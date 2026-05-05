@@ -957,6 +957,13 @@ func TestProjectStar_Success(t *testing.T) {
 	}
 }
 
+// TestProjectStar_EOFFallsBackToGet verifies that Star recovers from the
+// GitLab star endpoint closing the connection without a response.
+//
+// The test hijacks and closes the POST /projects/:id/star connection, then
+// expects the handler to fetch the project with GET /projects/:id and return
+// the refreshed star count. This protects clients from losing a successful
+// GitLab star operation when the API response body is unavailable.
 func TestProjectStar_EOFFallsBackToGet(t *testing.T) {
 	starCalled := false
 	getCalled := false

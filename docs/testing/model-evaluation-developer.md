@@ -16,7 +16,7 @@ around `cmd/eval_meta_tools`.
 | `cmd/eval_meta_tools/fixtures.go` | Docker GitLab fixture preparation and placeholder replacement. |
 | `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Canonical task corpus. |
 | `dist/evaluation/meta-tools/` | Generated reports, traces, and fixture state; ignored by Git. |
-| `docs/testing/model-results.md` | Curated benchmark snapshots copied from generated reports. |
+| `docs/testing/model-results.md` | Current published benchmark result copied from generated reports. |
 
 ## Environment
 
@@ -203,8 +203,14 @@ Each model-backed run writes:
 4. Fix harness noise before judging model quality.
 5. Re-run the targeted task set.
 6. Re-run the affected preset.
-7. Copy the curated result summary into
-   [AI Model Evaluation Results](model-results.md).
+7. Publish the reviewed reports with `cmd/eval_meta_tools --publish-docs`.
+
+Use `--publish-from` once per reviewed Markdown report and set a clear
+`--publish-label`. The publication phase updates only the managed marker blocks
+in [AI Model Evaluation Results](model-results.md) and the repository README;
+normal evaluator runs never update documentation automatically. Use
+`--check-docs` in CI-style validation when the selected reports should already
+match the committed docs.
 
 ## Adding Or Updating Cases
 

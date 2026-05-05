@@ -16,7 +16,7 @@ correctly.
 | [Testing Reference](testing.md) | Contributors | Generated unit, integration, E2E, coverage, and package test reference. |
 | [AI Model Evaluation](model-evaluation.md) | Users and evaluators | Explains what AI model evaluations prove, how schema and Docker modes differ, and how to interpret the metrics. |
 | [AI Model Evaluation Developer Guide](model-evaluation-developer.md) | Maintainers | Operational guide for running schema and Docker model evaluations, adding cases, reading traces, and updating results. |
-| [AI Model Evaluation Results](model-results.md) | Users and maintainers | Curated benchmark snapshots, compatibility matrix, and result-table schema for published runs. |
+| [AI Model Evaluation Results](model-results.md) | Users and maintainers | Current published benchmark result selected from generated reports. |
 
 ## Validation Layers
 
@@ -40,10 +40,12 @@ a real GitLab API.
 
 Generated model reports and traces are written under
 `dist/evaluation/meta-tools/` and are intentionally ignored by Git. Publish only
-curated summaries in [AI Model Evaluation Results](model-results.md). A curated
-summary should include the model ID, evaluation mode, preset or task set, number
-of expected operations, emitted model/tool calls, success percentages, and any
-known caveats.
+curated summaries in [AI Model Evaluation Results](model-results.md). Use
+`cmd/eval_meta_tools --publish-docs --publish-from <report>` after the selected
+reports have been reviewed; use `--check-docs` to verify the managed blocks
+without writing. A curated summary should include the model ID, evaluation mode,
+preset or task set, number of expected operations, emitted model/tool calls,
+success percentages, and any known caveats.
 
 ## Maintenance Rules
 

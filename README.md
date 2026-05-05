@@ -30,7 +30,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 - **1006 MCP tools** — broad GitLab REST API v4 + GraphQL coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
 - **33 meta-tools** (48 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The latest curated Docker economy matrix covers 472 live task attempts and 960 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
@@ -59,7 +59,7 @@ The server handles the translation from natural language to GitLab API calls. Yo
 
 ## Quick Start
 
-### 1. Download
+### 1. Get the server
 
 Download the latest binary for your platform from [GitHub Releases](../../releases) and make it executable:
 
@@ -67,7 +67,13 @@ Download the latest binary for your platform from [GitHub Releases](../../releas
 chmod +x gitlab-mcp-server-*  # Linux/macOS only
 ```
 
-### 2. Configure your MCP client
+Or pull the published container image:
+
+```bash
+docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+### 2. Configure GitLab access
 
 **Recommended**: Run the built-in setup wizard — it configures your GitLab connection and MCP client in one step:
 
@@ -77,12 +83,25 @@ chmod +x gitlab-mcp-server-*  # Linux/macOS only
 
 > **Tip**: The wizard supports Web UI, Terminal UI, and plain CLI modes. On Windows, double-click the `.exe` to launch the wizard automatically.
 
-**Or configure manually** — expand your client below:
+Manual setup only needs a GitLab Personal Access Token with `api` scope:
+
+```env
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+```
 
 `GITLAB_URL` defaults to `https://gitlab.com`; add it only when you connect to a self-managed GitLab instance.
 
-<details>
-<summary><strong>VS Code (GitHub Copilot)</strong></summary>
+```env
+GITLAB_URL=https://gitlab.example.com
+```
+
+### 3. Connect your MCP client
+
+Most desktop clients use stdio: the client starts one local MCP server process and talks to it over stdin/stdout. Choose one of these runtime patterns.
+
+#### Native binary (stdio)
+
+VS Code and Cursor-style MCP configuration:
 
 Add to `.vscode/mcp.json` in your workspace:
 
@@ -100,12 +119,7 @@ Add to `.vscode/mcp.json` in your workspace:
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Claude Desktop</strong></summary>
-
-Add to `claude_desktop_config.json`:
+Claude Desktop uses the same server command under `mcpServers`:
 
 ```json
 {
@@ -120,166 +134,79 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-</details>
+For client-specific paths, secure token prompts, HTTP OAuth, and extra IDEs, see [IDE Configuration](docs/ide-configuration.md).
 
-<details>
-<summary><strong>Cursor</strong></summary>
+#### Docker launched by an IDE (stdio)
 
-Add to `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Claude Code</strong></summary>
-
-```bash
-claude mcp add gitlab /path/to/gitlab-mcp-server \
-  -e GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-```
-
-</details>
-
-<details>
-<summary><strong>Windsurf</strong></summary>
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>JetBrains IDEs</strong></summary>
-
-Add to the MCP configuration in **Settings → Tools → AI Assistant → MCP Servers**:
+If an IDE starts Docker as the MCP server process, keep `docker run -i` and pass `--http=false` after the image name. Do not publish port 8080 in this mode.
 
 ```json
 {
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/path/to/gitlab-mcp-server",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITLAB_TOKEN",
+        "-e",
+        "GITLAB_URL",
+        "-e",
+        "GITLAB_SKIP_TLS_VERIFY",
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
+        "--http=false"
+      ],
       "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
+        "GITLAB_URL": "https://gitlab.com",
+        "GITLAB_SKIP_TLS_VERIFY": "false"
       }
     }
   }
 }
 ```
 
-</details>
+#### Docker or binary as an HTTP MCP server
 
-<details>
-<summary><strong>Zed</strong></summary>
+Use HTTP mode for shared, remote, or multi-user deployments. The Docker image starts in HTTP mode by default, but the flags are shown explicitly here for clarity.
 
-Add to Zed settings (`settings.json`):
+```bash
+# Fixed GitLab instance for all clients
+docker run -d --name gitlab-mcp-server -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com
 
-```json
+# Multi-instance mode: clients send GITLAB-URL per request
+docker run -d --name gitlab-mcp-server -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
+```
+
+HTTP clients authenticate each request with `PRIVATE-TOKEN` or `Authorization: Bearer`:
+
+```jsonc
 {
-  "context_servers": {
+  "servers": {
     "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "args": [],
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
   }
 }
 ```
 
-</details>
+In multi-instance mode, clients must also send `GITLAB-URL`. See [HTTP Server Mode](docs/http-server-mode.md) for OAuth, reverse proxy, rate limit, and server-pool details.
 
-<details>
-<summary><strong>Kiro</strong></summary>
-
-Add to `.kiro/settings/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "args": [],
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Cline</strong></summary>
-
-Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Global MCP**, or edit `cline_mcp_settings.json` directly:
-
-- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
-- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
-- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Roo Code</strong></summary>
-
-Open the Roo Code sidebar in VS Code → MCP servers icon → **Edit Global MCP** (or **Edit Project MCP** to create `.roo/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-### 3. Verify
+### 4. Verify
 
 Open your AI client and try:
 
@@ -309,7 +236,7 @@ Meta-tool summary:
 | `gitlab_ci_catalog` | 2 | Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). |
 | `gitlab_ci_variable` | 15 | Manage GitLab CI/CD variables at instance, group, and project scope. |
 | `gitlab_custom_emoji` | 3 | Manage group-level custom emoji via GraphQL. |
-| `gitlab_discover_project` | — | Resolve a git remote URL to a GitLab project and return its project_id and metadata. |
+| `gitlab_discover_project` | — | Resolve a full git remote URL to a GitLab project and return its project_id and metadata. |
 | `gitlab_environment` | 23 | Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. |
 | `gitlab_feature_flags` | 10 | Manage project feature flags and feature-flag user lists for gradual rollouts. |
 | `gitlab_group` | 130 | Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export. |
@@ -381,21 +308,18 @@ The evaluator measures whether each model chooses the correct meta-tool and
 action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
-Current economy model set used by the evaluation harness:
+<!-- START MODEL EVAL SUMMARY -->
+Current published result: **2026-05-05 Full Docker Economy Run**.
 
-| Provider | Model | Tool-call compatibility | Curated Docker final success |
-| --- | --- | --- | ---: |
-| Anthropic | `anthropic:claude-haiku-4-5-20251001` | OK | 100.0% |
-| Google | `google:gemini-3.1-flash-lite-preview` | OK | 100.0% |
-| OpenAI | `openai:gpt-5.4-nano` | OK | 100.0% |
-| Qwen | `qwen:qwen3.6-flash` | OK | 100.0% |
+| Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
+| --- | --- | --- | ---: | ---: | --- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | No repairs | 100.0% final across 240 ops |
+| Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 100.0% (1/1) | 100.0% final across 240 ops |
+| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 50.0% (2/4) | 100.0% final across 240 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 240 ops |
 
-The published economy matrix covers 472 Docker-backed attempts and 960 expected
-MCP operations across read, safe-mutating, and safe-destructive presets after
-traces were inspected and known harness noise was removed. The curated rows
-reach 100.0% first-pass validation, one model request per expected operation,
-and 100.0% final success. See [AI Model Evaluation Results](docs/testing/model-results.md)
-for the detailed matrix and run history.
+The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+<!-- END MODEL EVAL SUMMARY -->
 
 ## Documentation
 
@@ -404,7 +328,9 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | Document | Description |
 |----------|-------------|
 | [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
+| [IDE Configuration](docs/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
+| [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
 | [Tools Reference](docs/tools/README.md) | All 1006 individual tools with input/output schemas |
 | [Meta-Tools](docs/meta-tools.md) | 32/47 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
@@ -434,69 +360,11 @@ make build
 
 See the [Development Guide](docs/development/development.md) for cross-compilation and contributing guidelines.
 
-## Docker
+## Container Image
 
-The official Docker image starts in HTTP mode by default. Use one of the
-following patterns depending on how your MCP client connects.
-
-### Docker as an HTTP MCP server
-
-```bash
-docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
-
-# Single-instance mode (fixed GitLab.com URL for all clients; replace for self-managed GitLab)
-docker run -d --name gitlab-mcp-server -p 8080:8080 \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest \
-  --http \
-  --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.com
-
-# Multi-instance mode (clients send GITLAB-URL header per request)
-docker run -d --name gitlab-mcp-server -p 8080:8080 \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest \
-  --http \
-  --http-addr=0.0.0.0:8080
-```
-
-> **TLS verification** is enabled by default. Add `--skip-tls-verify=true` only when connecting to a self-hosted GitLab instance with a self-signed certificate in a controlled environment — never in production.
-
-Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. In multi-instance mode, clients must also send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
-
-### Docker as a local stdio MCP process
-
-When an IDE starts Docker as a stdio MCP server, override the image's HTTP
-default by passing `--http=false` after the image name. Do not publish port 8080
-for this mode.
-
-```json
-{
-  "servers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "GITLAB_TOKEN",
-        "-e",
-        "GITLAB_SKIP_TLS_VERIFY",
-        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-        "--http=false"
-      ],
-      "env": {
-        "GITLAB_TOKEN": "${input:gitlab-token}",
-        "GITLAB_SKIP_TLS_VERIFY": "false"
-      }
-    }
-  }
-}
-```
+The published image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Runtime examples live in [Quick Start](#quick-start) next to MCP client configuration, and Docker Compose/source-build details live in the [Development Guide](docs/development/development.md#docker).
 
 ## FAQ
-
-For self-managed GitLab in Docker stdio mode, add `GITLAB_URL` to `env` and pass `-e GITLAB_URL` in `args`.
 
 <details>
 <summary><strong>Does it work with self-hosted GitLab?</strong></summary>
@@ -558,66 +426,66 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 621 | 120,577 |
-| Unit tests (`_test.go`) | 404 | 210,567 |
-| End-to-end tests | 108 | 23,492 |
-| **Total** | **1,133** | **354,636** |
+| Source (`.go`, non-test) | 647 | 132,813 |
+| Unit tests (`_test.go`) | 410 | 215,866 |
+| End-to-end tests | 109 | 23,526 |
+| **Total** | **1,166** | **372,205** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,366 |
-| — exported (public) | 2,187 |
-| — unexported (private) | 1,179 |
-| Unit test functions (`TestXxx`) | 8,827 |
-| Subtests (`t.Run(...)`) | 1,929 |
+| Source functions | 3,933 |
+| — exported (public) | 2,206 |
+| — unexported (private) | 1,727 |
+| Unit test functions (`TestXxx`) | 9,032 |
+| Subtests (`t.Run(...)`) | 1,933 |
 | End-to-end test functions | 243 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.75× more tests than code |
-| Average source file length | ~194 lines |
-| Average test file length | ~521 lines |
-| Comment lines in source | 10,080 (~8.4% of source) |
-| Test functions per source function | 2.6× |
+| Test lines vs source lines | 1.63× more tests than code |
+| Average source file length | ~205 lines |
+| Average test file length | ~526 lines |
+| Comment lines in source | 10,376 (~7.8% of source) |
+| Test functions per source function | 2.3× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,350 |
-| `defer` statements | 662 |
-| `struct` types defined | 1,928 |
-| `//nolint` suppressions | 55 |
+| `if err != nil` checks | 5,675 |
+| `defer` statements | 717 |
+| `struct` types defined | 2,006 |
+| `//nolint` suppressions | 57 |
 | `TODO` / `FIXME` / `HACK` comments | 0 |
 
 ### Project
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 192 |
+| Go packages | 196 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 94 |
+| Git commits | 122 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `internal/tools/register_meta.go` — 3,123 lines |
-| Longest test file | `internal/tools/projects/projects_test.go` — 6,379 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 5,715 lines |
+| Longest test file | `internal/tools/projects/projects_test.go` — 6,422 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,192 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,541 (impossible to avoid) |
-| Longest function name in source | `RetryFailedExternalStatusCheckForProjectMR` (42 chars) |
-| Longest test function name | `TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding` (79 chars) |
+| Source code printed at 55 lines/page | ~2,414 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,842 (impossible to avoid) |
+| Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
+| Longest test function name | `TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement` (84 chars) |
 
 <!-- END STATS -->

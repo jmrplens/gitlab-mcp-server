@@ -2,6 +2,13 @@ package toolutil
 
 import "testing"
 
+// TestLookupMetaActionSchema_DestructiveActionAddsConfirm verifies that
+// destructive action schemas are copied and augmented with confirmation
+// metadata without mutating the registered route schema.
+//
+// The test builds an in-memory route map for milestone_delete, looks up its
+// schema, and asserts that the returned schema includes confirm and
+// x_destructive while the original InputSchema remains unchanged.
 func TestLookupMetaActionSchema_DestructiveActionAddsConfirm(t *testing.T) {
 	routes := map[string]ActionMap{
 		"gitlab_project": {

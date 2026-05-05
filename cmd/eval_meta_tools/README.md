@@ -14,6 +14,13 @@
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |
 | `--coverage-report` | empty | Optional Markdown file listing uncovered high-risk routes for the selected run. |
 | `--compare` | empty | Repeatable report path for comparison mode. Accepts token reports from `cmd/audit_tokens` and evaluation reports from this command. |
+| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/testing/model-results.md`. |
+| `--publish-from` | empty | Repeatable reviewed `eval_meta_tools` report path consumed by `--publish-docs` or `--check-docs`. |
+| `--publish-results-doc` | `docs/testing/model-results.md` | Results document updated by `--publish-docs`. |
+| `--publish-readme` | `README.md` | README file updated by `--publish-docs`. |
+| `--publish-label` | empty | Human-readable result label used in generated documentation. Defaults to the report date. |
+| `--publish-mode` | `replace-current` | Results block update mode: `replace-current` or `append`. README summary always reflects the current selected reports. |
+| `--check-docs` | `false` | Verify managed documentation blocks match the selected reports without writing files. |
 | `--mcp-command` | empty | External stdio MCP server command used by `--execute-tools` instead of the in-process current-source server. |
 | `--mcp-arg` | empty | Repeatable argument passed to `--mcp-command`. |
 | `--mcp-env-file` | empty | Env file passed to the external MCP command, usually `.env` or `test/e2e/.env.docker`. |
@@ -111,6 +118,28 @@ timeout 180s go run ./cmd/eval_meta_tools \
   --out dist/evaluation/meta-tools/comparison/version-summary.md
 ```
 
+Publish reviewed Docker reports into managed documentation blocks:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --publish-docs \
+  --publish-from dist/evaluation/meta-tools/docker-read-all-models.md \
+  --publish-from dist/evaluation/meta-tools/docker-mutating-safe-all-models.md \
+  --publish-from dist/evaluation/meta-tools/docker-destructive-safe-all-models.md \
+  --publish-label "2026-05-05 Docker economy models"
+```
+
+Check the committed docs against the same reviewed reports without writing:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --check-docs \
+  --publish-from dist/evaluation/meta-tools/docker-read-all-models.md \
+  --publish-from dist/evaluation/meta-tools/docker-mutating-safe-all-models.md \
+  --publish-from dist/evaluation/meta-tools/docker-destructive-safe-all-models.md \
+  --publish-label "2026-05-05 Docker economy models"
+```
+
 Run validated calls through an older or separately built stdio MCP server:
 
 ```bash
@@ -135,6 +164,8 @@ Use `scripts/eval-compare-version.sh` to orchestrate the standard snapshot, toke
 `--execute-tools` can mutate GitLab resources. It requires `--backend=gitlab` or `--mcp-command` plus `E2E_MODE=docker` unless `--allow-live-mutations` is explicitly set.
 
 Keep reports, traces, snapshots, and fixture state under `dist/evaluation/meta-tools/`; that directory is ignored by git.
+
+`--publish-docs` is intentionally separate from normal runs. It consumes only reviewed Markdown reports selected with `--publish-from`, never raw trace JSON, and refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
 
 Docker live reports include a failure-triage section that separates MCP implementation bugs, GitLab CE limitations, model route-selection misses, model parameter-shape misses, fixture setup failures, transient GitLab 5xx responses, timeout/resource exhaustion, destructive safety failures, and not-found results.
 

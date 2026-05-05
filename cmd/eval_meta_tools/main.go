@@ -9,6 +9,7 @@
 //	go run ./cmd/eval_meta_tools/ --max-tasks=5
 //	go run ./cmd/eval_meta_tools/ --dry-run
 //	go run ./cmd/eval_meta_tools/ --tools-file /tmp/tools_meta.json
+//	go run ./cmd/eval_meta_tools/ --publish-docs --publish-from dist/evaluation/meta-tools/docker-read.md
 package main
 
 import (
@@ -61,57 +62,70 @@ const (
 	presetDockerDestructiveSafe = "docker-destructive-safe"
 )
 
+// options holds data for main operations.
 type options struct {
-	TasksPath       string
-	Output          string
-	TraceDir        string
-	Model           string
-	Models          string
-	ToolsFile       string
-	CompareReports  stringList
-	Preset          string
-	Partition       string
-	CoverageReport  string
-	Backend         string
-	GitLabEnv       string
-	MCPCommand      string
-	MCPArgs         stringList
-	MCPEnv          string
-	Fixtures        string
-	OnlyIDs         string
-	MaxTasks        int
-	Repeat          int
-	MaxTokens       int
-	Retries         int
-	RetryWait       time.Duration
-	Pause           time.Duration
-	Pricing         pricingOptions
-	DryRun          bool
-	MCPSmoke        bool
-	Execute         bool
-	AllowLive       bool
-	PrepareFixtures bool
-	FixturesOnly    bool
-	UseFixtures     bool
-	SkipDestructive bool
-	OnlyDestructive bool
-	SkipMutating    bool
-	OnlyMutating    bool
-	SkipUnavailable bool
-	explicitFlags   map[string]bool
+	TasksPath         string
+	Output            string
+	TraceDir          string
+	Model             string
+	Models            string
+	ToolsFile         string
+	CompareReports    stringList
+	PublishFrom       stringList
+	PublishResults    string
+	PublishReadme     string
+	PublishLabel      string
+	PublishMode       string
+	Preset            string
+	Partition         string
+	CoverageReport    string
+	Backend           string
+	GitLabEnv         string
+	MCPCommand        string
+	MCPArgs           stringList
+	MCPEnv            string
+	Fixtures          string
+	OnlyIDs           string
+	MaxTasks          int
+	Repeat            int
+	MaxTokens         int
+	Retries           int
+	RetryWait         time.Duration
+	Pause             time.Duration
+	Pricing           pricingOptions
+	DryRun            bool
+	PublishDocs       bool
+	CheckDocs         bool
+	PublishAllowNoise bool
+	MCPSmoke          bool
+	Execute           bool
+	AllowLive         bool
+	PrepareFixtures   bool
+	FixturesOnly      bool
+	UseFixtures       bool
+	SkipDestructive   bool
+	OnlyDestructive   bool
+	SkipMutating      bool
+	OnlyMutating      bool
+	SkipUnavailable   bool
+	explicitFlags     map[string]bool
 }
 
+// stringList holds data for main operations.
 type stringList []string
 
+// String performs the string operation on *stringList.
 func (s *stringList) String() string {
 	return strings.Join(*s, ",")
 }
 
+// Set performs the set operation on *stringList.
 func (s *stringList) Set(value string) error {
 	*s = append(*s, value)
 	return nil
 }
 
+// evalTask holds data for main operations.
 type evalTask struct {
 	ID             string
 	Prompt         string
@@ -124,6 +138,7 @@ type evalTask struct {
 	Steps          []evalStep
 }
 
+// evalStep holds data for main operations.
 type evalStep struct {
 	ExpectedTool   string
 	ExpectedAction string
@@ -133,6 +148,7 @@ type evalStep struct {
 	Simulation     string
 }
 
+// pricingOptions holds data for main operations.
 type pricingOptions struct {
 	InputPerMTok      float64
 	OutputPerMTok     float64
@@ -140,6 +156,7 @@ type pricingOptions struct {
 	CacheReadPerMTok  float64
 }
 
+// modelTool holds data for main operations.
 type modelTool struct {
 	Name         string        `json:"name"`
 	Description  string        `json:"description"`
@@ -147,16 +164,19 @@ type modelTool struct {
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
+// snapshotTool holds data for main operations.
 type snapshotTool struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
+// cacheControl holds data for main operations.
 type cacheControl struct {
 	Type string `json:"type"`
 }
 
+// anthropicRequest holds data for main operations.
 type anthropicRequest struct {
 	Model       string            `json:"model"`
 	MaxTokens   int               `json:"max_tokens"`
@@ -167,11 +187,13 @@ type anthropicRequest struct {
 	Messages    []modelMessage    `json:"messages"`
 }
 
+// modelMessage holds data for main operations.
 type modelMessage struct {
 	Role    string              `json:"role"`
 	Content []modelContentBlock `json:"content"`
 }
 
+// modelContentBlock holds data for main operations.
 type modelContentBlock struct {
 	Type             string          `json:"type"`
 	Text             string          `json:"text,omitempty"`
@@ -185,6 +207,7 @@ type modelContentBlock struct {
 	ThoughtSignature string          `json:"-"`
 }
 
+// modelResponse holds data for main operations.
 type modelResponse struct {
 	ID      string              `json:"id"`
 	Type    string              `json:"type"`
@@ -194,6 +217,7 @@ type modelResponse struct {
 	Error   *modelError         `json:"error,omitempty"`
 }
 
+// modelUsage holds data for main operations.
 type modelUsage struct {
 	InputTokens              int `json:"input_tokens"`
 	OutputTokens             int `json:"output_tokens"`
@@ -201,6 +225,7 @@ type modelUsage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 }
 
+// add performs the add operation on *modelUsage.
 func (u *modelUsage) add(other modelUsage) {
 	u.InputTokens += other.InputTokens
 	u.OutputTokens += other.OutputTokens
@@ -208,11 +233,13 @@ func (u *modelUsage) add(other modelUsage) {
 	u.CacheReadInputTokens += other.CacheReadInputTokens
 }
 
+// modelError holds data for main operations.
 type modelError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }
 
+// taskResult holds data for main operations.
 type taskResult struct {
 	Task             evalTask
 	Run              int
@@ -235,6 +262,7 @@ type taskResult struct {
 	Trace            taskTrace
 }
 
+// taskTrace holds data for main operations.
 type taskTrace struct {
 	Run          int                 `json:"run"`
 	Model        string              `json:"model,omitempty"`
@@ -247,6 +275,7 @@ type taskTrace struct {
 	Summary      traceSummary        `json:"summary"`
 }
 
+// traceExpectedStep holds data for main operations.
 type traceExpectedStep struct {
 	Step           int      `json:"step"`
 	Tool           string   `json:"tool"`
@@ -257,6 +286,7 @@ type traceExpectedStep struct {
 	Simulation     string   `json:"simulation,omitempty"`
 }
 
+// traceEvent holds data for main operations.
 type traceEvent struct {
 	Turn       int                 `json:"turn"`
 	Kind       string              `json:"kind"`
@@ -273,6 +303,7 @@ type traceEvent struct {
 	Validation *traceValidation    `json:"validation,omitempty"`
 }
 
+// traceValidation holds data for main operations.
 type traceValidation struct {
 	Valid           bool   `json:"valid"`
 	ToolMatches     bool   `json:"tool_matches"`
@@ -282,6 +313,7 @@ type traceValidation struct {
 	Message         string `json:"message"`
 }
 
+// traceSummary holds data for main operations.
 type traceSummary struct {
 	FirstTool        string `json:"first_tool,omitempty"`
 	FirstAction      string `json:"first_action,omitempty"`
@@ -300,6 +332,7 @@ type traceSummary struct {
 	Notes            string `json:"notes,omitempty"`
 }
 
+// validationResult holds data for main operations.
 type validationResult struct {
 	Valid           bool
 	ToolMatches     bool
@@ -310,6 +343,7 @@ type validationResult struct {
 	Message         string
 }
 
+// simulationResult holds data for main operations.
 type simulationResult struct {
 	Content  string
 	Advance  bool
@@ -317,6 +351,7 @@ type simulationResult struct {
 	Err      error
 }
 
+// main is an internal helper for the main package.
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "eval_meta_tools: %v\n", err)
@@ -324,6 +359,7 @@ func main() {
 	}
 }
 
+// run is an internal helper for the main package.
 func run() error {
 	opts := parseFlags()
 	var presetErr error
@@ -338,6 +374,9 @@ func run() error {
 		if err := godotenv.Overload(opts.GitLabEnv); err != nil {
 			return fmt.Errorf("load gitlab env file %s: %w", opts.GitLabEnv, err)
 		}
+	}
+	if opts.PublishDocs || opts.CheckDocs {
+		return publishEvaluationDocs(opts)
 	}
 	if len(opts.CompareReports) > 0 {
 		if opts.Output == "" {
@@ -540,6 +579,7 @@ func run() error {
 	return writeTraceArtifacts(opts.TraceDir, results)
 }
 
+// parseFlags is an internal helper for the main package.
 func parseFlags() options {
 	var opts options
 	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
@@ -549,6 +589,11 @@ func parseFlags() options {
 	flag.StringVar(&opts.Models, "models", "", "Comma-separated provider:model list for local multi-model evaluation; defaults to EVAL_MODELS when --model is not set")
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.Var(&opts.CompareReports, "compare", "Evaluation or token report file to include in a comparison summary; repeat for multiple reports")
+	flag.Var(&opts.PublishFrom, "publish-from", "Reviewed evaluation report to publish into docs; repeat for multiple reports")
+	flag.StringVar(&opts.PublishResults, "publish-results-doc", defaultPublishResultsDoc, "Markdown results document updated by --publish-docs")
+	flag.StringVar(&opts.PublishReadme, "publish-readme", defaultPublishReadme, "README updated by --publish-docs")
+	flag.StringVar(&opts.PublishLabel, "publish-label", "", "Human-readable label for the published snapshot")
+	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
 	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
@@ -570,6 +615,9 @@ func parseFlags() options {
 	flag.Float64Var(&opts.Pricing.CacheWritePerMTok, "cache-write-cost-per-mtok", 0, "Optional prompt-cache write price in USD per million tokens for cost estimates")
 	flag.Float64Var(&opts.Pricing.CacheReadPerMTok, "cache-read-cost-per-mtok", 0, "Optional prompt-cache read price in USD per million tokens for cost estimates")
 	flag.BoolVar(&opts.DryRun, "dry-run", false, "Validate fixture routes without calling model providers")
+	flag.BoolVar(&opts.PublishDocs, "publish-docs", false, "Publish reviewed evaluation reports into README and docs/testing/model-results.md")
+	flag.BoolVar(&opts.CheckDocs, "check-docs", false, "Verify published evaluation docs match the selected --publish-from reports without writing files")
+	flag.BoolVar(&opts.PublishAllowNoise, "publish-allow-harness-noise", false, "Allow publishing reports that explicitly mention unresolved harness noise")
 	flag.BoolVar(&opts.MCPSmoke, "mcp-smoke", false, "Call read-only smoke tools through MCP against --backend=gitlab before evaluation")
 	flag.BoolVar(&opts.Execute, "execute-tools", false, "Execute validated model tool calls through MCP instead of simulated tool results; requires --backend=gitlab and E2E_MODE=docker unless --allow-live-mutations is set")
 	flag.BoolVar(&opts.AllowLive, "allow-live-mutations", false, "Allow --execute-tools against non-Docker GitLab instances; dangerous because evaluation tasks may mutate resources")
@@ -589,6 +637,7 @@ func parseFlags() options {
 	return opts
 }
 
+// applyPresetDefaults performs the apply preset defaults operation using the GitLab API and returns [options].
 func applyPresetDefaults(opts options) (options, error) {
 	preset := strings.TrimSpace(opts.Preset)
 	if preset == "" {
@@ -617,6 +666,7 @@ func applyPresetDefaults(opts options) (options, error) {
 	return opts, nil
 }
 
+// applyDockerPresetDefaults is an internal helper for the main package.
 func applyDockerPresetDefaults(opts *options, partition string) {
 	setStringDefault(&opts.Backend, *opts, "backend", backendGitLab)
 	setStringDefault(&opts.GitLabEnv, *opts, "gitlab-env-file", "test/e2e/.env.docker")
@@ -626,6 +676,7 @@ func applyDockerPresetDefaults(opts *options, partition string) {
 	setBoolDefault(&opts.SkipUnavailable, *opts, "skip-unavailable")
 }
 
+// validPreset is an internal helper for the main package.
 func validPreset(preset string) bool {
 	switch preset {
 	case presetSchemaEnterprise, presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe:
@@ -635,18 +686,21 @@ func validPreset(preset string) bool {
 	}
 }
 
+// setStringDefault is an internal helper for the main package.
 func setStringDefault(target *string, opts options, flagName, value string) {
 	if !opts.explicitFlags[flagName] {
 		*target = value
 	}
 }
 
+// setBoolDefault is an internal helper for the main package.
 func setBoolDefault(target *bool, opts options, flagName string) {
 	if !opts.explicitFlags[flagName] {
 		*target = true
 	}
 }
 
+// filterTasks is an internal helper for the main package.
 func filterTasks(tasks []evalTask, onlyIDs string) []evalTask {
 	if strings.TrimSpace(onlyIDs) == "" {
 		return tasks
@@ -667,6 +721,7 @@ func filterTasks(tasks []evalTask, onlyIDs string) []evalTask {
 	return filtered
 }
 
+// filterTasksByDestructive performs the filter tasks by destructive operation using the GitLab API and returns [[]evalTask].
 func filterTasksByDestructive(tasks []evalTask, skipDestructive, onlyDestructive bool) ([]evalTask, error) {
 	if skipDestructive && onlyDestructive {
 		return nil, errors.New("--skip-destructive and --only-destructive cannot be used together")
@@ -688,6 +743,7 @@ func filterTasksByDestructive(tasks []evalTask, skipDestructive, onlyDestructive
 	return filtered, nil
 }
 
+// taskHasDestructiveStep is an internal helper for the main package.
 func taskHasDestructiveStep(task evalTask) bool {
 	if task.Destructive {
 		return true
@@ -700,6 +756,7 @@ func taskHasDestructiveStep(task evalTask) bool {
 	return false
 }
 
+// routeLooksDestructive is an internal helper for the main package.
 func routeLooksDestructive(action string) bool {
 	action = strings.TrimPrefix(action, "gitlab_")
 	for _, token := range strings.FieldsFunc(action, func(r rune) bool { return r == '.' || r == '_' || r == '-' }) {
@@ -711,6 +768,7 @@ func routeLooksDestructive(action string) bool {
 	return strings.Contains(action, "publish_all")
 }
 
+// filterTasksByMutation performs the filter tasks by mutation operation using the GitLab API and returns [[]evalTask].
 func filterTasksByMutation(tasks []evalTask, skipMutating, onlyMutating bool) ([]evalTask, error) {
 	if skipMutating && onlyMutating {
 		return nil, errors.New("--skip-mutating and --only-mutating cannot be used together")
@@ -732,6 +790,7 @@ func filterTasksByMutation(tasks []evalTask, skipMutating, onlyMutating bool) ([
 	return filtered, nil
 }
 
+// filterTasksByAvailableRoutes is an internal helper for the main package.
 func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
 	filtered := make([]evalTask, 0, len(tasks))
 	enterprise := catalogHasRoute(routes, "gitlab", "merge_train.list_project")
@@ -743,6 +802,7 @@ func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.A
 	return filtered
 }
 
+// taskRoutesAvailable is an internal helper for the main package.
 func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, enterprise bool) bool {
 	if taskUnavailableInLiveEvaluator(task.ID) {
 		return false
@@ -764,6 +824,7 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 	return true
 }
 
+// filterTasksByPartition performs the filter tasks by partition operation using the GitLab API and returns [[]evalTask].
 func filterTasksByPartition(tasks []evalTask, partition string) ([]evalTask, error) {
 	partition = strings.TrimSpace(partition)
 	if partition == "" {
@@ -781,6 +842,7 @@ func filterTasksByPartition(tasks []evalTask, partition string) ([]evalTask, err
 	return filtered, nil
 }
 
+// validPartition is an internal helper for the main package.
 func validPartition(partition string) bool {
 	switch partition {
 	case "base-read", "base-mutating", "base-destructive", "enterprise-read", "enterprise-mutating", "enterprise-destructive", "error-recovery", "capability-fallback":
@@ -790,6 +852,7 @@ func validPartition(partition string) bool {
 	}
 }
 
+// taskMatchesPartition is an internal helper for the main package.
 func taskMatchesPartition(task evalTask, partition string) bool {
 	enterprise := taskHasEnterpriseStep(task)
 	destructive := taskHasDestructiveStep(task)
@@ -818,6 +881,7 @@ func taskMatchesPartition(task evalTask, partition string) bool {
 	}
 }
 
+// filterTasksByPreset performs the filter tasks by preset operation using the GitLab API and returns [[]evalTask].
 func filterTasksByPreset(tasks []evalTask, preset string) ([]evalTask, error) {
 	if !validPreset(preset) {
 		return nil, fmt.Errorf("unknown --preset %q", preset)
@@ -831,6 +895,7 @@ func filterTasksByPreset(tasks []evalTask, preset string) ([]evalTask, error) {
 	return orderTasksForPreset(filtered, preset), nil
 }
 
+// orderTasksForPreset is an internal helper for the main package.
 func orderTasksForPreset(tasks []evalTask, preset string) []evalTask {
 	if preset != presetDockerDestructiveSafe {
 		return tasks
@@ -847,6 +912,7 @@ func orderTasksForPreset(tasks []evalTask, preset string) []evalTask {
 	return append(regular, projectArchive...)
 }
 
+// taskArchivesSharedProject is an internal helper for the main package.
 func taskArchivesSharedProject(task evalTask) bool {
 	for _, step := range taskSteps(task) {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "archive" {
@@ -856,6 +922,7 @@ func taskArchivesSharedProject(task evalTask) bool {
 	return false
 }
 
+// taskMatchesPreset is an internal helper for the main package.
 func taskMatchesPreset(task evalTask, preset string) bool {
 	enterprise := taskHasEnterpriseStep(task)
 	destructive := taskHasDestructiveStep(task)
@@ -875,6 +942,7 @@ func taskMatchesPreset(task evalTask, preset string) bool {
 	}
 }
 
+// taskHasEnterpriseStep is an internal helper for the main package.
 func taskHasEnterpriseStep(task evalTask) bool {
 	for _, step := range taskSteps(task) {
 		if routeLooksEnterprise(step.ExpectedTool, step.ExpectedAction) {
@@ -884,6 +952,7 @@ func taskHasEnterpriseStep(task evalTask) bool {
 	return false
 }
 
+// routeLooksEnterprise is an internal helper for the main package.
 func routeLooksEnterprise(tool, action string) bool {
 	domain := tool
 	if action != "" {
@@ -904,6 +973,7 @@ func routeLooksEnterprise(tool, action string) bool {
 	return false
 }
 
+// taskHasSimulation is an internal helper for the main package.
 func taskHasSimulation(task evalTask) bool {
 	for _, step := range taskSteps(task) {
 		if step.Simulation != "" {
@@ -913,6 +983,7 @@ func taskHasSimulation(task evalTask) bool {
 	return false
 }
 
+// taskUsesCapabilityFallback is an internal helper for the main package.
 func taskUsesCapabilityFallback(task evalTask) bool {
 	hasExpectedRoute := false
 	for _, step := range taskSteps(task) {
@@ -930,6 +1001,7 @@ func taskUsesCapabilityFallback(task evalTask) bool {
 	return strings.Contains(prompt, "schema") || strings.Contains(prompt, "capability") || strings.Contains(prompt, "fallback")
 }
 
+// catalogHasRoute is an internal helper for the main package.
 func catalogHasRoute(routes map[string]toolutil.ActionMap, tool, action string) bool {
 	toolRoutes, ok := routes[tool]
 	if !ok {
@@ -939,6 +1011,7 @@ func catalogHasRoute(routes map[string]toolutil.ActionMap, tool, action string) 
 	return ok
 }
 
+// routeUnavailableOnCE is an internal helper for the main package.
 func routeUnavailableOnCE(tool, action string) bool {
 	route := action
 	if tool != "gitlab" && action != "" {
@@ -952,6 +1025,7 @@ func routeUnavailableOnCE(tool, action string) bool {
 	}
 }
 
+// taskUnavailableInLiveEvaluator is an internal helper for the main package.
 func taskUnavailableInLiveEvaluator(id string) bool {
 	switch id {
 	case "MT-008", "MT-017", "MT-023", "MT-049", "MT-054", "MT-063", "MT-066", "MT-069", "MT-105", "MT-107", "MT-114", "MT-115", "MT-116":
@@ -961,10 +1035,12 @@ func taskUnavailableInLiveEvaluator(id string) bool {
 	}
 }
 
+// standaloneUnavailableInLiveEvaluator is an internal helper for the main package.
 func standaloneUnavailableInLiveEvaluator(tool string) bool {
 	return strings.HasPrefix(tool, "gitlab_interactive_")
 }
 
+// taskHasMutatingStep is an internal helper for the main package.
 func taskHasMutatingStep(task evalTask) bool {
 	for _, step := range taskSteps(task) {
 		if step.Destructive || routeLooksMutating(step.ExpectedTool, step.ExpectedAction) {
@@ -974,6 +1050,7 @@ func taskHasMutatingStep(task evalTask) bool {
 	return false
 }
 
+// routeLooksMutating is an internal helper for the main package.
 func routeLooksMutating(tool, action string) bool {
 	if action == "" {
 		return strings.HasPrefix(tool, "gitlab_interactive_")
@@ -991,6 +1068,7 @@ func routeLooksMutating(tool, action string) bool {
 	return false
 }
 
+// normalizedBackend is an internal helper for the main package.
 func normalizedBackend(backend string) string {
 	backend = strings.TrimSpace(backend)
 	if backend == "" {
@@ -999,6 +1077,7 @@ func normalizedBackend(backend string) string {
 	return backend
 }
 
+// toolExecutionMode converts the GitLab API response to the tool output format.
 func toolExecutionMode(opts options) string {
 	if opts.DryRun {
 		return "none"
@@ -1012,6 +1091,7 @@ func toolExecutionMode(opts options) string {
 	return "simulated"
 }
 
+// defaultOutputPath is an internal helper for the main package.
 func defaultOutputPath(model string) string {
 	stamp := time.Now().UTC().Format("20060102-150405")
 	if strings.Contains(model, ",") {
@@ -1021,11 +1101,13 @@ func defaultOutputPath(model string) string {
 	return filepath.Join(defaultEvalDir, fmt.Sprintf("model-%s-%s.md", stamp, model))
 }
 
+// defaultComparisonOutputPath is an internal helper for the main package.
 func defaultComparisonOutputPath() string {
 	stamp := time.Now().UTC().Format("20060102-150405")
 	return filepath.Join(defaultEvalDir, "comparison", fmt.Sprintf("%s-summary.md", stamp))
 }
 
+// defaultTraceDir is an internal helper for the main package.
 func defaultTraceDir(reportPath string) string {
 	ext := filepath.Ext(reportPath)
 	if ext == "" {
@@ -1034,14 +1116,16 @@ func defaultTraceDir(reportPath string) string {
 	return strings.TrimSuffix(reportPath, ext) + ".traces"
 }
 
+// parseTasksFile performs the parse tasks file operation using the GitLab API and returns [[]evalTask].
 func parseTasksFile(path string) ([]evalTask, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- task corpus path is an explicit evaluator input.
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
 	}
 	return parseTasksMarkdown(string(data))
 }
 
+// parseTasksMarkdown performs the parse tasks markdown operation using the GitLab API and returns [[]evalTask].
 func parseTasksMarkdown(markdown string) ([]evalTask, error) {
 	var tasks []evalTask
 	for line := range strings.SplitSeq(markdown, "\n") {
@@ -1065,10 +1149,12 @@ func parseTasksMarkdown(markdown string) ([]evalTask, error) {
 	return tasks, nil
 }
 
+// isTaskRow is an internal helper for the main package.
 func isTaskRow(line string) bool {
 	return strings.HasPrefix(line, "| MT-") || strings.HasPrefix(line, "| MS-") || strings.HasPrefix(line, "| MF-")
 }
 
+// parseTaskRow performs the parse task row operation using the GitLab API and returns [evalTask].
 func parseTaskRow(cols []string) (evalTask, error) {
 	steps, err := parseExpectedSteps(cols[2])
 	if err != nil {
@@ -1110,6 +1196,7 @@ func parseTaskRow(cols []string) (evalTask, error) {
 	}, nil
 }
 
+// simulationColumn is an internal helper for the main package.
 func simulationColumn(cols []string) string {
 	if len(cols) < 8 {
 		return ""
@@ -1117,6 +1204,7 @@ func simulationColumn(cols []string) string {
 	return cols[6]
 }
 
+// validateTaskFixture is an internal helper for the main package.
 func validateTaskFixture(tasks []evalTask) []string {
 	var problems []string
 	for _, task := range tasks {
@@ -1140,6 +1228,7 @@ func validateTaskFixture(tasks []evalTask) []string {
 	return problems
 }
 
+// validateTaskFixtureAgainstRoutes is an internal helper for the main package.
 func validateTaskFixtureAgainstRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []string {
 	var problems []string
 	for _, task := range tasks {
@@ -1170,6 +1259,7 @@ func validateTaskFixtureAgainstRoutes(tasks []evalTask, routes map[string]toolut
 	return problems
 }
 
+// normalizeTasksForRoutes is an internal helper for the main package.
 func normalizeTasksForRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
 	if _, hasSuperDispatcher := routes["gitlab"]; !hasSuperDispatcher {
 		return tasks
@@ -1190,6 +1280,7 @@ func normalizeTasksForRoutes(tasks []evalTask, routes map[string]toolutil.Action
 	return out
 }
 
+// normalizeExpectedRoute is an internal helper for the main package.
 func normalizeExpectedRoute(tool, action string, routes map[string]toolutil.ActionMap) (normalizedTool, normalizedAction string) {
 	if action == "" || tool == "gitlab" || tool == "gitlab_server" || !strings.HasPrefix(tool, "gitlab_") {
 		return tool, action
@@ -1201,10 +1292,12 @@ func normalizeExpectedRoute(tool, action string, routes map[string]toolutil.Acti
 	return tool, action
 }
 
+// superDispatcherAction is an internal helper for the main package.
 func superDispatcherAction(tool, action string) string {
 	return strings.TrimPrefix(tool, "gitlab_") + "." + action
 }
 
+// taskSteps is an internal helper for the main package.
 func taskSteps(task evalTask) []evalStep {
 	if len(task.Steps) > 0 {
 		return task.Steps
@@ -1219,10 +1312,12 @@ func taskSteps(task evalTask) []evalStep {
 	}}
 }
 
+// hasParam is an internal helper for the main package.
 func hasParam(params []string, needle string) bool {
 	return slices.Contains(params, needle)
 }
 
+// promptNamesEntity is an internal helper for the main package.
 func promptNamesEntity(prompt, entity string) bool {
 	lowerPrompt := strings.ToLower(prompt)
 	lowerEntity := strings.ToLower(entity)
@@ -1232,6 +1327,7 @@ func promptNamesEntity(prompt, entity string) bool {
 		strings.Contains(lowerPrompt, lowerEntity+" path `")
 }
 
+// splitMarkdownRow is an internal helper for the main package.
 func splitMarkdownRow(line string) []string {
 	parts := make([]string, 0)
 	var current strings.Builder
@@ -1273,6 +1369,7 @@ func splitMarkdownRow(line string) []string {
 	return out
 }
 
+// parseExpectedToolAction performs the parse expected tool action operation using the GitLab API and returns [string].
 func parseExpectedToolAction(value string) (tool, action string, err error) {
 	parts := strings.Split(value, "/")
 	if len(parts) == 1 {
@@ -1296,6 +1393,7 @@ func parseExpectedToolAction(value string) (tool, action string, err error) {
 	return tool, action, nil
 }
 
+// parseExpectedSteps performs the parse expected steps operation using the GitLab API and returns [[]evalStep].
 func parseExpectedSteps(value string) ([]evalStep, error) {
 	parts := strings.Split(value, "->")
 	steps := make([]evalStep, 0, len(parts))
@@ -1312,6 +1410,7 @@ func parseExpectedSteps(value string) ([]evalStep, error) {
 	return steps, nil
 }
 
+// parseParamGroups performs the parse param groups operation using the GitLab API and returns [[][]string].
 func parseParamGroups(value string, stepCount int) ([][]string, error) {
 	if stepCount == 1 {
 		return [][]string{parseParamList(value)}, nil
@@ -1327,6 +1426,7 @@ func parseParamGroups(value string, stepCount int) ([][]string, error) {
 	return out, nil
 }
 
+// parseDestructiveSteps performs the parse destructive steps operation using the GitLab API and returns [[]bool].
 func parseDestructiveSteps(value string, stepCount int) ([]bool, error) {
 	value = strings.TrimSpace(strings.ToLower(value))
 	flags := make([]bool, stepCount)
@@ -1357,6 +1457,7 @@ func parseDestructiveSteps(value string, stepCount int) ([]bool, error) {
 	return flags, nil
 }
 
+// parseSimulationGroups performs the parse simulation groups operation using the GitLab API and returns [[]string].
 func parseSimulationGroups(value string, stepCount int) ([]string, error) {
 	if strings.TrimSpace(value) == "" || strings.EqualFold(strings.TrimSpace(value), "none") {
 		return make([]string, stepCount), nil
@@ -1375,6 +1476,7 @@ func parseSimulationGroups(value string, stepCount int) ([]string, error) {
 	return out, nil
 }
 
+// normalizeSimulation is an internal helper for the main package.
 func normalizeSimulation(value string) string {
 	value = strings.Trim(strings.TrimSpace(value), "`")
 	if strings.EqualFold(value, "none") {
@@ -1383,6 +1485,7 @@ func normalizeSimulation(value string) string {
 	return value
 }
 
+// parseParamList is an internal helper for the main package.
 func parseParamList(value string) []string {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.EqualFold(value, "none") {
@@ -1398,6 +1501,7 @@ func parseParamList(value string) []string {
 	return params
 }
 
+// newMockGitLabClient is an internal helper for the main package.
 func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1413,6 +1517,7 @@ func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
 	return client, srv.Close, nil
 }
 
+// loadCatalog is an internal helper for the main package.
 func loadCatalog(opts options) ([]modelTool, map[string]toolutil.ActionMap, error) {
 	if opts.ToolsFile != "" {
 		return loadToolsSnapshot(opts.ToolsFile)
@@ -1429,6 +1534,7 @@ func loadCatalog(opts options) ([]modelTool, map[string]toolutil.ActionMap, erro
 	return convertTools(mcpTools), routes, nil
 }
 
+// newCatalogGitLabClient is an internal helper for the main package.
 func newCatalogGitLabClient(opts options) (*gitlabclient.Client, func(), error) {
 	switch normalizedBackend(opts.Backend) {
 	case backendMock:
@@ -1454,6 +1560,7 @@ func newCatalogGitLabClient(opts options) (*gitlabclient.Client, func(), error) 
 	}
 }
 
+// runMCPSmoke is an internal helper for the main package.
 func runMCPSmoke(opts options) error {
 	if opts.ToolsFile != "" {
 		return errors.New("--mcp-smoke requires a live catalog, not --tools-file")
@@ -1491,6 +1598,7 @@ func runMCPSmoke(opts options) error {
 	return nil
 }
 
+// newExecutionSession is an internal helper for the main package.
 func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client, func(), error) {
 	if err := validateExecutionOptions(opts); err != nil {
 		return nil, nil, nil, err
@@ -1514,6 +1622,7 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 	}, nil
 }
 
+// validateExecutionOptions is an internal helper for the main package.
 func validateExecutionOptions(opts options) error {
 	if strings.TrimSpace(opts.MCPCommand) != "" {
 		if opts.ToolsFile == "" {
@@ -1536,6 +1645,7 @@ func validateExecutionOptions(opts options) error {
 	return nil
 }
 
+// newExternalExecutionSession is an internal helper for the main package.
 func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), error) {
 	cmd := exec.CommandContext(context.Background(), opts.MCPCommand, []string(opts.MCPArgs)...) // #nosec G204 -- explicit developer-provided MCP server command for version comparison.
 	env, err := externalMCPEnv(opts)
@@ -1556,6 +1666,7 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	return session, func() { session.Close() }, nil
 }
 
+// ensureLiveAttemptResources performs the ensure live attempt resources operation using the GitLab API and returns [evalTask].
 func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask) (evalTask, error) {
 	if session == nil {
 		return task, nil
@@ -1589,6 +1700,8 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return ensureLiveSnippetDeleteTarget(ctx, client, task)
 	case "MT-057":
 		return ensureLiveHookDeleteTarget(ctx, client, task)
+	}
+	switch task.ID {
 	case "MT-059":
 		return ensureLiveBadgeDeleteTarget(ctx, client, task)
 	case "MT-099":
@@ -1626,6 +1739,7 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 	}
 }
 
+// ensureLiveProjectActive is an internal helper for the main package.
 func ensureLiveProjectActive(ctx context.Context, client *gitlabclient.Client) error {
 	if client == nil {
 		return nil
@@ -1639,12 +1753,13 @@ func ensureLiveProjectActive(ctx context.Context, client *gitlabclient.Client) e
 	if !project.Archived {
 		return nil
 	}
-	if _, _, err := client.GL().Projects.UnarchiveProject(project.ID, gl.WithContext(setupCtx)); err != nil {
-		return fmt.Errorf("unarchive project %s: %w", liveFixtureProjectPath, err)
+	if _, _, unarchiveErr := client.GL().Projects.UnarchiveProject(project.ID, gl.WithContext(setupCtx)); unarchiveErr != nil {
+		return fmt.Errorf("unarchive project %s: %w", liveFixtureProjectPath, unarchiveErr)
 	}
 	return nil
 }
 
+// ensureLiveIssueDeleteTarget performs the ensure live issue delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1670,14 +1785,17 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	return task, nil
 }
 
+// ensureLiveProjectVariableUpdateTarget is an internal helper for the main package.
 func ensureLiveProjectVariableUpdateTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	return ensureLiveProjectVariableTarget(ctx, client, prompt, "MT-027", "masked-value-123")
 }
 
+// ensureLiveProjectVariableDeleteTarget is an internal helper for the main package.
 func ensureLiveProjectVariableDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	return ensureLiveProjectVariableTarget(ctx, client, prompt, "MT-028", "masked-value-456")
 }
 
+// ensureLiveProjectVariableTarget is an internal helper for the main package.
 func ensureLiveProjectVariableTarget(ctx context.Context, client *gitlabclient.Client, prompt, taskID, value string) error {
 	if client == nil {
 		return nil
@@ -1712,6 +1830,7 @@ func ensureLiveProjectVariableTarget(ctx context.Context, client *gitlabclient.C
 	return nil
 }
 
+// projectVariableEnvironmentScope is an internal helper for the main package.
 func projectVariableEnvironmentScope(prompt string) string {
 	if environmentScope, ok := backtickValueAfter(prompt, "environment_scope "); ok {
 		return environmentScope
@@ -1722,6 +1841,7 @@ func projectVariableEnvironmentScope(prompt string) string {
 	return "*"
 }
 
+// ensureLiveRepositoryFileDeleteTarget is an internal helper for the main package.
 func ensureLiveRepositoryFileDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -1761,6 +1881,7 @@ func ensureLiveRepositoryFileDeleteTarget(ctx context.Context, client *gitlabcli
 	return nil
 }
 
+// ensureLiveMilestoneDeleteTarget performs the ensure live milestone delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1786,6 +1907,7 @@ func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.C
 	return task, nil
 }
 
+// ensureLiveReleaseDeleteTarget is an internal helper for the main package.
 func ensureLiveReleaseDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -1821,6 +1943,7 @@ func ensureLiveReleaseDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	return nil
 }
 
+// ensureLivePackageDeleteTarget performs the ensure live package delete target operation using the GitLab API and returns [evalTask].
 func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1864,6 +1987,7 @@ func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	return task, nil
 }
 
+// ensureLiveProjectMemberAbsent is an internal helper for the main package.
 func ensureLiveProjectMemberAbsent(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -1889,6 +2013,7 @@ func ensureLiveProjectMemberAbsent(ctx context.Context, client *gitlabclient.Cli
 	return nil
 }
 
+// ensureLiveRunnerRemoveTarget performs the ensure live runner remove target operation using the GitLab API and returns [evalTask].
 func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1918,6 +2043,7 @@ func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Clie
 	return task, nil
 }
 
+// ensureLiveSnippetDeleteTarget performs the ensure live snippet delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1942,6 +2068,7 @@ func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	return task, nil
 }
 
+// ensureLiveHookDeleteTarget performs the ensure live hook delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1969,6 +2096,7 @@ func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	return task, nil
 }
 
+// ensureLiveBadgeDeleteTarget performs the ensure live badge delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -1995,6 +2123,7 @@ func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	return task, nil
 }
 
+// ensureLiveBranchExists is an internal helper for the main package.
 func ensureLiveBranchExists(ctx context.Context, client *gitlabclient.Client, projectID, branch, ref string) error {
 	_, _, err := client.GL().Branches.GetBranch(projectID, branch, gl.WithContext(ctx))
 	if err == nil {
@@ -2013,6 +2142,7 @@ func ensureLiveBranchExists(ctx context.Context, client *gitlabclient.Client, pr
 	return nil
 }
 
+// ensureLiveTagExists is an internal helper for the main package.
 func ensureLiveTagExists(ctx context.Context, client *gitlabclient.Client, projectID, tagName, ref string) error {
 	_, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
 	if err == nil {
@@ -2031,6 +2161,7 @@ func ensureLiveTagExists(ctx context.Context, client *gitlabclient.Client, proje
 	return nil
 }
 
+// ensureLiveBranchDeleteTarget is an internal helper for the main package.
 func ensureLiveBranchDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -2063,6 +2194,7 @@ func ensureLiveBranchDeleteTarget(ctx context.Context, client *gitlabclient.Clie
 	return nil
 }
 
+// ensureLiveTagDeleteTarget is an internal helper for the main package.
 func ensureLiveTagDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -2095,6 +2227,7 @@ func ensureLiveTagDeleteTarget(ctx context.Context, client *gitlabclient.Client,
 	return nil
 }
 
+// ensureLivePipelineDeleteTarget performs the ensure live pipeline delete target operation using the GitLab API and returns [evalTask].
 func ensureLivePipelineDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2118,6 +2251,7 @@ func ensureLivePipelineDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	return task, nil
 }
 
+// ensureLivePipelineTriggerDeleteTarget performs the ensure live pipeline trigger delete target operation using the GitLab API and returns [evalTask].
 func ensureLivePipelineTriggerDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2142,6 +2276,7 @@ func ensureLivePipelineTriggerDeleteTarget(ctx context.Context, client *gitlabcl
 	return task, nil
 }
 
+// ensureLivePipelineScheduleDeleteTarget performs the ensure live pipeline schedule delete target operation using the GitLab API and returns [evalTask].
 func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2171,6 +2306,7 @@ func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabc
 	return task, nil
 }
 
+// ensureLiveFeatureFlagDeleteTarget is an internal helper for the main package.
 func ensureLiveFeatureFlagDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -2197,6 +2333,7 @@ func ensureLiveFeatureFlagDeleteTarget(ctx context.Context, client *gitlabclient
 	return nil
 }
 
+// ensureLiveWikiDeleteTarget is an internal helper for the main package.
 func ensureLiveWikiDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
 	if client == nil {
 		return nil
@@ -2223,6 +2360,7 @@ func ensureLiveWikiDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	return nil
 }
 
+// ensureLiveMRAwardDeleteTarget performs the ensure live m r award delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveMRAwardDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2249,6 +2387,7 @@ func ensureLiveMRAwardDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	return task, nil
 }
 
+// ensureLiveIssueAwardDeleteTarget performs the ensure live issue award delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2275,6 +2414,7 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	return task, nil
 }
 
+// promptInt64After performs the prompt int64 after operation using the GitLab API and returns [int64].
 func promptInt64After(prompt, marker string) (int64, error) {
 	value, ok := backtickValueAfter(prompt, marker)
 	if !ok {
@@ -2287,6 +2427,7 @@ func promptInt64After(prompt, marker string) (int64, error) {
 	return parsed, nil
 }
 
+// createLiveMRAwardEmoji creates live m r award emoji using the GitLab API and returns [int64].
 func createLiveMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) (int64, error) {
 	emojis, _, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(projectID, mergeRequestIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
 	if err != nil {
@@ -2307,6 +2448,7 @@ func createLiveMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, pr
 	return 0, errors.New("no merge request award emoji available after create attempts")
 }
 
+// createLiveIssueAwardEmoji creates live issue award emoji using the GitLab API and returns [int64].
 func createLiveIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, projectID string, issueIID int64) (int64, error) {
 	emojis, _, err := client.GL().AwardEmoji.ListIssueAwardEmoji(projectID, issueIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
 	if err != nil {
@@ -2327,10 +2469,12 @@ func createLiveIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	return 0, errors.New("no issue award emoji available after create attempts")
 }
 
+// liveAwardEmojiNames is an internal helper for the main package.
 func liveAwardEmojiNames() []string {
 	return []string{"thumbsup", "thumbsdown", "rocket", "eyes", "heart", "tada"}
 }
 
+// ensureLiveDeployKeyDeleteTarget performs the ensure live deploy key delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2361,6 +2505,7 @@ func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.C
 	return task, nil
 }
 
+// ensureLiveDeployTokenDeleteTarget performs the ensure live deploy token delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveDeployTokenDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2388,6 +2533,7 @@ func ensureLiveDeployTokenDeleteTarget(ctx context.Context, client *gitlabclient
 	return task, nil
 }
 
+// ensureLiveCommitDiscussionNoteDeleteTarget performs the ensure live commit discussion note delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveCommitDiscussionNoteDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2422,6 +2568,7 @@ func ensureLiveCommitDiscussionNoteDeleteTarget(ctx context.Context, client *git
 	return task, nil
 }
 
+// cleanupLiveInstanceVariables is an internal helper for the main package.
 func cleanupLiveInstanceVariables(ctx context.Context, client *gitlabclient.Client, prefix string) error {
 	if client == nil {
 		return nil
@@ -2443,6 +2590,7 @@ func cleanupLiveInstanceVariables(ctx context.Context, client *gitlabclient.Clie
 	return nil
 }
 
+// ensureLiveManualJob performs the ensure live manual job operation using the GitLab API and returns [evalTask].
 func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
 		return task, nil
@@ -2470,6 +2618,7 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	return task, nil
 }
 
+// waitForManualJob performs the wait for manual job operation using the GitLab API and returns [int64].
 func waitForManualJob(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64) (int64, error) {
 	deadline := time.Now().Add(4 * time.Minute)
 	var lastStatuses []string
@@ -2494,10 +2643,12 @@ func waitForManualJob(ctx context.Context, client *gitlabclient.Client, projectI
 	return 0, fmt.Errorf("prepare MT-064 fixture manual job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
 }
 
+// replacePromptJobID performs the replace prompt job i d operation using the GitLab API and returns [string].
 func replacePromptJobID(prompt string, jobID int64) (string, error) {
 	return replacePromptBacktickValueAfter(prompt, "job ", jobID)
 }
 
+// replacePromptBacktickValueAfter performs the replace prompt backtick value after operation using the GitLab API and returns [string].
 func replacePromptBacktickValueAfter(prompt, marker string, value any) (string, error) {
 	oldValue, ok := backtickValueAfter(prompt, marker)
 	if !ok {
@@ -2508,28 +2659,29 @@ func replacePromptBacktickValueAfter(prompt, marker string, value any) (string, 
 	return strings.Replace(prompt, oldText, newText, 1), nil
 }
 
+// replaceAllPromptBacktickValuesAfter performs the replace all prompt backtick values after operation using the GitLab API and returns [string].
 func replaceAllPromptBacktickValuesAfter(prompt, marker string, value any) (string, error) {
 	if _, ok := backtickValueAfter(prompt, marker); !ok {
 		return prompt, fmt.Errorf("backtick value after %q not found in prompt %q", marker, prompt)
 	}
 	var out strings.Builder
 	for {
-		idx := strings.Index(prompt, marker+"`")
-		if idx < 0 {
+		before, remaining, ok := strings.Cut(prompt, marker+"`")
+		if !ok {
 			out.WriteString(prompt)
 			return out.String(), nil
 		}
-		out.WriteString(prompt[:idx])
-		out.WriteString(fmt.Sprintf("%s`%v`", marker, value))
-		remaining := prompt[idx+len(marker)+1:]
-		end := strings.Index(remaining, "`")
-		if end < 0 {
+		out.WriteString(before)
+		fmt.Fprintf(&out, "%s`%v`", marker, value)
+		_, after, ok := strings.Cut(remaining, "`")
+		if !ok {
 			return "", fmt.Errorf("unterminated backtick value after %q in prompt %q", marker, prompt)
 		}
-		prompt = remaining[end+1:]
+		prompt = after
 	}
 }
 
+// ensureLiveMergeRequestSource is an internal helper for the main package.
 func ensureLiveMergeRequestSource(ctx context.Context, session *mcp.ClientSession, prompt string) error {
 	projectID, ok := backtickValueAfter(prompt, "project ")
 	if !ok {
@@ -2562,6 +2714,7 @@ func ensureLiveMergeRequestSource(ctx context.Context, session *mcp.ClientSessio
 	}, "already exists")
 }
 
+// callFixtureSetupTool is an internal helper for the main package.
 func callFixtureSetupTool(ctx context.Context, session *mcp.ClientSession, action string, params map[string]any, ignoredErrors ...string) error {
 	result, err := callFixtureSetupToolByName(ctx, session, "gitlab", action, params)
 	if err != nil && strings.Contains(strings.ToLower(err.Error()), "unknown tool \"gitlab\"") {
@@ -2585,6 +2738,7 @@ func callFixtureSetupTool(ctx context.Context, session *mcp.ClientSession, actio
 	return fmt.Errorf("prepare fixture %s: %s", action, text)
 }
 
+// callFixtureSetupToolByName performs the call fixture setup tool by name operation using the GitLab API and returns [*mcp.CallToolResult].
 func callFixtureSetupToolByName(ctx context.Context, session *mcp.ClientSession, toolName, action string, params map[string]any) (*mcp.CallToolResult, error) {
 	return session.CallTool(ctx, &mcp.CallToolParams{
 		Name: toolName,
@@ -2595,6 +2749,7 @@ func callFixtureSetupToolByName(ctx context.Context, session *mcp.ClientSession,
 	})
 }
 
+// splitFixtureSetupAction performs the split fixture setup action operation using the GitLab API and returns [string].
 func splitFixtureSetupAction(action string) (toolName, splitAction string, ok bool) {
 	domain, route, ok := strings.Cut(action, ".")
 	if !ok || domain == "" || route == "" {
@@ -2603,6 +2758,7 @@ func splitFixtureSetupAction(action string) (toolName, splitAction string, ok bo
 	return "gitlab_" + domain, strings.ReplaceAll(route, ".", "_"), true
 }
 
+// backtickValueAfter performs the backtick value after operation using the GitLab API and returns [string].
 func backtickValueAfter(text, marker string) (string, bool) {
 	_, remaining, found := strings.Cut(text, marker)
 	if !found {
@@ -2619,6 +2775,7 @@ func backtickValueAfter(text, marker string) (string, bool) {
 	return value, true
 }
 
+// safeFixturePathPart is an internal helper for the main package.
 func safeFixturePathPart(value string) string {
 	var out strings.Builder
 	for _, r := range strings.ToLower(value) {
@@ -2631,6 +2788,7 @@ func safeFixturePathPart(value string) string {
 	return strings.Trim(out.String(), "-")
 }
 
+// externalMCPEnv performs the external m c p env operation using the GitLab API and returns [[]string].
 func externalMCPEnv(opts options) ([]string, error) {
 	env := os.Environ()
 	if strings.TrimSpace(opts.MCPEnv) == "" {
@@ -2657,6 +2815,7 @@ func externalMCPEnv(opts options) ([]string, error) {
 	return env, nil
 }
 
+// dockerModeEnabled is an internal helper for the main package.
 func dockerModeEnabled(envFile string) bool {
 	if strings.EqualFold(os.Getenv("E2E_MODE"), "docker") {
 		return true
@@ -2671,6 +2830,7 @@ func dockerModeEnabled(envFile string) bool {
 	return strings.EqualFold(values["E2E_MODE"], "docker")
 }
 
+// callToolResultText is an internal helper for the main package.
 func callToolResultText(result *mcp.CallToolResult) string {
 	if result == nil || len(result.Content) == 0 {
 		return "empty error result"
@@ -2681,6 +2841,7 @@ func callToolResultText(result *mcp.CallToolResult) string {
 	return fmt.Sprintf("error result with first content type %T", result.Content[0])
 }
 
+// toolResultContent converts the GitLab API response to the tool output format.
 func toolResultContent(result *mcp.CallToolResult) string {
 	if result == nil {
 		return "empty result"
@@ -2703,6 +2864,7 @@ func toolResultContent(result *mcp.CallToolResult) string {
 	return truncateToolResult(strings.Join(parts, "\n"))
 }
 
+// truncateToolResult is an internal helper for the main package.
 func truncateToolResult(content string) string {
 	if len(content) <= maxToolResultLen {
 		return content
@@ -2710,8 +2872,9 @@ func truncateToolResult(content string) string {
 	return content[:maxToolResultLen] + "\n...[truncated]"
 }
 
+// loadToolsSnapshot is an internal helper for the main package.
 func loadToolsSnapshot(path string) ([]modelTool, map[string]toolutil.ActionMap, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- tools snapshot path is an explicit evaluator input.
 	if err != nil {
 		return nil, nil, fmt.Errorf("read tools snapshot: %w", err)
 	}
@@ -2722,6 +2885,7 @@ func loadToolsSnapshot(path string) ([]modelTool, map[string]toolutil.ActionMap,
 	return convertSnapshotTools(snapshot), routesFromSnapshot(snapshot), nil
 }
 
+// parseToolsSnapshot performs the parse tools snapshot operation using the GitLab API and returns [[]snapshotTool].
 func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 	var snapshot []snapshotTool
 	if err := json.Unmarshal(data, &snapshot); err == nil {
@@ -2736,6 +2900,7 @@ func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 	return wrapped.Tools, nil
 }
 
+// buildCatalog constructs the request parameters from the input.
 func buildCatalog(client *gitlabclient.Client) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
 	session, closeSession, toolsResult, routes, err := buildCatalogSession(client)
 	if closeSession != nil {
@@ -2748,11 +2913,13 @@ func buildCatalog(client *gitlabclient.Client) ([]*mcp.Tool, map[string]toolutil
 	return toolsResult, routes, nil
 }
 
+// newCatalogSession is an internal helper for the main package.
 func newCatalogSession(client *gitlabclient.Client) (*mcp.ClientSession, func(), error) {
 	session, closeSession, _, _, err := buildCatalogSession(client)
 	return session, closeSession, err
 }
 
+// buildCatalogSession constructs the request parameters from the input.
 func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-meta-tools", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	routes = toolutil.CaptureMetaRoutes(func() {
@@ -2780,6 +2947,7 @@ func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSessio
 	return session, func() { session.Close() }, result.Tools, routes, nil
 }
 
+// evalCreateMessageHandler performs the eval create message handler operation using the GitLab API and returns [*mcp.CreateMessageResult].
 func evalCreateMessageHandler(_ context.Context, _ *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 	return &mcp.CreateMessageResult{
 		Content: &mcp.TextContent{Text: "## Mock Analysis\n\nThis analysis was generated by the eval_meta_tools sampling handler."},
@@ -2788,6 +2956,7 @@ func evalCreateMessageHandler(_ context.Context, _ *mcp.CreateMessageRequest) (*
 	}, nil
 }
 
+// convertTools is an internal helper for the main package.
 func convertTools(toolList []*mcp.Tool) []modelTool {
 	out := make([]modelTool, 0, len(toolList))
 	for _, tool := range toolList {
@@ -2807,6 +2976,7 @@ func convertTools(toolList []*mcp.Tool) []modelTool {
 	return out
 }
 
+// convertSnapshotTools is an internal helper for the main package.
 func convertSnapshotTools(snapshot []snapshotTool) []modelTool {
 	out := make([]modelTool, 0, len(snapshot))
 	for _, tool := range snapshot {
@@ -2823,6 +2993,7 @@ func convertSnapshotTools(snapshot []snapshotTool) []modelTool {
 	return out
 }
 
+// catalogToolNames is an internal helper for the main package.
 func catalogToolNames(catalog []modelTool) map[string]bool {
 	names := make(map[string]bool, len(catalog))
 	for _, tool := range catalog {
@@ -2831,6 +3002,7 @@ func catalogToolNames(catalog []modelTool) map[string]bool {
 	return names
 }
 
+// routesFromSnapshot is an internal helper for the main package.
 func routesFromSnapshot(snapshot []snapshotTool) map[string]toolutil.ActionMap {
 	routes := make(map[string]toolutil.ActionMap, len(snapshot))
 	for _, tool := range snapshot {
@@ -2847,6 +3019,7 @@ func routesFromSnapshot(snapshot []snapshotTool) map[string]toolutil.ActionMap {
 	return routes
 }
 
+// actionEnumFromSchema is an internal helper for the main package.
 func actionEnumFromSchema(schema map[string]any) []string {
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -2870,6 +3043,7 @@ func actionEnumFromSchema(schema map[string]any) []string {
 	return actions
 }
 
+// modelRunner holds data for main operations.
 type modelRunner struct {
 	apiKey     string
 	provider   string
@@ -2882,6 +3056,7 @@ type modelRunner struct {
 	mcpSession *mcp.ClientSession
 }
 
+// evaluateTask performs the evaluate task operation on *modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
 	steps := taskSteps(task)
 	userPrompt := taskPrompt(task)
@@ -3026,6 +3201,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 	return result
 }
 
+// canExecuteInvalidToolCall reports whether the *modelRunner satisfies the can execute invalid tool call condition.
 func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation validationResult, toolUse modelContentBlock, routes map[string]toolutil.ActionMap) bool {
 	if r.mcpSession == nil || step.Simulation != "" {
 		return false
@@ -3043,6 +3219,7 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 	return validation.DestructiveSafe
 }
 
+// isReadOnlyUnexpectedAction is an internal helper for the main package.
 func isReadOnlyUnexpectedAction(action string) bool {
 	leaf := action
 	if dot := strings.LastIndex(action, "."); dot >= 0 {
@@ -3055,6 +3232,7 @@ func isReadOnlyUnexpectedAction(action string) bool {
 	return leaf == "get" || leaf == "list" || strings.HasPrefix(leaf, "get_") || strings.HasPrefix(leaf, "list_") || strings.HasSuffix(leaf, "_get") || strings.HasSuffix(leaf, "_list")
 }
 
+// taskToolCallLimit is an internal helper for the main package.
 func taskToolCallLimit(stepCount int) int {
 	limit := stepCount*2 + 4
 	if limit < toolCallLimit {
@@ -3063,6 +3241,7 @@ func taskToolCallLimit(stepCount int) int {
 	return limit
 }
 
+// successfulSimulatedToolContent is an internal helper for the main package.
 func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, nextStep, totalSteps int) string {
 	result := map[string]any{"ok": true, "next_step": nextStep, "total_steps": totalSteps}
 	action, _ := toolUse.Input["action"].(string)
@@ -3110,6 +3289,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 	return string(data)
 }
 
+// projectPathFromRemoteURL is an internal helper for the main package.
 func projectPathFromRemoteURL(remoteURL string) string {
 	withoutSuffix := strings.TrimSuffix(remoteURL, ".git")
 	if _, withoutScheme, found := strings.Cut(withoutSuffix, "://"); found {
@@ -3123,6 +3303,7 @@ func projectPathFromRemoteURL(remoteURL string) string {
 	return withoutSuffix
 }
 
+// validatedToolResult performs the validated tool result operation on *modelRunner.
 func (r *modelRunner) validatedToolResult(ctx context.Context, step evalStep, toolUse modelContentBlock, attempt, stepNumber, totalSteps int) simulationResult {
 	if step.Simulation != "" || r.mcpSession == nil {
 		return simulatedToolResult(step, attempt, stepNumber, totalSteps)
@@ -3130,6 +3311,7 @@ func (r *modelRunner) validatedToolResult(ctx context.Context, step evalStep, to
 	return r.mcpToolResult(ctx, toolUse)
 }
 
+// mcpToolResult performs the mcp tool result operation on *modelRunner.
 func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlock) simulationResult {
 	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
@@ -3151,6 +3333,7 @@ func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlo
 	return simulationResult{Content: content, Advance: true, Injected: true}
 }
 
+// toolExecutionNote converts the GitLab API response to the tool output format.
 func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	if step.Simulation != "" {
 		return fmt.Sprintf("step %d simulation %s: %s", stepNumber, step.Simulation, err.Error())
@@ -3158,6 +3341,7 @@ func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	return fmt.Sprintf("step %d MCP execution: %s", stepNumber, err.Error())
 }
 
+// newTaskTrace is an internal helper for the main package.
 func newTaskTrace(task evalTask, systemPrompt, userPrompt string) taskTrace {
 	steps := taskSteps(task)
 	expected := make([]traceExpectedStep, 0, len(steps))
@@ -3187,6 +3371,7 @@ func newTaskTrace(task evalTask, systemPrompt, userPrompt string) taskTrace {
 	}
 }
 
+// traceToolUseEvent is an internal helper for the main package.
 func traceToolUseEvent(turn int, toolUse modelContentBlock) traceEvent {
 	action, _ := toolUse.Input["action"].(string)
 	return traceEvent{
@@ -3201,6 +3386,7 @@ func traceToolUseEvent(turn int, toolUse modelContentBlock) traceEvent {
 	}
 }
 
+// traceValidationEvent is an internal helper for the main package.
 func traceValidationEvent(turn int, validation validationResult) traceEvent {
 	return traceEvent{
 		Turn: turn,
@@ -3216,6 +3402,7 @@ func traceValidationEvent(turn int, validation validationResult) traceEvent {
 	}
 }
 
+// traceToolResultEvent is an internal helper for the main package.
 func traceToolResultEvent(turn int, block modelContentBlock) traceEvent {
 	return traceEvent{
 		Turn:      turn,
@@ -3227,6 +3414,7 @@ func traceToolResultEvent(turn int, block modelContentBlock) traceEvent {
 	}
 }
 
+// traceSummaryFromResult is an internal helper for the main package.
 func traceSummaryFromResult(result taskResult) traceSummary {
 	return traceSummary{
 		FirstTool:        result.FirstTool,
@@ -3247,6 +3435,7 @@ func traceSummaryFromResult(result taskResult) traceSummary {
 	}
 }
 
+// call performs the call operation on *modelRunner.
 func (r *modelRunner) call(ctx context.Context, systemPrompt string, catalog []modelTool, messages []modelMessage) (modelResponse, error) {
 	provider := modelProviderFor(r.provider)
 	request := modelProviderRequest{
@@ -3278,6 +3467,7 @@ func (r *modelRunner) call(ctx context.Context, systemPrompt string, catalog []m
 	return modelResponse{}, lastErr
 }
 
+// redactResponse is an internal helper for the main package.
 func redactResponse(body []byte) string {
 	text := string(body)
 	if len(text) > 1000 {
@@ -3286,6 +3476,7 @@ func redactResponse(body []byte) string {
 	return text
 }
 
+// toolUseBlocks converts the GitLab API response to the tool output format.
 func toolUseBlocks(blocks []modelContentBlock) []modelContentBlock {
 	out := make([]modelContentBlock, 0, len(blocks))
 	for _, block := range blocks {
@@ -3296,6 +3487,7 @@ func toolUseBlocks(blocks []modelContentBlock) []modelContentBlock {
 	return out
 }
 
+// isSchemaLookup is an internal helper for the main package.
 func isSchemaLookup(toolUse modelContentBlock) bool {
 	if toolUse.Name != "gitlab_server" {
 		return false
@@ -3304,6 +3496,7 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 	return action == "schema_get" || action == "schema_index"
 }
 
+// schemaLookupResult performs the schema lookup result operation using the GitLab API and returns [string].
 func schemaLookupResult(routes map[string]toolutil.ActionMap, input map[string]any) (string, error) {
 	action, _ := input["action"].(string)
 	params, _ := input["params"].(map[string]any)
@@ -3343,6 +3536,7 @@ func schemaLookupResult(routes map[string]toolutil.ActionMap, input map[string]a
 	}
 }
 
+// schemaGetUsage is an internal helper for the main package.
 func schemaGetUsage() map[string]any {
 	return map[string]any{
 		"message": "schema_get needs params.tool to return an exact action schema",
@@ -3364,6 +3558,7 @@ func schemaGetUsage() map[string]any {
 	}
 }
 
+// schemaLookupAlias performs the schema lookup alias operation using the GitLab API and returns [map[string]toolutil.ActionMap].
 func schemaLookupAlias(routes map[string]toolutil.ActionMap, tool, action string) (lookupRoutes map[string]toolutil.ActionMap, lookupTool, lookupAction string) {
 	superRoutes, hasSuperDispatcher := routes["gitlab"]
 	if !hasSuperDispatcher || tool == "gitlab" || tool == "gitlab_server" || !strings.HasPrefix(tool, "gitlab_") {
@@ -3392,6 +3587,7 @@ func schemaLookupAlias(routes map[string]toolutil.ActionMap, tool, action string
 	return map[string]toolutil.ActionMap{tool: filtered}, tool, action
 }
 
+// marshalToolResult performs the marshal tool result operation using the GitLab API and returns [string].
 func marshalToolResult(value any) (string, error) {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -3400,6 +3596,7 @@ func marshalToolResult(value any) (string, error) {
 	return string(data), nil
 }
 
+// toolResultBlock converts the GitLab API response to the tool output format.
 func toolResultBlock(toolUseID, content string, err error) modelContentBlock {
 	block := modelContentBlock{Type: "tool_result", ToolUseID: toolUseID, Content: content}
 	if err != nil {
@@ -3411,10 +3608,12 @@ func toolResultBlock(toolUseID, content string, err error) modelContentBlock {
 	return block
 }
 
+// systemPrompt is an internal helper for the main package.
 func systemPrompt() string {
 	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path, pass it inside params as project_id; use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.variables as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. When the task only asks for an LLM-assisted analyzer or to analyze why a pipeline failed, call the matching analyze.* action directly without prefetching pipeline, issue, MR, or changes; release notes use analyze.release_notes with project_id, from, and to. If the task asks for inspection, listing, or compare before an analyzer, perform those prerequisites first and call the analyzer last. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
 }
 
+// systemPromptForTask is an internal helper for the main package.
 func systemPromptForTask(task evalTask) string {
 	steps := taskSteps(task)
 	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
@@ -3423,6 +3622,7 @@ func systemPromptForTask(task evalTask) string {
 	return systemPrompt()
 }
 
+// taskPrompt is an internal helper for the main package.
 func taskPrompt(task evalTask) string {
 	destructive := "No"
 	if taskHasDestructiveStep(task) {
@@ -3461,11 +3661,15 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; confirm must be inside params, never a top-level field. The delete envelope shape is {"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}}. Do not call file_get again after the update.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get" {
+		needsBroadcastGuidance := false
 		for _, step := range steps {
 			if step.ExpectedTool == "gitlab_admin" && step.ExpectedAction == "broadcast_message_create" {
-				retryGuidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
+				needsBroadcastGuidance = true
 				break
 			}
+		}
+		if needsBroadcastGuidance {
+			retryGuidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
 		}
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
@@ -3498,17 +3702,25 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_group" && steps[0].ExpectedAction == "group_milestone_create" {
 		retryGuidance += ` For group milestone lifecycle, group_milestone_create should use params.group_id, params.title, and params.due_date when the task gives only a due date. Do not invent params.start_date unless the task provides an earlier start date. After create, call group_milestone_get with the returned milestone_iid before any update.`
 	}
+	needsPipelineTriggerGuidance := false
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
-			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+			needsPipelineTriggerGuidance = true
 			break
 		}
 	}
+	if needsPipelineTriggerGuidance {
+		retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+	}
+	needsProjectHookGuidance := false
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "hook_add" {
-			retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
+			needsProjectHookGuidance = true
 			break
 		}
+	}
+	if needsProjectHookGuidance {
+		retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
 	}
 	if strings.Contains(strings.ToLower(task.Prompt), "failed jobs") && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
 		hasFailedJobListStep := false
@@ -3546,10 +3758,12 @@ func taskPrompt(task evalTask) string {
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nThis single-operation fixture expects exactly one tool call when the action and params are clear from the prompt and tool catalog. A schema lookup before the task call is a failure unless the prompt is missing a required value or a previous validation error occurred. Choose the single MCP tool call needed to perform this task. For action-based tools, keep all action-specific fields under params and never call gitlab without an input object containing action and params. If the task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. A value like group/project is params.project_id, not remote_url; do not call gitlab_discover_project unless the task gives a git remote URL. For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title. Do not use ref, search, tag_name, to, or value for merge request create branch/title fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, snippet ID is params.snippet_id, not project_id, query, search, sort, or file_path. For custom emoji group operations, use custom_emoji.list with params.group_path, not group.custom_emoji_list or group_id. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and runner.disable_project only detaches a runner from a project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For job.play variables, use params.variables as an array like [{\"key\":\"DEPLOY_ENV\",\"value\":\"staging\"}], not an object. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. For subgroup creation with group.create, use params.name, params.path, and params.parent_id. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope; for group variables use params.group_id and ci_variable.group_* actions, not project actions. For project badges, linking to a URL means params.link_url and image means params.image_url. For pipeline lists, latest pipelines plural means pipeline.list; use pipeline.latest only for one single latest pipeline. Omit optional params that are not needed; do not add sorting/filter params unless the user asks for them, and do not send empty arrays or objects. If the task needs no input values, call the selected action with params:{}. The final task call should perform the requested GitLab operation.%s", task.ID, task.Prompt, destructive, retryGuidance)
 }
 
+// isAnalyzerStep is an internal helper for the main package.
 func isAnalyzerStep(step evalStep) bool {
 	return step.ExpectedTool == "gitlab_analyze" || strings.HasPrefix(step.ExpectedAction, "analyze.")
 }
 
+// usesExactSingleToolPrompt is an internal helper for the main package.
 func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	lowerPrompt := strings.ToLower(task.Prompt)
 	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, "failed jobs") && strings.Contains(lowerPrompt, "pipeline") {
@@ -3572,6 +3786,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	}
 }
 
+// exactToolTaskPrompt is an internal helper for the main package.
 func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) string {
 	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
 	for _, param := range step.RequiredParams {
@@ -3603,6 +3818,7 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s.%s Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data, toolDisambiguation)
 }
 
+// usesCompactExactPrompt is an internal helper for the main package.
 func usesCompactExactPrompt(step evalStep) bool {
 	switch step.ExpectedAction {
 	case "pipeline.trigger_delete", "pipeline.schedule_delete", "user.block", "user.disable_two_factor", "feature_flags.feature_flag_delete", "wiki.delete", "merge_request.emoji_mr_delete", "issue.emoji_issue_delete", "access.deploy_key_delete", "access.deploy_token_delete_project", "repository.commit_discussion_delete_note", "attestation.download", "audit_event.get_instance", "audit_event.list_project", "compliance_policy.update", "dependency.export_create", "dependency.export_download", "dora_metrics.group", "enterprise_user.get", "enterprise_user.disable_2fa", "external_status_check.create_project", "external_status_check.set_project_mr_status", "external_status_check.delete_project", "geo.get", "geo.create", "geo.delete", "group.credential_list_pats", "group.credential_revoke_pat", "group.epic_board_list", "group.epic_list", "group.epic_create", "group.epic_update", "group.epic_delete", "group.epic_issue_assign":
@@ -3612,6 +3828,7 @@ func usesCompactExactPrompt(step evalStep) bool {
 	}
 }
 
+// compactExactTaskPrompt is an internal helper for the main package.
 func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) string {
 	params := make(map[string]any, len(step.RequiredParams)+1)
 	for _, param := range step.RequiredParams {
@@ -3650,6 +3867,7 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. %s\nUse the gitlab tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data, mapping)
 }
 
+// compactExactPromptUsesID is an internal helper for the main package.
 func compactExactPromptUsesID(requiredParams []string) bool {
 	for _, param := range requiredParams {
 		if strings.HasSuffix(param, "_id") && param != "project_id" && param != "group_id" {
@@ -3659,6 +3877,7 @@ func compactExactPromptUsesID(requiredParams []string) bool {
 	return false
 }
 
+// marshalGuidanceExample performs the marshal guidance example operation using the GitLab API and returns [string].
 func marshalGuidanceExample(value any) (string, error) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -3669,251 +3888,107 @@ func marshalGuidanceExample(value any) (string, error) {
 	return strings.TrimSpace(buffer.String()), nil
 }
 
+var numericExampleParamMarkers = map[string][]string{
+	"id":                       {"Geo site ID "},
+	"attestation_iid":          {"attestation IID "},
+	"event_id":                 {"event ID "},
+	"external_status_check_id": {"external status check ID "},
+	"check_id":                 {"external project status check ID ", "external status check ID "},
+	"csp_namespace_id":         {"namespace ID "},
+	"export_id":                {"export ID "},
+	"epic_iid":                 {"epic IID "},
+	"child_iid":                {"issue IID "},
+	"token_id":                 {"personal access token ID ", "token ID "},
+	"issue_iid":                {"issue "},
+	"merge_request_iid":        {"merge_request_iid ", "merge request ", "MR "},
+	"note_id":                  {"note ", "discussion note "},
+	"pipeline_id":              {"pipeline ID ", "pipeline "},
+	"job_id":                   {"job ID ", "job "},
+	"schedule_id":              {"pipeline schedule ID "},
+	"trigger_id":               {"pipeline trigger token ID "},
+	"user_id":                  {"user ID "},
+	"award_id":                 {"award emoji ID "},
+	"deploy_key_id":            {"deploy key ID "},
+	"deploy_token_id":          {"deploy token ID ", "project deploy token ID "},
+}
+
+var stringExampleParamMarkers = map[string][]string{
+	"external_url":       {"pointing at "},
+	"artifact_path":      {"artifact "},
+	"group_id":           {" in group ", "group path ", "group "},
+	"full_path":          {"group full path ", "group path "},
+	"child_project_path": {"child project path "},
+	"start_date":         {" from "},
+	"end_date":           {" to "},
+	"sha":                {"SHA "},
+	"url":                {"URL "},
+	"commit_sha":         {"on commit "},
+	"discussion_id":      {"discussion_id ", "from discussion "},
+	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
+	"key":                {"variable "},
+	"value":              {"value "},
+	"title":              {"titled "},
+	"slug":               {"wiki page "},
+	"from":               {" from "},
+	"to":                 {" to "},
+	"content_ref":        {"branch ", " ref "},
+	"ref":                {"branch ", " ref "},
+	"branch":             {"branch "},
+	"file_path":          {"file "},
+	"content":            {"content "},
+	"commit_message":     {"commit_message "},
+}
+
+// exampleParamValue is an internal helper for the main package.
 func exampleParamValue(param, prompt string) any {
+	if value, ok := examplePromptMarkerValue(param, prompt); ok {
+		return value
+	}
+	lowerPrompt := strings.ToLower(prompt)
 	switch param {
-	case "id":
-		if value, ok := backtickValueAfter(prompt, "Geo site ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "attestation_iid":
-		if value, ok := backtickValueAfter(prompt, "attestation IID "); ok {
-			return numericExampleValue(value)
-		}
-	case "event_id":
-		if value, ok := backtickValueAfter(prompt, "event ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "external_status_check_id":
-		if value, ok := backtickValueAfter(prompt, "external status check ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "check_id":
-		if value, ok := backtickValueAfter(prompt, "external project status check ID "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "external status check ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "csp_namespace_id":
-		if value, ok := backtickValueAfter(prompt, "namespace ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "external_url":
-		if value, ok := backtickValueAfter(prompt, "pointing at "); ok {
-			return value
-		}
-	case "artifact_path":
-		if value, ok := backtickValueAfter(prompt, "artifact "); ok {
-			return value
-		}
-	case "export_id":
-		if value, ok := backtickValueAfter(prompt, "export ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "group_id":
-		if value, ok := backtickValueAfter(prompt, " in group "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "group path "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "group "); ok {
-			return value
-		}
-	case "full_path":
-		if value, ok := backtickValueAfter(prompt, "group full path "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "group path "); ok {
-			return value
-		}
-	case "epic_iid":
-		if value, ok := backtickValueAfter(prompt, "epic IID "); ok {
-			return numericExampleValue(value)
-		}
-	case "child_project_path":
-		if value, ok := backtickValueAfter(prompt, "child project path "); ok {
-			return value
-		}
-	case "child_iid":
-		if value, ok := backtickValueAfter(prompt, "issue IID "); ok {
-			return numericExampleValue(value)
-		}
-	case "token_id":
-		if value, ok := backtickValueAfter(prompt, "personal access token ID "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "token ID "); ok {
-			return numericExampleValue(value)
-		}
 	case "metric":
-		if strings.Contains(strings.ToLower(prompt), "lead time") {
+		if strings.Contains(lowerPrompt, "lead time") {
 			return "lead_time_for_changes"
 		}
-	case "start_date":
-		if value, ok := backtickValueAfter(prompt, " from "); ok {
-			return value
-		}
-	case "end_date":
-		if value, ok := backtickValueAfter(prompt, " to "); ok {
-			return value
-		}
-	case "sha":
-		if value, ok := backtickValueAfter(prompt, "SHA "); ok {
-			return value
-		}
 	case "status":
-		if strings.Contains(strings.ToLower(prompt), "passed") {
+		if strings.Contains(lowerPrompt, "passed") {
 			return "passed"
 		}
 	case "scope":
-		if strings.Contains(strings.ToLower(prompt), "failed jobs") {
+		if strings.Contains(lowerPrompt, "failed jobs") {
 			return "failed"
-		}
-	case "url":
-		if value, ok := backtickValueAfter(prompt, "URL "); ok {
-			return value
 		}
 	case "project_id":
 		if value, ok := exampleProjectIDValue(prompt); ok {
 			return value
 		}
-	case "issue_iid":
-		if value, ok := backtickValueAfter(prompt, "issue "); ok {
-			return numericExampleValue(value)
-		}
-	case "merge_request_iid":
-		if value, ok := backtickValueAfter(prompt, "merge_request_iid "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "merge request "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "MR "); ok {
-			return numericExampleValue(value)
-		}
-	case "note_id":
-		if value, ok := backtickValueAfter(prompt, "note "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "discussion note "); ok {
-			return numericExampleValue(value)
-		}
-	case "pipeline_id":
-		if value, ok := backtickValueAfter(prompt, "pipeline ID "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "pipeline "); ok {
-			return numericExampleValue(value)
-		}
-	case "job_id":
-		if value, ok := backtickValueAfter(prompt, "job ID "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "job "); ok {
-			return numericExampleValue(value)
-		}
-	case "schedule_id":
-		if value, ok := backtickValueAfter(prompt, "pipeline schedule ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "trigger_id":
-		if value, ok := backtickValueAfter(prompt, "pipeline trigger token ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "user_id":
-		if value, ok := backtickValueAfter(prompt, "user ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "award_id":
-		if value, ok := backtickValueAfter(prompt, "award emoji ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "deploy_key_id":
-		if value, ok := backtickValueAfter(prompt, "deploy key ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "deploy_token_id":
-		if value, ok := backtickValueAfter(prompt, "deploy token ID "); ok {
-			return numericExampleValue(value)
-		}
-		if value, ok := backtickValueAfter(prompt, "project deploy token ID "); ok {
-			return numericExampleValue(value)
-		}
-	case "commit_sha":
-		if value, ok := backtickValueAfter(prompt, "on commit "); ok {
-			return value
-		}
-	case "discussion_id":
-		if value, ok := backtickValueAfter(prompt, "discussion_id "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "from discussion "); ok {
-			return value
-		}
-	case "name":
-		if value, ok := backtickValueAfter(prompt, "named "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "deploy token "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "status check "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, "feature flag "); ok {
-			return value
-		}
-	case "key":
-		if value, ok := backtickValueAfter(prompt, "variable "); ok {
-			return value
-		}
-	case "value":
-		if value, ok := backtickValueAfter(prompt, "value "); ok {
-			return value
-		}
 	case "masked", "protected":
 		return false
-	case "title":
-		if value, ok := backtickValueAfter(prompt, "titled "); ok {
-			return value
-		}
-	case "slug":
-		if value, ok := backtickValueAfter(prompt, "wiki page "); ok {
-			return value
-		}
-	case "from":
-		if value, ok := backtickValueAfter(prompt, " from "); ok {
-			return value
-		}
-	case "to":
-		if value, ok := backtickValueAfter(prompt, " to "); ok {
-			return value
-		}
-	case "content_ref", "ref":
-		if value, ok := backtickValueAfter(prompt, "branch "); ok {
-			return value
-		}
-		if value, ok := backtickValueAfter(prompt, " ref "); ok {
-			return value
-		}
-	case "branch":
-		if value, ok := backtickValueAfter(prompt, "branch "); ok {
-			return value
-		}
-	case "file_path":
-		if value, ok := backtickValueAfter(prompt, "file "); ok {
-			return value
-		}
-	case "content":
-		if value, ok := backtickValueAfter(prompt, "content "); ok {
-			return value
-		}
-	case "commit_message":
-		if value, ok := backtickValueAfter(prompt, "commit_message "); ok {
-			return value
+	}
+	return fallbackExampleParamValue(param)
+}
+
+// examplePromptMarkerValue performs the example prompt marker value operation using the GitLab API and returns [any].
+func examplePromptMarkerValue(param, prompt string) (any, bool) {
+	if markers, ok := numericExampleParamMarkers[param]; ok {
+		for _, marker := range markers {
+			if value, found := backtickValueAfter(prompt, marker); found {
+				return numericExampleValue(value), true
+			}
 		}
 	}
+	if markers, ok := stringExampleParamMarkers[param]; ok {
+		for _, marker := range markers {
+			if value, found := backtickValueAfter(prompt, marker); found {
+				return value, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// fallbackExampleParamValue is an internal helper for the main package.
+func fallbackExampleParamValue(param string) any {
 	switch param {
 	case "id", "attestation_iid", "event_id", "external_status_check_id", "check_id", "csp_namespace_id", "export_id", "issue_iid", "merge_request_iid", "pipeline_id", "job_id", "runner_id", "schedule_id", "trigger_id", "user_id", "award_id", "deploy_key_id", "deploy_token_id", "token_id", "epic_iid", "child_iid", "note_id":
 		return 123
@@ -3924,6 +3999,7 @@ func exampleParamValue(param, prompt string) any {
 	}
 }
 
+// exampleOptionalParamValue performs the example optional param value operation using the GitLab API and returns [any].
 func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	start, end, hasMonth := monthRangeFromPrompt(prompt)
 	switch param {
@@ -3968,6 +4044,7 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	return nil, false
 }
 
+// monthRangeFromPrompt performs the month range from prompt operation using the GitLab API and returns [string].
 func monthRangeFromPrompt(prompt string) (startDate, endDate string, ok bool) {
 	lower := strings.ToLower(prompt)
 	for month := time.January; month <= time.December; month++ {
@@ -3992,6 +4069,7 @@ func monthRangeFromPrompt(prompt string) (startDate, endDate string, ok bool) {
 	return "", "", false
 }
 
+// exampleProjectIDValue performs the example project i d value operation using the GitLab API and returns [string].
 func exampleProjectIDValue(prompt string) (string, bool) {
 	for _, marker := range []string{" from project ", " in project ", " on project ", " project "} {
 		if value, ok := backtickValueAfter(prompt, marker); ok {
@@ -4001,6 +4079,7 @@ func exampleProjectIDValue(prompt string) (string, bool) {
 	return backtickValueAfter(prompt, "project ")
 }
 
+// numericExampleValue is an internal helper for the main package.
 func numericExampleValue(value string) any {
 	number, err := strconv.Atoi(value)
 	if err != nil {
@@ -4009,6 +4088,7 @@ func numericExampleValue(value string) any {
 	return number
 }
 
+// taskHasSimulationMode is an internal helper for the main package.
 func taskHasSimulationMode(task evalTask, simulation string) bool {
 	for _, step := range taskSteps(task) {
 		if step.Simulation == simulation {
@@ -4018,10 +4098,12 @@ func taskHasSimulationMode(task evalTask, simulation string) bool {
 	return false
 }
 
+// validateToolCall is an internal helper for the main package.
 func validateToolCall(task evalTask, toolName string, input map[string]any) validationResult {
 	return validateStepCall(taskSteps(task)[0], toolName, input)
 }
 
+// validateStepCall is an internal helper for the main package.
 func validateStepCall(step evalStep, toolName string, input map[string]any) validationResult {
 	if step.ExpectedAction == "" {
 		return validateStandaloneToolCall(step, toolName, input)
@@ -4029,6 +4111,7 @@ func validateStepCall(step evalStep, toolName string, input map[string]any) vali
 	return validateActionToolCall(step, toolName, input)
 }
 
+// validateStepCallWithRoutes is an internal helper for the main package.
 func validateStepCallWithRoutes(step evalStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) validationResult {
 	if step.ExpectedAction != "" && toolName == step.ExpectedTool {
 		if toolRoutes, routesOK := routes[step.ExpectedTool]; routesOK {
@@ -4076,6 +4159,7 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 	return result
 }
 
+// cloneToolInputWithAction is an internal helper for the main package.
 func cloneToolInputWithAction(input map[string]any, action string) map[string]any {
 	out := make(map[string]any, len(input))
 	maps.Copy(out, input)
@@ -4083,6 +4167,7 @@ func cloneToolInputWithAction(input map[string]any, action string) map[string]an
 	return out
 }
 
+// cloneToolInputWithParams is an internal helper for the main package.
 func cloneToolInputWithParams(input, params map[string]any) map[string]any {
 	out := make(map[string]any, len(input))
 	maps.Copy(out, input)
@@ -4090,6 +4175,7 @@ func cloneToolInputWithParams(input, params map[string]any) map[string]any {
 	return out
 }
 
+// schemaAllowsParam is an internal helper for the main package.
 func schemaAllowsParam(schema map[string]any, param string) bool {
 	if param == "confirm" {
 		return true
@@ -4102,6 +4188,7 @@ func schemaAllowsParam(schema map[string]any, param string) bool {
 	return ok
 }
 
+// schemaValidationIssues is an internal helper for the main package.
 func schemaValidationIssues(schema map[string]any, value any, path string) (unknownParams, missingParams []string) {
 	var unknown []string
 	var missing []string
@@ -4149,6 +4236,7 @@ func schemaValidationIssues(schema map[string]any, value any, path string) (unkn
 	return unknown, missing
 }
 
+// schemaStringSlice is an internal helper for the main package.
 func schemaStringSlice(value any) []string {
 	items, ok := value.([]any)
 	if !ok {
@@ -4163,6 +4251,7 @@ func schemaStringSlice(value any) []string {
 	return stringsOut
 }
 
+// schemaPath is an internal helper for the main package.
 func schemaPath(prefix, name string) string {
 	if prefix == "" {
 		return name
@@ -4170,6 +4259,7 @@ func schemaPath(prefix, name string) string {
 	return prefix + "." + name
 }
 
+// simulatedToolResult is an internal helper for the main package.
 func simulatedToolResult(step evalStep, attempt, stepNumber, totalSteps int) simulationResult {
 	switch step.Simulation {
 	case "":
@@ -4204,6 +4294,7 @@ func simulatedToolResult(step evalStep, attempt, stepNumber, totalSteps int) sim
 	}
 }
 
+// validateActionToolCall is an internal helper for the main package.
 func validateActionToolCall(step evalStep, toolName string, input map[string]any) validationResult {
 	action, _ := input["action"].(string)
 	params, _ := input["params"].(map[string]any)
@@ -4251,6 +4342,7 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	return result
 }
 
+// requiredParamPresent is an internal helper for the main package.
 func requiredParamPresent(params map[string]any, required string) bool {
 	if _, ok := params[required]; ok {
 		return true
@@ -4262,6 +4354,7 @@ func requiredParamPresent(params map[string]any, required string) bool {
 	return false
 }
 
+// validationRepairMessage is an internal helper for the main package.
 func validationRepairMessage(step evalStep, validation validationResult) string {
 	var b strings.Builder
 	b.WriteString(validation.Message)
@@ -4279,6 +4372,7 @@ func validationRepairMessage(step evalStep, validation validationResult) string 
 	return b.String()
 }
 
+// expectedActionCallExample is an internal helper for the main package.
 func expectedActionCallExample(step evalStep) string {
 	params := map[string]any{}
 	for _, required := range step.RequiredParams {
@@ -4294,6 +4388,7 @@ func expectedActionCallExample(step evalStep) string {
 	return string(data)
 }
 
+// validateStandaloneToolCall is an internal helper for the main package.
 func validateStandaloneToolCall(step evalStep, toolName string, input map[string]any) validationResult {
 	result := validationResult{
 		ToolMatches:     toolName == step.ExpectedTool,
@@ -4332,6 +4427,7 @@ func validateStandaloneToolCall(step evalStep, toolName string, input map[string
 	return result
 }
 
+// isTruthy is an internal helper for the main package.
 func isTruthy(value any) bool {
 	switch v := value.(type) {
 	case bool:
@@ -4344,6 +4440,7 @@ func isTruthy(value any) bool {
 	}
 }
 
+// runStaticValidation is an internal helper for the main package.
 func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap, toolNames map[string]bool, runIndex int) []taskResult {
 	results := make([]taskResult, 0, len(tasks))
 	for _, task := range tasks {
@@ -4364,6 +4461,7 @@ func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap,
 	return results
 }
 
+// missingRoutes is an internal helper for the main package.
 func missingRoutes(steps []evalStep, routes map[string]toolutil.ActionMap, toolNames map[string]bool) []string {
 	var missing []string
 	for i, step := range steps {
@@ -4380,6 +4478,7 @@ func missingRoutes(steps []evalStep, routes map[string]toolutil.ActionMap, toolN
 	return missing
 }
 
+// comparisonInput defines parameters for the comparison operation.
 type comparisonInput struct {
 	Path          string
 	Label         string
@@ -4402,6 +4501,7 @@ type comparisonInput struct {
 	Coverage      map[string]int
 }
 
+// writeComparisonReport is an internal helper for the main package.
 func writeComparisonReport(path string, files []string) error {
 	if len(files) < 2 {
 		return errors.New("--compare requires at least two report files")
@@ -4425,6 +4525,7 @@ func writeComparisonReport(path string, files []string) error {
 	return nil
 }
 
+// parseComparisonInput performs the parse comparison input operation using the GitLab API and returns [comparisonInput].
 func parseComparisonInput(path string) (comparisonInput, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- explicit developer-provided comparison report path.
 	if err != nil {
@@ -4477,6 +4578,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 	return input, nil
 }
 
+// buildComparisonReport constructs the request parameters from the input.
 func buildComparisonReport(inputs []comparisonInput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Meta-Tool Evaluation Comparison\n\n")
@@ -4500,6 +4602,7 @@ func buildComparisonReport(inputs []comparisonInput) string {
 	return b.String()
 }
 
+// writeEvaluationComparison is an internal helper for the main package.
 func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 	evals := comparisonInputsByKind(inputs, "evaluation")
 	if len(evals) == 0 {
@@ -4523,6 +4626,7 @@ func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 	writeMetricDeltaTable(b, evals)
 }
 
+// writeMetricDeltaTable is an internal helper for the main package.
 func writeMetricDeltaTable(b *strings.Builder, evals []comparisonInput) {
 	if len(evals) < 2 {
 		return
@@ -4544,6 +4648,7 @@ func writeMetricDeltaTable(b *strings.Builder, evals []comparisonInput) {
 	}
 }
 
+// writeTokenComparison is an internal helper for the main package.
 func writeTokenComparison(b *strings.Builder, inputs []comparisonInput) {
 	tokens := comparisonInputsByKind(inputs, "token")
 	if len(tokens) == 0 {
@@ -4561,6 +4666,7 @@ func writeTokenComparison(b *strings.Builder, inputs []comparisonInput) {
 	}
 }
 
+// writeUsageComparison is an internal helper for the main package.
 func writeUsageComparison(b *strings.Builder, inputs []comparisonInput) {
 	evals := comparisonInputsByKind(inputs, "evaluation")
 	var withUsage []comparisonInput
@@ -4585,6 +4691,7 @@ func writeUsageComparison(b *strings.Builder, inputs []comparisonInput) {
 	}
 }
 
+// writeDiagnosticsComparison is an internal helper for the main package.
 func writeDiagnosticsComparison(b *strings.Builder, inputs []comparisonInput) {
 	categories := sortedIntKeys(func() map[string]int {
 		merged := map[string]int{}
@@ -4610,6 +4717,7 @@ func writeDiagnosticsComparison(b *strings.Builder, inputs []comparisonInput) {
 	}
 }
 
+// writeCoverageComparison is an internal helper for the main package.
 func writeCoverageComparison(b *strings.Builder, inputs []comparisonInput) {
 	evals := comparisonInputsByKind(inputs, "evaluation")
 	if len(evals) == 0 {
@@ -4624,6 +4732,7 @@ func writeCoverageComparison(b *strings.Builder, inputs []comparisonInput) {
 	}
 }
 
+// comparisonInputsByKind is an internal helper for the main package.
 func comparisonInputsByKind(inputs []comparisonInput, kind string) []comparisonInput {
 	var out []comparisonInput
 	for _, input := range inputs {
@@ -4634,6 +4743,7 @@ func comparisonInputsByKind(inputs []comparisonInput, kind string) []comparisonI
 	return out
 }
 
+// firstMetadataValue is an internal helper for the main package.
 func firstMetadataValue(content, key string) string {
 	prefix := key + ":"
 	for line := range strings.SplitSeq(content, "\n") {
@@ -4645,10 +4755,12 @@ func firstMetadataValue(content, key string) string {
 	return ""
 }
 
+// firstMetadataInt is an internal helper for the main package.
 func firstMetadataInt(content, key string) int {
 	return parseReportInt(firstMetadataValue(content, key))
 }
 
+// parsePercentTable is an internal helper for the main package.
 func parsePercentTable(content, section string) map[string]float64 {
 	out := map[string]float64{}
 	for key, value := range parseStringTable(content, section, "Metric", "Value") {
@@ -4657,6 +4769,7 @@ func parsePercentTable(content, section string) map[string]float64 {
 	return out
 }
 
+// parseIntTable is an internal helper for the main package.
 func parseIntTable(content, section, keyHeader, valueHeader string) map[string]int {
 	out := map[string]int{}
 	for key, value := range parseStringTable(content, section, keyHeader, valueHeader) {
@@ -4665,6 +4778,7 @@ func parseIntTable(content, section, keyHeader, valueHeader string) map[string]i
 	return out
 }
 
+// parseStringTable is an internal helper for the main package.
 func parseStringTable(content, section, keyHeader, valueHeader string) map[string]string {
 	out := map[string]string{}
 	for _, row := range reportTableRows(content, section) {
@@ -4676,6 +4790,7 @@ func parseStringTable(content, section, keyHeader, valueHeader string) map[strin
 	return out
 }
 
+// reportTableRows is an internal helper for the main package.
 func reportTableRows(content, section string) [][]string {
 	var rows [][]string
 	if section != "" {
@@ -4690,6 +4805,7 @@ func reportTableRows(content, section string) [][]string {
 	return rows
 }
 
+// appendReportTableRow is an internal helper for the main package.
 func appendReportTableRow(rows [][]string, line string) [][]string {
 	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
@@ -4702,6 +4818,7 @@ func appendReportTableRow(rows [][]string, line string) [][]string {
 	return append(rows, row)
 }
 
+// sectionLines is an internal helper for the main package.
 func sectionLines(lines []string, section string) []string {
 	start := -1
 	for i, line := range lines {
@@ -4723,6 +4840,7 @@ func sectionLines(lines []string, section string) []string {
 	return lines[start:end]
 }
 
+// markdownSeparatorRow is an internal helper for the main package.
 func markdownSeparatorRow(row []string) bool {
 	if len(row) == 0 {
 		return false
@@ -4736,6 +4854,7 @@ func markdownSeparatorRow(row []string) bool {
 	return true
 }
 
+// comparisonLabel is an internal helper for the main package.
 func comparisonLabel(path string) string {
 	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	if base == "tools" || base == "tokens" || strings.HasPrefix(base, "schema-") || strings.HasPrefix(base, "live-") {
@@ -4747,6 +4866,7 @@ func comparisonLabel(path string) string {
 	return base
 }
 
+// comparisonLabelFromSnapshot is an internal helper for the main package.
 func comparisonLabelFromSnapshot(snapshotPath, fallback string) string {
 	snapshotPath = cleanReportValue(snapshotPath)
 	if snapshotPath == "" {
@@ -4759,12 +4879,14 @@ func comparisonLabelFromSnapshot(snapshotPath, fallback string) string {
 	return parent
 }
 
+// cleanReportValue is an internal helper for the main package.
 func cleanReportValue(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.Trim(value, "`")
 	return strings.TrimSpace(value)
 }
 
+// parseReportPercent is an internal helper for the main package.
 func parseReportPercent(value string) float64 {
 	value = strings.TrimSuffix(cleanReportValue(value), "%")
 	value = strings.ReplaceAll(value, ",", "")
@@ -4772,6 +4894,7 @@ func parseReportPercent(value string) float64 {
 	return parsed
 }
 
+// parseReportInt is an internal helper for the main package.
 func parseReportInt(value string) int {
 	value = cleanReportValue(value)
 	value = strings.ReplaceAll(value, ",", "")
@@ -4783,14 +4906,17 @@ func parseReportInt(value string) int {
 	return parsed
 }
 
+// formatMetric renders the result as a formatted string.
 func formatMetric(value float64) string {
 	return fmt.Sprintf("%.1f%%", value)
 }
 
+// formatDelta renders the result as a formatted string.
 func formatDelta(value float64) string {
 	return fmt.Sprintf("%+.1f pp", value)
 }
 
+// sortedIntKeys is an internal helper for the main package.
 func sortedIntKeys(values map[string]int) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -4800,6 +4926,7 @@ func sortedIntKeys(values map[string]int) []string {
 	return keys
 }
 
+// emptyDash is an internal helper for the main package.
 func emptyDash(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "-"
@@ -4807,6 +4934,7 @@ func emptyDash(value string) string {
 	return escapeTable(value)
 }
 
+// valueOrZero is an internal helper for the main package.
 func valueOrZero(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "0"
@@ -4814,6 +4942,7 @@ func valueOrZero(value string) string {
 	return escapeTable(value)
 }
 
+// writeReport is an internal helper for the main package.
 func writeReport(path string, opts options, results []taskResult, catalog []modelTool, routes map[string]toolutil.ActionMap, dryRun bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
@@ -4826,6 +4955,14 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	fmt.Fprintf(&b, "# Meta-Tool Model Evaluation\n\n")
 	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
+	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
+		if branch != "" {
+			fmt.Fprintf(&b, "Git branch: `%s`\n", branch)
+		}
+		if commit != "" {
+			fmt.Fprintf(&b, "Git commit: `%s`\n", commit)
+		}
+	}
 	fmt.Fprintf(&b, "Mode: %s\n", mode)
 	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
@@ -4897,6 +5034,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	return nil
 }
 
+// writeFailureDiagnostics is an internal helper for the main package.
 func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskResult) {
 	counts := make(map[string]int)
 	examples := make(map[string]string)
@@ -4929,6 +5067,7 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 	}
 }
 
+// failureDiagnosticCategory is an internal helper for the main package.
 func failureDiagnosticCategory(notes []string) string {
 	text := strings.ToLower(strings.Join(notes, "\n"))
 	switch {
@@ -4959,6 +5098,7 @@ func failureDiagnosticCategory(notes []string) string {
 	}
 }
 
+// writeTraceArtifacts is an internal helper for the main package.
 func writeTraceArtifacts(dir string, results []taskResult) error {
 	if dir == "" {
 		return nil
@@ -5014,6 +5154,7 @@ func writeTraceArtifacts(dir string, results []taskResult) error {
 	return nil
 }
 
+// traceFileName is an internal helper for the main package.
 func traceFileName(trace taskTrace) string {
 	taskID := strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(trace.TaskID)
 	model := strings.NewReplacer("/", "-", "\\", "-", " ", "-", ":", "-").Replace(trace.Model)
@@ -5023,6 +5164,7 @@ func traceFileName(trace taskTrace) string {
 	return fmt.Sprintf("%s-run-%03d-%s.json", model, trace.Run, taskID)
 }
 
+// writeFixtureCoverage is an internal helper for the main package.
 func writeFixtureCoverage(b *strings.Builder, catalog []modelTool, results []taskResult, routes map[string]toolutil.ActionMap) {
 	summary := fixtureToolCoverage(catalog, results)
 	actionSummary := fixtureActionCoverage(routes, results)
@@ -5042,12 +5184,14 @@ func writeFixtureCoverage(b *strings.Builder, catalog []modelTool, results []tas
 	}
 }
 
+// fixtureCoverage holds data for main operations.
 type fixtureCoverage struct {
 	Total   int
 	Covered int
 	Missing []string
 }
 
+// fixtureToolCoverage is an internal helper for the main package.
 func fixtureToolCoverage(catalog []modelTool, results []taskResult) fixtureCoverage {
 	catalogNames := make([]string, 0, len(catalog))
 	for _, tool := range catalog {
@@ -5069,6 +5213,7 @@ func fixtureToolCoverage(catalog []modelTool, results []taskResult) fixtureCover
 	return fixtureCoverage{Total: len(catalogNames), Covered: len(catalogNames) - len(missing), Missing: missing}
 }
 
+// fixtureActionCoverage is an internal helper for the main package.
 func fixtureActionCoverage(routes map[string]toolutil.ActionMap, results []taskResult) fixtureCoverage {
 	if len(routes) == 0 {
 		return fixtureCoverage{}
@@ -5097,6 +5242,7 @@ func fixtureActionCoverage(routes map[string]toolutil.ActionMap, results []taskR
 	return fixtureCoverage{Total: len(all), Covered: len(all) - len(missing), Missing: missing}
 }
 
+// writeCoverageReportIfRequested is an internal helper for the main package.
 func writeCoverageReportIfRequested(opts options, results []taskResult, routes map[string]toolutil.ActionMap) error {
 	if opts.CoverageReport == "" {
 		return nil
@@ -5112,6 +5258,7 @@ func writeCoverageReportIfRequested(opts options, results []taskResult, routes m
 	return nil
 }
 
+// buildRouteCoverageReport constructs the request parameters from the input.
 func buildRouteCoverageReport(opts options, results []taskResult, routes map[string]toolutil.ActionMap) string {
 	covered := coveredRouteSet(results)
 	uncovered := uncoveredHighRiskRoutes(routes, covered)
@@ -5150,17 +5297,20 @@ func buildRouteCoverageReport(opts options, results []taskResult, routes map[str
 	return b.String()
 }
 
+// uncoveredRoute holds data for main operations.
 type uncoveredRoute struct {
 	Tool   string
 	Action string
 	Risks  []string
 }
 
+// domainCount holds data for main operations.
 type domainCount struct {
 	Name  string
 	Count int
 }
 
+// coveredRouteSet is an internal helper for the main package.
 func coveredRouteSet(results []taskResult) map[string]bool {
 	covered := map[string]bool{}
 	for _, result := range results {
@@ -5174,6 +5324,7 @@ func coveredRouteSet(results []taskResult) map[string]bool {
 	return covered
 }
 
+// uncoveredHighRiskRoutes is an internal helper for the main package.
 func uncoveredHighRiskRoutes(routes map[string]toolutil.ActionMap, covered map[string]bool) []uncoveredRoute {
 	var out []uncoveredRoute
 	for tool, actions := range routes {
@@ -5198,6 +5349,7 @@ func uncoveredHighRiskRoutes(routes map[string]toolutil.ActionMap, covered map[s
 	return out
 }
 
+// routeRiskClasses is an internal helper for the main package.
 func routeRiskClasses(tool, action string) []string {
 	var risks []string
 	if routeLooksEnterprise(tool, action) {
@@ -5224,6 +5376,7 @@ func routeRiskClasses(tool, action string) []string {
 	return uniqueStrings(risks)
 }
 
+// uncoveredHighRiskByDomain is an internal helper for the main package.
 func uncoveredHighRiskByDomain(routes []uncoveredRoute) []domainCount {
 	counts := map[string]int{}
 	for _, route := range routes {
@@ -5242,6 +5395,7 @@ func uncoveredHighRiskByDomain(routes []uncoveredRoute) []domainCount {
 	return domains
 }
 
+// routeDomainName is an internal helper for the main package.
 func routeDomainName(tool, action string) string {
 	if tool != "gitlab" || action == "" {
 		return strings.TrimPrefix(tool, "gitlab_")
@@ -5252,6 +5406,7 @@ func routeDomainName(tool, action string) string {
 	return action
 }
 
+// countCatalogRoutes is an internal helper for the main package.
 func countCatalogRoutes(routes map[string]toolutil.ActionMap) int {
 	total := 0
 	for _, actions := range routes {
@@ -5260,6 +5415,7 @@ func countCatalogRoutes(routes map[string]toolutil.ActionMap) int {
 	return total
 }
 
+// uniqueStrings is an internal helper for the main package.
 func uniqueStrings(values []string) []string {
 	seen := map[string]bool{}
 	unique := make([]string, 0, len(values))
@@ -5273,6 +5429,7 @@ func uniqueStrings(values []string) []string {
 	return unique
 }
 
+// expectedDisplay is an internal helper for the main package.
 func expectedDisplay(task evalTask) string {
 	steps := taskSteps(task)
 	parts := make([]string, 0, len(steps))
@@ -5282,6 +5439,7 @@ func expectedDisplay(task evalTask) string {
 	return strings.Join(parts, " -> ")
 }
 
+// stepDisplay is an internal helper for the main package.
 func stepDisplay(tool, action string) string {
 	if tool == "" {
 		return "-"
@@ -5292,6 +5450,7 @@ func stepDisplay(tool, action string) string {
 	return fmt.Sprintf("`%s` / `%s`", tool, action)
 }
 
+// writePerRunMetrics is an internal helper for the main package.
 func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	byRun := make(map[int][]taskResult)
 	runs := make([]int, 0)
@@ -5320,6 +5479,7 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	}
 }
 
+// writePerModelMetrics is an internal helper for the main package.
 func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	byModel := resultsByModel(results)
 	if len(byModel) <= 1 {
@@ -5336,6 +5496,7 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	}
 }
 
+// writeUsageSummary is an internal helper for the main package.
 func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, dryRun bool) {
 	if dryRun {
 		return
@@ -5360,6 +5521,7 @@ func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, d
 	writePerModelUsage(b, opts, results)
 }
 
+// writePerModelUsage is an internal helper for the main package.
 func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) {
 	byModel := resultsByModel(results)
 	if len(byModel) <= 1 {
@@ -5380,12 +5542,14 @@ func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) 
 	}
 }
 
+// usageSummary holds data for main operations.
 type usageSummary struct {
 	Usage      modelUsage
 	ModelCalls int
 	ToolCalls  int
 }
 
+// aggregateUsage is an internal helper for the main package.
 func aggregateUsage(results []taskResult) usageSummary {
 	var summary usageSummary
 	for _, result := range results {
@@ -5396,10 +5560,12 @@ func aggregateUsage(results []taskResult) usageSummary {
 	return summary
 }
 
+// resultsHaveMultipleModels is an internal helper for the main package.
 func resultsHaveMultipleModels(results []taskResult) bool {
 	return len(resultsByModel(results)) > 1
 }
 
+// resultsByModel is an internal helper for the main package.
 func resultsByModel(results []taskResult) map[string][]taskResult {
 	out := map[string][]taskResult{}
 	for _, result := range results {
@@ -5412,6 +5578,7 @@ func resultsByModel(results []taskResult) map[string][]taskResult {
 	return out
 }
 
+// sortedStringKeys is an internal helper for the main package.
 func sortedStringKeys[T any](values map[string]T) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -5421,15 +5588,18 @@ func sortedStringKeys[T any](values map[string]T) []string {
 	return keys
 }
 
+// resolvedPricing holds data for main operations.
 type resolvedPricing struct {
 	Pricing pricingOptions
 	Source  string
 }
 
+// resolvePricing is an internal helper for the main package.
 func resolvePricing(opts options) resolvedPricing {
 	return resolvePricingForModel(opts, opts.Model)
 }
 
+// resolvePricingForModel is an internal helper for the main package.
 func resolvePricingForModel(opts options, model string) resolvedPricing {
 	if pricingConfigured(opts.Pricing) {
 		return resolvedPricing{Pricing: opts.Pricing, Source: "flags"}
@@ -5451,10 +5621,12 @@ func resolvePricingForModel(opts options, model string) resolvedPricing {
 	return resolvedPricing{}
 }
 
+// pricingConfigured is an internal helper for the main package.
 func pricingConfigured(pricing pricingOptions) bool {
 	return pricing.InputPerMTok > 0 || pricing.OutputPerMTok > 0 || pricing.CacheWritePerMTok > 0 || pricing.CacheReadPerMTok > 0
 }
 
+// estimateCostUSD is an internal helper for the main package.
 func estimateCostUSD(usage modelUsage, pricing pricingOptions) float64 {
 	return (float64(usage.InputTokens)*pricing.InputPerMTok +
 		float64(usage.OutputTokens)*pricing.OutputPerMTok +
@@ -5462,6 +5634,7 @@ func estimateCostUSD(usage modelUsage, pricing pricingOptions) float64 {
 		float64(usage.CacheReadInputTokens)*pricing.CacheReadPerMTok) / 1_000_000
 }
 
+// metrics holds data for main operations.
 type metrics struct {
 	ToolSelection     float64
 	ActionSelection   float64
@@ -5472,6 +5645,7 @@ type metrics struct {
 	FinalSuccess      float64
 }
 
+// calculateMetrics is an internal helper for the main package.
 func calculateMetrics(results []taskResult) metrics {
 	if len(results) == 0 {
 		return metrics{}
@@ -5519,6 +5693,7 @@ func calculateMetrics(results []taskResult) metrics {
 	}
 }
 
+// percent is an internal helper for the main package.
 func percent(value, total int) float64 {
 	if total == 0 {
 		return 100
@@ -5526,6 +5701,7 @@ func percent(value, total int) float64 {
 	return float64(value) * 100 / float64(total)
 }
 
+// boolText is an internal helper for the main package.
 func boolText(value bool) string {
 	if value {
 		return "Yes"
@@ -5533,6 +5709,7 @@ func boolText(value bool) string {
 	return "No"
 }
 
+// escapeTable is an internal helper for the main package.
 func escapeTable(value string) string {
 	return strings.ReplaceAll(value, "|", "\\|")
 }

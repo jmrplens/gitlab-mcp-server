@@ -1409,6 +1409,12 @@ func TestIssueIDRequired_Validation(t *testing.T) {
 	}
 }
 
+// TestIssueInputSchemas_DoNotRequireOptionalMilestone verifies that the
+// generated create and update schemas keep milestone_id optional.
+//
+// The test inspects the route schema required fields directly instead of
+// making an API request. This protects issue creation and update workflows
+// where callers may intentionally omit a milestone.
 func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
 	for name, schema := range map[string]map[string]any{
 		"create": toolutil.SchemaForRoute[CreateInput](),
@@ -1422,6 +1428,8 @@ func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
 	}
 }
 
+// schemaRequiredFields extracts the required field names from a generated
+// JSON Schema map while accepting both []any and []string representations.
 func schemaRequiredFields(schema map[string]any) []string {
 	switch required := schema["required"].(type) {
 	case []any:

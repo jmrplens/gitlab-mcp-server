@@ -582,18 +582,24 @@ func truncateRunes(s string, maxRunes int) string {
 	return s[:size] + "..."
 }
 
-// stripMetaPrefix removes the literal "Example: ..." header that
-// MetaToolDescriptionPrefix prepends to every meta-tool description, so the
-// summary lines in llms.txt show the actual user-facing description rather
-// than the per-action JSON example.
+// stripMetaPrefix removes the generated meta-tool usage header so llms.txt
+// summary lines show the actual user-facing domain description.
 func stripMetaPrefix(s string) string {
-	if !strings.HasPrefix(s, "Example: {") {
+	lines := strings.Split(s, "\n")
+	if len(lines) < 2 {
 		return s
 	}
-	if _, after, ok := strings.Cut(s, "\n\n"); ok {
-		return after
+	firstLine := strings.TrimSpace(lines[0])
+	secondLine := strings.TrimSpace(lines[1])
+	if !strings.Contains(firstLine, `Example: {"action":`) ||
+		!strings.HasPrefix(secondLine, "For the params schema of any action") {
+		return s
 	}
-	return s
+	start := 2
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	return strings.Join(lines[start:], "\n")
 }
 
 // firstParagraph returns text up to the first blank-line paragraph break (\n\n).

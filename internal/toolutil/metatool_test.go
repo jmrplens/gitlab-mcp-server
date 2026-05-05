@@ -35,6 +35,8 @@ type testInt64Input struct {
 	Message   string      `json:"message,omitempty"`
 }
 
+// testAliasInput defines parameters used to verify common LLM-facing aliases
+// are normalized before typed meta-tool input decoding.
 type testAliasInput struct {
 	Query        string      `json:"query"`
 	MRIID        int64       `json:"merge_request_iid"`
@@ -134,6 +136,12 @@ func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_NormalizesCommonAliases verifies that common aliases
+// used by LLMs are normalized before strict JSON decoding.
+//
+// The test sends search, mr_iid, project_path, link, from/to branch aliases,
+// environment, legacy auto-merge wording, and scalar variables. It asserts the
+// decoded struct receives the canonical fields and normalized collection forms.
 func TestUnmarshalParams_NormalizesCommonAliases(t *testing.T) {
 	params := map[string]any{
 		"search":                       "bug",
@@ -409,6 +417,12 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_ActionAlias verifies that dotted action aliases resolve
+// to canonical meta-tool route names.
+//
+// The test registers project.milestone_list and calls the handler with
+// milestone.list, then asserts the typed output is returned. This protects the
+// compatibility layer for user-facing action names.
 func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	routes := ActionMap{
 		"project.milestone_list": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -427,6 +441,12 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_ParamValidationErrorIsToolError verifies that parameter
+// type errors are returned as MCP tool errors instead of protocol errors.
+//
+// The test sends an invalid string for an integer field and asserts that the
+// handler returns an IsError result containing the action-specific validation
+// message while leaving the raw output nil.
 func TestMakeMetaHandler_ParamValidationErrorIsToolError(t *testing.T) {
 	routes := ActionMap{
 		"create": RouteAction[testInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testInput) (testOutput, error) {
@@ -450,6 +470,11 @@ func TestMakeMetaHandler_ParamValidationErrorIsToolError(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_MissingRequiredParamsIsToolError verifies that missing
+// required nested params are reported as MCP tool errors.
+//
+// The test registers a route with a required name field, omits params entirely,
+// and asserts the returned tool-error text points at both params and name.
 func TestMakeMetaHandler_MissingRequiredParamsIsToolError(t *testing.T) {
 	routes := ActionMap{
 		"create": RouteAction[testRequiredInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testRequiredInput) (testOutput, error) {
