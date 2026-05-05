@@ -1,6 +1,6 @@
 # AI Model Evaluation
 
-> **Diataxis type**: Explanation
+> **Diátaxis type**: Explanation
 > **Audience**: Users, evaluators, maintainers
 > **Prerequisites**: Basic understanding of MCP tools and GitLab operations
 

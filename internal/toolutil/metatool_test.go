@@ -360,10 +360,10 @@ func TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties(t *testi
 	}
 }
 
-// TestRequiredMissingAndUnknownParamNames verifies required parameter sorting,
+// TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown verifies required parameter sorting,
 // missing required detection, and unknown parameter detection from JSON Schema
 // properties.
-func TestRequiredMissingAndUnknownParamNames(t *testing.T) {
+func TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown(t *testing.T) {
 	schema := map[string]any{
 		"required": []any{"project_id", "name", ""},
 		"properties": map[string]any{

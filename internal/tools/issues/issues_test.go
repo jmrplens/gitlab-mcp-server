@@ -1416,10 +1416,11 @@ func TestIssueIDRequired_Validation(t *testing.T) {
 // making an API request. This protects issue creation and update workflows
 // where callers may intentionally omit a milestone.
 func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
-	for name, schema := range map[string]map[string]any{
-		"create": toolutil.SchemaForRoute[CreateInput](),
-		"update": toolutil.SchemaForRoute[UpdateInput](),
+	for name, route := range map[string]toolutil.ActionRoute{
+		"create": toolutil.RouteAction[CreateInput, Output]((*gitlabclient.Client)(nil), Create),
+		"update": toolutil.RouteAction[UpdateInput, Output]((*gitlabclient.Client)(nil), Update),
 	} {
+		schema := route.InputSchema
 		for _, field := range schemaRequiredFields(schema) {
 			if field == "milestone_id" {
 				t.Fatalf("%s schema required fields = %v, want milestone_id optional", name, schema["required"])

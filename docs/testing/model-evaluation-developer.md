@@ -1,6 +1,6 @@
 # AI Model Evaluation Developer Guide
 
-> **Diataxis type**: How-to and reference
+> **Diátaxis type**: How-to and reference
 > **Audience**: Maintainers and contributors
 > **Prerequisites**: Go toolchain, model provider API keys, Docker for live mode
 
@@ -35,7 +35,7 @@ or generated fixture state.
 
 The documented Qwen configuration uses `QWEN_API_KEY` directly. Keep provider
 fallbacks out of `.env.example` unless the evaluator command examples also need
-them.
+those fallback variables.
 
 The commands below resolve `go` through an explicit `PATH` so they also work in
 non-interactive shells where `timeout` cannot find the Go binary.
@@ -222,9 +222,9 @@ Edit `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md`. Preserve the
 existing table format and update the summary counts at the bottom. Use the
 following guidance:
 
-- Add `MT-` cases for one clear operation.
-- Add `MS-` cases for real workflows where sequencing matters.
-- Add `MF-` cases for failure recovery and prompt-injection resilience.
+- Include `MT-` cases for one clear operation.
+- Define `MS-` cases for real workflows where sequencing matters.
+- Cover `MF-` cases for failure recovery and prompt-injection resilience.
 - Include only required params in the required column.
 - Mark destructive steps precisely so the evaluator can enforce confirmation.
 - Prefer Docker fixtures over assumptions about a manually prepared instance.

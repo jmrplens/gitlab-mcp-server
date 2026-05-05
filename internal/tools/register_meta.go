@@ -858,7 +858,7 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
 NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
 
-IMPORTANT — action choice: use note_create only for a general/top-level MR comment with no file or line position. Use discussion_create with a position object for threaded or inline review comments, including prompts like "comment on this line/file/hunk". If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
+IMPORTANT — action choice: use note_create only for a general/top-level MR comment with no file or line position. Use discussion_create without position for a general threaded discussion. Add a position object only for inline review comments, including prompts like "comment on this line/file/hunk". If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
 
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).

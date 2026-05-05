@@ -326,6 +326,159 @@ func TestSafeFixturePathPart(t *testing.T) {
 	}
 }
 
+// TestLiveFixturePreparerDefaultRef_DetectedBranch_ReturnsDetectedBranch verifies fixture setup honors the project default branch discovered from GitLab.
+func TestLiveFixturePreparerDefaultRef_DetectedBranch_ReturnsDetectedBranch(t *testing.T) {
+	preparer := &liveFixturePreparer{state: &liveFixtureState{DefaultBranch: "trunk"}}
+	if got := preparer.defaultRef(); got != "trunk" {
+		t.Fatalf("defaultRef() = %q, want trunk", got)
+	}
+	preparer.state.DefaultBranch = ""
+	if got := preparer.defaultRef(); got != liveFixtureDefaultRef {
+		t.Fatalf("defaultRef(empty) = %q, want %q", got, liveFixtureDefaultRef)
+	}
+}
+
+// TestEnsureCIVariables_RecreatesProjectGroupAndInstanceVariables verifies fixture preparation restores every variable scope it removes.
+func TestEnsureCIVariables_RecreatesProjectGroupAndInstanceVariables(t *testing.T) {
+	created := map[string]bool{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.EscapedPath(), "/api/v4/projects/101/variables/EVAL_TOKEN"):
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Variable Not Found"}`))
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.EscapedPath(), "/api/v4/groups/202/variables/GROUP_EVAL_TOKEN"):
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Variable Not Found"}`))
+		case r.Method == http.MethodDelete && r.URL.EscapedPath() == "/api/v4/admin/ci/variables/INSTANCE_EVAL_TOKEN":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Variable Not Found"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/101/variables":
+			if !assertVariableCreateRequest(t, w, r, "EVAL_TOKEN", "production") {
+				return
+			}
+			created["project"] = true
+			_, _ = w.Write([]byte(`{"key":"EVAL_TOKEN","value":"masked-value-123","environment_scope":"production"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/groups/202/variables":
+			if !assertVariableCreateRequest(t, w, r, "GROUP_EVAL_TOKEN", "production") {
+				return
+			}
+			created["group"] = true
+			_, _ = w.Write([]byte(`{"key":"GROUP_EVAL_TOKEN","value":"masked-value-123","environment_scope":"production"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/admin/ci/variables":
+			if !assertVariableCreateRequest(t, w, r, "INSTANCE_EVAL_TOKEN", "") {
+				return
+			}
+			created["instance"] = true
+			_, _ = w.Write([]byte(`{"key":"INSTANCE_EVAL_TOKEN","value":"masked-value-123"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	preparer := &liveFixturePreparer{client: client, state: &liveFixtureState{ProjectID: 101, GroupID: 202}}
+
+	if err := preparer.ensureCIVariables(t.Context()); err != nil {
+		t.Fatalf("ensureCIVariables() error = %v", err)
+	}
+	for _, scope := range []string{"project", "group", "instance"} {
+		if !created[scope] {
+			t.Fatalf("%s variable was not recreated", scope)
+		}
+	}
+}
+
+// TestEnsureFile_UpdateMissingFile_CreatesFile verifies a stale successful GetFile result is recovered with CreateFile.
+func TestEnsureFile_UpdateMissingFile_CreatesFile(t *testing.T) {
+	created := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/101/repository/files/README.md":
+			if r.URL.Query().Get("ref") != "trunk" {
+				t.Errorf("ref = %q, want trunk", r.URL.Query().Get("ref"))
+			}
+			_, _ = w.Write([]byte(`{"file_path":"README.md","branch":"trunk","encoding":"base64","content":"b2xkCg=="}`))
+		case r.Method == http.MethodPut && r.URL.EscapedPath() == "/api/v4/projects/101/repository/files/README.md":
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"message":"A file with this name doesn't exist"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/101/repository/files/README.md":
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode create request: %v", err)
+				http.Error(w, "decode request", http.StatusBadRequest)
+				return
+			}
+			if request["branch"] != "trunk" || request["content"] != "new content\n" {
+				t.Errorf("create request = %+v, want trunk branch and content", request)
+				http.Error(w, "unexpected create request", http.StatusBadRequest)
+				return
+			}
+			created = true
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"file_path":"README.md","branch":"trunk"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	preparer := &liveFixturePreparer{client: client, state: &liveFixtureState{ProjectID: 101}}
+
+	if err := preparer.ensureFile(t.Context(), "README.md", "trunk", "new content\n", "Seed README"); err != nil {
+		t.Fatalf("ensureFile() error = %v", err)
+	}
+	if !created {
+		t.Fatal("CreateFile was not called after missing-file update error")
+	}
+}
+
+// newFixtureTestClient creates a GitLab client for fixture unit tests.
+func newFixtureTestClient(t *testing.T, gitlabURL string) *gitlabclient.Client {
+	t.Helper()
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       gitlabURL,
+		GitLabToken:     "eval-token",
+		MetaTools:       true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	return client
+}
+
+// assertVariableCreateRequest verifies a CI variable fixture creation request.
+func assertVariableCreateRequest(t *testing.T, w http.ResponseWriter, r *http.Request, key, environmentScope string) bool {
+	t.Helper()
+	var request map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		t.Errorf("decode variable request: %v", err)
+		http.Error(w, "decode request", http.StatusBadRequest)
+		return false
+	}
+	if request["key"] != key || request["value"] != "masked-value-123" {
+		t.Errorf("variable request = %+v, want key %s and fixture value", request, key)
+		http.Error(w, "unexpected variable request", http.StatusBadRequest)
+		return false
+	}
+	if environmentScope == "" {
+		if _, ok := request["environment_scope"]; ok {
+			t.Errorf("variable request = %+v, want no environment_scope", request)
+			http.Error(w, "unexpected variable scope", http.StatusBadRequest)
+			return false
+		}
+		return true
+	}
+	if request["environment_scope"] != environmentScope {
+		t.Errorf("variable request = %+v, want environment_scope %s", request, environmentScope)
+		http.Error(w, "unexpected variable scope", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
 // assertContains is an internal helper for the main package.
 func assertContains(t *testing.T, text, want string) {
 	t.Helper()

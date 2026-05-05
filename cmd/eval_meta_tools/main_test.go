@@ -103,6 +103,22 @@ func TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes(t *testing.T) {
 	}
 }
 
+// TestModelToolFromParts_TypedNilInputSchemaUsesFallback verifies typed-nil
+// schemas from snapshot tools still become valid object schemas for providers.
+func TestModelToolFromParts_TypedNilInputSchemaUsesFallback(t *testing.T) {
+	var inputSchema map[string]any
+
+	tool := modelToolFromParts("gitlab_project", "Project actions", inputSchema)
+
+	schema, ok := tool.InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("InputSchema = %T, want map[string]any", tool.InputSchema)
+	}
+	if schema["type"] != "object" {
+		t.Fatalf("schema = %#v, want fallback object schema", schema)
+	}
+}
+
 // TestFilterTasksByDestructive verifies the behavior of filter tasks by destructive.
 func TestFilterTasksByDestructive(t *testing.T) {
 	tasks := []evalTask{

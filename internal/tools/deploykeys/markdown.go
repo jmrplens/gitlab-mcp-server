@@ -53,6 +53,7 @@ func FormatListMarkdown(o ListOutput) string {
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'get' with key_id for full details",
 		"Use action 'add' to create a new deploy key",
 	)
@@ -116,6 +117,7 @@ func FormatInstanceListMarkdown(o InstanceListOutput) string {
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'instance_get' with key_id for full details",
 	)
 	return b.String()

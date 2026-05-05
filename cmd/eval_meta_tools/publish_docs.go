@@ -894,6 +894,7 @@ func resolveGitDir(worktree string) (string, error) {
 	return filepath.Clean(gitDir), nil
 }
 
+// readGitRef resolves ref from gitDir, packed refs, or a linked common dir.
 func readGitRef(gitDir, ref string) (string, error) {
 	if commit, err := readTrimmedFile(filepath.Join(gitDir, filepath.FromSlash(ref))); err == nil {
 		return commit, nil
@@ -914,6 +915,7 @@ func readGitRef(gitDir, ref string) (string, error) {
 	return "", fmt.Errorf("git ref %s not found", ref)
 }
 
+// gitCommonDir returns the shared metadata directory for a Git worktree.
 func gitCommonDir(gitDir string) string {
 	commonDir, err := readTrimmedFile(filepath.Join(gitDir, "commondir"))
 	if err != nil || commonDir == "" {
@@ -925,6 +927,7 @@ func gitCommonDir(gitDir string) string {
 	return filepath.Clean(commonDir)
 }
 
+// readPackedGitRef returns ref's commit from packed-refs when present.
 func readPackedGitRef(gitDir, ref string) (string, bool) {
 	// #nosec G304 -- gitDir is resolved from the local repository metadata to read optional report labels.
 	content, err := os.ReadFile(filepath.Join(gitDir, "packed-refs"))
@@ -944,10 +947,12 @@ func readPackedGitRef(gitDir, ref string) (string, bool) {
 	return "", false
 }
 
+// gitBranchName trims refs/heads/ from a Git branch ref.
 func gitBranchName(ref string) string {
 	return strings.TrimPrefix(ref, "refs/heads/")
 }
 
+// shortGitCommit returns a 12-character commit prefix when possible.
 func shortGitCommit(commit string) string {
 	commit = strings.TrimSpace(commit)
 	if len(commit) > 12 {
@@ -956,6 +961,7 @@ func shortGitCommit(commit string) string {
 	return commit
 }
 
+// readTrimmedFile reads path and returns surrounding whitespace trimmed.
 func readTrimmedFile(path string) (string, error) {
 	// #nosec G304 -- callers pass paths derived from the local .git directory for optional report metadata.
 	content, err := os.ReadFile(path)

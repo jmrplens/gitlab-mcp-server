@@ -2,7 +2,7 @@
 
 This document provides memory and CPU estimates for gitlab-mcp-server in both stdio and HTTP modes, helping operators plan capacity for deployments.
 
-> **Diataxis type**: Reference
+> **Diátaxis type**: Reference
 > **Audience**: ⚙️ Server administrators
 > **Prerequisites**: [HTTP Server Mode](http-server-mode.md), [Configuration](configuration.md)
 

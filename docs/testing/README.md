@@ -1,6 +1,6 @@
 # Testing Documentation
 
-> **Diataxis type**: Overview
+> **Diátaxis type**: Overview
 > **Audience**: Users, evaluators, maintainers, contributors
 > **Prerequisites**: Basic MCP concepts; Docker for live GitLab validation
 

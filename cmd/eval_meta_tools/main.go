@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -3007,10 +3008,24 @@ func convertSnapshotTools(snapshot []snapshotTool) []modelTool {
 
 // modelToolFromParts builds a model-facing tool with a fallback object schema.
 func modelToolFromParts(name, description string, inputSchema any) modelTool {
-	if inputSchema == nil {
+	if isNilModelToolSchema(inputSchema) {
 		inputSchema = map[string]any{"type": "object"}
 	}
 	return modelTool{Name: name, Description: description, InputSchema: inputSchema}
+}
+
+// isNilModelToolSchema reports whether a schema is nil, including typed-nil maps.
+func isNilModelToolSchema(inputSchema any) bool {
+	if inputSchema == nil {
+		return true
+	}
+	value := reflect.ValueOf(inputSchema)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // sortedModelTools sorts model tools and marks the final entry cacheable.

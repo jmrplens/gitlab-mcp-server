@@ -171,18 +171,21 @@ If an IDE starts Docker as the MCP server process, keep `docker run -i` and pass
 
 #### Docker or binary as an HTTP MCP server
 
-Use HTTP mode for shared, remote, or multi-user deployments. The Docker image starts in HTTP mode by default, but the flags are shown explicitly here for clarity.
+Use HTTP mode for shared, remote, or multi-user deployments. The Docker image
+starts in HTTP mode by default, but the flags are shown explicitly here for
+clarity. These examples publish the container port on host loopback only;
+`--http-addr=0.0.0.0:8080` binds inside the container.
 
 ```bash
 # Fixed GitLab instance for all clients
-docker run -d --name gitlab-mcp-server -p 8080:8080 \
+docker run -d --name gitlab-mcp-server -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
   --gitlab-url=https://gitlab.com
 
 # Multi-instance mode: clients send GITLAB-URL per request
-docker run -d --name gitlab-mcp-server -p 8080:8080 \
+docker run -d --name gitlab-mcp-server -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080

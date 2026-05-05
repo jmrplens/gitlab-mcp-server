@@ -259,6 +259,14 @@ func (p *liveFixturePreparer) notef(format string, args ...any) {
 	p.state.Notes = append(p.state.Notes, fmt.Sprintf(format, args...))
 }
 
+// defaultRef returns the detected project default branch or the fixture fallback.
+func (p *liveFixturePreparer) defaultRef() string {
+	if p != nil && p.state != nil && p.state.DefaultBranch != "" {
+		return p.state.DefaultBranch
+	}
+	return liveFixtureDefaultRef
+}
+
 // ensureGroup performs the ensure group operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureGroup(ctx context.Context, name, fullPath string, parentID int64) (*gl.Group, error) {
 	group, _, err := p.client.GL().Groups.GetGroup(fullPath, nil, gl.WithContext(ctx))
@@ -317,13 +325,14 @@ func (p *liveFixturePreparer) ensureProject(ctx context.Context, namespaceID int
 
 // ensureRepository performs the ensure repository operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureRepository(ctx context.Context) error {
-	if err := p.waitForBranch(ctx, liveFixtureDefaultRef); err != nil {
+	defaultRef := p.defaultRef()
+	if err := p.waitForBranch(ctx, defaultRef); err != nil {
 		return err
 	}
-	if err := p.ensureFile(ctx, "README.md", liveFixtureDefaultRef, fixtureReadme(), "Seed evaluation README"); err != nil {
+	if err := p.ensureFile(ctx, "README.md", defaultRef, fixtureReadme(), "Seed evaluation README"); err != nil {
 		return err
 	}
-	return p.ensureFile(ctx, ".gitlab-ci.yml", liveFixtureDefaultRef, fixtureCI(), "Seed evaluation CI")
+	return p.ensureFile(ctx, ".gitlab-ci.yml", defaultRef, fixtureCI(), "Seed evaluation CI")
 }
 
 // ensureLabels performs the ensure labels operation on *liveFixturePreparer.
@@ -356,10 +365,11 @@ func (p *liveFixturePreparer) ensureLabels(ctx context.Context) error {
 
 // ensureBranches performs the ensure branches operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureBranches(ctx context.Context) error {
-	if err := p.ensureBranch(ctx, liveFixtureFeatureRef, liveFixtureDefaultRef); err != nil {
+	defaultRef := p.defaultRef()
+	if err := p.ensureBranch(ctx, liveFixtureFeatureRef, defaultRef); err != nil {
 		return err
 	}
-	if err := p.ensureBranch(ctx, liveFixtureObsoleteRef, liveFixtureDefaultRef); err != nil {
+	if err := p.ensureBranch(ctx, liveFixtureObsoleteRef, defaultRef); err != nil {
 		return err
 	}
 	if err := p.ensureFile(ctx, "feature/eval.txt", liveFixtureFeatureRef, "feature fixture\n", "Seed feature evaluation file"); err != nil {
@@ -407,7 +417,7 @@ func (p *liveFixturePreparer) ensureMergeRequests(ctx context.Context) error {
 // ensurePipeline performs the ensure pipeline operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePipeline(ctx context.Context) error {
 	pipeline, _, err := p.client.GL().Pipelines.CreatePipeline(p.state.ProjectID, &gl.CreatePipelineOptions{
-		Ref: new(liveFixtureDefaultRef),
+		Ref: new(p.defaultRef()),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("create pipeline: %w", err)
@@ -432,7 +442,7 @@ func (p *liveFixturePreparer) ensureMilestone(ctx context.Context) error {
 
 // ensureCleanupRelease performs the ensure cleanup release operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCleanupRelease(ctx context.Context) error {
-	if err := p.ensureTag(ctx, liveFixtureCleanupTag, liveFixtureDefaultRef); err != nil {
+	if err := p.ensureTag(ctx, liveFixtureCleanupTag, p.defaultRef()); err != nil {
 		return err
 	}
 	_, _, err := p.client.GL().Releases.GetRelease(p.state.ProjectID, liveFixtureCleanupTag, gl.WithContext(ctx))
@@ -626,6 +636,21 @@ func (p *liveFixturePreparer) ensureCIVariables(ctx context.Context) error {
 		Value:            new(value),
 		EnvironmentScope: new("production"),
 	}, gl.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	_, _, err = p.client.GL().GroupVariables.CreateVariable(p.state.GroupID, &gl.CreateGroupVariableOptions{
+		Key:              new(groupKey),
+		Value:            new(value),
+		EnvironmentScope: new("production"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	_, _, err = p.client.GL().InstanceVariables.CreateVariable(&gl.CreateInstanceVariableOptions{
+		Key:   new(instanceKey),
+		Value: new(value),
+	}, gl.WithContext(ctx))
 	return err
 }
 
@@ -726,7 +751,7 @@ func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error
 	}
 	deleteSchedule, _, err := p.client.GL().PipelineSchedules.CreatePipelineSchedule(p.state.ProjectID, &gl.CreatePipelineScheduleOptions{
 		Description:  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
-		Ref:          new(liveFixtureDefaultRef),
+		Ref:          new(p.defaultRef()),
 		Cron:         new("0 3 * * *"),
 		CronTimezone: new("UTC"),
 		Active:       new(false),
@@ -736,7 +761,7 @@ func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error
 	}
 	playSchedule, _, err := p.client.GL().PipelineSchedules.CreatePipelineSchedule(p.state.ProjectID, &gl.CreatePipelineScheduleOptions{
 		Description:  new(fmt.Sprintf("play-fixture-%d", time.Now().UnixNano())),
-		Ref:          new(liveFixtureDefaultRef),
+		Ref:          new(p.defaultRef()),
 		Cron:         new("30 3 * * *"),
 		CronTimezone: new("UTC"),
 		Active:       new(false),
@@ -895,7 +920,7 @@ func (p *liveFixturePreparer) ensureDiscussions(ctx context.Context) error {
 
 // ensureCommitDiscussion performs the ensure commit discussion operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCommitDiscussion(ctx context.Context) error {
-	branch, _, err := p.client.GL().Branches.GetBranch(p.state.ProjectID, liveFixtureDefaultRef, gl.WithContext(ctx))
+	branch, _, err := p.client.GL().Branches.GetBranch(p.state.ProjectID, p.defaultRef(), gl.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -932,7 +957,8 @@ func (p *liveFixturePreparer) createIssue(ctx context.Context, title, descriptio
 
 // ensureFixtureMergeRequest performs the ensure fixture merge request operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sourceBranch, title string, mergeFixture bool) (*gl.BasicMergeRequest, error) {
-	if err := p.ensureBranch(ctx, sourceBranch, liveFixtureDefaultRef); err != nil {
+	defaultRef := p.defaultRef()
+	if err := p.ensureBranch(ctx, sourceBranch, defaultRef); err != nil {
 		return nil, err
 	}
 	filePath := strings.TrimPrefix(sourceBranch, "feature/") + ".txt"
@@ -943,7 +969,7 @@ func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sou
 	mrs, _, err := p.client.GL().MergeRequests.ListProjectMergeRequests(p.state.ProjectID, &gl.ListProjectMergeRequestsOptions{
 		State:        &open,
 		SourceBranch: &sourceBranch,
-		TargetBranch: new(liveFixtureDefaultRef),
+		TargetBranch: new(defaultRef),
 		ListOptions:  gl.ListOptions{PerPage: 1},
 	}, gl.WithContext(ctx))
 	if err != nil {
@@ -960,7 +986,7 @@ func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sou
 		Title:              new(title),
 		Description:        new(description),
 		SourceBranch:       new(sourceBranch),
-		TargetBranch:       new(liveFixtureDefaultRef),
+		TargetBranch:       new(defaultRef),
 		RemoveSourceBranch: new(false),
 	}, gl.WithContext(ctx))
 	if err != nil {
@@ -1000,7 +1026,7 @@ func (p *liveFixturePreparer) closeOpenMergeRequestsForBranch(ctx context.Contex
 	mrs, _, err := p.client.GL().MergeRequests.ListProjectMergeRequests(p.state.ProjectID, &gl.ListProjectMergeRequestsOptions{
 		State:        &open,
 		SourceBranch: &sourceBranch,
-		TargetBranch: new(liveFixtureDefaultRef),
+		TargetBranch: new(p.defaultRef()),
 		ListOptions:  gl.ListOptions{PerPage: 100},
 	}, gl.WithContext(ctx))
 	if err != nil {
@@ -1062,15 +1088,23 @@ func (p *liveFixturePreparer) ensureFile(ctx context.Context, path, branch, cont
 			Content:       new(content),
 			CommitMessage: new(message),
 		}, gl.WithContext(ctx))
-		if updateErr != nil && !isEmptyCommitError(updateErr) {
-			return fmt.Errorf("update file %s on %s: %w", path, branch, updateErr)
+		if updateErr == nil || isEmptyCommitError(updateErr) {
+			return nil
 		}
-		return nil
+		if isMissingFileUpdateError(updateErr) {
+			return p.createFile(ctx, path, branch, content, message)
+		}
+		return fmt.Errorf("update file %s on %s: %w", path, branch, updateErr)
 	}
 	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 		return fmt.Errorf("get file %s on %s: %w", path, branch, err)
 	}
-	_, _, err = p.client.GL().RepositoryFiles.CreateFile(p.state.ProjectID, path, &gl.CreateFileOptions{
+	return p.createFile(ctx, path, branch, content, message)
+}
+
+// createFile creates a repository file and tolerates races where it already exists.
+func (p *liveFixturePreparer) createFile(ctx context.Context, path, branch, content, message string) error {
+	_, _, err := p.client.GL().RepositoryFiles.CreateFile(p.state.ProjectID, path, &gl.CreateFileOptions{
 		Branch:        new(branch),
 		Content:       new(content),
 		CommitMessage: new(message),
@@ -1563,7 +1597,12 @@ func pathBase(path string) string {
 
 // isEmptyCommitError is an internal helper for the main package.
 func isEmptyCommitError(err error) bool {
-	return toolutil.ContainsAny(err, "commit was empty", "A file with this name doesn't exist", "You are trying to update the file with the same content")
+	return toolutil.ContainsAny(err, "commit was empty", "You are trying to update the file with the same content")
+}
+
+// isMissingFileUpdateError reports GitLab update errors caused by a missing file.
+func isMissingFileUpdateError(err error) bool {
+	return toolutil.ContainsAny(err, "A file with this name doesn't exist", "file does not exist")
 }
 
 // newAuthorizedSSHKey performs the new authorized s s h key operation using the GitLab API and returns [string].

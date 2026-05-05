@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-> **Diataxis type**: How-to
+> **Diátaxis type**: How-to
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go 1.26+, GitLab instance with PAT, Git, Make
 

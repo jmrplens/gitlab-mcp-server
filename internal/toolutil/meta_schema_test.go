@@ -124,9 +124,9 @@ func TestBuildMetaSchemaDiscoveryIndex_IncludesSchemaURIsAndDestructiveFlags(t *
 	}
 }
 
-// TestBuildMetaSchemaDiscoveryIndexForTool verifies single-tool discovery and
+// TestBuildMetaSchemaDiscoveryIndexForTool_KnownTool_ReturnsSingleToolIndex verifies single-tool discovery and
 // the false result for unknown tools.
-func TestBuildMetaSchemaDiscoveryIndexForTool(t *testing.T) {
+func TestBuildMetaSchemaDiscoveryIndexForTool_KnownTool_ReturnsSingleToolIndex(t *testing.T) {
 	index, ok := BuildMetaSchemaDiscoveryIndexForTool(testMetaSchemaRoutes(), "gitlab_project")
 	if !ok {
 		t.Fatal("BuildMetaSchemaDiscoveryIndexForTool() ok = false, want true")
@@ -251,9 +251,9 @@ func TestLookupMetaActionSchema_NilInputSchemaReturnsFallback(t *testing.T) {
 	}
 }
 
-// TestParseMetaSchemaURI verifies valid per-action schema URIs and malformed
+// TestParseMetaSchemaURI_ValidAndMalformedURIs_ReturnsParsedParts verifies valid per-action schema URIs and malformed
 // variants are parsed defensively.
-func TestParseMetaSchemaURI(t *testing.T) {
+func TestParseMetaSchemaURI_ValidAndMalformedURIs_ReturnsParsedParts(t *testing.T) {
 	tool, action := ParseMetaSchemaURI("gitlab://schema/meta/gitlab_project/milestone_delete")
 	if tool != "gitlab_project" || action != "milestone_delete" {
 		t.Fatalf("ParseMetaSchemaURI() = %q/%q", tool, action)
@@ -271,9 +271,9 @@ func TestParseMetaSchemaURI(t *testing.T) {
 	}
 }
 
-// TestMetaSchemaURI verifies URI construction uses the registered schema
+// TestMetaSchemaURI_ToolAndAction_ReturnsMetaSchemaURI verifies URI construction uses the registered schema
 // namespace and preserves tool/action names exactly.
-func TestMetaSchemaURI(t *testing.T) {
+func TestMetaSchemaURI_ToolAndAction_ReturnsMetaSchemaURI(t *testing.T) {
 	got := MetaSchemaURI("gitlab_project", "milestone_delete")
 	want := "gitlab://schema/meta/gitlab_project/milestone_delete"
 	if got != want {
