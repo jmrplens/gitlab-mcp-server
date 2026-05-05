@@ -151,7 +151,7 @@ func publishEvaluationDocs(opts options) error {
 	return nil
 }
 
-// readPublishReports performs the read publish reports operation using the GitLab API and returns [[]publishReport].
+// readPublishReports parses one or more local evaluation reports.
 func readPublishReports(paths []string) ([]publishReport, error) {
 	reports := make([]publishReport, 0, len(paths))
 	for _, path := range paths {
@@ -164,7 +164,7 @@ func readPublishReports(paths []string) ([]publishReport, error) {
 	return reports, nil
 }
 
-// readPublishReport performs the read publish report operation using the GitLab API and returns [publishReport].
+// readPublishReport parses one local evaluation report selected for publication.
 func readPublishReport(path string) (publishReport, error) {
 	input, err := parseComparisonInput(path)
 	if err != nil {
@@ -748,7 +748,7 @@ func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) e
 	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o750); mkdirErr != nil {
 		return fmt.Errorf("create publish doc directory: %w", mkdirErr)
 	}
-	if writeErr := os.WriteFile(path, []byte(updated), 0o600); writeErr != nil {
+	if writeErr := os.WriteFile(path, []byte(updated), 0o644); writeErr != nil { // #nosec G306 -- tracked Markdown docs should remain world-readable.
 		return fmt.Errorf("write publish doc %s: %w", path, writeErr)
 	}
 	fmt.Printf("updated evaluation docs: %s\n", path)
@@ -772,7 +772,7 @@ func checkManagedDoc(path, startMarker, endMarker, block, mode, label string) er
 	return nil
 }
 
-// readTextFile performs the read text file operation using the GitLab API and returns [string].
+// readTextFile reads a local text file.
 func readTextFile(path string) (string, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- explicit developer-provided documentation path.
 	if err != nil {
@@ -781,7 +781,7 @@ func readTextFile(path string) (string, error) {
 	return string(data), nil
 }
 
-// applyManagedBlock performs the apply managed block operation using the GitLab API and returns [string].
+// applyManagedBlock replaces or appends a managed Markdown block between markers.
 func applyManagedBlock(content, startMarker, endMarker, block, mode, label string) (string, error) {
 	start := strings.Index(content, startMarker)
 	if start == -1 {
@@ -815,7 +815,7 @@ func appendSnapshotBlock(inner, block, label string) string {
 	return trimmedBlock + "\n\n" + trimmedInner + "\n"
 }
 
-// replaceSnapshotByHeading performs the replace snapshot by heading operation using the GitLab API and returns [string].
+// replaceSnapshotByHeading replaces the snapshot section that starts at heading.
 func replaceSnapshotByHeading(content, heading, replacement string) (string, bool) {
 	lines := strings.Split(content, "\n")
 	start := -1

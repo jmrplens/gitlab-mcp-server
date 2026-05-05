@@ -29,7 +29,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1006 MCP tools** — broad GitLab REST API v4 + GraphQL coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **33 meta-tools** (48 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **32 meta-tools** (47 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -316,7 +316,7 @@ Current published result: **2026-05-05 Full Docker Economy Run**.
 | Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | No repairs | 100.0% final across 240 ops |
 | Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 100.0% (1/1) | 100.0% final across 240 ops |
 | OpenAI | `gpt-5.4-nano` | OK | 100.0% | 50.0% (2/4) | 100.0% final across 240 ops |
-| Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 240 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 84 ops |
 
 The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL SUMMARY -->
@@ -426,19 +426,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 647 | 132,963 |
-| Unit tests (`_test.go`) | 410 | 216,197 |
+| Source (`.go`, non-test) | 647 | 133,004 |
+| Unit tests (`_test.go`) | 411 | 216,363 |
 | End-to-end tests | 109 | 23,526 |
-| **Total** | **1,166** | **372,686** |
+| **Total** | **1,167** | **372,893** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,939 |
+| Source functions | 3,940 |
 | — exported (public) | 2,206 |
-| — unexported (private) | 1,733 |
-| Unit test functions (`TestXxx`) | 9,045 |
+| — unexported (private) | 1,734 |
+| Unit test functions (`TestXxx`) | 9,051 |
 | Subtests (`t.Run(...)`) | 1,933 |
 | End-to-end test functions | 243 |
 
@@ -448,15 +448,15 @@ Numbers nobody asked for, but here they are anyway.
 | --- | ---: |
 | Test lines vs source lines | 1.63× more tests than code |
 | Average source file length | ~205 lines |
-| Average test file length | ~527 lines |
-| Comment lines in source | 10,377 (~7.8% of source) |
+| Average test file length | ~526 lines |
+| Comment lines in source | 10,379 (~7.8% of source) |
 | Test functions per source function | 2.3× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,684 |
+| `if err != nil` checks | 5,687 |
 | `defer` statements | 716 |
 | `struct` types defined | 2,006 |
 | `//nolint` suppressions | 57 |
@@ -469,7 +469,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 196 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 123 |
+| Git commits | 124 |
 | Unique contributors | 2 |
 
 ### Hall of fame
@@ -477,14 +477,14 @@ Numbers nobody asked for, but here they are anyway.
 | Record | File |
 | --- | --- |
 | Longest source file | `cmd/eval_meta_tools/main.go` — 5,742 lines |
-| Longest test file | `internal/tools/projects/projects_test.go` — 6,422 lines |
+| Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,417 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,843 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,418 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,837 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement` (84 chars) |
 

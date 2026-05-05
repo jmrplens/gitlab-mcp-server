@@ -77,7 +77,7 @@ timeout 1800s go run ./cmd/eval_meta_tools \
   --out dist/evaluation/meta-tools/current-multi-model-smoke.md
 ```
 
-When neither `--model` nor `--models` is provided, `.env` `EVAL_MODELS` is used if present; otherwise the evaluator falls back to `anthropic:claude-sonnet-4-6`.
+When neither `--model` nor `--models` is provided, `.env` `EVAL_MODELS` is used if present; otherwise the evaluator uses the source-defined default model.
 
 Prepare Docker fixtures:
 

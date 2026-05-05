@@ -1445,7 +1445,11 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 	case "MT-102":
 		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerID)
 	case taskPipelineScheduleID:
-		prompt = replaceID(prompt, "pipeline schedule ID", 12, state.PipelineScheduleID)
+		scheduleID := state.PipelineScheduleID
+		if state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
+			scheduleID = state.PipelineSchedulePlayID
+		}
+		prompt = replaceID(prompt, "pipeline schedule ID", 12, scheduleID)
 	case "MT-104", "MT-105", "MS-034":
 		prompt = replaceID(prompt, "user ID", 55, state.UserID)
 	case "MT-111":
@@ -1484,9 +1488,6 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 		case "MT-036":
 			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval`", fmt.Sprintf("`v0.0.0-eval-%s`", suffix))
 		}
-	}
-	if taskID == taskPipelineScheduleID && state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
-		prompt = replaceID(prompt, "pipeline schedule ID", 12, state.PipelineSchedulePlayID)
 	}
 	if taskID == taskPipelineScheduleID && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
 		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerRunID)

@@ -142,7 +142,7 @@ type UpdateInput struct {
 	AddLabels        string               `json:"add_labels,omitempty"    jsonschema:"Comma-separated labels to add without removing existing"`
 	RemoveLabels     string               `json:"remove_labels,omitempty" jsonschema:"Comma-separated labels to remove"`
 	EpicID           int64                `json:"epic_id,omitempty"       jsonschema:"Epic ID to associate (EE only)"`
-	MilestoneID      int64                `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset)"`
+	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
@@ -459,8 +459,8 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 		labels := gl.LabelOptions(strings.Split(input.RemoveLabels, ","))
 		opts.RemoveLabels = &labels
 	}
-	if input.MilestoneID > 0 {
-		opts.MilestoneID = new(input.MilestoneID)
+	if input.MilestoneID != nil {
+		opts.MilestoneID = input.MilestoneID
 	}
 	if input.DueDate != "" {
 		d, err := parseDueDate(input.DueDate)

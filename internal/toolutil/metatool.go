@@ -544,6 +544,19 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 			}
 		}
 	}
+	if value, hasFilePath := out["file_path"]; hasFilePath && accepts("path") && accepts("filename") && !accepts("file_path") {
+		if _, hasPath := out["path"]; !hasPath {
+			if _, hasFilename := out["filename"]; !hasFilename {
+				if filePath, ok := value.(string); ok && filePath != "" {
+					path, filename := splitPackageFilePath(filePath)
+					updated := clone()
+					updated["path"] = path
+					updated["filename"] = filename
+					delete(updated, "file_path")
+				}
+			}
+		}
+	}
 	if accepts("source_branch") && accepts("target_branch") {
 		if _, hasSource := out["source_branch"]; !hasSource {
 			for _, key := range []string{"ref", "branch", "from"} {

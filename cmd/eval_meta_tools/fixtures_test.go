@@ -14,21 +14,23 @@ import (
 // TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies that ApplyLiveFixtureState handles the replaces prompt placeholders scenario correctly.
 func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	state := &liveFixtureState{
-		ProjectPath:          liveFixtureProjectPath,
-		ProjectID:            101,
-		RemoteURL:            "http://localhost:8929/my-org/tools/gitlab-mcp-server.git",
-		IssueIID:             12,
-		IssueDeleteIID:       13,
-		MergeRequestIID:      14,
-		MergeRequestMergeIID: 15,
-		PipelineID:           16,
-		PipelineIID:          17,
-		FailedJobID:          18,
-		ManualJobID:          19,
-		RunnerID:             20,
-		IssueAwardID:         21,
-		MergeRequestAwardID:  22,
-		MergeRequestThreadID: "thread-123",
+		ProjectPath:            liveFixtureProjectPath,
+		ProjectID:              101,
+		RemoteURL:              "http://localhost:8929/my-org/tools/gitlab-mcp-server.git",
+		IssueIID:               12,
+		IssueDeleteIID:         13,
+		MergeRequestIID:        14,
+		MergeRequestMergeIID:   15,
+		PipelineID:             16,
+		PipelineIID:            17,
+		FailedJobID:            18,
+		ManualJobID:            19,
+		RunnerID:               20,
+		IssueAwardID:           21,
+		MergeRequestAwardID:    22,
+		MergeRequestThreadID:   "thread-123",
+		PipelineScheduleID:     23,
+		PipelineSchedulePlayID: 24,
 	}
 	tasks := []evalTask{
 		{ID: "MT-013", Prompt: "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`."},
@@ -41,6 +43,8 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MS-025", Prompt: "Create scoped CI variable `EVAL_CRUD_TOKEN`."},
 		{ID: "MT-061", Prompt: "Resolve merge request discussion with discussion_id `abc123` on merge request IID `7`."},
 		{ID: "MT-061", Prompt: "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7`."},
+		{ID: taskPipelineScheduleID, Prompt: "Delete pipeline schedule ID `12`."},
+		{ID: taskPipelineScheduleID, Prompt: "play pipeline schedule ID `12`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -59,6 +63,8 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[8].Prompt, "merge request IID `14`")
 	assertContains(t, got[9].Prompt, "discussion_id `thread-123`")
 	assertContains(t, got[9].Prompt, "merge_request_iid `14`")
+	assertContains(t, got[10].Prompt, "pipeline schedule ID `23`")
+	assertContains(t, got[11].Prompt, "pipeline schedule ID `24`")
 }
 
 // TestFixtureCI_IsValidYAMLShape verifies that FixtureCI handles the is valid y a m l shape scenario correctly.
@@ -137,10 +143,14 @@ func TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable(t *
 		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables":
 			var request map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-				t.Fatalf("decode request: %v", err)
+				t.Errorf("decode request: %v", err)
+				http.Error(w, "decode request", http.StatusBadRequest)
+				return
 			}
 			if request["key"] != "EVAL_TOKEN" || request["environment_scope"] != "production" {
-				t.Fatalf("request = %+v, want EVAL_TOKEN production", request)
+				t.Errorf("request = %+v, want EVAL_TOKEN production", request)
+				http.Error(w, "unexpected variable request", http.StatusBadRequest)
+				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"key":               "EVAL_TOKEN",

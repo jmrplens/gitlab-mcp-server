@@ -433,11 +433,11 @@ These rows use an extra `Simulation by step` column. The harness validates the m
 
 | Area | Cases |
 | --- | ---: |
-| Single-operation meta-tool cases | 117 |
+| Single-operation meta-tool cases | 179 |
 | Multi-step workflow scenarios | 37 |
 | Failure simulation scenarios | 5 |
-| Total automated cases | 159 |
-| Expected tool operations across all cases | 300 |
+| Total automated cases | 221 |
+| Expected tool operations across all cases | 362 |
 | Catalog tools covered | 48 / 48 |
 
 ## Maintenance Rules

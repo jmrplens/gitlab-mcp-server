@@ -855,10 +855,10 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
-	When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
+When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
 NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
 
-	IMPORTANT — action choice: if the task says note or comment, use note_create. If it says discussion/thread, use discussion_create. If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
+IMPORTANT — action choice: use note_create only for a general/top-level MR comment with no file or line position. Use discussion_create with a position object for threaded or inline review comments, including prompts like "comment on this line/file/hunk". If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
 
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
@@ -1681,9 +1681,9 @@ Jobs:
 
 Artifact downloads (base64, max 1MB):
 - artifacts: project_id*, job_id* — download the whole artifact archive from a known numeric job ID.
-- download_artifacts: project_id*, ref_name*, job — download the whole artifact archive by ref_name and job NAME (string). Never use with job_id.
+- download_artifacts: project_id*, ref_name*, job* — download the whole artifact archive by ref_name and job NAME (string). Never use with job_id.
 - download_single_artifact: project_id*, job_id*, artifact_path* — use when the prompt gives a numeric job ID and one artifact file path such as coverage/report.xml. This is the single-file-by-job-id action.
-- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job — use when the prompt gives ref_name plus job NAME and one artifact file path. Never use with job_id.
+- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job* — use when the prompt gives ref_name plus job NAME and one artifact file path. Never use with job_id.
 
 Job token scope:
 - token_scope_get / token_scope_patch: project_id*. Patch params: enabled.

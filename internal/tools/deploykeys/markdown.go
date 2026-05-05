@@ -28,7 +28,7 @@ func FormatOutputMarkdown(o Output) string {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
 	toolutil.WriteHints(&b,
-		"If the workflow asks to fetch/get this key before update or delete, call action 'get' (deploy_key_get in gitlab_access) with this ID next",
+		"If the workflow asks to fetch/get this key before update or delete, call action 'get' with key_id next",
 		"Use action 'enable' to grant this key to another project",
 		"Use action 'delete' to remove this deploy key",
 	)

@@ -137,6 +137,49 @@ func TestLookupMetaActionSchema_DestructiveActionAddsConfirm(t *testing.T) {
 	}
 }
 
+// TestLookupMetaActionSchema_DeepClonesSliceFields verifies callers cannot
+// mutate slice-valued schema fields returned from the route registry.
+func TestLookupMetaActionSchema_DeepClonesSliceFields(t *testing.T) {
+	routes := map[string]ActionMap{
+		"gitlab_project": {
+			"create": {
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id"},
+					"properties": map[string]any{
+						"visibility": map[string]any{"enum": []any{"private", "public"}},
+					},
+					"oneOf": []any{map[string]any{"required": []any{"name"}}},
+				},
+			},
+		},
+	}
+
+	schema, ok := LookupMetaActionSchema(routes, "gitlab_project", "create")
+	if !ok {
+		t.Fatal("LookupMetaActionSchema() ok = false, want true")
+	}
+	schema["required"].([]any)[0] = "changed"
+	properties := schema["properties"].(map[string]any)
+	visibility := properties["visibility"].(map[string]any)
+	visibility["enum"].([]any)[0] = "internal"
+	schema["oneOf"].([]any)[0].(map[string]any)["required"].([]any)[0] = "path"
+
+	original := routes["gitlab_project"]["create"].InputSchema
+	if got := original["required"].([]any)[0]; got != "project_id" {
+		t.Fatalf("original required[0] = %q, want project_id", got)
+	}
+	originalProperties := original["properties"].(map[string]any)
+	originalVisibility := originalProperties["visibility"].(map[string]any)
+	if got := originalVisibility["enum"].([]any)[0]; got != "private" {
+		t.Fatalf("original enum[0] = %q, want private", got)
+	}
+	originalOneOf := original["oneOf"].([]any)[0].(map[string]any)
+	if got := originalOneOf["required"].([]any)[0]; got != "name" {
+		t.Fatalf("original oneOf required[0] = %q, want name", got)
+	}
+}
+
 // TestLookupMetaActionSchema_NilInputSchemaReturnsFallback verifies routes
 // without captured input schema still expose an actionable object schema and
 // unknown tool/action pairs return false.

@@ -179,13 +179,24 @@ func enrichDestructiveSchema(schema map[string]any, destructive bool) map[string
 func cloneSchemaMap(value map[string]any) map[string]any {
 	out := make(map[string]any, len(value))
 	for key, item := range value {
-		if nested, ok := item.(map[string]any); ok {
-			out[key] = cloneSchemaMap(nested)
-			continue
-		}
-		out[key] = item
+		out[key] = cloneSchemaValue(item)
 	}
 	return out
+}
+
+func cloneSchemaValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneSchemaMap(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = cloneSchemaValue(item)
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // ParseMetaSchemaURI extracts the tool and action segments from a schema URI.

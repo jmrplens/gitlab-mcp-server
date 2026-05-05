@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,6 +25,7 @@ const (
 
 	headerContentType = "Content-Type"
 	contentTypeJSON   = "application/json"
+	headerGoogleAuth  = "x-goog-api-key"
 )
 
 // modelSpec holds data for main operations.
@@ -442,12 +442,17 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	if candidate == "" {
 		return nil, errors.New("empty arguments after normalization")
 	}
-	wrapped := false
+	addedOpening := false
 	if !strings.HasPrefix(candidate, "{") {
 		candidate = "{" + candidate
-		wrapped = true
+		addedOpening = true
+		if err := json.Unmarshal([]byte(candidate), &input); err == nil {
+			return input, nil
+		}
 	}
-	if wrapped || !strings.HasSuffix(candidate, "}") {
+	if !strings.HasSuffix(candidate, "}") {
+		candidate += "}"
+	} else if addedOpening {
 		candidate += "}"
 	}
 	if err := json.Unmarshal([]byte(candidate), &input); err != nil {
@@ -584,12 +589,13 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("marshal google request: %w", err)
 	}
-	endpoint := geminiAPIBase + url.PathEscape(request.Model) + ":generateContent?key=" + url.QueryEscape(apiKey)
+	endpoint := geminiAPIBase + url.PathEscape(request.Model) + ":generateContent"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new google request: %w", err)
 	}
 	req.Header.Set(headerContentType, contentTypeJSON)
+	req.Header.Set(headerGoogleAuth, apiKey)
 
 	respBody, retry, err := doModelRequest(client, req, "google")
 	if err != nil {
@@ -700,7 +706,12 @@ func googleFunctionResponsePayload(block modelContentBlock) map[string]any {
 	if err := json.Unmarshal([]byte(block.Content), &parsed); err == nil {
 		response["content"] = parsed
 		if object, ok := parsed.(map[string]any); ok {
-			maps.Copy(response, object)
+			for key, value := range object {
+				if _, reserved := response[key]; reserved {
+					continue
+				}
+				response[key] = value
+			}
 		}
 		return response
 	}
@@ -805,6 +816,9 @@ func sanitizeGoogleSchemaType(value any) any {
 func doModelRequest(client *http.Client, req *http.Request, provider string) (body []byte, retry bool, err error) {
 	resp, err := client.Do(req) // #nosec G704 -- provider URLs come from explicit evaluator configuration, not model-generated input.
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || req.Context().Err() != nil {
+			return nil, false, fmt.Errorf("%s request: %w", provider, err)
+		}
 		return nil, true, fmt.Errorf("%s request: %w", provider, err)
 	}
 	defer resp.Body.Close()

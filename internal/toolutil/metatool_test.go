@@ -197,6 +197,8 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 			"assignee_ids":      map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
 			"variables":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"weight":            map[string]any{"type": "number"},
+			"path":              map[string]any{"type": "string"},
+			"filename":          map[string]any{"type": "string"},
 		},
 	}
 	params := map[string]any{
@@ -213,6 +215,7 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 		"assignee_ids":                 []any{"10", "11"},
 		"variables":                    "DEPLOY_ENV=prod",
 		"weight":                       "3.5",
+		"file_path":                    "packages/npm/package.tgz",
 	}
 
 	got := NormalizeParamAliasesForSchema(params, schema)
@@ -237,7 +240,10 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	if got["weight"] != 3.5 {
 		t.Fatalf("weight = %#v", got["weight"])
 	}
-	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active"} {
+	if got["path"] != "packages/npm" || got["filename"] != "package.tgz" {
+		t.Fatalf("file_path split values = %#v", got)
+	}
+	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path"} {
 		if _, exists := got[alias]; exists {
 			t.Fatalf("alias %q still present in %#v", alias, got)
 		}

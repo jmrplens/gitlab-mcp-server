@@ -180,6 +180,10 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_meta_tools \
 | `--skip-unavailable` | Skip routes not available in the current catalog or GitLab edition. |
 | `--task` | Comma-separated task IDs for targeted runs. |
 | `--out` | Markdown report path. Trace directory defaults to `<report>.traces/`. |
+| `--publish-docs` | Publish reviewed evaluation reports into the managed docs blocks. |
+| `--publish-from` | Reviewed Markdown report path to publish; repeat once per report. |
+| `--publish-label` | Human-readable label for the published snapshot. |
+| `--check-docs` | Verify committed docs match the selected `--publish-from` reports without writing files. |
 
 ## Outputs
 

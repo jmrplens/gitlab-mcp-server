@@ -47063,8 +47063,11 @@
           "type": "string"
         },
         "milestone_id": {
-          "description": "New milestone ID (0 to unset)",
-          "type": "integer"
+          "description": "New milestone ID (0 to unset; omit to leave unchanged)",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path,required",

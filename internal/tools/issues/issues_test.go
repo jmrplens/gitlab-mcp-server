@@ -1791,6 +1791,7 @@ func TestParseDueDate_RFC3339Rejected(t *testing.T) {
 func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	conf := true
 	locked := false
+	milestoneID := int64(5)
 	opts, err := buildUpdateOpts(UpdateInput{
 		Title:            "New Title",
 		Description:      "New Description",
@@ -1799,7 +1800,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Labels:           "a",
 		AddLabels:        "b",
 		RemoveLabels:     "c",
-		MilestoneID:      5,
+		MilestoneID:      &milestoneID,
 		DueDate:          "2026-12-31",
 		Confidential:     &conf,
 		IssueType:        "incident",
@@ -1811,6 +1812,19 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	}
 	assertUpdateOptsFields(t, opts)
 	assertUpdateOptsMetadata(t, opts, &conf, &locked)
+}
+
+// TestBuildUpdateOpts_MilestoneZeroUnsets verifies milestone_id 0 is forwarded
+// instead of being treated as an omitted field.
+func TestBuildUpdateOpts_MilestoneZeroUnsets(t *testing.T) {
+	zero := int64(0)
+	opts, err := buildUpdateOpts(UpdateInput{MilestoneID: &zero})
+	if err != nil {
+		t.Fatalf("buildUpdateOpts() error = %v", err)
+	}
+	if opts.MilestoneID == nil || *opts.MilestoneID != 0 {
+		t.Fatalf("MilestoneID = %#v, want pointer to 0", opts.MilestoneID)
+	}
 }
 
 // assertUpdateOptsFields is an internal helper for the issues package.
