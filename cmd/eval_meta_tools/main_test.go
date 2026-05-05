@@ -1178,7 +1178,7 @@ func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
 	}
 
 	prompt := taskPrompt(task)
-	for _, want := range []string{"download_single_artifact", "job_id", "artifact_path", "do not use download_artifacts"} {
+	for _, want := range []string{"Exact required call", "use the gitlab_job tool once", `"action":"download_single_artifact"`, `"job_id":999`, `"artifact_path":"coverage/report.xml"`} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want artifact guidance containing %q", prompt, want)
 		}

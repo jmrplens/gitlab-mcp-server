@@ -3515,7 +3515,8 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 		return true
 	}
 	switch step.ExpectedTool + "/" + step.ExpectedAction {
-	case "gitlab_job/delete_artifacts",
+	case "gitlab_job/download_single_artifact",
+		"gitlab_job/delete_artifacts",
 		"gitlab_user/block",
 		"gitlab_merge_request/emoji_mr_delete",
 		"gitlab_repository/commit_discussion_delete_note",
@@ -3654,6 +3655,10 @@ func exampleParamValue(param, prompt string) any {
 		}
 	case "external_url":
 		if value, ok := backtickValueAfter(prompt, "pointing at "); ok {
+			return value
+		}
+	case "artifact_path":
+		if value, ok := backtickValueAfter(prompt, "artifact "); ok {
 			return value
 		}
 	case "export_id":
