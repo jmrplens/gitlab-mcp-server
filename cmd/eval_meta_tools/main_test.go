@@ -965,6 +965,37 @@ func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-037",
+		Prompt: "Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: get the project, list branches, list tags, list releases, list the repository tree at `main`, list project CI variables, list deploy keys, list deploy tokens, then list generic packages.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_branch", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_tag", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_release", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "tree", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_ci_variable", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_key_list_project", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_token_list_project", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_package", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"follow exactly this order",
+		"gitlab_release/list before repository tree",
+		"call repository tree with params.ref=\"main\"",
+		"Use params.per_page=1 on list/tree/package steps",
+		"one page is enough for this evaluation",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want broad inventory guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-016",
