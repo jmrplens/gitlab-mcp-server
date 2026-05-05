@@ -1073,6 +1073,7 @@ func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
 		`"project_id":"my-org/tools/gitlab-mcp-server"`,
 		`"merge_request_iid":7`,
 		"do not prefetch",
+		"do not use params:{}",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want analyzer guidance containing %q", prompt, want)
@@ -1095,7 +1096,7 @@ func TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample(t *testing.T) {
 		`"action":"analyze.ci_config"`,
 		`"project_id":"my-org/tools/gitlab-mcp-server"`,
 		`"content_ref":"main"`,
-		"keep action and string params quoted",
+		"Exact required call",
 		"do not call gitlab_discover_project",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -1116,11 +1117,11 @@ func TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance(t *testing.T) {
 
 	prompt := taskPrompt(task)
 	for _, want := range []string{
-		"call gitlab_analyze directly",
+		"use the gitlab_analyze tool once",
 		`"action":"ci_config"`,
 		`"project_id":"my-org/tools/gitlab-mcp-server"`,
 		`"content_ref":"main"`,
-		"do not prefetch",
+		"do not use params:{}",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want split analyzer guidance containing %q", prompt, want)
@@ -2801,6 +2802,11 @@ func TestGoogleContentConversion_RoundTripsFunctionResponseNames(t *testing.T) {
 	}
 	if blocks[0].ThoughtSignature != "thought-token" {
 		t.Fatalf("thought signature = %q, want preserved", blocks[0].ThoughtSignature)
+	}
+
+	contentBlocks := googleContentBlocks(googleContent{Parts: []googlePart{{Text: "plain response"}, {FunctionCall: &googleFunctionCall{Name: "gitlab", Args: map[string]any{"action": "user.current"}, ID: "call-2"}}}})
+	if len(contentBlocks) != 2 || contentBlocks[0].Type != "text" || contentBlocks[0].Text != "plain response" || contentBlocks[1].Type != "tool_use" {
+		t.Fatalf("content blocks = %+v, want text block followed by tool_use", contentBlocks)
 	}
 }
 

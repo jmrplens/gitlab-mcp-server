@@ -3445,11 +3445,11 @@ func taskPrompt(task evalTask) string {
 	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact" {
 		retryGuidance += ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
 	}
-	if len(steps) == 1 && isAnalyzerStep(steps[0]) {
-		retryGuidance += analyzerTaskGuidance(steps[0], task.Prompt)
-	}
 	if len(steps) == 1 && usesCompactExactPrompt(steps[0]) {
 		return compactExactTaskPrompt(task, destructive, steps[0])
+	}
+	if len(steps) == 1 && isAnalyzerStep(steps[0]) {
+		return analyzerTaskPrompt(task, destructive, steps[0])
 	}
 	if len(steps) == 1 && steps[0].ExpectedAction == "search.code" {
 		retryGuidance += ` For search.code, call gitlab with {"action":"search.code","params":{"query":"<query>","project_id":"<project_id>"}}; a namespace path like group/project is already project_id, never remote_url.`
@@ -3464,13 +3464,13 @@ func isAnalyzerStep(step evalStep) bool {
 	return step.ExpectedTool == "gitlab_analyze" || strings.HasPrefix(step.ExpectedAction, "analyze.")
 }
 
-func analyzerTaskGuidance(step evalStep, prompt string) string {
+func analyzerTaskPrompt(task evalTask, destructive string, step evalStep) string {
 	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
 	for _, param := range step.RequiredParams {
-		params[param] = exampleParamValue(param, prompt)
+		params[param] = exampleParamValue(param, task.Prompt)
 	}
 	for _, param := range step.OptionalParams {
-		params[param] = exampleParamValue(param, prompt)
+		params[param] = exampleParamValue(param, task.Prompt)
 	}
 
 	example := struct {
@@ -3486,9 +3486,9 @@ func analyzerTaskGuidance(step evalStep, prompt string) string {
 		toolName = "gitlab"
 	}
 	if err != nil {
-		return fmt.Sprintf(` For this LLM-assisted analyzer task, call %s with action %s directly; do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first.`, toolName, step.ExpectedAction)
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the %s tool once with action %s and the params named in the task. Do not answer in text, do not call schema lookup, do not prefetch related resources, and do not use params:{}.", task.ID, task.Prompt, destructive, toolName, step.ExpectedAction)
 	}
-	return fmt.Sprintf(` For this LLM-assisted analyzer task, call %s directly with a valid JSON envelope like %s; keep action and string params quoted, use any project path from the task directly as params.project_id, do not call gitlab_discover_project, and do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first.`, toolName, data)
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s. Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data)
 }
 
 func usesCompactExactPrompt(step evalStep) bool {

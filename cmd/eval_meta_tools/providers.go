@@ -562,7 +562,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	if len(decoded.Candidates) == 0 {
 		return modelResponse{}, true, googleEmptyResponseError(decoded, "no candidates")
 	}
-	blocks := googleToolUseBlocks(decoded.Candidates[0].Content)
+	blocks := googleContentBlocks(decoded.Candidates[0].Content)
 	if len(blocks) == 0 && decoded.UsageMetadata.CandidatesTokenCount == 0 {
 		return modelResponse{}, true, googleEmptyResponseError(decoded, "no tool calls or output tokens")
 	}
@@ -661,9 +661,23 @@ func googleFunctionResponsePayload(block modelContentBlock) map[string]any {
 }
 
 func googleToolUseBlocks(content googleContent) []modelContentBlock {
+	blocks := googleContentBlocks(content)
+	out := make([]modelContentBlock, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Type == "tool_use" {
+			out = append(out, block)
+		}
+	}
+	return out
+}
+
+func googleContentBlocks(content googleContent) []modelContentBlock {
 	blocks := make([]modelContentBlock, 0, len(content.Parts))
 	for index, part := range content.Parts {
 		if part.FunctionCall == nil {
+			if part.Text != "" {
+				blocks = append(blocks, modelContentBlock{Type: "text", Text: part.Text})
+			}
 			continue
 		}
 		id := part.FunctionCall.ID
