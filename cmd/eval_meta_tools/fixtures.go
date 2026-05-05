@@ -4,8 +4,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1493,11 +1493,11 @@ func isEmptyCommitError(err error) bool {
 }
 
 func newAuthorizedSSHKey() (string, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return "", err
 	}
-	sshKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	sshKey, err := ssh.NewPublicKey(publicKey)
 	if err != nil {
 		return "", err
 	}
