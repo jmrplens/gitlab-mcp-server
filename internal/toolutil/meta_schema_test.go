@@ -38,6 +38,50 @@ func TestMetaSchemaRegistry_ClonesRoutes(t *testing.T) {
 	}
 }
 
+// TestMetaSchemaRegistry_NilSetRoutesIsNoop verifies a nil registry receiver
+// tolerates SetRoutes calls so optional registries can skip setup safely.
+func TestMetaSchemaRegistry_NilSetRoutesIsNoop(t *testing.T) {
+	var registry *MetaSchemaRegistry
+	registry.SetRoutes(testMetaSchemaRoutes())
+}
+
+// TestCloneMetaSchemaRoutes_DeepClonesSchemas verifies route snapshots do not
+// share nested input or output schema maps with the original route registry.
+func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
+	routes := map[string]ActionMap{
+		"gitlab_project": {
+			"create": {
+				InputSchema: map[string]any{
+					"required": []string{"name"},
+					"properties": map[string]any{
+						"name": map[string]any{"type": "string"},
+					},
+				},
+				OutputSchema: map[string]any{
+					"required": []string{"id"},
+				},
+			},
+		},
+	}
+
+	clone := CloneMetaSchemaRoutes(routes)
+	cloneRoute := clone["gitlab_project"]["create"]
+	cloneRoute.InputSchema["required"].([]string)[0] = "changed"
+	cloneRoute.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"] = "integer"
+	cloneRoute.OutputSchema["required"].([]string)[0] = "changed"
+
+	original := routes["gitlab_project"]["create"]
+	if got := original.InputSchema["required"].([]string)[0]; got != "name" {
+		t.Fatalf("original input required = %q, want name", got)
+	}
+	if got := original.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"]; got != "string" {
+		t.Fatalf("original property type = %#v, want string", got)
+	}
+	if got := original.OutputSchema["required"].([]string)[0]; got != "id" {
+		t.Fatalf("original output required = %q, want id", got)
+	}
+}
+
 // TestBuildMetaSchemaIndex_SortsToolsAndActions verifies the resource index
 // has deterministic tool and action ordering.
 func TestBuildMetaSchemaIndex_SortsToolsAndActions(t *testing.T) {
@@ -145,11 +189,11 @@ func TestLookupMetaActionSchema_DeepClonesSliceFields(t *testing.T) {
 			"create": {
 				InputSchema: map[string]any{
 					"type":     "object",
-					"required": []any{"project_id"},
+					"required": []string{"project_id"},
 					"properties": map[string]any{
 						"visibility": map[string]any{"enum": []any{"private", "public"}},
 					},
-					"oneOf": []any{map[string]any{"required": []any{"name"}}},
+					"oneOf": []any{map[string]any{"required": []string{"name"}}},
 				},
 			},
 		},
@@ -159,14 +203,14 @@ func TestLookupMetaActionSchema_DeepClonesSliceFields(t *testing.T) {
 	if !ok {
 		t.Fatal("LookupMetaActionSchema() ok = false, want true")
 	}
-	schema["required"].([]any)[0] = "changed"
+	schema["required"].([]string)[0] = "changed"
 	properties := schema["properties"].(map[string]any)
 	visibility := properties["visibility"].(map[string]any)
 	visibility["enum"].([]any)[0] = "internal"
-	schema["oneOf"].([]any)[0].(map[string]any)["required"].([]any)[0] = "path"
+	schema["oneOf"].([]any)[0].(map[string]any)["required"].([]string)[0] = "path"
 
 	original := routes["gitlab_project"]["create"].InputSchema
-	if got := original["required"].([]any)[0]; got != "project_id" {
+	if got := original["required"].([]string)[0]; got != "project_id" {
 		t.Fatalf("original required[0] = %q, want project_id", got)
 	}
 	originalProperties := original["properties"].(map[string]any)
@@ -175,7 +219,7 @@ func TestLookupMetaActionSchema_DeepClonesSliceFields(t *testing.T) {
 		t.Fatalf("original enum[0] = %q, want private", got)
 	}
 	originalOneOf := original["oneOf"].([]any)[0].(map[string]any)
-	if got := originalOneOf["required"].([]any)[0]; got != "name" {
+	if got := originalOneOf["required"].([]string)[0]; got != "name" {
 		t.Fatalf("original oneOf required[0] = %q, want name", got)
 	}
 }

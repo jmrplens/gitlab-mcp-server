@@ -787,7 +787,7 @@ func coerceStringIDNumbers(params map[string]any, target reflect.Type) map[strin
 }
 
 func isStringIDParam(name string) bool {
-	return name == "id" || name == "iid" || strings.HasSuffix(name, "_id") || strings.HasSuffix(name, "_iid")
+	return name == "id" || name == "iid" || name == "project_path" || name == "group_path" || name == "full_path" || strings.HasSuffix(name, "_id") || strings.HasSuffix(name, "_iid")
 }
 
 func numericIDString(value any) (string, bool) {

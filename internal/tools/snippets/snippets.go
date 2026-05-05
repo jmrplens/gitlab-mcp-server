@@ -119,6 +119,28 @@ type UpdateFileInput struct {
 	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Previous file path (for move)"`
 }
 
+func snippetVisibility(value string) *gl.VisibilityValue {
+	if value == "" {
+		value = "private"
+	}
+	visibility := gl.VisibilityValue(value)
+	return &visibility
+}
+
+func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions {
+	if len(files) == 0 {
+		return nil
+	}
+	options := make([]*gl.CreateSnippetFileOptions, len(files))
+	for i, file := range files {
+		options[i] = &gl.CreateSnippetFileOptions{
+			FilePath: new(file.FilePath),
+			Content:  new(file.Content),
+		}
+	}
+	return &options
+}
+
 // ---------------------------------------------------------------------------
 // Markdown formatters
 // ---------------------------------------------------------------------------.
@@ -345,21 +367,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ContentBody != "" {
 		opts.Content = new(input.ContentBody)
 	}
-	visibility := input.Visibility
-	if visibility == "" {
-		visibility = "private"
-	}
-	v := gl.VisibilityValue(visibility)
-	opts.Visibility = &v
-	if len(input.Files) > 0 {
-		files := make([]*gl.CreateSnippetFileOptions, len(input.Files))
-		for i, f := range input.Files {
-			files[i] = &gl.CreateSnippetFileOptions{
-				FilePath: new(f.FilePath),
-				Content:  new(f.Content),
-			}
-		}
-		opts.Files = &files
+	opts.Visibility = snippetVisibility(input.Visibility)
+	if files := createSnippetFiles(input.Files); files != nil {
+		opts.Files = files
 	}
 	snippet, _, err := client.GL().Snippets.CreateSnippet(opts, gl.WithContext(ctx))
 	if err != nil {

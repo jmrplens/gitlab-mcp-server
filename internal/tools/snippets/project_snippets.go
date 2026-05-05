@@ -115,21 +115,9 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	visibility := input.Visibility
-	if visibility == "" {
-		visibility = "private"
-	}
-	v := gl.VisibilityValue(visibility)
-	opts.Visibility = &v
-	if len(input.Files) > 0 {
-		files := make([]*gl.CreateSnippetFileOptions, len(input.Files))
-		for i, f := range input.Files {
-			files[i] = &gl.CreateSnippetFileOptions{
-				FilePath: new(f.FilePath),
-				Content:  new(f.Content),
-			}
-		}
-		opts.Files = &files
+	opts.Visibility = snippetVisibility(input.Visibility)
+	if files := createSnippetFiles(input.Files); files != nil {
+		opts.Files = files
 	} else if input.FileName != "" || input.ContentBody != "" {
 		file := &gl.CreateSnippetFileOptions{}
 		if input.FileName != "" {

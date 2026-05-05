@@ -81,10 +81,25 @@ func (r *MetaSchemaRegistry) Routes() map[string]ActionMap {
 	return CloneMetaSchemaRoutes(r.routes)
 }
 
-// CloneMetaSchemaRoutes creates a shallow snapshot of route maps so consumers
-// do not observe later registration or filtering changes.
+// CloneMetaSchemaRoutes creates a defensive snapshot of route maps so consumers
+// do not observe later registration, filtering, or schema map changes.
 func CloneMetaSchemaRoutes(routes map[string]ActionMap) map[string]ActionMap {
-	return cloneMetaRoutes(routes)
+	out := make(map[string]ActionMap, len(routes))
+	for tool, actions := range routes {
+		actionCopy := make(ActionMap, len(actions))
+		for action, route := range actions {
+			routeCopy := route
+			if route.InputSchema != nil {
+				routeCopy.InputSchema = cloneSchemaMap(route.InputSchema)
+			}
+			if route.OutputSchema != nil {
+				routeCopy.OutputSchema = cloneSchemaMap(route.OutputSchema)
+			}
+			actionCopy[action] = routeCopy
+		}
+		out[tool] = actionCopy
+	}
+	return out
 }
 
 // BuildMetaSchemaIndex builds the resource-compatible schema index payload.
@@ -193,6 +208,10 @@ func cloneSchemaValue(value any) any {
 		for i, item := range typed {
 			out[i] = cloneSchemaValue(item)
 		}
+		return out
+	case []string:
+		out := make([]string, len(typed))
+		copy(out, typed)
 		return out
 	default:
 		return value

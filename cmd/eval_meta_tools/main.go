@@ -85,6 +85,7 @@ const (
 	metricFinalTaskSuccess            = "Final task success proxy"
 	metricEstimatedTokens             = "Estimated tokens"
 	metricValueTableHeader            = "| Metric | Value |\n| --- | ---: |\n"
+	metricIntegerValueTableRow        = "| %s | %d |\n"
 )
 
 // options holds data for main operations.
@@ -2990,29 +2991,30 @@ func convertTools(toolList []*mcp.Tool) []modelTool {
 		if tool == nil {
 			continue
 		}
-		var inputSchema any = map[string]any{"type": "object"}
-		if tool.InputSchema != nil {
-			inputSchema = tool.InputSchema
-		}
-		out = append(out, modelTool{Name: tool.Name, Description: tool.Description, InputSchema: inputSchema})
+		out = append(out, modelToolFromParts(tool.Name, tool.Description, tool.InputSchema))
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	if len(out) > 0 {
-		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral"}
-	}
-	return out
+	return sortedModelTools(out)
 }
 
 // convertSnapshotTools is an internal helper for the main package.
 func convertSnapshotTools(snapshot []snapshotTool) []modelTool {
 	out := make([]modelTool, 0, len(snapshot))
 	for _, tool := range snapshot {
-		inputSchema := any(map[string]any{"type": "object"})
-		if tool.InputSchema != nil {
-			inputSchema = tool.InputSchema
-		}
-		out = append(out, modelTool{Name: tool.Name, Description: tool.Description, InputSchema: inputSchema})
+		out = append(out, modelToolFromParts(tool.Name, tool.Description, tool.InputSchema))
 	}
+	return sortedModelTools(out)
+}
+
+// modelToolFromParts builds a model-facing tool with a fallback object schema.
+func modelToolFromParts(name, description string, inputSchema any) modelTool {
+	if inputSchema == nil {
+		inputSchema = map[string]any{"type": "object"}
+	}
+	return modelTool{Name: name, Description: description, InputSchema: inputSchema}
+}
+
+// sortedModelTools sorts model tools and marks the final entry cacheable.
+func sortedModelTools(out []modelTool) []modelTool {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	if len(out) > 0 {
 		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral"}
@@ -5531,10 +5533,10 @@ func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, d
 	summary := aggregateUsage(results)
 	fmt.Fprintf(b, "\n## API Usage\n\n")
 	b.WriteString(metricValueTableHeader)
-	fmt.Fprintf(b, "| %s | %d |\n", usageModelRequests, summary.ModelCalls)
-	fmt.Fprintf(b, "| %s | %d |\n", usageToolCallsEmitted, summary.ToolCalls)
-	fmt.Fprintf(b, "| %s | %d |\n", usageInputTokens, summary.Usage.InputTokens)
-	fmt.Fprintf(b, "| %s | %d |\n", usageOutputTokens, summary.Usage.OutputTokens)
+	fmt.Fprintf(b, metricIntegerValueTableRow, usageModelRequests, summary.ModelCalls)
+	fmt.Fprintf(b, metricIntegerValueTableRow, usageToolCallsEmitted, summary.ToolCalls)
+	fmt.Fprintf(b, metricIntegerValueTableRow, usageInputTokens, summary.Usage.InputTokens)
+	fmt.Fprintf(b, metricIntegerValueTableRow, usageOutputTokens, summary.Usage.OutputTokens)
 	fmt.Fprintf(b, "| Cache creation input tokens | %d |\n", summary.Usage.CacheCreationInputTokens)
 	fmt.Fprintf(b, "| Cache read input tokens | %d |\n", summary.Usage.CacheReadInputTokens)
 	pricing := resolvePricing(opts)

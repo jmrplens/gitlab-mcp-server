@@ -18,25 +18,25 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,286 |
-| Unit test functions | 9,044 |
+| Total test functions | 9,322 |
+| Unit test functions | 9,080 |
 | E2E test functions | 242 |
-| cmd test functions | 310 |
+| cmd test functions | 339 |
 | Test files (internal/) | 398 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 107 |
 | Tool sub-packages tested | 162 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.4% |
-| Overall coverage (`go test ./internal/...`) | 96.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
+| Overall coverage (`go test ./internal/...`) | 97.0% |
 | Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,348 | 89.9% |
-| `TestFunc` (no underscore) | 690 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,378 | 89.9% |
+| `TestFunc` (no underscore) | 696 | 7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) | 248 | 2.7% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,524 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,530 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (162) | 6,983 | 307 | domain-specific GitLab tool handlers |
+| Tool sub-packages (162) | 6,984 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
-| cmd packages | 310 | 13 | server entry point and developer command utilities |
-| **Total** | **9,286** | **518** |  |
+| cmd packages | 339 | 13 | server entry point and developer command utilities |
+| **Total** | **9,322** | **518** |  |
 
 ### Core Packages
 
@@ -70,9 +70,9 @@
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
 | serverpool | 45 | 99.5% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
-| toolutil | 351 | 89.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
+| toolutil | 357 | 94.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 207 | 83.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,524** |  |  |
+| **Subtotal** | **1,530** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -97,8 +97,8 @@
 | branches | 80 | 97.0% | 10 |
 | pipelineschedules | 80 | 97.4% | 11 |
 | containerregistry | 76 | 100.0% | 14 |
+| files | 75 | 93.2% | 8 |
 | tags | 75 | 99.0% | 9 |
-| files | 74 | 92.9% | 8 |
 | snippets | 71 | 99.0% | 17 |
 | deploykeys | 66 | 100.0% | 10 |
 | workitems | 66 | 100.0% | 5 |
@@ -160,7 +160,7 @@
 | featureflags | 37 | 2 | 98.0% | 6 |
 | features | 19 | 1 | 97.6% | 4 |
 | ffuserlists | 26 | 2 | 96.6% | 6 |
-| files | 74 | 2 | 92.9% | 8 |
+| files | 75 | 2 | 93.2% | 8 |
 | freezeperiods | 32 | 2 | 97.5% | 6 |
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
@@ -273,7 +273,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **6,983** | **307** |  | **1,052** |
+| **Total** | **6,984** | **307** |  | **1,052** |
 
 </details>
 
@@ -288,7 +288,7 @@
 | cmd/audit_metrics | 9.7% |
 | cmd/audit_output | 24.6% |
 | cmd/audit_tokens | 14.0% |
-| cmd/eval_meta_tools | 51.7% |
+| cmd/eval_meta_tools | 55.3% |
 | cmd/gen_llms | 6.3% |
 | cmd/gen_readme | 14.6% |
 | cmd/gen_testing_docs | 20.7% |
@@ -312,7 +312,7 @@
 | sampling | 99.5% |
 | serverpool | 99.5% |
 | testutil | 60.9% |
-| toolutil | 89.5% |
+| toolutil | 94.0% |
 | wizard | 83.1% |
 
 ### Tool Sub-Packages
@@ -369,7 +369,7 @@
 | featureflags | 98.0% |
 | features | 97.6% |
 | ffuserlists | 96.6% |
-| files | 92.9% |
+| files | 93.2% |
 | freezeperiods | 97.5% |
 | geo | 100.0% |
 | gitignoretemplates | 100.0% |
@@ -492,14 +492,13 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (24.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_meta_tools** (51.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_meta_tools** (55.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **wizard** (83.1%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.
-- **toolutil** (89.5%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 
 <!-- END TESTING STATS -->
 
