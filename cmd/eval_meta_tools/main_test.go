@@ -1024,6 +1024,31 @@ func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-027",
+		Prompt: "Exercise merge request note CRUD in project `my-org/tools/gitlab-mcp-server`: add note `eval-mr-note` to MR `7`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_create", RequiredParams: []string{"project_id", "merge_request_iid", "body"}},
+			{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_get", RequiredParams: []string{"project_id", "merge_request_iid", "note_id"}},
+			{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_update", RequiredParams: []string{"project_id", "merge_request_iid", "note_id", "body"}},
+			{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_delete", RequiredParams: []string{"project_id", "merge_request_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"follow exactly this order: note_create, note_get, note_update, note_delete",
+		"After note_create, call note_get next",
+		"call note_update with params.body set to the updated note text and without params.confirm",
+		"Only note_delete is destructive; call note_delete last with params.confirm=true",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want MR note CRUD guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-016",

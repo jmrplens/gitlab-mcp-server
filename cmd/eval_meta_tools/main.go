@@ -3469,6 +3469,9 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "time_estimate_set" {
 		retryGuidance += ` For merge request time tracking plus emoji, follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset. After emoji_mr_create, call emoji_mr_list next even if next_steps mentions delete. Delete the award only after the list step, using the returned award emoji id as params.award_id with params.confirm=true. After emoji_mr_delete, call spent_time_reset before time_estimate_reset.`
 	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
+		retryGuidance += ` For merge request note CRUD, follow exactly this order: note_create, note_get, note_update, note_delete. After note_create, call note_get next using the returned note id even if next_steps mentions update or delete. After note_get, call note_update with params.body set to the updated note text and without params.confirm. Only note_delete is destructive; call note_delete last with params.confirm=true.`
+	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
 			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
