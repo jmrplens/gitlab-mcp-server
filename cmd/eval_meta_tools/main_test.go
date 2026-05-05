@@ -1171,6 +1171,30 @@ func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-068",
+		Prompt:         "Create instance CI variable `INSTANCE_EVAL_TOKEN` with value `masked-value-123`.",
+		ExpectedTool:   "gitlab_ci_variable",
+		ExpectedAction: "instance_create",
+		RequiredParams: []string{"key", "value"},
+		OptionalParams: []string{"masked", "protected"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"Exact required call: use the gitlab_ci_variable tool once with input",
+		`"action":"instance_create"`,
+		`"key":"INSTANCE_EVAL_TOKEN"`,
+		`"value":"masked-value-123"`,
+		"Return exactly one tool call and no text answer",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want exact instance_create guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-020",
@@ -1247,6 +1271,30 @@ func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want feature flag lifecycle guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-030",
+		Prompt: "Exercise project deploy token lifecycle in project `my-org/tools/gitlab-mcp-server`: create deploy token `eval-deploy-token` with scope `read_repository`, fetch it with the returned deploy token ID, list project deploy tokens, then delete that deploy token.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_token_create_project", RequiredParams: []string{"project_id", "name", "scopes"}, OptionalParams: []string{"expires_at", "username"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_token_get_project", RequiredParams: []string{"project_id", "deploy_token_id"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_token_list_project", RequiredParams: []string{"project_id"}, OptionalParams: []string{"page", "per_page"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_token_delete_project", RequiredParams: []string{"project_id", "deploy_token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"deploy_token_create_project requires params.project_id, params.name, and params.scopes",
+		"Do not add params.expires_at unless the task gives an explicit expiry date",
+		"must be YYYY-MM-DD only, never a timestamp",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want deploy token lifecycle guidance containing %q", prompt, want)
 		}
 	}
 }

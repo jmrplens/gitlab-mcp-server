@@ -3475,6 +3475,9 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_feature_flags" && steps[0].ExpectedAction == "ff_user_list_create" {
 		retryGuidance += ` For feature flag user-list lifecycle, params.user_xids is a comma-separated string such as "u1,u2", not an array. For feature_flag_create and feature_flag_update, omit params.strategies unless the task gives an exact strategies JSON string; if you must send strategies, it must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object.`
 	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_token_create_project" {
+		retryGuidance += ` For project deploy token lifecycle, deploy_token_create_project requires params.project_id, params.name, and params.scopes. Do not add params.expires_at unless the task gives an explicit expiry date; if you send expires_at, it must be YYYY-MM-DD only, never a timestamp.`
+	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
 			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
@@ -3535,6 +3538,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	switch step.ExpectedTool + "/" + step.ExpectedAction {
 	case "gitlab_job/download_single_artifact",
 		"gitlab_job/delete_artifacts",
+		"gitlab_ci_variable/instance_create",
 		"gitlab_mr_review/discussion_resolve",
 		"gitlab_user/block",
 		"gitlab_merge_request/emoji_mr_delete",
@@ -3830,12 +3834,25 @@ func exampleParamValue(param, prompt string) any {
 		if value, ok := backtickValueAfter(prompt, "named "); ok {
 			return value
 		}
+		if value, ok := backtickValueAfter(prompt, "deploy token "); ok {
+			return value
+		}
 		if value, ok := backtickValueAfter(prompt, "status check "); ok {
 			return value
 		}
 		if value, ok := backtickValueAfter(prompt, "feature flag "); ok {
 			return value
 		}
+	case "key":
+		if value, ok := backtickValueAfter(prompt, "variable "); ok {
+			return value
+		}
+	case "value":
+		if value, ok := backtickValueAfter(prompt, "value "); ok {
+			return value
+		}
+	case "masked", "protected":
+		return false
 	case "title":
 		if value, ok := backtickValueAfter(prompt, "titled "); ok {
 			return value
