@@ -664,6 +664,14 @@ func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing
 	}
 }
 
+func TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true}
+	message := validationRepairMessage(step, validationResult{Message: "destructive task requires params.confirm=true"})
+	if !strings.Contains(message, `"confirm":true`) {
+		t.Fatalf("message = %q, want confirm inside retry envelope", message)
+	}
+}
+
 func TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "snippet.project_update", RequiredParams: []string{"project_id", "snippet_id", "files"}}
 	routes := map[string]toolutil.ActionMap{
@@ -1139,7 +1147,9 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 		"read the created file with file_get using params.ref set to the branch name",
 		"never send params.branch to file_get",
 		"After file_update succeeds, call file_delete next",
-		"do not call file_get again after the update",
+		"confirm must be inside params, never a top-level field",
+		`"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}`,
+		"Do not call file_get again after the update",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want repository file CRUD guidance containing %q", prompt, want)
@@ -1299,6 +1309,98 @@ func TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
+	tests := []struct {
+		name  string
+		task  evalTask
+		wants []string
+	}{
+		{
+			name: "broadcast theme",
+			task: evalTask{
+				ID:     "MS-009",
+				Prompt: "Schedule and then remove an instance maintenance banner: read current instance settings, immediately create broadcast message `Evaluation maintenance`, then delete the broadcast message created in the previous step using the returned ID.",
+				Steps: []evalStep{
+					{ExpectedTool: "gitlab_admin", ExpectedAction: "settings_get"},
+					{ExpectedTool: "gitlab_admin", ExpectedAction: "broadcast_message_create", RequiredParams: []string{"message"}, OptionalParams: []string{"starts_at", "ends_at", "broadcast_type"}},
+					{ExpectedTool: "gitlab_admin", ExpectedAction: "broadcast_message_delete", RequiredParams: []string{"id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				},
+			},
+			wants: []string{"omit params.theme unless explicitly requested", "use a GitLab theme name such as indigo, never a hex color"},
+		},
+		{
+			name: "issue link delete",
+			task: evalTask{
+				ID:     "MS-016",
+				Prompt: "Exercise issue link CRUD in project `my-org/tools/gitlab-mcp-server`: create source issue `eval-link-source`, create target issue `eval-link-target`, link source to target as `relates_to`, list source issue links, delete the returned issue link, then delete both issues.",
+				Steps: []evalStep{
+					{ExpectedTool: "gitlab_issue", ExpectedAction: "create", RequiredParams: []string{"project_id", "title"}},
+					{ExpectedTool: "gitlab_issue", ExpectedAction: "create", RequiredParams: []string{"project_id", "title"}},
+					{ExpectedTool: "gitlab_issue", ExpectedAction: "link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+					{ExpectedTool: "gitlab_issue", ExpectedAction: "link_list", RequiredParams: []string{"project_id", "issue_iid"}},
+					{ExpectedTool: "gitlab_issue", ExpectedAction: "link_delete", RequiredParams: []string{"project_id", "issue_iid", "issue_link_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				},
+			},
+			wants: []string{"keep the source issue IID from the first create call", "params.issue_iid set to the source issue IID", "params.issue_link_id from the returned link"},
+		},
+		{
+			name: "project badge URLs",
+			task: evalTask{
+				ID:     "MS-022",
+				Prompt: "Exercise project badge CRUD in project `my-org/tools/gitlab-mcp-server`: add badge `eval-crud-badge`, fetch it with badge get using the returned badge ID, edit the badge name to `Evaluation CRUD badge link`, then delete it.",
+				Steps: []evalStep{
+					{ExpectedTool: "gitlab_project", ExpectedAction: "badge_add", RequiredParams: []string{"project_id", "link_url", "image_url"}},
+					{ExpectedTool: "gitlab_project", ExpectedAction: "badge_get", RequiredParams: []string{"project_id", "badge_id"}},
+					{ExpectedTool: "gitlab_project", ExpectedAction: "badge_edit", RequiredParams: []string{"project_id", "badge_id"}},
+					{ExpectedTool: "gitlab_project", ExpectedAction: "badge_delete", RequiredParams: []string{"project_id", "badge_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				},
+			},
+			wants: []string{"badge_add requires valid absolute params.link_url and params.image_url", "https://example.com/eval-badge", "https://example.com/eval-badge.svg"},
+		},
+		{
+			name: "branch unprotect",
+			task: evalTask{
+				ID:     "MS-028",
+				Prompt: "Exercise branch protection lifecycle in project `my-org/tools/gitlab-mcp-server`: create branch `eval-protect-branch` from `main`, protect it with Maintainer push and merge access, fetch the protected branch, update it to allow force push, unprotect it, then delete the branch.",
+				Steps: []evalStep{
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "create", RequiredParams: []string{"project_id", "branch_name", "ref"}},
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "protect", RequiredParams: []string{"project_id", "branch_name"}},
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "get_protected", RequiredParams: []string{"project_id", "branch_name"}},
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "update_protected", RequiredParams: []string{"project_id", "branch_name"}},
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "unprotect", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true},
+					{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				},
+			},
+			wants: []string{"unprotect only uses params.project_id, params.branch_name, and params.confirm=true", "never send allow_force_push to unprotect", `"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, `"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, "Never put confirm beside action as a top-level field"},
+		},
+		{
+			name: "group milestone",
+			task: evalTask{
+				ID:     "MS-036",
+				Prompt: "Exercise group milestone lifecycle in group `my-org`: create milestone `Evaluation Group Milestone` with due date `2026-12-31`, fetch it using the returned milestone IID, update title to `Evaluation Group Milestone v2`, then delete it.",
+				Steps: []evalStep{
+					{ExpectedTool: "gitlab_group", ExpectedAction: "group_milestone_create", RequiredParams: []string{"group_id", "title"}, OptionalParams: []string{"description", "due_date"}},
+					{ExpectedTool: "gitlab_group", ExpectedAction: "group_milestone_get", RequiredParams: []string{"group_id", "milestone_iid"}},
+					{ExpectedTool: "gitlab_group", ExpectedAction: "group_milestone_update", RequiredParams: []string{"group_id", "milestone_iid"}},
+					{ExpectedTool: "gitlab_group", ExpectedAction: "group_milestone_delete", RequiredParams: []string{"group_id", "milestone_iid"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				},
+			},
+			wants: []string{"Do not invent params.start_date unless the task provides an earlier start date", "call group_milestone_get with the returned milestone_iid before any update"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPrompt(tt.task)
+			for _, want := range tt.wants {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("taskPrompt() = %q, want guidance containing %q", prompt, want)
+				}
+			}
+		})
+	}
+}
+
 func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-024",
@@ -1317,6 +1419,8 @@ func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
 		"do not call gitlab_project first",
 		"project_create requires params.project_id, params.title, params.file_name, and params.content",
 		"Use the returned snippet_id for project_get, project_update, and project_delete",
+		"project_update params should contain project_id, snippet_id, and files",
+		"never send params.file_path or params.content at top level when using files[]",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want project snippet CRUD guidance containing %q", prompt, want)
@@ -1511,6 +1615,11 @@ func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T)
 			name:  "job artifacts",
 			task:  evalTask{ID: "MT-024", Prompt: "Delete artifacts for job `999` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_job", ExpectedAction: "delete_artifacts", RequiredParams: []string{"project_id", "job_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			wants: []string{"use the gitlab_job tool once", `"action":"delete_artifacts"`, `"job_id":999`, `"confirm":true`},
+		},
+		{
+			name:  "wiki delete",
+			task:  evalTask{ID: "MT-108", Prompt: "Delete wiki page `obsolete-eval` from project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_wiki", ExpectedAction: "delete", RequiredParams: []string{"project_id", "slug"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			wants: []string{"use the gitlab_wiki tool once", `"action":"delete"`, `"slug":"obsolete-eval"`, `"confirm":true`},
 		},
 		{
 			name:  "mr emoji",

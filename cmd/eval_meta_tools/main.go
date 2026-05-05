@@ -3442,7 +3442,7 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For project webhook add/edit, send only requested params such as project_id, url, push_events, and enable_ssl_verification; never send member_events, subgroup_events, or branch_filter_strategy unless explicitly asked, and omit false or null event flags not asked for. If branch_filter_strategy is explicitly requested, use all_branches, wildcard, or regex; never use all.`
 	}
 	if strings.Contains(strings.ToLower(task.Prompt), "project snippet") && strings.Contains(strings.ToLower(task.Prompt), "files") {
-		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; never send params.file_path or params.content at top level when using files[].`
+		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; never send params.file_path or params.content at top level when using files[]. The project_update params should contain project_id, snippet_id, and files, plus only explicitly requested optional fields.`
 	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
@@ -3458,7 +3458,24 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For project snippet CRUD, the first call is gitlab_snippet with action project_create; do not call gitlab_project first. project_create requires params.project_id, params.title, params.file_name, and params.content. Use the returned snippet_id for project_get, project_update, and project_delete.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_repository" && steps[0].ExpectedAction == "file_create" {
-		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; do not call file_get again after the update.`
+		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; confirm must be inside params, never a top-level field. The delete envelope shape is {"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}}. Do not call file_get again after the update.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get" {
+		for _, step := range steps {
+			if step.ExpectedTool == "gitlab_admin" && step.ExpectedAction == "broadcast_message_create" {
+				retryGuidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
+				break
+			}
+		}
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
+		retryGuidance += ` For issue link CRUD, keep the source issue IID from the first create call. After link_list, call link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and params.confirm=true.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "badge_add" {
+		retryGuidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
+		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. The unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. The delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. Never put confirm beside action as a top-level field.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
 		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require params.confirm=true.`
@@ -3477,6 +3494,9 @@ func taskPrompt(task evalTask) string {
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_token_create_project" {
 		retryGuidance += ` For project deploy token lifecycle, deploy_token_create_project requires params.project_id, params.name, and params.scopes. Do not add params.expires_at unless the task gives an explicit expiry date; if you send expires_at, it must be YYYY-MM-DD only, never a timestamp.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_group" && steps[0].ExpectedAction == "group_milestone_create" {
+		retryGuidance += ` For group milestone lifecycle, group_milestone_create should use params.group_id, params.title, and params.due_date when the task gives only a due date. Do not invent params.start_date unless the task provides an earlier start date. After create, call group_milestone_get with the returned milestone_iid before any update.`
 	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
@@ -3542,6 +3562,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 		"gitlab_mr_review/discussion_resolve",
 		"gitlab_user/block",
 		"gitlab_merge_request/emoji_mr_delete",
+		"gitlab_wiki/delete",
 		"gitlab_repository/commit_discussion_delete_note",
 		"gitlab_repository/file_create",
 		"gitlab_project/archive":
@@ -4262,6 +4283,9 @@ func expectedActionCallExample(step evalStep) string {
 	params := map[string]any{}
 	for _, required := range step.RequiredParams {
 		params[required] = "<" + required + ">"
+	}
+	if step.Destructive || hasParam(step.OptionalParams, "confirm") {
+		params["confirm"] = true
 	}
 	data, err := json.Marshal(map[string]any{"action": step.ExpectedAction, "params": params})
 	if err != nil {
