@@ -996,6 +996,34 @@ func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-033",
+		Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on MR `7`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "time_estimate_set", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "spent_time_add", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "emoji_mr_list", RequiredParams: []string{"project_id", "merge_request_iid"}},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "emoji_mr_delete", RequiredParams: []string{"project_id", "merge_request_iid", "award_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "spent_time_reset", RequiredParams: []string{"project_id", "merge_request_iid"}},
+			{ExpectedTool: "gitlab_merge_request", ExpectedAction: "time_estimate_reset", RequiredParams: []string{"project_id", "merge_request_iid"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset",
+		"After emoji_mr_create, call emoji_mr_list next",
+		"using the returned award emoji id as params.award_id with params.confirm=true",
+		"After emoji_mr_delete, call spent_time_reset before time_estimate_reset",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want MR time/emoji guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-016",

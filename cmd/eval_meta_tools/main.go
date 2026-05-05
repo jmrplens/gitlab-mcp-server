@@ -3466,6 +3466,9 @@ func taskPrompt(task evalTask) string {
 	if len(steps) == 9 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "get" && strings.Contains(strings.ToLower(task.Prompt), "broad read-only docker inventory") {
 		retryGuidance += ` For broad read-only Docker inventory, follow exactly this order: gitlab_project/get, gitlab_branch/list, gitlab_tag/list, gitlab_release/list, gitlab_repository/tree, gitlab_ci_variable/list, gitlab_access/deploy_key_list_project, gitlab_access/deploy_token_list_project, gitlab_package/list. After tag list, call gitlab_release/list before repository tree. After release list, call repository tree with params.ref="main". Use params.per_page=1 on list/tree/package steps to keep responses small; one page is enough for this evaluation.`
 	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "time_estimate_set" {
+		retryGuidance += ` For merge request time tracking plus emoji, follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset. After emoji_mr_create, call emoji_mr_list next even if next_steps mentions delete. Delete the award only after the list step, using the returned award emoji id as params.award_id with params.confirm=true. After emoji_mr_delete, call spent_time_reset before time_estimate_reset.`
+	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
 			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
