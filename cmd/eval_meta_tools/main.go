@@ -3034,6 +3034,9 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 	if !ok || route.Destructive {
 		return false
 	}
+	if strings.Contains(validation.Message, "unknown params") {
+		return false
+	}
 	if (!validation.ToolMatches || !validation.ActionMatches) && !isReadOnlyUnexpectedAction(validation.Action) {
 		return false
 	}
@@ -3447,6 +3450,12 @@ func taskPrompt(task evalTask) string {
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_runner" && steps[0].ExpectedAction == "list_project" {
 		retryGuidance += ` For the runner list step, call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}} unless the task explicitly asks for an online, offline, stale, or never_contacted status filter. Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project.`
+	}
+	for _, step := range steps {
+		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
+			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+			break
+		}
 	}
 	if strings.Contains(strings.ToLower(task.Prompt), "failed jobs") && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
 		hasFailedJobListStep := false

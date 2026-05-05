@@ -1012,6 +1012,32 @@ func TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-019",
+		Prompt: "Exercise pipeline trigger CRUD in project `my-org/tools/gitlab-mcp-server`: create trigger `eval-crud-trigger`, fetch it with trigger get using the returned trigger ID, update the description, then delete it.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_create", RequiredParams: []string{"project_id", "description"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_get", RequiredParams: []string{"project_id", "trigger_id"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_update", RequiredParams: []string{"project_id", "trigger_id"}, OptionalParams: []string{"description"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_delete", RequiredParams: []string{"project_id", "trigger_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"trigger_create accepts only params.project_id and params.description",
+		"never send params.ref for trigger_create",
+		"Ref belongs to trigger_run or pipeline.create, not trigger_create",
+		"Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete",
+		"trigger_delete also requires params.confirm=true",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want pipeline trigger guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-061",
@@ -2447,6 +2473,18 @@ func TestCanExecuteInvalidToolCallSkipsUnexpectedMutations(t *testing.T) {
 
 	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
 		t.Fatal("canExecuteInvalidToolCall() = true, want unexpected create action to receive repair guidance instead of execution")
+	}
+}
+
+func TestCanExecuteInvalidToolCallSkipsUnknownParams(t *testing.T) {
+	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
+	step := evalStep{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_create", RequiredParams: []string{"project_id", "description"}}
+	validation := validationResult{ToolMatches: true, ActionMatches: true, Action: "trigger_create", RequiredPresent: true, DestructiveSafe: true, Message: "unknown params for gitlab_pipeline/trigger_create: ref"}
+	toolUse := modelContentBlock{Name: "gitlab_pipeline"}
+	routes := map[string]toolutil.ActionMap{"gitlab_pipeline": {"trigger_create": toolutil.ActionRoute{}}}
+
+	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
+		t.Fatal("canExecuteInvalidToolCall() = true, want unknown params to receive exact repair guidance instead of MCP execution")
 	}
 }
 
