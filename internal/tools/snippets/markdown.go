@@ -7,7 +7,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const hintUpdateSnippet = "Use action 'update' to modify this snippet"
+const hintUpdateSnippet = "Use action 'update' to modify a personal snippet; for project snippets use action 'project_update'"
 
 // FormatMarkdown formats a single snippet as markdown.
 func FormatMarkdown(out Output) string {
@@ -39,12 +39,21 @@ func FormatMarkdown(out Output) string {
 			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(f.Path), toolutil.MdTitleLink(f.Path, f.RawURL))
 		}
 	}
-	toolutil.WriteHints(&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'content' to read snippet content",
-		hintUpdateSnippet,
-		"Use action 'delete' to remove this snippet",
-	)
+	hints := []string{toolutil.HintPreserveLinks}
+	if out.ProjectID != 0 {
+		hints = append(hints,
+			"For project snippets, use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
+			"Use action 'project_update' with files[] to modify project snippet content; put file_path only inside files[], never as top-level params.file_path",
+			"Use action 'project_delete' to remove this project snippet",
+		)
+	} else {
+		hints = append(hints,
+			"Use action 'content' to read snippet content",
+			hintUpdateSnippet,
+			"Use action 'delete' to remove this snippet",
+		)
+	}
+	toolutil.WriteHints(&b, hints...)
 	return b.String()
 }
 

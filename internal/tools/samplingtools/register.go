@@ -319,7 +319,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 	toolutil.AddReadOnlyMetaTool(server, "gitlab_analyze", `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
-NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a `+"`SamplingUnsupportedResult`"+`).
+NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); skipping explicit prerequisite inspection/list/compare steps requested by the user; long-form report generation outside the chat session; clients without sampling support (the action returns a `+"`SamplingUnsupportedResult`"+`).
 
 Returns: each action returns action-specific JSON (typically identifiers + a text field plus model and truncated flags) and a Markdown summary suitable for direct display. Per-action text key:
 - summary: issue_summary, mr_review
@@ -333,7 +333,7 @@ Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milest
 All actions need project_id*. Additional params per action:
 - mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
-- release_notes: from*, to*. Generate categorized release notes between refs. from_ref/to_ref aliases are accepted but from/to are canonical.
+- release_notes: from*, to*. Generate categorized release notes between refs. from_ref/to_ref aliases are accepted but from/to are canonical. If the user asks to inspect releases or compare refs first, call those tools before release_notes.
 - pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
 - mr_review: merge_request_iid*. Summarize review feedback and unresolved threads.
 - milestone_report: milestone_iid*. Progress report with metrics.

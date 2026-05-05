@@ -948,7 +948,10 @@ func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T
 	}
 
 	prompt := taskPrompt(task)
-	if !strings.Contains(prompt, `"action":"mr_review.discussion_resolve"`) || !strings.Contains(prompt, `"discussion_id":"<discussion_id>"`) {
+	if !strings.Contains(prompt, "emit tool gitlab_mr_review") ||
+		!strings.Contains(prompt, `"action":"discussion_resolve"`) ||
+		!strings.Contains(prompt, `action "mr_review.discussion_resolve"`) ||
+		!strings.Contains(prompt, `"discussion_id":"<discussion_id>"`) {
 		t.Fatalf("taskPrompt() = %q, want quoted discussion_resolve envelope guidance", prompt)
 	}
 }

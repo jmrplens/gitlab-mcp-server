@@ -435,7 +435,7 @@ Members (member_*):
 - member_edit: project_id*, user_id*, access_level*, expires_at, member_role_id
 - member_delete: project_id*, user_id*
 
-Webhooks (hook_*) — event booleans: push/tag_push/issues/merge_requests/note/job/pipeline/wiki_page/deployment/releases/emoji:
+Webhooks (hook_*) — project webhook event booleans are push_events, tag_push_events, issues_events, confidential_issues_events, merge_requests_events, note_events, confidential_note_events, job_events, pipeline_events, wiki_page_events, deployment_events, releases_events, emoji_events, and resource_access_token_events. Do not send member_events or subgroup_events for project hooks; those are group hook fields. Omit params that are not requested, and omit null values.
 - hook_list: project_id*
 - hook_get / hook_delete: project_id*, hook_id*
 - hook_add: project_id*, url*, name, description, token, event booleans, enable_ssl_verification, push_events_branch_filter, custom_webhook_template, branch_filter_strategy
@@ -648,8 +648,8 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_release", `Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
-When to use: publish a release for a tag, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
-NOT for: creating tags (use gitlab_tag create first — release_create requires an existing tag_name), uploading binaries to the package registry (use gitlab_package), milestones (use gitlab_project milestone_*).
+When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
+NOT for: uploading binaries to the package registry (use gitlab_package), milestones (use gitlab_project milestone_*).
 
 Returns:
 - list: array of releases with pagination.
@@ -657,12 +657,12 @@ Returns:
 - link_list: array of {id, name, url, link_type, direct_asset_path}.
 - link_create / link_create_batch / link_get / link_update: link object(s).
 - delete / link_delete: {success: bool, message: string}.
-Errors: 404 not found (hint: tag_name must exist), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
+Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
 
 Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except link_create / link_create_batch / link_list).
 
 Releases:
-- create: project_id*, tag_name* (must exist), name, description (Markdown), released_at (ISO 8601), milestones ([]string)
+- create: project_id*, tag_name*, ref (branch/SHA when tag_name does not exist or the prompt says from ref), name, description (Markdown), released_at (ISO 8601), milestones ([]string), tag_message
 - get: project_id*, tag_name*
 - get_latest: project_id*
 - list: project_id*, order_by (released_at/created_at), sort (asc/desc), page, per_page
@@ -677,7 +677,7 @@ Asset links:
 - link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type
 - link_delete: project_id*, tag_name*, link_id*
 
-See also: gitlab_tag (create the tag before the release), gitlab_package (upload binaries; link_create can point at the package URL), gitlab_project (milestones referenced by releases).`, routes, toolutil.IconRelease)
+See also: gitlab_tag (standalone tag CRUD), gitlab_package (upload binaries; link_create can point at the package URL), gitlab_project (milestones referenced by releases).`, routes, toolutil.IconRelease)
 }
 
 // registerMergeRequestMeta registers the gitlab_merge_request meta-tool with actions:
@@ -2211,12 +2211,12 @@ Topics:
 - topic_update: topic_id*, name, title, description
 
 Settings & appearance:
-- settings_get / appearance_get: (no params)
+- settings_get / appearance_get: (no params). If the task says "read current instance settings" or "get instance settings", call settings_get, not broadcast_message_list.
 - settings_update: settings (map of setting_name to value)
 - appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
 
 Broadcast messages:
-- broadcast_message_list: (no params)
+- broadcast_message_list: (no params) lists existing broadcast messages only; it does not read instance settings.
 - broadcast_message_get / broadcast_message_delete: id*
 - broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels
 - broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable
@@ -2429,10 +2429,10 @@ Deploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD re
 - deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at
 - deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*
 
-Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:
+Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account. For deploy-key wording, add/create maps to deploy_key_add, fetch/get maps to deploy_key_get, update maps to deploy_key_update, and delete/remove maps to deploy_key_delete.
 - deploy_key_list_project / deploy_key_list_user_project: project_id*
 - deploy_key_list_all: (admin only)
-- deploy_key_get: project_id*, deploy_key_id*
+- deploy_key_get: project_id*, deploy_key_id*. If a workflow says add/create, then fetch/get, then update/delete, call deploy_key_get with the id returned by deploy_key_add before updating.
 - deploy_key_add: project_id*, title*, key*, can_push
 - deploy_key_update: project_id*, deploy_key_id*, title, can_push
 - deploy_key_delete: project_id*, deploy_key_id*
@@ -2610,7 +2610,7 @@ Project snippets:
 - project_list: project_id*
 - project_get / project_content: project_id*, snippet_id*
 - project_create: project_id*, title*, file_name*, content*, visibility
-- project_update: project_id*, snippet_id*, title, file_name, content, visibility
+- project_update: project_id*, snippet_id*, title, visibility, files* to change snippet file content. For updating existing content use files: [{"action":"update","file_path":"<returned file_path>","content":"..."}]; do not put file_path/content directly under params.
 - project_delete: project_id*, snippet_id*
 
 Discussions (threaded):

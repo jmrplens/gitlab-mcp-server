@@ -3415,10 +3415,16 @@ func taskPrompt(task evalTask) string {
 		retryGuidance = " If a simulated temporary GitLab server/API error appears, repeat the same validated operation once; do not use GitLab CI retry actions such as pipeline.retry or job.retry unless the task explicitly asks to rerun CI jobs."
 	}
 	if strings.Contains(task.Prompt, "discussion_id") && strings.Contains(task.Prompt, "merge_request_iid") {
-		retryGuidance += ` For discussion_resolve, emit the gitlab tool call with quoted JSON strings: {"action":"mr_review.discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}.`
+		retryGuidance += ` For discussion_resolve with split meta-tools, emit tool gitlab_mr_review with quoted JSON strings: {"action":"discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}. If only a unified gitlab dispatcher is available, use action "mr_review.discussion_resolve" instead.`
 	}
 	if strings.Contains(strings.ToLower(task.Prompt), "release") && strings.Contains(strings.ToLower(task.Prompt), "from ref") {
 		retryGuidance += ` For release.create, "from ref X" maps to params.ref; include params.ref when creating a release from a ref.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "project webhook") || strings.Contains(strings.ToLower(task.Prompt), "webhook crud") {
+		retryGuidance += ` For project webhook add/edit, send only requested params such as project_id, url, push_events, and enable_ssl_verification; never send member_events, subgroup_events, or branch_filter_strategy unless explicitly asked, and omit false or null event flags not asked for. If branch_filter_strategy is explicitly requested, use all_branches, wildcard, or regex; never use all.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "project snippet") && strings.Contains(strings.ToLower(task.Prompt), "files") {
+		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; never send params.file_path or params.content at top level when using files[].`
 	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && steps[0].ExpectedAction == "admin.settings_get" {

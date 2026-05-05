@@ -439,6 +439,9 @@ func (p *liveFixturePreparer) ensureCleanupRelease(ctx context.Context) error {
 }
 
 func (p *liveFixturePreparer) ensureHooks(ctx context.Context) error {
+	if err := p.cleanupProjectHooks(ctx); err != nil {
+		return err
+	}
 	hook, _, err := p.client.GL().Projects.AddProjectHook(p.state.ProjectID, &gl.AddProjectHookOptions{
 		Name:                  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
 		URL:                   new("https://example.com/gitlab-hook-delete"),
@@ -450,6 +453,58 @@ func (p *liveFixturePreparer) ensureHooks(ctx context.Context) error {
 	}
 	p.state.HookDeleteID = hook.ID
 	return nil
+}
+
+func (p *liveFixturePreparer) cleanupProjectHooks(ctx context.Context) error {
+	for range 3 {
+		deleted, err := p.deleteEvaluationProjectHooks(ctx)
+		if err != nil {
+			return err
+		}
+		if deleted == 0 {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (p *liveFixturePreparer) deleteEvaluationProjectHooks(ctx context.Context) (int, error) {
+	deleted := 0
+	for page := int64(1); ; {
+		hooks, resp, err := p.client.GL().Projects.ListProjectHooks(p.state.ProjectID, &gl.ListProjectHooksOptions{
+			ListOptions: gl.ListOptions{Page: page, PerPage: 100},
+		}, gl.WithContext(ctx))
+		if err != nil {
+			return deleted, err
+		}
+		for _, hook := range hooks {
+			if !isEvaluationProjectHook(hook) {
+				continue
+			}
+			_, err := p.client.GL().Projects.DeleteProjectHook(p.state.ProjectID, hook.ID, gl.WithContext(ctx))
+			if err != nil && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return deleted, err
+			}
+			deleted++
+		}
+		if resp == nil || resp.NextPage == 0 {
+			return deleted, nil
+		}
+		page = resp.NextPage
+	}
+}
+
+func isEvaluationProjectHook(hook *gl.ProjectHook) bool {
+	if hook == nil {
+		return false
+	}
+	name := strings.ToLower(hook.Name)
+	url := strings.ToLower(hook.URL)
+	return strings.HasPrefix(name, "delete-fixture-") ||
+		strings.Contains(name, "ms-021") ||
+		strings.Contains(name, "eval-crud-hook") ||
+		strings.Contains(url, "example.com/gitlab-hook") ||
+		strings.Contains(url, "example.com/eval-crud-hook")
 }
 
 func (p *liveFixturePreparer) ensureBadge(ctx context.Context) error {
