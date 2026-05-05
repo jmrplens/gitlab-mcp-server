@@ -1038,6 +1038,77 @@ func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-001",
+		Prompt: "Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git` for project `my-org/tools/gitlab-mcp-server`, verify the project metadata, then read `README.md` from `main`.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		`call the standalone tool with top-level remote_url only`,
+		`{"remote_url":"<remote_url>"}`,
+		"do not send action, params, project_id, or ref to gitlab_discover_project",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want discover_project guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-024",
+		Prompt: "Exercise project snippet CRUD in project `my-org/tools/gitlab-mcp-server`: create project snippet `eval-crud-snippet` titled `Evaluation CRUD snippet`, fetch it with project snippet get using the returned snippet ID, update its content with a `files` entry using action `update` and `file_path` set to the returned file path, not `previous_path`, then delete it.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_snippet", ExpectedAction: "project_create", RequiredParams: []string{"project_id", "title", "file_name", "content"}},
+			{ExpectedTool: "gitlab_snippet", ExpectedAction: "project_get", RequiredParams: []string{"project_id", "snippet_id"}},
+			{ExpectedTool: "gitlab_snippet", ExpectedAction: "project_update", RequiredParams: []string{"project_id", "snippet_id"}},
+			{ExpectedTool: "gitlab_snippet", ExpectedAction: "project_delete", RequiredParams: []string{"project_id", "snippet_id"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"the first call is gitlab_snippet with action project_create",
+		"do not call gitlab_project first",
+		"project_create requires params.project_id, params.title, params.file_name, and params.content",
+		"Use the returned snippet_id for project_get, project_update, and project_delete",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want project snippet CRUD guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-021",
+		Prompt: "Exercise project hook CRUD in project `my-org/tools/gitlab-mcp-server`: add a hook, fetch it with hook get, edit it, then delete it.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_project", ExpectedAction: "hook_add", RequiredParams: []string{"project_id", "url"}},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "hook_get", RequiredParams: []string{"project_id", "hook_id"}},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "hook_edit", RequiredParams: []string{"project_id", "hook_id"}},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "hook_delete", RequiredParams: []string{"project_id", "hook_id"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id",
+		"Do not use gitlab_group hook actions for a project hook workflow",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want project hook guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-061",
@@ -1162,6 +1233,53 @@ func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
 	system := systemPromptForTask(task)
 	if !strings.Contains(system, "Return tool calls only") || strings.Contains(system, "runner.list_project") {
 		t.Fatalf("systemPromptForTask() = %q, want compact exact-call system prompt", system)
+	}
+}
+
+func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T) {
+	tests := []struct {
+		name   string
+		task   evalTask
+		wants  []string
+		absent []string
+	}{
+		{
+			name:  "job artifacts",
+			task:  evalTask{ID: "MT-024", Prompt: "Delete artifacts for job `999` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_job", ExpectedAction: "delete_artifacts", RequiredParams: []string{"project_id", "job_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			wants: []string{"use the gitlab_job tool once", `"action":"delete_artifacts"`, `"job_id":999`, `"confirm":true`},
+		},
+		{
+			name:  "mr emoji",
+			task:  evalTask{ID: "MT-109", Prompt: "Remove award emoji ID `12` from merge request `7` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_merge_request", ExpectedAction: "emoji_mr_delete", RequiredParams: []string{"project_id", "merge_request_iid", "award_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			wants: []string{"use the gitlab_merge_request tool once", `"action":"emoji_mr_delete"`, `"award_id":12`, `"merge_request_iid":7`, "do not use gitlab_mr_review"},
+		},
+		{
+			name:  "commit discussion note",
+			task:  evalTask{ID: "MT-113", Prompt: "Delete commit discussion note `999` from discussion `abc123` on commit `abc1234` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_repository", ExpectedAction: "commit_discussion_delete_note", RequiredParams: []string{"project_id", "commit_sha", "discussion_id", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			wants: []string{"use the gitlab_repository tool once", `"action":"commit_discussion_delete_note"`, `"commit_sha":"abc1234"`, `"discussion_id":"abc123"`, `"note_id":999`},
+		},
+		{
+			name:   "archive",
+			task:   evalTask{ID: "MT-055", Prompt: "Archive project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_project", ExpectedAction: "archive", RequiredParams: []string{"project_id"}},
+			wants:  []string{"use the gitlab_project tool once", `"action":"archive"`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+			absent: []string{`"action":"delete"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPrompt(tt.task)
+			for _, want := range tt.wants {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("taskPrompt() = %q, want exact guidance containing %q", prompt, want)
+				}
+			}
+			for _, absent := range tt.absent {
+				if strings.Contains(prompt, absent) {
+					t.Fatalf("taskPrompt() = %q, want exact guidance without %q", prompt, absent)
+				}
+			}
+		})
 	}
 }
 

@@ -3451,9 +3451,21 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_runner" && steps[0].ExpectedAction == "list_project" {
 		retryGuidance += ` For the runner list step, call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}} unless the task explicitly asks for an online, offline, stale, or never_contacted status filter. Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project.`
 	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_discover_project" {
+		retryGuidance += ` For gitlab_discover_project, call the standalone tool with top-level remote_url only, like {"remote_url":"<remote_url>"}; do not send action, params, project_id, or ref to gitlab_discover_project.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_snippet" && steps[0].ExpectedAction == "project_create" {
+		retryGuidance += ` For project snippet CRUD, the first call is gitlab_snippet with action project_create; do not call gitlab_project first. project_create requires params.project_id, params.title, params.file_name, and params.content. Use the returned snippet_id for project_get, project_update, and project_delete.`
+	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
 			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+			break
+		}
+	}
+	for _, step := range steps {
+		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "hook_add" {
+			retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
 			break
 		}
 	}
@@ -3499,7 +3511,19 @@ func isAnalyzerStep(step evalStep) bool {
 
 func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	lowerPrompt := strings.ToLower(task.Prompt)
-	return step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, "failed jobs") && strings.Contains(lowerPrompt, "pipeline")
+	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, "failed jobs") && strings.Contains(lowerPrompt, "pipeline") {
+		return true
+	}
+	switch step.ExpectedTool + "/" + step.ExpectedAction {
+	case "gitlab_job/delete_artifacts",
+		"gitlab_user/block",
+		"gitlab_merge_request/emoji_mr_delete",
+		"gitlab_repository/commit_discussion_delete_note",
+		"gitlab_project/archive":
+		return true
+	default:
+		return false
+	}
 }
 
 func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) string {
@@ -3526,7 +3550,11 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 	if err != nil {
 		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the %s tool once with action %s and the params named in the task. Do not answer in text, do not call schema lookup, do not prefetch related resources, and do not use params:{}.", task.ID, task.Prompt, destructive, toolName, step.ExpectedAction)
 	}
-	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s. Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data)
+	toolDisambiguation := ""
+	if step.ExpectedTool == "gitlab_merge_request" && step.ExpectedAction == "emoji_mr_delete" {
+		toolDisambiguation = " The exact tool name is gitlab_merge_request; do not use gitlab_mr_review, which is for MR notes, discussions, and diffs."
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s.%s Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data, toolDisambiguation)
 }
 
 func usesCompactExactPrompt(step evalStep) bool {
@@ -3712,6 +3740,9 @@ func exampleParamValue(param, prompt string) any {
 			return numericExampleValue(value)
 		}
 	case "note_id":
+		if value, ok := backtickValueAfter(prompt, "note "); ok {
+			return numericExampleValue(value)
+		}
 		if value, ok := backtickValueAfter(prompt, "discussion note "); ok {
 			return numericExampleValue(value)
 		}
@@ -3720,6 +3751,13 @@ func exampleParamValue(param, prompt string) any {
 			return numericExampleValue(value)
 		}
 		if value, ok := backtickValueAfter(prompt, "pipeline "); ok {
+			return numericExampleValue(value)
+		}
+	case "job_id":
+		if value, ok := backtickValueAfter(prompt, "job ID "); ok {
+			return numericExampleValue(value)
+		}
+		if value, ok := backtickValueAfter(prompt, "job "); ok {
 			return numericExampleValue(value)
 		}
 	case "schedule_id":
