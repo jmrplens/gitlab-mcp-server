@@ -3427,8 +3427,23 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; never send params.file_path or params.content at top level when using files[].`
 	}
 	steps := taskSteps(task)
+	if strings.Contains(strings.ToLower(task.Prompt), "failed jobs") && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
+		hasFailedJobListStep := false
+		for _, step := range steps {
+			if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" {
+				hasFailedJobListStep = true
+				break
+			}
+		}
+		if hasFailedJobListStep {
+			retryGuidance += ` For listing failed jobs in a pipeline, call gitlab_job with {"action":"list","params":{"project_id":"<project_id>","pipeline_id":<pipeline_id>,"scope":"failed"}}; do not call gitlab_pipeline list with pipeline_id.`
+		}
+	}
 	if len(steps) == 1 && steps[0].ExpectedAction == "admin.settings_get" {
 		retryGuidance += ` For instance application settings, call gitlab with {"action":"admin.settings_get","params":{}}; do not call gitlab_server and do not look up a schema.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact" {
+		retryGuidance += ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
 	}
 	if len(steps) == 1 && strings.HasPrefix(steps[0].ExpectedAction, "analyze.") {
 		retryGuidance += analyzerTaskGuidance(steps[0], task.Prompt)

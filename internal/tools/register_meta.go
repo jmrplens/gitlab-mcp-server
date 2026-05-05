@@ -1681,9 +1681,9 @@ Jobs:
 
 Artifact downloads (base64, max 1MB):
 - artifacts: project_id*, job_id* — download the whole artifact archive from a known numeric job ID.
-- download_artifacts: project_id*, ref_name*, job — download the whole artifact archive by ref_name and job NAME (string), not by job_id.
-- download_single_artifact: project_id*, job_id*, artifact_path* — use when the prompt gives a numeric job ID and one artifact file path.
-- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job — use when the prompt gives ref_name plus job NAME and one artifact file path.
+- download_artifacts: project_id*, ref_name*, job — download the whole artifact archive by ref_name and job NAME (string). Never use with job_id.
+- download_single_artifact: project_id*, job_id*, artifact_path* — use when the prompt gives a numeric job ID and one artifact file path such as coverage/report.xml. This is the single-file-by-job-id action.
+- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job — use when the prompt gives ref_name plus job NAME and one artifact file path. Never use with job_id.
 
 Job token scope:
 - token_scope_get / token_scope_patch: project_id*. Patch params: enabled.

@@ -397,6 +397,17 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 		return input, nil
 	}
 	candidate := strings.TrimSpace(arguments)
+	if start := strings.Index(candidate, "{"); start >= 0 {
+		prefix := strings.TrimSpace(candidate[:start])
+		if prefix != "" && !strings.ContainsAny(prefix, "\":,") {
+			if end := strings.LastIndex(candidate, "}"); end > start {
+				objectCandidate := candidate[start : end+1]
+				if err := json.Unmarshal([]byte(objectCandidate), &input); err == nil {
+					return input, nil
+				}
+			}
+		}
+	}
 	candidate = strings.Trim(candidate, " \t\r\n,")
 	if candidate == "" {
 		return nil, errors.New("empty arguments after normalization")

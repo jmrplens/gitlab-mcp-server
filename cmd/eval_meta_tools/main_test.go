@@ -998,6 +998,43 @@ func TestTaskPrompt_AdminSettingsUsesDispatcherDirectly(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-065",
+		Prompt:         "Download artifact `coverage/report.xml` from job `999` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_job",
+		ExpectedAction: "download_single_artifact",
+		RequiredParams: []string{"project_id", "job_id", "artifact_path"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{"download_single_artifact", "job_id", "artifact_path", "do not use download_artifacts"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want artifact guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-002",
+		Prompt: "Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server`: inspect the pipeline, list failed jobs, fetch job `999` trace, then call the pipeline failure analyzer.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "get", RequiredParams: []string{"project_id", "pipeline_id"}},
+			{ExpectedTool: "gitlab_job", ExpectedAction: "list", RequiredParams: []string{"project_id", "pipeline_id"}, OptionalParams: []string{"scope"}},
+			{ExpectedTool: "gitlab_job", ExpectedAction: "trace", RequiredParams: []string{"project_id", "job_id"}},
+			{ExpectedTool: "gitlab_analyze", ExpectedAction: "pipeline_failure", RequiredParams: []string{"project_id", "pipeline_id"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{"gitlab_job", `"action":"list"`, `"scope":"failed"`, "do not call gitlab_pipeline list with pipeline_id"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want failed-job guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-093",
@@ -2666,6 +2703,26 @@ func TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments(t *testing.
 	}
 	if blocks[0].Input["action"] != "merge_request.create" {
 		t.Fatalf("action = %v, want merge_request.create", blocks[0].Input["action"])
+	}
+}
+
+func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
+	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
+		ID:   "call-1",
+		Type: "function",
+		Function: openAIFunctionCall{
+			Name:      "gitlab_analyze",
+			Arguments: `<tool_call>{"action":"pipeline_failure","params":{"project_id":"my-org/tools/gitlab-mcp-server","pipeline_id":12345}}</tool_call>`,
+		},
+	}}})
+	if err != nil {
+		t.Fatalf("openAIToolUseBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Input["action"] != "pipeline_failure" {
+		t.Fatalf("action = %v, want pipeline_failure", blocks[0].Input["action"])
 	}
 }
 
