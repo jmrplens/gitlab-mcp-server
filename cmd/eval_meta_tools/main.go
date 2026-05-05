@@ -3426,7 +3426,7 @@ func systemPromptForTask(task evalTask) string {
 func taskPrompt(task evalTask) string {
 	destructive := "No"
 	if taskHasDestructiveStep(task) {
-		destructive = "Yes; include confirm:true in params for the final task call."
+		destructive = "Yes; include confirm:true in params for each destructive tool call."
 	}
 	retryGuidance := ""
 	if taskHasSimulationMode(task, "transient_error_once") {
@@ -3459,6 +3459,9 @@ func taskPrompt(task evalTask) string {
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_repository" && steps[0].ExpectedAction == "file_create" {
 		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; do not call file_get again after the update.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
+		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require params.confirm=true.`
 	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {

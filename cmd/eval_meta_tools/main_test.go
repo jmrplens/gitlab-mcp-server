@@ -1063,6 +1063,35 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 	}
 }
 
+func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-020",
+		Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_get", RequiredParams: []string{"project_id", "schedule_id"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_update", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"cron"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_create_variable", RequiredParams: []string{"project_id", "schedule_id", "key", "value"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_edit_variable", RequiredParams: []string{"project_id", "schedule_id", "key", "value"}},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_delete_variable", RequiredParams: []string{"project_id", "schedule_id", "key"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "schedule_delete", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"include confirm:true in params for each destructive tool call",
+		"the first call is gitlab_pipeline with action schedule_create",
+		"do not call gitlab_discover_project or gitlab_project first",
+		"Use the returned id as params.schedule_id",
+		"Both schedule_delete_variable and schedule_delete are destructive and require params.confirm=true",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want pipeline schedule guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-001",
