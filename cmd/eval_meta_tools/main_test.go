@@ -939,6 +939,29 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-037",
+		Prompt: "Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: list project CI variables, list deploy keys, then list generic packages.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_ci_variable", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_key_list_project", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_package", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"one successful list response completes a list step",
+		"do not fetch additional pagination pages",
+		"unless the task explicitly asks for every page",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want pagination guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-061",
@@ -1077,6 +1100,30 @@ func TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample(t *testing.T) {
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want analyzer guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-097",
+		Prompt:         "Analyze the CI configuration on branch `main` for project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_analyze",
+		ExpectedAction: "ci_config",
+		RequiredParams: []string{"project_id"},
+		OptionalParams: []string{"content_ref"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"call gitlab_analyze directly",
+		`"action":"ci_config"`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		`"content_ref":"main"`,
+		"do not prefetch",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want split analyzer guidance containing %q", prompt, want)
 		}
 	}
 }
