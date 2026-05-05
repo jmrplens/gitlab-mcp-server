@@ -1038,6 +1038,31 @@ func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-017",
+		Prompt: "Exercise repository file CRUD in project `my-org/tools/gitlab-mcp-server`: create file `tmp/eval-crud.txt` on branch `feature/eval`, read it, update its content, then delete it from the same branch.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_create", RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"}},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_update", RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"}},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_delete", RequiredParams: []string{"project_id", "file_path", "branch", "commit_message"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"read the created file with file_get using params.ref set to the branch name",
+		"never send params.branch to file_get",
+		"After file_update succeeds, call file_delete next",
+		"do not call file_get again after the update",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want repository file CRUD guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-001",
