@@ -30,7 +30,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 - **1006 MCP tools** — broad GitLab REST API v4 + GraphQL coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
 - **33 meta-tools** (48 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The latest curated Docker economy matrix covers 472 live task attempts with a 94.3% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The latest curated Docker economy matrix covers 472 live task attempts and 960 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
@@ -385,14 +385,16 @@ Current economy model set used by the evaluation harness:
 
 | Provider | Model | Tool-call compatibility | Curated Docker final success |
 | --- | --- | --- | ---: |
-| Anthropic | `anthropic:claude-haiku-4-5-20251001` | OK | 97.5% |
-| Google | `google:gemini-3.1-flash-lite-preview` | OK | 88.1% |
-| OpenAI | `openai:gpt-5.4-nano` | OK | 94.1% |
-| Qwen | `qwen:qwen3.6-flash` | OK | 97.5% |
+| Anthropic | `anthropic:claude-haiku-4-5-20251001` | OK | 100.0% |
+| Google | `google:gemini-3.1-flash-lite-preview` | OK | 100.0% |
+| OpenAI | `openai:gpt-5.4-nano` | OK | 100.0% |
+| Qwen | `qwen:qwen3.6-flash` | OK | 100.0% |
 
-The published economy matrix covers 472 Docker-backed attempts across read,
-safe-mutating, and safe-destructive presets after traces were inspected and
-known harness noise was removed. See [AI Model Evaluation Results](docs/testing/model-results.md)
+The published economy matrix covers 472 Docker-backed attempts and 960 expected
+MCP operations across read, safe-mutating, and safe-destructive presets after
+traces were inspected and known harness noise was removed. The curated rows
+reach 100.0% first-pass validation, one model request per expected operation,
+and 100.0% final success. See [AI Model Evaluation Results](docs/testing/model-results.md)
 for the detailed matrix and run history.
 
 ## Documentation

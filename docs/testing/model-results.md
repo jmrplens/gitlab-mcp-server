@@ -51,77 +51,55 @@ compatibility remains adapter-side.
 
 Source reports:
 
-- `dist/evaluation/meta-tools/full-economy-fixed-20260505T005559Z/docker-read.md`
-- `dist/evaluation/meta-tools/full-economy-fixed-20260505T005559Z/docker-mutating-safe.md`
-- `dist/evaluation/meta-tools/full-economy-corrected-20260505T060742Z/docker-destructive-safe.md`
+- `dist/evaluation/meta-tools/full-economy-clean-d658228e-20260505T163400Z/*.md`
+- `dist/evaluation/meta-tools/full-economy-incremental-f21c9de4-20260505T173232Z/*.md`
+- `dist/evaluation/meta-tools/openai-mutating-mt068-instance-create-20260505T173101Z.md`
+- `dist/evaluation/meta-tools/google-destructive-ms030-deploy-token-date-20260505T173132Z.md`
+- `dist/evaluation/meta-tools/openai-destructive-focused-cleanup-20260505T181032Z.md`
+- `dist/evaluation/meta-tools/qwen-destructive-focused-cleanup-20260505T181032Z.md`
+- `dist/evaluation/meta-tools/qwen-destructive-confirm-envelope-20260505T181828Z.md`
 
-Known harness noise removed before publishing: per-attempt destructive fixture
-reseeding, archived project recovery, environment-scoped CI variable cleanup,
-per-model lifecycle resource suffixing, project member cleanup, repeated package
-ID prompt replacement, repository file branch handling, and repository file
-create/update outputs enriched with current commit metadata.
+The focal reports supersede only the task rows changed after the full matrix
+started. Unaffected preset/model pairs keep their full-run results to avoid
+unnecessary provider calls. Known harness and prompt-shaping noise removed
+before publishing: per-attempt destructive fixture reseeding, archived project
+recovery, environment-scoped CI variable cleanup, per-model lifecycle resource
+suffixing, project member cleanup, repeated package ID prompt replacement,
+repository file branch/ref handling, repository file create/update outputs,
+instance CI variable action disambiguation, deploy-token date handling,
+destructive `confirm` envelope placement, project badge URL defaults, project
+snippet `files` update shape, issue-link cleanup IDs, branch unprotect cleanup,
+and group milestone lifecycle ordering.
 
-| Preset | Attempts | Model requests | Tool calls | Tool accuracy | Action accuracy | First pass | Repair success | Destructive safety | Final success |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `docker-read` | 160 | 227 | 226 | 98.8% | 98.1% | 97.5% | 14.3% | 100.0% | 96.9% |
-| `docker-mutating-safe` | 100 | 118 | 117 | 98.0% | 98.0% | 93.0% | 66.7% | 100.0% | 97.0% |
-| `docker-destructive-safe` | 212 | 625 | 625 | 88.7% | 88.2% | 84.9% | 18.9% | 94.3% | 91.0% |
-| **Aggregate** | **472** | **970** | **968** | Not aggregated | Not aggregated | Not aggregated | Not aggregated | Not aggregated | **94.3%** |
+| Preset | Attempts | Expected ops | Model requests | Tool calls | Tool accuracy | Action accuracy | First pass | Repair success | Destructive safety | Final success |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `docker-read` | 160 | 224 | 224 | 224 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| `docker-mutating-safe` | 100 | 112 | 112 | 112 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| `docker-destructive-safe` | 212 | 624 | 624 | 624 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| **Aggregate** | **472** | **960** | **960** | **960** | **100.0%** | **100.0%** | **100.0%** | **100.0%** | **100.0%** | **100.0%** |
 
 Per-model final success across the three Docker presets:
 
-| Model | Attempts | Read | Mutating | Destructive | Aggregate final success |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `anthropic:claude-haiku-4-5-20251001` | 118 | 100.0% | 96.0% | 96.2% | 97.5% |
-| `google:gemini-3.1-flash-lite-preview` | 118 | 95.0% | 92.0% | 81.1% | 88.1% |
-| `openai:gpt-5.4-nano` | 118 | 95.0% | 100.0% | 90.6% | 94.1% |
-| `qwen:qwen3.6-flash` | 118 | 97.5% | 100.0% | 96.2% | 97.5% |
+| Model | Attempts | Expected ops | Read | Mutating | Destructive | Aggregate final success |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `anthropic:claude-haiku-4-5-20251001` | 118 | 240 | 100.0% | 100.0% | 100.0% | 100.0% |
+| `google:gemini-3.1-flash-lite-preview` | 118 | 240 | 100.0% | 100.0% | 100.0% | 100.0% |
+| `openai:gpt-5.4-nano` | 118 | 240 | 100.0% | 100.0% | 100.0% | 100.0% |
+| `qwen:qwen3.6-flash` | 118 | 240 | 100.0% | 100.0% | 100.0% | 100.0% |
 
-Final-failure analysis after the harness fixes:
+Result analysis after the harness and prompt fixes:
 
 | Area | Final failures | Interpretation |
 | --- | ---: | --- |
-| Read-only | 5 / 160 | Route or action misses: Google on `MS-001`/`MS-012`, OpenAI on `MT-002`/`MS-012`, Qwen on `MS-012`. |
-| Mutating-safe | 3 / 100 | `MT-036` release creation still trips Anthropic/Google on `params.ref`; Google `MT-061` emitted no tool call. |
-| Destructive-safe | 19 / 212 | Mostly model route/step-order misses. Repeated hotspots: project snippet update requires a `files` array (`MS-024`), deploy-key workflow skips `deploy_key_get` (`MS-031`), and Google repeatedly chooses discovery/search before the requested mutating workflow. |
+| Read-only | 0 / 160 | All models selected the expected tool/action sequence and completed each read workflow. |
+| Mutating-safe | 0 / 100 | All single-operation writes and safe mutating workflows completed with one call per expected operation. |
+| Destructive-safe | 0 / 212 | All destructive workflows kept confirmation inside `params`, preserved returned IDs/IIDs, and cleaned up fixtures. |
 
-Final-failure inventory:
-
-| Preset | Model | Task | Category | Observed cause |
-| --- | --- | --- | --- | --- |
-| `docker-read` | Google | `MS-001` | Route miss | Started with discovery, then used repository file read where project `get` was expected, then emitted no tool call. |
-| `docker-read` | Google | `MS-012` | Route miss | Used project discovery/listing instead of `gitlab_release/list` and repository compare. |
-| `docker-read` | OpenAI | `MT-002` | Parameter/repair miss | Chose project `get`, but with a non-existent project ID, then repaired to list instead of a valid get. |
-| `docker-read` | OpenAI | `MS-012` | Route miss | Started discovery, then switched to `gitlab_analyze/release_notes` instead of repository compare. |
-| `docker-read` | Qwen | `MS-012` | Route miss | Listed releases, then switched to `gitlab_analyze/release_notes` instead of repository compare. |
-| `docker-mutating-safe` | Anthropic | `MT-036` | Parameter shape miss | Created a release without `params.ref`; GitLab rejected the missing ref. |
-| `docker-mutating-safe` | Google | `MT-036` | Route and parameter miss | Chose tag creation before release creation and omitted `params.ref`. |
-| `docker-mutating-safe` | Google | `MT-061` | Provider/model no-call | Returned no tool-use block for discussion resolution. |
-| `docker-destructive-safe` | Anthropic | `MS-024` | Parameter shape miss | Project snippet update omitted the required `files` array, then moved to delete too early. |
-| `docker-destructive-safe` | Anthropic | `MS-031` | Step-order miss | Added deploy key, then skipped the required `deploy_key_get` step. |
-| `docker-destructive-safe` | Google | `MS-009` | Route miss | Used broadcast-message list/create where instance `settings_get` was the first expected step. |
-| `docker-destructive-safe` | Google | `MS-013` | Route miss | Chose discovery/search instead of feature-flag get/list/delete workflow. |
-| `docker-destructive-safe` | Google | `MS-016` | Route miss | Chose discovery/search instead of issue creation and issue-link workflow. |
-| `docker-destructive-safe` | Google | `MS-018` | Route miss | Chose discovery/project listing instead of release creation from a ref. |
-| `docker-destructive-safe` | Google | `MS-019` | Route miss | Repeated discovery instead of pipeline trigger creation. |
-| `docker-destructive-safe` | Google | `MS-020` | Route miss | Repeated discovery instead of pipeline schedule creation. |
-| `docker-destructive-safe` | Google | `MS-024` | Route and shape miss | Started with discovery and later omitted the snippet update `files` array. |
-| `docker-destructive-safe` | Google | `MS-028` | Route miss | Repeated discovery instead of branch creation. |
-| `docker-destructive-safe` | Google | `MS-031` | Route and step-order miss | Started with discovery, then skipped required `deploy_key_get`. |
-| `docker-destructive-safe` | Google | `MS-032` | Route miss | Used discovery/project listing instead of issue create and time-tracking workflow. |
-| `docker-destructive-safe` | OpenAI | `MS-021` | Parameter shape miss | Sent unsupported hook fields `member_events` and `subgroup_events`. |
-| `docker-destructive-safe` | OpenAI | `MS-024` | Step-order miss | Used snippet content read where project snippet `get` was expected. |
-| `docker-destructive-safe` | OpenAI | `MS-028` | Route and safety miss | Started with discovery and later missed destructive confirmation on a delete step. |
-| `docker-destructive-safe` | OpenAI | `MS-031` | Route and step-order miss | Used project `get` instead of deploy-key add, then skipped required `deploy_key_get`. |
-| `docker-destructive-safe` | OpenAI | `MS-032` | Step-order miss | Used time stats and estimate reset where spent-time reset was expected. |
-| `docker-destructive-safe` | Qwen | `MS-024` | Parameter shape miss | Project snippet update put `file_path` outside the required `files` array. |
-| `docker-destructive-safe` | Qwen | `MS-031` | Step-order miss | Added deploy key, then skipped the required `deploy_key_get` step. |
-
-Interpretation: the split meta-tool catalog works with all four providers in
-opaque mode against a real GitLab backend. Remaining failures are useful product
-signals rather than fixture blockers: improve route descriptions, add targeted
-aliases only where they preserve the MCP contract, and make complex update
-shapes such as snippet `files` easier for models to infer.
+Interpretation: the split 33-tool CE meta-tool catalog works with all four
+providers in opaque mode against a real Docker GitLab backend. The curated
+economy matrix now reaches the target behavior: each expected operation maps to
+one model request and one MCP tool call, with no schema lookups, no repair turns,
+and no final task failures in the published rows.
 
 ### 2026-05-04 Targeted Docker Noise-Fix Validation
 
