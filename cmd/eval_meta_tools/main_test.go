@@ -895,10 +895,10 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	if !strings.Contains(prompt, "For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title") {
 		t.Fatalf("taskPrompt() = %q, want merge request create guidance", prompt)
 	}
-	if !strings.Contains(prompt, "For merge request discussions, use mr_review.discussion_create") || !strings.Contains(prompt, "mr_review.note_create only when the task says note or comment") {
-		t.Fatalf("taskPrompt() = %q, want merge request discussion guidance", prompt)
+	if !strings.Contains(prompt, "For merge request notes or comments, use mr_review.note_create") || !strings.Contains(prompt, "Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion") {
+		t.Fatalf("taskPrompt() = %q, want merge request note/discussion guidance", prompt)
 	}
-	if !strings.Contains(prompt, "For personal snippets, snippet ID is params.snippet_id") {
+	if !strings.Contains(prompt, "For personal snippets, snippet ID is params.snippet_id") || !strings.Contains(prompt, "or file_path") {
 		t.Fatalf("taskPrompt() = %q, want snippet_id guidance", prompt)
 	}
 	if !strings.Contains(prompt, "For custom emoji group operations, use custom_emoji.list with params.group_path") {
@@ -918,6 +918,9 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id") || !strings.Contains(prompt, "for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id") || !strings.Contains(prompt, "use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied") {
 		t.Fatalf("taskPrompt() = %q, want project/group/instance CI variable action guidance", prompt)
+	}
+	if !strings.Contains(prompt, "For runner.list_project, use params.project_id by default") || !strings.Contains(prompt, "Do not send params.paused, params.type, params.tag_list") {
+		t.Fatalf("taskPrompt() = %q, want runner list filter guidance", prompt)
 	}
 	if !strings.Contains(prompt, "For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message") {
 		t.Fatalf("taskPrompt() = %q, want repository file write guidance", prompt)
@@ -958,6 +961,53 @@ func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want pagination guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-016",
+		Prompt:         "Add a note saying `Can we add coverage?` to merge request `7` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_mr_review",
+		ExpectedAction: "note_create",
+		RequiredParams: []string{"project_id", "merge_request_iid", "body"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		`call gitlab_mr_review with {"action":"note_create"`,
+		`"merge_request_iid":<merge_request_iid>`,
+		`"body":"<body>"`,
+		"Do not use discussion_create unless the task explicitly says threaded discussion or discussion",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want MR note guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-008",
+		Prompt: "Troubleshoot runner ID `99` for project `my-org/tools/gitlab-mcp-server`: list project runners, inspect runner jobs, fetch trace for job `999`, then set paused=true on the runner.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_runner", ExpectedAction: "list_project", RequiredParams: []string{"project_id"}},
+			{ExpectedTool: "gitlab_runner", ExpectedAction: "jobs", RequiredParams: []string{"runner_id"}},
+			{ExpectedTool: "gitlab_job", ExpectedAction: "trace", RequiredParams: []string{"project_id", "job_id"}},
+			{ExpectedTool: "gitlab_runner", ExpectedAction: "update", RequiredParams: []string{"runner_id", "paused"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		`call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}}`,
+		"unless the task explicitly asks for an online, offline, stale, or never_contacted status filter",
+		"Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project",
+		"For runner jobs, use runner.jobs with params.runner_id only",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want runner filter guidance containing %q", prompt, want)
 		}
 	}
 }
@@ -2354,6 +2404,18 @@ func TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting(t *testing.T) {
 	}
 	if !traceContainsToolResult(result.Trace, "search ok") {
 		t.Fatalf("trace events = %+v, want real search result content", result.Trace.Events)
+	}
+}
+
+func TestCanExecuteInvalidToolCallSkipsUnexpectedMutations(t *testing.T) {
+	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
+	step := evalStep{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_create", RequiredParams: []string{"project_id", "merge_request_iid", "body"}}
+	validation := validationResult{ToolMatches: true, ActionMatches: false, Action: "discussion_create", RequiredPresent: true, DestructiveSafe: true}
+	toolUse := modelContentBlock{Name: "gitlab_mr_review"}
+	routes := map[string]toolutil.ActionMap{"gitlab_mr_review": {"discussion_create": toolutil.ActionRoute{}}}
+
+	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
+		t.Fatal("canExecuteInvalidToolCall() = true, want unexpected create action to receive repair guidance instead of execution")
 	}
 }
 
