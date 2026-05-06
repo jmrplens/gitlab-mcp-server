@@ -25,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // README generation markers define the managed tools table section.
@@ -175,31 +176,7 @@ func firstSentence(s string) string {
 // Meta-tools prepend a generated usage example and schema-resource hint for
 // MCP clients; those lines are useful in tools/list but noisy in README tables.
 func descriptionSummary(description string) string {
-	return firstSentence(stripMetaToolDescriptionPrefix(description))
-}
-
-// stripMetaToolDescriptionPrefix removes the generated meta-tool usage header
-// added by toolutil.MetaToolDescriptionPrefix while preserving standalone tool
-// descriptions that happen to start with an example.
-func stripMetaToolDescriptionPrefix(description string) string {
-	lines := strings.Split(description, "\n")
-	if len(lines) < 2 {
-		return description
-	}
-
-	firstLine := strings.TrimSpace(lines[0])
-	secondLine := strings.TrimSpace(lines[1])
-	hasUsageExample := strings.Contains(firstLine, `Use {"action":`) || strings.Contains(firstLine, `Example: {"action":`)
-	hasSchemaHint := strings.HasPrefix(secondLine, "Action params schema:") || strings.HasPrefix(secondLine, "For the params schema of any action")
-	if !hasUsageExample || !hasSchemaHint {
-		return description
-	}
-
-	start := 2
-	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
-		start++
-	}
-	return strings.Join(lines[start:], "\n")
+	return firstSentence(toolutil.StripMetaToolDescriptionPrefix(description))
 }
 
 // abbreviations that should not be treated as sentence boundaries.

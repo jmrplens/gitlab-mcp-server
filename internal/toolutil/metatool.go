@@ -1776,6 +1776,30 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	)
 }
 
+// StripMetaToolDescriptionPrefix removes the generated meta-tool usage header
+// added by MetaToolDescriptionPrefix while preserving standalone descriptions
+// that happen to start with an example.
+func StripMetaToolDescriptionPrefix(description string) string {
+	lines := strings.Split(description, "\n")
+	if len(lines) < 2 {
+		return description
+	}
+
+	firstLine := strings.TrimSpace(lines[0])
+	secondLine := strings.TrimSpace(lines[1])
+	hasUsageExample := strings.Contains(firstLine, `Use {"action":`) || strings.Contains(firstLine, `Example: {"action":`)
+	hasSchemaHint := strings.HasPrefix(secondLine, "Action params schema:") || strings.HasPrefix(secondLine, "For the params schema of any action")
+	if !hasUsageExample || !hasSchemaHint {
+		return description
+	}
+
+	start := 2
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	return strings.Join(lines[start:], "\n")
+}
+
 // buildMetaOneOf constructs the oneOf branch list for full/compact modes.
 // Each branch pins `action` to a const and replaces `params` with the captured
 // per-action InputSchema (optionally compacted).

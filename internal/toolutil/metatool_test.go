@@ -1081,6 +1081,43 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	}
 }
 
+// TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix verifies the generated
+// concise prefix is removed before documentation summaries are rendered.
+func TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix(t *testing.T) {
+	description := "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\n" +
+		"Action params schema: gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
+		"Manage GitLab issues."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != "Manage GitLab issues." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want real description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix keeps README and llms
+// generation compatible with descriptions emitted before the concise prefix.
+func TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix(t *testing.T) {
+	description := "Example: {\"action\":\"create\",\"params\":{...}}\n" +
+		"For the params schema of any action, read gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
+		"Manage GitLab issues."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != "Manage GitLab issues." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want real description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_PreservesStandaloneExample verifies normal
+// descriptions are left intact when only one generated-prefix line is present.
+func TestStripMetaToolDescriptionPrefix_PreservesStandaloneExample(t *testing.T) {
+	description := "Example: resolve this remote before listing projects. More details follow."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != description {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want original description", got)
+	}
+}
+
 // enrichWithHints.
 
 // TestEnrichWithHints_AddsNextSteps verifies that enrichWithHints injects
