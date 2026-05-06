@@ -150,13 +150,23 @@ jobs:
 
       - name: Commit updated server.json and plugin.json to main
         env:
-          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
         run: |
+          set -euo pipefail
+
           VERSION="${GITHUB_REF#refs/tags/v}"
+          SSH_KEY="$HOME/.ssh/release_deploy_key"
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "${RELEASE_DEPLOY_KEY}" > "$SSH_KEY"
+          chmod 600 "$SSH_KEY"
+          ssh-keyscan -H github.com >> "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $SSH_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
 
           git config user.name "José M. Requena Plens"
           git config user.email "jmrplens@gmail.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
 
           git fetch origin main
           git checkout main
