@@ -336,7 +336,7 @@ Test categories (all required):
 
 1. Add entry to `docs/tools/{domain}.md`
 2. Update `docs/tools/README.md` tool count
-3. Run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing.md` with new test counts and coverage values
+3. Run `go run ./cmd/gen_testing_docs/` to refresh `docs/testing/testing.md` with new test counts and coverage values
 
 ## Step 8: Verify
 
@@ -344,7 +344,7 @@ Test categories (all required):
 go vet ./internal/tools/{domain}/
 go test ./internal/tools/{domain}/ -count=1 -v
 go run ./cmd/gen_testing_docs/ --check
-npx markdownlint-cli2 docs/development/testing.md
+npx markdownlint-cli2 docs/testing/testing.md
 golangci-lint run ./internal/tools/{domain}/
 ```
 

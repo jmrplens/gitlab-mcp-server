@@ -1409,6 +1409,45 @@ func TestIssueIDRequired_Validation(t *testing.T) {
 	}
 }
 
+// TestIssueInputSchemas_DoNotRequireOptionalMilestone verifies that the
+// generated create and update schemas keep milestone_id optional.
+//
+// The test inspects the route schema required fields directly instead of
+// making an API request. This protects issue creation and update workflows
+// where callers may intentionally omit a milestone.
+func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
+	for name, route := range map[string]toolutil.ActionRoute{
+		"create": toolutil.RouteAction[CreateInput, Output]((*gitlabclient.Client)(nil), Create),
+		"update": toolutil.RouteAction[UpdateInput, Output]((*gitlabclient.Client)(nil), Update),
+	} {
+		schema := route.InputSchema
+		for _, field := range schemaRequiredFields(schema) {
+			if field == "milestone_id" {
+				t.Fatalf("%s schema required fields = %v, want milestone_id optional", name, schema["required"])
+			}
+		}
+	}
+}
+
+// schemaRequiredFields extracts the required field names from a generated
+// JSON Schema map while accepting both []any and []string representations.
+func schemaRequiredFields(schema map[string]any) []string {
+	switch required := schema["required"].(type) {
+	case []any:
+		fields := make([]string, 0, len(required))
+		for _, field := range required {
+			if fieldName, ok := field.(string); ok {
+				fields = append(fields, fieldName)
+			}
+		}
+		return fields
+	case []string:
+		return required
+	default:
+		return nil
+	}
+}
+
 // TestToProjectIDRequired_Validation ensures Move rejects zero/negative to_project_id.
 func TestToProjectIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1753,6 +1792,7 @@ func TestParseDueDate_RFC3339Rejected(t *testing.T) {
 func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	conf := true
 	locked := false
+	milestoneID := int64(5)
 	opts, err := buildUpdateOpts(UpdateInput{
 		Title:            "New Title",
 		Description:      "New Description",
@@ -1761,7 +1801,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Labels:           "a",
 		AddLabels:        "b",
 		RemoveLabels:     "c",
-		MilestoneID:      5,
+		MilestoneID:      &milestoneID,
 		DueDate:          "2026-12-31",
 		Confidential:     &conf,
 		IssueType:        "incident",
@@ -1773,6 +1813,19 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	}
 	assertUpdateOptsFields(t, opts)
 	assertUpdateOptsMetadata(t, opts, &conf, &locked)
+}
+
+// TestBuildUpdateOpts_MilestoneZeroUnsets verifies milestone_id 0 is forwarded
+// instead of being treated as an omitted field.
+func TestBuildUpdateOpts_MilestoneZeroUnsets(t *testing.T) {
+	zero := int64(0)
+	opts, err := buildUpdateOpts(UpdateInput{MilestoneID: &zero})
+	if err != nil {
+		t.Fatalf("buildUpdateOpts() error = %v", err)
+	}
+	if opts.MilestoneID == nil || *opts.MilestoneID != 0 {
+		t.Fatalf("MilestoneID = %#v, want pointer to 0", opts.MilestoneID)
+	}
 }
 
 // assertUpdateOptsFields is an internal helper for the issues package.

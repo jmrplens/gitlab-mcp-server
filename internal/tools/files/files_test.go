@@ -125,6 +125,19 @@ func TestFileGet_NestedPath(t *testing.T) {
 	}
 }
 
+// TestEnrichFileInfoOutput_MissingInputsReturnsPartialOutput verifies the
+// best-effort metadata enrichment keeps create/update results usable when the
+// caller lacks the inputs needed for a metadata lookup.
+func TestEnrichFileInfoOutput_MissingInputsReturnsPartialOutput(t *testing.T) {
+	out := enrichFileInfoOutput(context.Background(), nil, "", "main.go", "main")
+	if out.FilePath != "main.go" || out.Branch != "main" {
+		t.Fatalf("output = %+v, want file path and branch preserved", out)
+	}
+	if out.CommitID != "" || out.LastCommitID != "" {
+		t.Fatalf("commit fields = %q/%q, want empty", out.CommitID, out.LastCommitID)
+	}
+}
+
 // TestFileGet_ImageFile verifies that fileGet detects image files by extension,
 // stores raw bytes in ImageData, empties Content, and sets ContentCategory="image".
 func TestFileGet_ImageFile(t *testing.T) {

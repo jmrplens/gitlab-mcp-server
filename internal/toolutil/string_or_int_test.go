@@ -57,6 +57,11 @@ func TestStringOrInt_UnmarshalJSON(t *testing.T) {
 			want:  StringOrInt("405"),
 		},
 		{
+			name:    "fractional float",
+			input:   `405.5`,
+			wantErr: true,
+		},
+		{
 			name:  "null value",
 			input: `null`,
 			want:  StringOrInt(""),

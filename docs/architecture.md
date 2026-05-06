@@ -2,7 +2,7 @@
 
 This document describes the system architecture of gitlab-mcp-server, a Model Context Protocol (MCP) server that bridges AI assistants to the GitLab REST API v4 and GraphQL API.
 
-> **Diataxis type**: Explanation
+> **Diátaxis type**: Explanation
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Familiarity with Go, REST APIs, and basic MCP concepts
 > 📖 **User documentation**: See the [Architecture](https://jmrplens.github.io/gitlab-mcp-server/architecture/) on the documentation site for a user-friendly version.

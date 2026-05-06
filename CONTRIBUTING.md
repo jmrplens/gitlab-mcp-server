@@ -237,7 +237,7 @@ Then commit the updated golden files alongside your code changes. The CI will fa
 - Adding a new prompt → update `docs/prompts-reference.md`
 - Adding a new capability → update `docs/capabilities.md`
 - Changing configuration → update `docs/configuration.md`
-- Adding or modifying tests → update `docs/development/testing.md` with new test counts and coverage values
+- Adding or modifying tests → update `docs/testing/testing.md` with new test counts and coverage values
 
 ### Language Policy
 

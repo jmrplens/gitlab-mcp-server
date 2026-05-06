@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,6 +24,12 @@ import (
 
 // maxInt is the maximum int value; used for overflow-safe capacity calculations.
 const maxInt = int(math.MaxInt)
+
+const (
+	minInt64AsFloat          = -float64(1 << 63)
+	maxInt64AsFloat          = float64(1<<63 - 1)
+	invalidActionParamsError = "invalid params for this action: %w"
+)
 
 // MetaToolInput is the common input for all meta-tools.
 // The LLM sends an action name and a params object; the dispatcher
@@ -50,6 +58,54 @@ type ActionRoute struct {
 
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
+
+var commonActionAliases = map[string]string{
+	"badge.add":               "project.badge_add",
+	"hook.add":                "project.hook_add",
+	"milestone.create":        "project.milestone_create",
+	"milestone.delete":        "project.milestone_delete",
+	"milestone.get":           "project.milestone_get",
+	"milestone.list":          "project.milestone_list",
+	"milestone.update":        "project.milestone_update",
+	"group.custom_emoji_list": "custom_emoji.list",
+	"me":                      "current",
+}
+
+// NormalizeActionAlias returns the canonical action name for common shortened
+// action spellings when the canonical action exists on the target meta-tool.
+func NormalizeActionAlias(action string, routes ActionMap) string {
+	if action == "" {
+		return action
+	}
+	if canonical, ok := commonActionAliases[action]; ok {
+		if _, exists := routes[canonical]; exists {
+			return canonical
+		}
+	}
+	return action
+}
+
+// ParamValidationError marks parameter decoding failures that should be
+// surfaced as recoverable tool errors instead of protocol errors.
+type ParamValidationError struct {
+	Err error
+}
+
+// Error returns the underlying validation error message.
+func (e *ParamValidationError) Error() string {
+	if e == nil || e.Err == nil {
+		return "invalid params"
+	}
+	return e.Err.Error()
+}
+
+// Unwrap returns the underlying validation error.
+func (e *ParamValidationError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // Meta-tool route registry state supports both the global audit view and the
 // per-server capture used when registering meta-schema resources in HTTP mode.
@@ -137,6 +193,7 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 // regenerating identical JSON Schemas for every route registration.
 var (
 	outputSchemaCache sync.Map // reflect.Type → map[string]any
+	inputSchemaCache  sync.Map // reflect.Type → map[string]any
 )
 
 // schemaForType generates a JSON Schema map for the given reflect.Type
@@ -163,6 +220,75 @@ func schemaForType(rt reflect.Type) map[string]any {
 	}
 	outputSchemaCache.Store(rt, m)
 	return m
+}
+
+func inputSchemaForType(rt reflect.Type) map[string]any {
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if cached, ok := inputSchemaCache.Load(rt); ok {
+		m, _ := cached.(map[string]any)
+		return m
+	}
+	schema := maps.Clone(schemaForType(rt))
+	if schema == nil {
+		return nil
+	}
+	if required := requiredJSONFieldNames(rt); len(required) > 0 {
+		schema["required"] = required
+	} else {
+		delete(schema, "required")
+	}
+	inputSchemaCache.Store(rt, schema)
+	return schema
+}
+
+func requiredJSONFieldNames(rt reflect.Type) []string {
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if rt.Kind() != reflect.Struct {
+		return nil
+	}
+	var names []string
+	for field := range rt.Fields() {
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+		jsonName := jsonFieldName(field)
+		if jsonName == "-" {
+			continue
+		}
+		if field.Anonymous && jsonName == "" {
+			names = append(names, requiredJSONFieldNames(field.Type)...)
+			continue
+		}
+		if jsonName != "" && jsonSchemaTagHasRequired(field.Tag.Get("jsonschema")) {
+			names = append(names, jsonName)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func jsonFieldName(field reflect.StructField) string {
+	name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+	if name != "" {
+		return name
+	}
+	if field.Anonymous {
+		return ""
+	}
+	return field.Name
+}
+
+func jsonSchemaTagHasRequired(tag string) bool {
+	for part := range strings.SplitSeq(tag, ",") {
+		if strings.TrimSpace(part) == "required" {
+			return true
+		}
+	}
+	return false
 }
 
 // SchemaForRoute returns the cached output schema for type R.
@@ -220,6 +346,316 @@ func stripReservedKeys(params map[string]any) map[string]any {
 	return out
 }
 
+var commonParamAliases = []struct {
+	Alias     string
+	Canonical string
+}{
+	{Alias: "search", Canonical: "query"},
+	{Alias: "mr_iid", Canonical: "merge_request_iid"},
+	{Alias: "merge_request_id", Canonical: "merge_request_iid"},
+	{Alias: "pipeline_schedule_id", Canonical: "schedule_id"},
+	{Alias: "emoji_id", Canonical: "award_id"},
+	{Alias: "key_id", Canonical: "deploy_key_id"},
+	{Alias: "token_id", Canonical: "deploy_token_id"},
+	{Alias: "commit_id", Canonical: "commit_sha"},
+	{Alias: "dependency_export_id", Canonical: "export_id"},
+	{Alias: "url", Canonical: "external_url"},
+	{Alias: "rule_id", Canonical: "check_id"},
+	{Alias: "group_path", Canonical: "full_path"},
+	{Alias: "group_id", Canonical: "full_path"},
+	{Alias: "include_descendant_groups", Canonical: "include_descendants"},
+	{Alias: "project_path", Canonical: "project_id"},
+	{Alias: "project_id", Canonical: "project_path"},
+	{Alias: "group_path", Canonical: "group_id"},
+	{Alias: "group_id", Canonical: "group_path"},
+	{Alias: "id", Canonical: "snippet_id"},
+	{Alias: "id", Canonical: "runner_id"},
+	{Alias: "link", Canonical: "link_url"},
+	{Alias: "image", Canonical: "image_url"},
+	{Alias: "content", Canonical: "body"},
+	{Alias: "description", Canonical: "body"},
+	{Alias: "note", Canonical: "body"},
+	{Alias: "body", Canonical: "message"},
+	{Alias: "content", Canonical: "message"},
+	{Alias: "scope", Canonical: "scopes"},
+	{Alias: "scope", Canonical: "environment_scope"},
+	{Alias: "environment", Canonical: "environment_scope"},
+	{Alias: "expires", Canonical: "expires_at"},
+	{Alias: "expiry", Canonical: "expires_at"},
+	{Alias: "expiration", Canonical: "expires_at"},
+	{Alias: "merge_when_pipeline_succeeds", Canonical: "auto_merge"},
+	{Alias: "branch_name", Canonical: "ref"},
+	{Alias: "ref", Canonical: "content_ref"},
+	{Alias: "from_ref", Canonical: "from"},
+	{Alias: "to_ref", Canonical: "to"},
+	{Alias: "target_branch", Canonical: "to"},
+	{Alias: "name", Canonical: "environment"},
+}
+
+// normalizeParamAliases accepts common LLM-generated parameter aliases only
+// when the target input type has the canonical field and not the alias field.
+func normalizeParamAliases(params map[string]any, target reflect.Type) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := jsonFieldNames(target)
+	if len(fields) == 0 {
+		return params
+	}
+	out := params
+	cloned := false
+	clone := func() map[string]any {
+		if !cloned {
+			out = maps.Clone(params)
+			cloned = true
+		}
+		return out
+	}
+	accepts := func(name string) bool {
+		_, ok := fields[name]
+		return ok
+	}
+	for _, pair := range commonParamAliases {
+		value, hasAlias := out[pair.Alias]
+		_, hasCanonical := out[pair.Canonical]
+		if !hasAlias {
+			continue
+		}
+		if hasCanonical {
+			if accepts(pair.Canonical) && !accepts(pair.Alias) {
+				delete(clone(), pair.Alias)
+			}
+			continue
+		}
+		if !accepts(pair.Canonical) || accepts(pair.Alias) {
+			continue
+		}
+		updated := clone()
+		updated[pair.Canonical] = value
+		delete(updated, pair.Alias)
+	}
+	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
+		if _, hasPaused := out["paused"]; !hasPaused {
+			if active, ok := value.(bool); ok {
+				updated := clone()
+				updated["paused"] = !active
+				delete(updated, "active")
+			}
+		}
+	}
+	if value, hasFilePath := out["file_path"]; hasFilePath && accepts("path") && accepts("filename") && !accepts("file_path") {
+		if _, hasPath := out["path"]; !hasPath {
+			if _, hasFilename := out["filename"]; !hasFilename {
+				if filePath, ok := value.(string); ok && filePath != "" {
+					path, filename := splitPackageFilePath(filePath)
+					updated := clone()
+					updated["path"] = path
+					updated["filename"] = filename
+					delete(updated, "file_path")
+				}
+			}
+		}
+	}
+	if accepts("source_branch") && accepts("target_branch") {
+		if _, hasSource := out["source_branch"]; !hasSource {
+			for _, key := range []string{"ref", "branch", "from"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["source_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+		if _, hasTarget := out["target_branch"]; !hasTarget {
+			for _, key := range []string{"to", "base"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["target_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// NormalizeParamAliasesForSchema applies the same compatibility aliases used
+// by UnmarshalParams, driven by a JSON Schema properties map instead of a Go
+// struct type. It is used by evaluation code that validates simulated calls.
+func NormalizeParamAliasesForSchema(params, schema map[string]any) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := schemaPropertyNames(schema)
+	if len(fields) == 0 {
+		return params
+	}
+	normalized := normalizeParamAliasesWithFields(params, fields)
+	normalized = coerceSchemaParamTypes(normalized, schema)
+	normalized = coerceSingleStringArraysForSchema(normalized, schema)
+	return coerceStringListParamsForSchema(normalized, schema)
+}
+
+func normalizeParamAliasesWithFields(params map[string]any, fields map[string]struct{}) map[string]any {
+	out := params
+	cloned := false
+	clone := func() map[string]any {
+		if !cloned {
+			out = maps.Clone(params)
+			cloned = true
+		}
+		return out
+	}
+	accepts := func(name string) bool {
+		_, ok := fields[name]
+		return ok
+	}
+	for _, pair := range commonParamAliases {
+		value, hasAlias := out[pair.Alias]
+		_, hasCanonical := out[pair.Canonical]
+		if !hasAlias {
+			continue
+		}
+		if hasCanonical {
+			if accepts(pair.Canonical) && !accepts(pair.Alias) {
+				delete(clone(), pair.Alias)
+			}
+			continue
+		}
+		if !accepts(pair.Canonical) || accepts(pair.Alias) {
+			continue
+		}
+		updated := clone()
+		updated[pair.Canonical] = value
+		delete(updated, pair.Alias)
+	}
+	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
+		if _, hasPaused := out["paused"]; !hasPaused {
+			if active, ok := value.(bool); ok {
+				updated := clone()
+				updated["paused"] = !active
+				delete(updated, "active")
+			}
+		}
+	}
+	if value, hasFilePath := out["file_path"]; hasFilePath && accepts("path") && accepts("filename") && !accepts("file_path") {
+		if _, hasPath := out["path"]; !hasPath {
+			if _, hasFilename := out["filename"]; !hasFilename {
+				if filePath, ok := value.(string); ok && filePath != "" {
+					path, filename := splitPackageFilePath(filePath)
+					updated := clone()
+					updated["path"] = path
+					updated["filename"] = filename
+					delete(updated, "file_path")
+				}
+			}
+		}
+	}
+	if accepts("source_branch") && accepts("target_branch") {
+		if _, hasSource := out["source_branch"]; !hasSource {
+			for _, key := range []string{"ref", "branch", "from"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["source_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+		if _, hasTarget := out["target_branch"]; !hasTarget {
+			for _, key := range []string{"to", "base"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["target_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func nonEmptyStringValue(value any) bool {
+	text, ok := value.(string)
+	return ok && strings.TrimSpace(text) != ""
+}
+
+func splitPackageFilePath(filePath string) (dir, filename string) {
+	filePath = strings.Trim(filePath, "/")
+	if filePath == "" {
+		return ".", ""
+	}
+	idx := strings.LastIndex(filePath, "/")
+	if idx < 0 {
+		return ".", filePath
+	}
+	return filePath[:idx], filePath[idx+1:]
+}
+
+func jsonFieldNames(target reflect.Type) map[string]struct{} {
+	if target == nil {
+		return nil
+	}
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	if target.Kind() != reflect.Struct {
+		return nil
+	}
+	fields := make(map[string]struct{})
+	collectJSONFieldNames(target, fields)
+	return fields
+}
+
+func schemaPropertyNames(schema map[string]any) map[string]struct{} {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) == 0 {
+		return nil
+	}
+	fields := make(map[string]struct{}, len(properties))
+	for name := range properties {
+		fields[name] = struct{}{}
+	}
+	return fields
+}
+
+func collectJSONFieldNames(target reflect.Type, fields map[string]struct{}) {
+	for field := range target.Fields() {
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+		name := jsonFieldName(field)
+		if name == "-" {
+			continue
+		}
+		if field.Anonymous && name == "" {
+			fieldType := field.Type
+			for fieldType.Kind() == reflect.Pointer {
+				fieldType = fieldType.Elem()
+			}
+			if fieldType.Kind() == reflect.Struct {
+				collectJSONFieldNames(fieldType, fields)
+				continue
+			}
+		}
+		if name == "" {
+			name = field.Name
+		}
+		fields[name] = struct{}{}
+	}
+}
+
 // UnmarshalParams re-serializes params map to JSON and deserializes into T.
 // LLMs frequently send numeric values as JSON strings (e.g. "17" instead of 17).
 // When standard unmarshalling fails, this function retries after coercing
@@ -234,25 +670,567 @@ func stripReservedKeys(params map[string]any) map[string]any {
 // (see [reservedParamKeys]) are stripped before unmarshalling.
 func UnmarshalParams[T any](params map[string]any) (T, error) {
 	var input T
-	cleaned := stripReservedKeys(params)
+	target := reflect.TypeFor[T]()
+	cleaned := coerceStringIDNumbers(coerceStringListParams(coerceSingleStringSlices(normalizeParamAliases(stripReservedKeys(params), target), target), target), target)
+	cleaned, coerceErr := coerceNumericParams(cleaned, target)
+	if coerceErr != nil {
+		return input, newParamValidationError(invalidActionParamsError, coerceErr)
+	}
 	data, err := json.Marshal(cleaned)
 	if err != nil {
-		return input, fmt.Errorf("invalid params: %w", err)
+		return input, newParamValidationError("invalid params: %w", err)
 	}
 	if err = strictUnmarshal(data, &input); err != nil {
-		// Retry with numeric string coercion.
+		// Retry with legacy broad numeric string coercion for routes whose
+		// target type cannot be fully reflected, while preserving the original
+		// error if the retry still fails.
 		coerced := coerceNumericStrings(cleaned)
 		data2, marshalErr := json.Marshal(coerced)
 		if marshalErr != nil {
-			return input, fmt.Errorf("invalid params for this action: %w", err)
+			return input, newParamValidationError(invalidActionParamsError, err)
 		}
 		if strictUnmarshal(data2, &input) != nil {
 			// Return the original error for a clearer message.
-			return input, fmt.Errorf("invalid params for this action: %w", err)
+			return input, newParamValidationError(invalidActionParamsError, err)
 		}
 		return input, nil
 	}
 	return input, nil
+}
+
+func newParamValidationError(format string, args ...any) error {
+	return &ParamValidationError{Err: fmt.Errorf(format, args...)}
+}
+
+func coerceSingleStringSlices(params map[string]any, target reflect.Type) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		fieldType, ok := fields[name]
+		if !ok || !isStringSliceType(fieldType) {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = []string{text}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceStringListParams(params map[string]any, target reflect.Type) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		if !isCommaStringParam(name) || !isStringType(fields[name]) {
+			continue
+		}
+		if csv, ok := stringListToCSV(value); ok {
+			if out == nil {
+				out = maps.Clone(params)
+			}
+			out[name] = csv
+		}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceStringIDNumbers(params map[string]any, target reflect.Type) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		fieldType, ok := fields[name]
+		if !ok || !isStringIDParam(name) || !isStringType(fieldType) {
+			continue
+		}
+		text, ok := numericIDString(value)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = text
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func isStringIDParam(name string) bool {
+	return name == "id" || name == "iid" || name == "project_path" || name == "group_path" || name == "full_path" || strings.HasSuffix(name, "_id") || strings.HasSuffix(name, "_iid")
+}
+
+func numericIDString(value any) (string, bool) {
+	switch n := value.(type) {
+	case int:
+		return strconv.Itoa(n), true
+	case int8:
+		return strconv.FormatInt(int64(n), 10), true
+	case int16:
+		return strconv.FormatInt(int64(n), 10), true
+	case int32:
+		return strconv.FormatInt(int64(n), 10), true
+	case int64:
+		return strconv.FormatInt(n, 10), true
+	case uint:
+		return strconv.FormatUint(uint64(n), 10), true
+	case uint8:
+		return strconv.FormatUint(uint64(n), 10), true
+	case uint16:
+		return strconv.FormatUint(uint64(n), 10), true
+	case uint32:
+		return strconv.FormatUint(uint64(n), 10), true
+	case uint64:
+		return strconv.FormatUint(n, 10), true
+	case json.Number:
+		if i, err := integerFromString(n.String()); err == nil {
+			return strconv.FormatInt(i, 10), true
+		}
+		return "", false
+	case float32:
+		return integerFloatString(float64(n))
+	case float64:
+		return integerFloatString(n)
+	default:
+		return "", false
+	}
+}
+
+func integerFloatString(value float64) (string, bool) {
+	if math.Trunc(value) != value || value < minInt64AsFloat || value > maxInt64AsFloat {
+		return "", false
+	}
+	return strconv.FormatInt(int64(value), 10), true
+}
+
+func coerceNumericParams(params map[string]any, target reflect.Type) (map[string]any, error) {
+	if len(params) == 0 {
+		return params, nil
+	}
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return params, nil
+	}
+	var out map[string]any
+	for name, value := range params {
+		fieldType, ok := fields[name]
+		if !ok {
+			continue
+		}
+		coerced, changed, err := coerceValueForTargetType(name, value, fieldType)
+		if err != nil {
+			return nil, err
+		}
+		if !changed {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = coerced
+	}
+	if out != nil {
+		return out, nil
+	}
+	return params, nil
+}
+
+func coerceValueForTargetType(name string, value any, target reflect.Type) (coerced any, changed bool, err error) {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	switch target.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return coerceSignedIntegerValue(name, value)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return coerceUnsignedIntegerValue(name, value)
+	case reflect.Float32, reflect.Float64:
+		return coerceFloatValue(name, value)
+	case reflect.Slice:
+		return coerceSliceValueForTargetType(name, value, target.Elem())
+	default:
+		return value, false, nil
+	}
+}
+
+func coerceSignedIntegerValue(name string, value any) (coerced any, changed bool, err error) {
+	text, ok := value.(string)
+	if !ok {
+		return value, false, nil
+	}
+	integer, err := integerFromString(text)
+	if err != nil {
+		return nil, false, fmt.Errorf("parameter %q must be an integer, got %q", name, text)
+	}
+	return integer, true, nil
+}
+
+func coerceUnsignedIntegerValue(name string, value any) (coerced any, changed bool, err error) {
+	text, ok := value.(string)
+	if !ok {
+		return value, false, nil
+	}
+	integer, err := integerFromString(text)
+	if err != nil || integer < 0 {
+		return nil, false, fmt.Errorf("parameter %q must be a non-negative integer, got %q", name, text)
+	}
+	return uint64(integer), true, nil
+}
+
+func coerceFloatValue(name string, value any) (coerced any, changed bool, err error) {
+	text, ok := value.(string)
+	if !ok {
+		return value, false, nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil {
+		return nil, false, fmt.Errorf("parameter %q must be a number, got %q", name, text)
+	}
+	return f, true, nil
+}
+
+func coerceSliceValueForTargetType(name string, value any, elem reflect.Type) (coerced any, changed bool, err error) {
+	for elem.Kind() == reflect.Pointer {
+		elem = elem.Elem()
+	}
+	if !isNumericKind(elem.Kind()) {
+		return value, false, nil
+	}
+	items, ok := sliceItems(value)
+	if !ok {
+		return value, false, nil
+	}
+	out := make([]any, len(items))
+	for i, item := range items {
+		itemCoerced, itemChanged, itemErr := coerceValueForTargetType(fmt.Sprintf("%s[%d]", name, i), item, elem)
+		if itemErr != nil {
+			return nil, false, itemErr
+		}
+		out[i] = itemCoerced
+		changed = changed || itemChanged
+	}
+	if !changed {
+		return value, false, nil
+	}
+	return out, true, nil
+}
+
+func sliceItems(value any) ([]any, bool) {
+	switch items := value.(type) {
+	case []any:
+		return items, true
+	case []string:
+		out := make([]any, len(items))
+		for i, item := range items {
+			out[i] = item
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
+func isNumericKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func coerceSchemaParamTypes(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		property := properties[name]
+		coerced, changed := coerceSchemaParamValue(name, value, property)
+		if !changed {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = coerced
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceSchemaParamValue(name string, value, property any) (any, bool) {
+	if schemaPropertyHasType(property, "integer") {
+		if text, ok := value.(string); ok {
+			if integer, err := integerFromString(text); err == nil {
+				return integer, true
+			}
+		}
+		return value, false
+	}
+	if schemaPropertyHasType(property, "number") {
+		if text, ok := value.(string); ok {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(text), 64); err == nil {
+				return f, true
+			}
+		}
+		return value, false
+	}
+	if schemaPropertyHasType(property, "string") && isStringIDParam(name) {
+		if text, ok := numericIDString(value); ok {
+			return text, true
+		}
+	}
+	if schemaPropertyHasType(property, "array") {
+		return coerceSchemaArrayValue(value, property)
+	}
+	return value, false
+}
+
+func coerceSchemaArrayValue(value, property any) (any, bool) {
+	prop, ok := property.(map[string]any)
+	if !ok {
+		return value, false
+	}
+	items, ok := prop["items"].(map[string]any)
+	if !ok {
+		return value, false
+	}
+	if !schemaPropertyHasType(items, "integer") && !schemaPropertyHasType(items, "number") {
+		return value, false
+	}
+	values, ok := sliceItems(value)
+	if !ok {
+		return value, false
+	}
+	changed := false
+	out := make([]any, len(values))
+	for i, item := range values {
+		coerced, itemChanged := coerceSchemaParamValue("", item, items)
+		out[i] = coerced
+		changed = changed || itemChanged
+	}
+	return out, changed
+}
+
+func schemaPropertyHasType(property any, expected string) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	switch kind := prop["type"].(type) {
+	case string:
+		return kind == expected
+	case []any:
+		return slices.Contains(kind, any(expected))
+	case []string:
+		return slices.Contains(kind, expected)
+	}
+	return false
+}
+
+func integerFromString(text string) (int64, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return 0, errors.New("empty integer")
+	}
+	if integer, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return integer, nil
+	}
+	f, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil || math.Trunc(f) != f || f < minInt64AsFloat || f > maxInt64AsFloat {
+		return 0, fmt.Errorf("invalid integer %q", text)
+	}
+	return int64(f), nil
+}
+
+func isCommaStringParam(name string) bool {
+	switch name {
+	case "labels", "add_labels", "remove_labels":
+		return true
+	default:
+		return false
+	}
+}
+
+func stringListToCSV(value any) (string, bool) {
+	switch labels := value.(type) {
+	case []string:
+		return strings.Join(labels, ","), true
+	case []any:
+		parts := make([]string, 0, len(labels))
+		for _, item := range labels {
+			text, ok := item.(string)
+			if !ok {
+				return "", false
+			}
+			parts = append(parts, text)
+		}
+		return strings.Join(parts, ","), true
+	default:
+		return "", false
+	}
+}
+
+func coerceSingleStringArraysForSchema(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		if !schemaPropertyIsStringArray(properties[name]) {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = []string{text}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceStringListParamsForSchema(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		if !isCommaStringParam(name) || !schemaPropertyIsString(properties[name]) {
+			continue
+		}
+		if csv, ok := stringListToCSV(value); ok {
+			if out == nil {
+				out = maps.Clone(params)
+			}
+			out[name] = csv
+		}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func schemaPropertyIsStringArray(property any) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	if prop["type"] != "array" {
+		return false
+	}
+	items, hasItems := prop["items"].(map[string]any)
+	if !hasItems {
+		return false
+	}
+	return items["type"] == "string"
+}
+
+func schemaPropertyIsString(property any) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	return prop["type"] == "string"
+}
+
+func jsonFieldTypes(target reflect.Type) map[string]reflect.Type {
+	if target == nil {
+		return nil
+	}
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	if target.Kind() != reflect.Struct {
+		return nil
+	}
+	fields := make(map[string]reflect.Type)
+	collectJSONFieldTypes(target, fields)
+	return fields
+}
+
+func collectJSONFieldTypes(target reflect.Type, fields map[string]reflect.Type) {
+	for field := range target.Fields() {
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+		name := jsonFieldName(field)
+		if name == "-" {
+			continue
+		}
+		fieldType := field.Type
+		if field.Anonymous && name == "" {
+			for fieldType.Kind() == reflect.Pointer {
+				fieldType = fieldType.Elem()
+			}
+			if fieldType.Kind() == reflect.Struct {
+				collectJSONFieldTypes(fieldType, fields)
+				continue
+			}
+		}
+		if name == "" {
+			name = field.Name
+		}
+		fields[name] = field.Type
+	}
+}
+
+func isStringSliceType(target reflect.Type) bool {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	return target.Kind() == reflect.Slice && target.Elem().Kind() == reflect.String
+}
+
+func isStringType(target reflect.Type) bool {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	return target.Kind() == reflect.String
 }
 
 // strictUnmarshal decodes JSON bytes into v while rejecting any keys that do
@@ -365,7 +1343,7 @@ func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  false,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -377,7 +1355,7 @@ func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Con
 	return ActionRoute{
 		Handler:      withVoidOutput(WrapVoidAction(client, fn), VoidOutput{Status: "success", Message: msgActionCompleted}),
 		Destructive:  false,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[VoidOutput]()),
 	}
 }
@@ -388,7 +1366,7 @@ func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(c
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  false,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -399,7 +1377,7 @@ func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx co
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  true,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -411,7 +1389,7 @@ func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 	return ActionRoute{
 		Handler:      withVoidOutput(WrapVoidAction(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted}),
 		Destructive:  true,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }
@@ -422,7 +1400,7 @@ func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn 
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  true,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -434,7 +1412,7 @@ func DestructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn fun
 	return ActionRoute{
 		Handler:      withVoidOutput(WrapVoidActionWithRequest(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted}),
 		Destructive:  true,
-		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		InputSchema:  inputSchemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }
@@ -486,12 +1464,23 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 		if input.Action == "" {
-			return nil, nil, fmt.Errorf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))
+			return ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))), nil, nil
 		}
+		input.Action = NormalizeActionAlias(input.Action, routes)
 
 		route, ok := routes[input.Action]
 		if !ok {
-			return nil, nil, fmt.Errorf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))
+			return ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))), nil, nil
+		}
+
+		if input.Params == nil {
+			required := requiredParamNames(route.InputSchema)
+			if len(required) > 0 {
+				return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s.", toolName, input.Action, strings.Join(required, ", "))), nil, nil
+			}
+		}
+		if missing := missingRequiredParamNames(route.InputSchema, input.Params); len(missing) > 0 && !hasUnknownParamNames(route.InputSchema, input.Params) {
+			return ErrorResult(fmt.Sprintf("%s/%s: missing required params: %s. Put action-specific fields under params.", toolName, input.Action, strings.Join(missing, ", "))), nil, nil
 		}
 
 		// Confirm destructive actions before execution using route metadata.
@@ -510,6 +1499,10 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {
+			var validationErr *ParamValidationError
+			if errors.As(err, &validationErr) {
+				return ErrorResult(fmt.Sprintf("%s/%s: %s", toolName, input.Action, validationErr.Error())), nil, nil
+			}
 			return nil, nil, err
 		}
 		callResult := formatResult(result)
@@ -521,6 +1514,62 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		}
 		return callResult, enrichWithHints(result, callResult), nil
 	}
+}
+
+func requiredParamNames(schema map[string]any) []string {
+	if schema == nil {
+		return nil
+	}
+	rawRequired, ok := schema["required"]
+	if !ok {
+		return nil
+	}
+	var names []string
+	switch values := rawRequired.(type) {
+	case []any:
+		for _, value := range values {
+			if name, isString := value.(string); isString && name != "" {
+				names = append(names, name)
+			}
+		}
+	case []string:
+		for _, name := range values {
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func missingRequiredParamNames(schema, params map[string]any) []string {
+	if len(params) == 0 {
+		return requiredParamNames(schema)
+	}
+	var missing []string
+	for _, name := range requiredParamNames(schema) {
+		if _, ok := params[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
+func hasUnknownParamNames(schema, params map[string]any) bool {
+	if len(params) == 0 {
+		return false
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) == 0 {
+		return false
+	}
+	for name := range params {
+		if _, exists := properties[name]; !exists {
+			return true
+		}
+	}
+	return false
 }
 
 // enrichWithHints extracts next-step hints from the Markdown content in
@@ -722,7 +1771,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	first := actions[0]
 	return fmt.Sprintf(
-		"Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		"Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
 	)
 }

@@ -20,6 +20,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Resource Consumption](resource-consumption.md) | Memory footprint, scaling limits, and optimization strategies |
 | [Meta-Tools](meta-tools.md) | Domain-level meta-tool reference with action mappings |
 | [Output Format](output-format.md) | How tool responses are structured: Markdown + JSON, annotations, clickable links, next-step hints |
+| [Testing](testing/) | Unit, E2E, and AI model evaluation documentation |
 | [GraphQL Integration](graphql.md) | When and how the server uses GitLab's GraphQL API |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions for connection, TLS, tools, and transport |
 
@@ -28,7 +29,10 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | Document | Description |
 | --- | --- |
 | [Development Guide](development/development.md) | Developer guide: setup, building, testing, adding new tools |
-| [Testing](development/testing.md) | Test suite overview, coverage breakdown, and per-package statistics |
+| [Testing](testing/testing.md) | Test suite overview, coverage breakdown, and per-package statistics |
+| [AI Model Evaluation](testing/model-evaluation.md) | How model evaluations validate MCP tool use against schema and Docker GitLab |
+| [AI Model Evaluation Developer Guide](testing/model-evaluation-developer.md) | Commands, fixtures, traces, and maintenance workflow for model evaluation |
+| [AI Model Evaluation Results](testing/model-results.md) | Curated model compatibility and benchmark snapshots |
 | [Static Analysis](development/static-analysis.md) | Static analysis tools: vet, modernize, golangci-lint, gosec, staticcheck, govulncheck |
 | [Godoc Compliance](development/godoc.md) | Godoc audit workflow for packages, exported symbols, and test functions |
 

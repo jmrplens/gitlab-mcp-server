@@ -41,7 +41,7 @@ type CreateInput struct {
 	AssigneeID  int64   `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
 	AssigneeIDs []int64 `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
 	Labels      string  `json:"labels,omitempty" jsonschema:"Comma-separated labels to apply"`
-	MilestoneID int64   `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate,required"`
+	MilestoneID int64   `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
 	EpicID      int64   `json:"epic_id,omitempty" jsonschema:"Epic ID to associate the issue with"`
 	Weight      int64   `json:"weight,omitempty" jsonschema:"Issue weight (0 or higher)"`
 	DueDate     string  `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
@@ -142,7 +142,7 @@ type UpdateInput struct {
 	AddLabels        string               `json:"add_labels,omitempty"    jsonschema:"Comma-separated labels to add without removing existing"`
 	RemoveLabels     string               `json:"remove_labels,omitempty" jsonschema:"Comma-separated labels to remove"`
 	EpicID           int64                `json:"epic_id,omitempty"       jsonschema:"Epic ID to associate (EE only)"`
-	MilestoneID      int64                `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset),required"`
+	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
@@ -459,8 +459,8 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 		labels := gl.LabelOptions(strings.Split(input.RemoveLabels, ","))
 		opts.RemoveLabels = &labels
 	}
-	if input.MilestoneID > 0 {
-		opts.MilestoneID = new(input.MilestoneID)
+	if input.MilestoneID != nil {
+		opts.MilestoneID = input.MilestoneID
 	}
 	if input.DueDate != "" {
 		d, err := parseDueDate(input.DueDate)

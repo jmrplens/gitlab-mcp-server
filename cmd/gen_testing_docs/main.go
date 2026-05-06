@@ -1,5 +1,5 @@
 // Command gen_testing_docs regenerates the managed test metrics section in
-// docs/development/testing.md.
+// docs/testing/testing.md.
 //
 // It discovers Go packages, counts Test* functions by parsing _test.go files,
 // runs unit-test coverage for ./internal/... and ./cmd/..., and replaces the
@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	defaultDocPath = "docs/development/testing.md"
+	defaultDocPath = "docs/testing/testing.md"
 	startMarker    = "<!-- START TESTING STATS -->"
 	endMarker      = "<!-- END TESTING STATS -->"
 	fallbackStart  = "## Overview"

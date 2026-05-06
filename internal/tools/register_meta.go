@@ -435,7 +435,7 @@ Members (member_*):
 - member_edit: project_id*, user_id*, access_level*, expires_at, member_role_id
 - member_delete: project_id*, user_id*
 
-Webhooks (hook_*) — event booleans: push/tag_push/issues/merge_requests/note/job/pipeline/wiki_page/deployment/releases/emoji:
+Webhooks (hook_*) — project webhook event booleans are push_events, tag_push_events, issues_events, confidential_issues_events, merge_requests_events, note_events, confidential_note_events, job_events, pipeline_events, wiki_page_events, deployment_events, releases_events, emoji_events, and resource_access_token_events. Do not send member_events or subgroup_events for project hooks; those are group hook fields. Omit params that are not requested, and omit null values.
 - hook_list: project_id*
 - hook_get / hook_delete: project_id*, hook_id*
 - hook_add: project_id*, url*, name, description, token, event booleans, enable_ssl_verification, push_events_branch_filter, custom_webhook_template, branch_filter_strategy
@@ -450,7 +450,7 @@ Labels (label_*):
 - label_create: project_id*, name*, color* (hex), description, priority
 - label_update: project_id*, label_id*, new_name, color, description, priority
 
-Milestones (milestone_*):
+Project milestones (milestone_* — use gitlab_group group_milestone_* only when the prompt explicitly says group milestone or gives a group_id/group path):
 - milestone_list: project_id*, state (active/closed), title, search, include_ancestors
 - milestone_get / milestone_delete: project_id*, milestone_iid*
 - milestone_create: project_id*, title*, description, start_date, due_date
@@ -648,8 +648,8 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_release", `Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
-When to use: publish a release for a tag, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
-NOT for: creating tags (use gitlab_tag create first — release_create requires an existing tag_name), uploading binaries to the package registry (use gitlab_package), milestones (use gitlab_project milestone_*).
+When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
+NOT for: uploading binaries to the package registry (use gitlab_package), milestones (use gitlab_project milestone_*).
 
 Returns:
 - list: array of releases with pagination.
@@ -657,12 +657,12 @@ Returns:
 - link_list: array of {id, name, url, link_type, direct_asset_path}.
 - link_create / link_create_batch / link_get / link_update: link object(s).
 - delete / link_delete: {success: bool, message: string}.
-Errors: 404 not found (hint: tag_name must exist), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
+Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
 
 Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except link_create / link_create_batch / link_list).
 
 Releases:
-- create: project_id*, tag_name* (must exist), name, description (Markdown), released_at (ISO 8601), milestones ([]string)
+- create: project_id*, tag_name*, ref (branch/SHA when tag_name does not exist or the prompt says from ref), name, description (Markdown), released_at (ISO 8601), milestones ([]string), tag_message
 - get: project_id*, tag_name*
 - get_latest: project_id*
 - list: project_id*, order_by (released_at/created_at), sort (asc/desc), page, per_page
@@ -677,7 +677,7 @@ Asset links:
 - link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type
 - link_delete: project_id*, tag_name*, link_id*
 
-See also: gitlab_tag (create the tag before the release), gitlab_package (upload binaries; link_create can point at the package URL), gitlab_project (milestones referenced by releases).`, routes, toolutil.IconRelease)
+See also: gitlab_tag (standalone tag CRUD), gitlab_package (upload binaries; link_create can point at the package URL), gitlab_project (milestones referenced by releases).`, routes, toolutil.IconRelease)
 }
 
 // registerMergeRequestMeta registers the gitlab_merge_request meta-tool with actions:
@@ -855,10 +855,10 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
-When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review.
+When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
 NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
 
-IMPORTANT — batch review pattern: call draft_note_create once per comment (with `+"`position`"+` for inline comments, or `+"`in_reply_to_discussion_id`"+` for replies), then draft_note_publish_all ONCE to send a single notification. Use discussion_create only for standalone questions that need immediate visibility.
+IMPORTANT — action choice: use note_create only for a general/top-level MR comment with no file or line position. Use discussion_create without position for a general threaded discussion. Add a position object only for inline review comments, including prompts like "comment on this line/file/hunk". If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
 
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
@@ -886,12 +886,12 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: returns file diffs; check truncated_files
-- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
+- changes_get: returns structured MR file diffs by merge_request_iid; use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
 - diff_versions_list: list MR diff revisions
 - diff_version_get: version_id*, unidiff (bool)
 
-Draft notes (batch review):
+Draft notes (batch review, not immediately published):
 - draft_note_list: order_by, sort
 - draft_note_get: note_id*
 - draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion (bool), position
@@ -952,7 +952,7 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
-When to use: file/commit operations, diffs, blame, compare, archives, submodules, markdown rendering. NOT for: branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
+	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
 
 Behavior:
 - Idempotent reads: tree, blob, raw_blob, archive, compare, merge_base, contributors, file_get/raw/metadata/raw_metadata/blame, list_submodules, read_submodule_file, file_history, commit_list/get/diff/refs/comments/merge_requests/statuses/signature, commit_discussion_list/get, markdown_render, changelog_generate.
@@ -983,7 +983,7 @@ Commits:
 - commit_list: project_id*, ref_name, since, until, path, author, with_stats
 - file_history: alias for commit_list filtered by path* — list commits modifying a specific file
 - commit_get: project_id*, sha*
-- commit_diff: project_id*, sha*
+- commit_diff: project_id*, sha* — commit SHA only; not for merge_request_iid or MR changes.
 - commit_refs: project_id*, sha*, type (branch/tag/all)
 - commit_comments / commit_merge_requests: project_id*, sha*
 - commit_comment_create: project_id*, sha*, note*, path, line, line_type (new/old)
@@ -994,7 +994,7 @@ Commits:
 - commit_signature: project_id*, sha*
 
 Files:
-- file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Blame also accepts range_start, range_end.
+- file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Use only when the exact repository file_path is known; use gitlab_search/code for text search across files. Blame also accepts range_start, range_end.
   - file_metadata: HEAD-style metadata for the file content endpoint (size, encoding, content_sha256, blob_id, last_commit_id, ref).
   - file_raw_metadata: HEAD-style metadata for the raw file endpoint (size, content_type, ref) — useful to size-check before downloading via file_raw.
 - file_create: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding (text/base64), author_email, author_name, execute_filemode
@@ -1234,7 +1234,7 @@ Labels (group_label_*):
 - group_label_create: group_id*, name*, color*, description
 - group_label_update: group_id*, label_id*, new_name, color, description
 
-Milestones (group_milestone_*):
+Group milestones (group_milestone_* — group scope only; use gitlab_project milestone_* for project milestones):
 - group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
 - group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
 - group_milestone_create: group_id*, title*, description, start_date, due_date
@@ -1680,10 +1680,10 @@ Jobs:
 - delete_project_artifacts: project_id*. Deletes ALL artifacts across project.
 
 Artifact downloads (base64, max 1MB):
-- artifacts: project_id*, job_id*
-- download_artifacts: project_id*, ref_name*, job
-- download_single_artifact: project_id*, job_id*, artifact_path*
-- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job
+- artifacts: project_id*, job_id* — download the whole artifact archive from a known numeric job ID.
+- download_artifacts: project_id*, ref_name*, job* — download the whole artifact archive by ref_name and job NAME (string). Never use with job_id.
+- download_single_artifact: project_id*, job_id*, artifact_path* — use when the prompt gives a numeric job ID and one artifact file path such as coverage/report.xml. This is the single-file-by-job-id action.
+- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job* — use when the prompt gives ref_name plus job NAME and one artifact file path. Never use with job_id.
 
 Job token scope:
 - token_scope_get / token_scope_patch: project_id*. Patch params: enabled.
@@ -1793,7 +1793,7 @@ When to use: any user-management workflow — user CRUD (create / modify / delet
 Param conventions: * = required. User IDs are integers. List actions accept page, per_page. Actions ending in _for_user take the same params as the base action plus user_id*. Plain ssh_keys / gpg_keys / emails (no suffix) operate on the current authenticated user with no params.
 
 Current user:
-- current / me: returns authenticated user info.
+- current: returns authenticated user info. The legacy alias me is accepted and normalized to current, but current is the canonical action to emit.
 - current_user_status: returns emoji, message, availability.
 - set_status: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
 
@@ -1971,8 +1971,9 @@ Environments:
 
 Protected environments:
 - protected_list: project_id*, page, per_page
-- protected_get / protected_unprotect: project_id*, name*
-- protected_protect / protected_update: project_id*, name*, deploy_access_levels, approval_rules
+- protected_get / protected_unprotect: project_id*, environment* (environment name; name is accepted as an alias)
+- protected_protect: project_id*, name*, deploy_access_levels, approval_rules
+- protected_update: project_id*, environment*, name, deploy_access_levels, approval_rules
 
 Freeze periods (cron expressions):
 - freeze_list: project_id*, page, per_page
@@ -2210,12 +2211,12 @@ Topics:
 - topic_update: topic_id*, name, title, description
 
 Settings & appearance:
-- settings_get / appearance_get: (no params)
+- settings_get / appearance_get: (no params). If the task says "read current instance settings" or "get instance settings", call settings_get, not broadcast_message_list.
 - settings_update: settings (map of setting_name to value)
 - appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
 
 Broadcast messages:
-- broadcast_message_list: (no params)
+- broadcast_message_list: (no params) lists existing broadcast messages only; it does not read instance settings.
 - broadcast_message_get / broadcast_message_delete: id*
 - broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels
 - broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable
@@ -2428,10 +2429,10 @@ Deploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD re
 - deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at
 - deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*
 
-Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:
+Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account. For deploy-key wording, add/create maps to deploy_key_add, fetch/get maps to deploy_key_get, update maps to deploy_key_update, and delete/remove maps to deploy_key_delete.
 - deploy_key_list_project / deploy_key_list_user_project: project_id*
 - deploy_key_list_all: (admin only)
-- deploy_key_get: project_id*, deploy_key_id*
+- deploy_key_get: project_id*, deploy_key_id*. If a workflow says add/create, then fetch/get, then update/delete, call deploy_key_get with the id returned by deploy_key_add before updating.
 - deploy_key_add: project_id*, title*, key*, can_push
 - deploy_key_update: project_id*, deploy_key_id*, title, can_push
 - deploy_key_delete: project_id*, deploy_key_id*
@@ -2609,7 +2610,7 @@ Project snippets:
 - project_list: project_id*
 - project_get / project_content: project_id*, snippet_id*
 - project_create: project_id*, title*, file_name*, content*, visibility
-- project_update: project_id*, snippet_id*, title, file_name, content, visibility
+- project_update: project_id*, snippet_id*, title, visibility, files* to change snippet file content. For updating existing content use files: [{"action":"update","file_path":"<returned file_path>","content":"..."}]; do not put file_path/content directly under params.
 - project_delete: project_id*, snippet_id*
 
 Discussions (threaded):

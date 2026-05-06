@@ -35,6 +35,46 @@ type testInt64Input struct {
 	Message   string      `json:"message,omitempty"`
 }
 
+// testAliasInput defines parameters used to verify common LLM-facing aliases
+// are normalized before typed meta-tool input decoding.
+type testAliasInput struct {
+	Query        string      `json:"query"`
+	MRIID        int64       `json:"merge_request_iid"`
+	ProjectID    StringOrInt `json:"project_id"`
+	LinkURL      string      `json:"link_url"`
+	Labels       string      `json:"labels"`
+	SourceBranch string      `json:"source_branch"`
+	TargetBranch string      `json:"target_branch"`
+	Environment  string      `json:"environment_scope"`
+	AutoMerge    bool        `json:"auto_merge"`
+	Variables    []string    `json:"variables,omitempty"`
+}
+
+type testProjectPathInput struct {
+	ProjectPath string `json:"project_path"`
+}
+
+type testGroupPathInput struct {
+	GroupPath string `json:"group_path"`
+}
+
+type testFullPathInput struct {
+	FullPath string `json:"full_path"`
+}
+
+type testPausedInput struct {
+	Paused bool `json:"paused"`
+}
+
+type testPackageFilePathInput struct {
+	Path     string `json:"path"`
+	Filename string `json:"filename"`
+}
+
+type testRequiredInput struct {
+	Name string `json:"name" jsonschema:"Resource name,required"`
+}
+
 // testOutput represents the response from the test operation.
 type testOutput struct {
 	Result string `json:"result"`
@@ -117,6 +157,234 @@ func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_NormalizesCommonAliases verifies that common aliases
+// used by LLMs are normalized before strict JSON decoding.
+//
+// The test sends search, mr_iid, project_path, link, from/to branch aliases,
+// environment, legacy auto-merge wording, and scalar variables. It asserts the
+// decoded struct receives the canonical fields and normalized collection forms.
+func TestUnmarshalParams_NormalizesCommonAliases(t *testing.T) {
+	params := map[string]any{
+		"search":                       "bug",
+		"mr_iid":                       "17",
+		"project_path":                 "group/project",
+		"link":                         "https://example.test",
+		"labels":                       []any{"bug", "urgent"},
+		"from":                         "feature",
+		"to":                           "main",
+		"environment":                  "production",
+		"merge_when_pipeline_succeeds": true,
+		"variables":                    "DEPLOY_ENV=prod",
+	}
+
+	got, err := UnmarshalParams[testAliasInput](params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Query != "bug" || got.MRIID != 17 || got.ProjectID.String() != "group/project" {
+		t.Fatalf("basic aliases = %+v, want query bug, MR 17, project group/project", got)
+	}
+	if got.LinkURL != "https://example.test" || got.Labels != "bug,urgent" {
+		t.Fatalf("link/labels aliases = %+v, want link_url and CSV labels", got)
+	}
+	if got.SourceBranch != "feature" || got.TargetBranch != "main" {
+		t.Fatalf("branch aliases = %+v, want feature -> main", got)
+	}
+	if got.Environment != "production" || !got.AutoMerge {
+		t.Fatalf("environment/auto_merge aliases = %+v", got)
+	}
+	if len(got.Variables) != 1 || got.Variables[0] != "DEPLOY_ENV=prod" {
+		t.Fatalf("variables = %#v, want single-item string slice", got.Variables)
+	}
+}
+
+// TestUnmarshalParams_CanonicalAliasesWin verifies runtime alias normalization
+// removes an alias when the canonical field is already present.
+func TestUnmarshalParams_CanonicalAliasesWin(t *testing.T) {
+	got, err := UnmarshalParams[testAliasInput](map[string]any{
+		"query":  "canonical",
+		"search": "alias",
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error = %v", err)
+	}
+	if got.Query != "canonical" {
+		t.Fatalf("Query = %q, want canonical", got.Query)
+	}
+}
+
+// TestUnmarshalParams_NormalizesActiveAndFilePathAliases verifies runtime-only
+// alias branches used by package and schedule style actions.
+func TestUnmarshalParams_NormalizesActiveAndFilePathAliases(t *testing.T) {
+	paused, err := UnmarshalParams[testPausedInput](map[string]any{"active": false})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(active) error = %v", err)
+	}
+	if !paused.Paused {
+		t.Fatal("Paused = false, want true when active=false")
+	}
+
+	path, err := UnmarshalParams[testPackageFilePathInput](map[string]any{"file_path": "packages/npm/package.tgz"})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(file_path) error = %v", err)
+	}
+	if path.Path != "packages/npm" || path.Filename != "package.tgz" {
+		t.Fatalf("path = %+v, want packages/npm + package.tgz", path)
+	}
+}
+
+// TestUnmarshalParams_CoercesNumericPathAliasesToStrings verifies numeric IDs
+// remain usable after alias normalization rewrites them to path-style fields.
+func TestUnmarshalParams_CoercesNumericPathAliasesToStrings(t *testing.T) {
+	project, err := UnmarshalParams[testProjectPathInput](map[string]any{"project_id": float64(42)})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(project_id) error = %v", err)
+	}
+	if project.ProjectPath != "42" {
+		t.Fatalf("ProjectPath = %q, want 42", project.ProjectPath)
+	}
+
+	group, err := UnmarshalParams[testGroupPathInput](map[string]any{"group_id": float64(7)})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(group_id) error = %v", err)
+	}
+	if group.GroupPath != "7" {
+		t.Fatalf("GroupPath = %q, want 7", group.GroupPath)
+	}
+
+	full, err := UnmarshalParams[testFullPathInput](map[string]any{"group_id": float64(9)})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(full_path) error = %v", err)
+	}
+	if full.FullPath != "9" {
+		t.Fatalf("FullPath = %q, want 9", full.FullPath)
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_NormalizesAndCoerces verifies schema-led
+// normalization covers common aliases, active/paused inversion, numeric
+// coercion, numeric string IDs, string arrays, and comma-separated label
+// fields without needing a Go struct type.
+func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"query":             map[string]any{"type": "string"},
+			"merge_request_iid": map[string]any{"type": "integer"},
+			"project_id":        map[string]any{"type": "string"},
+			"link_url":          map[string]any{"type": "string"},
+			"labels":            map[string]any{"type": "string"},
+			"source_branch":     map[string]any{"type": "string"},
+			"target_branch":     map[string]any{"type": "string"},
+			"environment_scope": map[string]any{"type": "string"},
+			"auto_merge":        map[string]any{"type": "boolean"},
+			"paused":            map[string]any{"type": "boolean"},
+			"assignee_ids":      map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
+			"variables":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"weight":            map[string]any{"type": "number"},
+			"path":              map[string]any{"type": "string"},
+			"filename":          map[string]any{"type": "string"},
+		},
+	}
+	params := map[string]any{
+		"search":                       "bug",
+		"mr_iid":                       "17",
+		"project_path":                 float64(42),
+		"link":                         "https://example.test",
+		"labels":                       []any{"bug", "urgent"},
+		"from":                         "feature",
+		"to":                           "main",
+		"environment":                  "production",
+		"merge_when_pipeline_succeeds": true,
+		"active":                       false,
+		"assignee_ids":                 []any{"10", "11"},
+		"variables":                    "DEPLOY_ENV=prod",
+		"weight":                       "3.5",
+		"file_path":                    "packages/npm/package.tgz",
+	}
+
+	got := NormalizeParamAliasesForSchema(params, schema)
+	if got["query"] != "bug" || got["merge_request_iid"] != int64(17) || got["project_id"] != "42" {
+		t.Fatalf("basic normalized values = %#v", got)
+	}
+	if got["link_url"] != "https://example.test" || got["labels"] != "bug,urgent" {
+		t.Fatalf("link/labels values = %#v", got)
+	}
+	if got["source_branch"] != "feature" || got["target_branch"] != "main" {
+		t.Fatalf("branch values = %#v", got)
+	}
+	if got["environment_scope"] != "production" || got["auto_merge"] != true || got["paused"] != true {
+		t.Fatalf("environment/auto_merge/paused values = %#v", got)
+	}
+	if !reflect.DeepEqual(got["assignee_ids"], []any{int64(10), int64(11)}) {
+		t.Fatalf("assignee_ids = %#v", got["assignee_ids"])
+	}
+	if !reflect.DeepEqual(got["variables"], []string{"DEPLOY_ENV=prod"}) {
+		t.Fatalf("variables = %#v", got["variables"])
+	}
+	if got["weight"] != 3.5 {
+		t.Fatalf("weight = %#v", got["weight"])
+	}
+	if got["path"] != "packages/npm" || got["filename"] != "package.tgz" {
+		t.Fatalf("file_path split values = %#v", got)
+	}
+	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path"} {
+		if _, exists := got[alias]; exists {
+			t.Fatalf("alias %q still present in %#v", alias, got)
+		}
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_CanonicalWins verifies aliases are
+// dropped when the canonical parameter is already present and the schema does
+// not accept the alias.
+func TestNormalizeParamAliasesForSchema_CanonicalWins(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{"query": map[string]any{"type": "string"}}}
+	params := map[string]any{"query": "canonical", "search": "alias"}
+
+	got := NormalizeParamAliasesForSchema(params, schema)
+	if got["query"] != "canonical" {
+		t.Fatalf("query = %#v, want canonical", got["query"])
+	}
+	if _, exists := got["search"]; exists {
+		t.Fatalf("search alias still present: %#v", got)
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties verifies
+// params are returned unchanged when no schema properties are available.
+func TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties(t *testing.T) {
+	params := map[string]any{"search": "bug"}
+	got := NormalizeParamAliasesForSchema(params, map[string]any{"type": "object"})
+	if !reflect.DeepEqual(got, params) {
+		t.Fatalf("got %#v, want unchanged %#v", got, params)
+	}
+}
+
+// TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown verifies required parameter sorting,
+// missing required detection, and unknown parameter detection from JSON Schema
+// properties.
+func TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id", "name", ""},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"name":       map[string]any{"type": "string"},
+		},
+	}
+	if got := requiredParamNames(schema); !reflect.DeepEqual(got, []string{"name", "project_id"}) {
+		t.Fatalf("requiredParamNames() = %#v", got)
+	}
+	if got := missingRequiredParamNames(schema, map[string]any{"project_id": "group/project"}); !reflect.DeepEqual(got, []string{"name"}) {
+		t.Fatalf("missingRequiredParamNames() = %#v", got)
+	}
+	if !hasUnknownParamNames(schema, map[string]any{"unknown": true}) {
+		t.Fatal("hasUnknownParamNames() = false, want true")
+	}
+	if hasUnknownParamNames(schema, map[string]any{"name": "value"}) {
+		t.Fatal("known params reported as unknown")
+	}
+}
+
 // TestUnmarshalParams_RejectsUnknownField verifies that params containing a
 // key that is not declared on the target type produce an actionable error
 // (mirroring the JSON Schema additionalProperties:false lockdown applied to
@@ -163,6 +431,100 @@ func TestCoerceNumericStrings(t *testing.T) {
 	}
 	if v, ok := got["bool_val"].(bool); !ok || !v {
 		t.Errorf("bool_val = %v (%T), want bool(true)", got["bool_val"], got["bool_val"])
+	}
+}
+
+// TestCoercionHelpers_CoverNumericAndSchemaBranches verifies lower-level
+// coercion helpers across integer, unsigned, float, slice, and schema paths.
+func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
+	numericValues := []any{int(1), int8(2), int16(3), int32(4), int64(5), uint(6), uint8(7), uint16(8), uint32(9), uint64(10), json.Number("11"), float32(12), float64(13)}
+	for _, value := range numericValues {
+		if text, ok := numericIDString(value); !ok || text == "" {
+			t.Fatalf("numericIDString(%T %[1]v) = %q/%v, want numeric string", value, text, ok)
+		}
+	}
+	for _, value := range []any{json.Number("1.5"), float64(1.2), "12"} {
+		if text, ok := numericIDString(value); ok || text != "" {
+			t.Fatalf("numericIDString(%T %[1]v) = %q/%v, want empty false", value, text, ok)
+		}
+	}
+	if text, ok := integerFloatString(1.5); ok || text != "" {
+		t.Fatalf("integerFloatString(1.5) = %q/%v, want empty false", text, ok)
+	}
+
+	unsigned, changed, err := coerceUnsignedIntegerValue("count", "7")
+	if err != nil || !changed || unsigned != uint64(7) {
+		t.Fatalf("coerceUnsignedIntegerValue() = %#v/%v/%v", unsigned, changed, err)
+	}
+	for _, value := range []string{"-1", "bad"} {
+		if _, _, unsignedErr := coerceUnsignedIntegerValue("count", value); unsignedErr == nil {
+			t.Fatalf("coerceUnsignedIntegerValue(%q) error = nil, want error", value)
+		}
+	}
+	floatValue, changed, err := coerceFloatValue("weight", "3.5")
+	if err != nil || !changed || floatValue != 3.5 {
+		t.Fatalf("coerceFloatValue() = %#v/%v/%v", floatValue, changed, err)
+	}
+	if _, _, floatErr := coerceFloatValue("weight", "bad"); floatErr == nil {
+		t.Fatal("coerceFloatValue(bad) error = nil, want error")
+	}
+
+	sliceValue, changed, err := coerceSliceValueForTargetType("ids", []string{"1", "2"}, reflect.TypeFor[int64]())
+	if err != nil || !changed || !reflect.DeepEqual(sliceValue, []any{int64(1), int64(2)}) {
+		t.Fatalf("coerceSliceValueForTargetType() = %#v/%v/%v", sliceValue, changed, err)
+	}
+	if _, _, sliceErr := coerceSliceValueForTargetType("ids", []any{"bad"}, reflect.TypeFor[int64]()); sliceErr == nil {
+		t.Fatal("coerceSliceValueForTargetType(bad) error = nil, want error")
+	}
+	if value, sliceChanged, sliceErr := coerceSliceValueForTargetType("names", []string{"a"}, reflect.TypeFor[string]()); sliceErr != nil || sliceChanged || !reflect.DeepEqual(value, []string{"a"}) {
+		t.Fatalf("coerceSliceValueForTargetType(non-numeric) = %#v/%v/%v", value, sliceChanged, sliceErr)
+	}
+	if items, ok := sliceItems(42); ok || items != nil {
+		t.Fatalf("sliceItems(non-slice) = %#v/%v, want nil false", items, ok)
+	}
+
+	integerArraySchema := map[string]any{"type": "array", "items": map[string]any{"type": "integer"}}
+	arrayValue, changed := coerceSchemaArrayValue([]string{"1", "2"}, integerArraySchema)
+	if !changed || !reflect.DeepEqual(arrayValue, []any{int64(1), int64(2)}) {
+		t.Fatalf("coerceSchemaArrayValue() = %#v/%v", arrayValue, changed)
+	}
+	for _, property := range []any{"not-map", map[string]any{}, map[string]any{"items": map[string]any{"type": "string"}}} {
+		if value, arrayChanged := coerceSchemaArrayValue([]string{"1"}, property); arrayChanged || !reflect.DeepEqual(value, []string{"1"}) {
+			t.Fatalf("coerceSchemaArrayValue(%#v) = %#v/%v, want unchanged", property, value, arrayChanged)
+		}
+	}
+	if !schemaPropertyHasType(map[string]any{"type": []string{"integer", "string"}}, "string") {
+		t.Fatal("schemaPropertyHasType([]string) = false, want true")
+	}
+	if schemaPropertyHasType("not-map", "string") {
+		t.Fatal("schemaPropertyHasType(non-map) = true, want false")
+	}
+	if value, integerErr := integerFromString("3.0"); integerErr != nil || value != 3 {
+		t.Fatalf("integerFromString(3.0) = %d/%v, want 3", value, integerErr)
+	}
+	if _, emptyErr := integerFromString(""); emptyErr == nil {
+		t.Fatal("integerFromString(empty) error = nil, want error")
+	}
+	for _, value := range []any{[]any{"a", 2}, 42} {
+		if csv, ok := stringListToCSV(value); ok || csv != "" {
+			t.Fatalf("stringListToCSV(%#v) = %q/%v, want empty false", value, csv, ok)
+		}
+	}
+	params := map[string]any{"labels": "bug"}
+	if got := coerceSingleStringArraysForSchema(params, map[string]any{}); !reflect.DeepEqual(got, params) {
+		t.Fatalf("coerceSingleStringArraysForSchema(no props) = %#v", got)
+	}
+	if got := coerceStringListParamsForSchema(params, map[string]any{}); !reflect.DeepEqual(got, params) {
+		t.Fatalf("coerceStringListParamsForSchema(no props) = %#v", got)
+	}
+	if schemaPropertyIsStringArray("not-map") || schemaPropertyIsStringArray(map[string]any{"type": "array"}) {
+		t.Fatal("schemaPropertyIsStringArray() accepted invalid schema")
+	}
+	if schemaPropertyIsString("not-map") {
+		t.Fatal("schemaPropertyIsString(non-map) = true, want false")
+	}
+	if jsonFieldTypes(nil) != nil || jsonFieldTypes(reflect.TypeFor[int]()) != nil {
+		t.Fatal("jsonFieldTypes(non-struct) returned non-nil")
 	}
 }
 
@@ -324,9 +686,15 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
-	if err == nil {
-		t.Fatal("expected error for empty action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); got != "test_tool: 'action' is required. Valid actions: list" {
+		t.Fatalf("error text = %q", got)
 	}
 }
 
@@ -339,10 +707,110 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
-	if err == nil {
-		t.Fatal("expected error for unknown action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
 	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); got != `test_tool: unknown action "bogus". Valid actions: list` {
+		t.Fatalf("error text = %q", got)
+	}
+}
+
+// TestMakeMetaHandler_ActionAlias verifies that dotted action aliases resolve
+// to canonical meta-tool route names.
+//
+// The test registers project.milestone_list and calls the handler with
+// milestone.list, then asserts the typed output is returned. This protects the
+// compatibility layer for user-facing action names.
+func TestMakeMetaHandler_ActionAlias(t *testing.T) {
+	routes := ActionMap{
+		"project.milestone_list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return testOutput{Result: "ok"}, nil
+		}),
+	}
+	handler := MakeMetaHandler("gitlab_project", routes, nil)
+
+	_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "milestone.list"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, ok := raw.(testOutput)
+	if !ok || out.Result != "ok" {
+		t.Fatalf("raw = %#v, want test output", raw)
+	}
+}
+
+// TestMakeMetaHandler_ParamValidationErrorIsToolError verifies that parameter
+// type errors are returned as MCP tool errors instead of protocol errors.
+//
+// The test sends an invalid string for an integer field and asserts that the
+// handler returns an IsError result containing the action-specific validation
+// message while leaving the raw output nil.
+func TestMakeMetaHandler_ParamValidationErrorIsToolError(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testInput) (testOutput, error) {
+			return testOutput{}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{
+		Action: "create",
+		Params: map[string]any{"id": "not-an-int"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); !strings.Contains(got, `test_tool/create: invalid params for this action`) {
+		t.Fatalf("error text = %q, want validation tool error", got)
+	}
+}
+
+// TestMakeMetaHandler_MissingRequiredParamsIsToolError verifies that missing
+// required nested params are reported as MCP tool errors.
+//
+// The test registers a route with a required name field, omits params entirely,
+// and asserts the returned tool-error text points at both params and name.
+func TestMakeMetaHandler_MissingRequiredParamsIsToolError(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testRequiredInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testRequiredInput) (testOutput, error) {
+			return testOutput{}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "create"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	got := metaErrorText(t, result)
+	if !strings.Contains(got, "params' is required") || !strings.Contains(got, "name") {
+		t.Fatalf("error text = %q, want required params", got)
+	}
+}
+
+func metaErrorText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("error result content is empty")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	return text.Text
 }
 
 // TestMakeMetaHandler_CustomFormatter verifies MakeMetaHandler uses a custom
@@ -592,6 +1060,10 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	wantExample := `Example: {"action":"create","params":{...}}`
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
+	}
+	wantEnvelope := "only top-level keys are action and params"
+	if !strings.Contains(got, wantEnvelope) {
+		t.Errorf("prefix missing envelope guidance, got: %q", got)
 	}
 	wantPointer := "gitlab://schema/meta/gitlab_widget/<action>"
 	if !strings.Contains(got, wantPointer) {

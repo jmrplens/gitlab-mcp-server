@@ -939,6 +939,9 @@ func Star(ctx context.Context, client *gitlabclient.Client, input StarInput) (Ou
 	}
 	p, _, err := client.GL().Projects.StarProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return Get(ctx, client, GetInput{ProjectID: input.ProjectID})
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectStar", err, http.StatusNotModified,
 			"project is already starred by the authenticated user \u2014 use gitlab_project_get to inspect star_count and gitlab_project_list_user_starred to list current stars")
 	}

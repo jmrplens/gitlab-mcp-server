@@ -14,9 +14,9 @@ import (
 // The test uses the same two-line prefix emitted by toolutil.MetaToolDescriptionPrefix
 // followed by a real domain description. It asserts that the summary starts at
 // the domain text, protecting README generation from regressing to unhelpful
-// "Example: ..." descriptions.
+// envelope/example descriptions.
 func TestDescriptionSummary_StripsGeneratedMetaToolPrefix(t *testing.T) {
-	description := "Example: {\"action\":\"create\",\"params\":{...}}\n" +
+	description := "Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":\"create\",\"params\":{...}}\n" +
 		"For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
 		"Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive."
 

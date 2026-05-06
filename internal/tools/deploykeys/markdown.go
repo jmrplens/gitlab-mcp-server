@@ -28,6 +28,7 @@ func FormatOutputMarkdown(o Output) string {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
 	toolutil.WriteHints(&b,
+		"If the workflow asks to fetch/get this key before update or delete, call action 'get' with key_id next",
 		"Use action 'enable' to grant this key to another project",
 		"Use action 'delete' to remove this deploy key",
 	)
@@ -52,6 +53,7 @@ func FormatListMarkdown(o ListOutput) string {
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'get' with key_id for full details",
 		"Use action 'add' to create a new deploy key",
 	)
@@ -115,6 +117,7 @@ func FormatInstanceListMarkdown(o InstanceListOutput) string {
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'instance_get' with key_id for full details",
 	)
 	return b.String()

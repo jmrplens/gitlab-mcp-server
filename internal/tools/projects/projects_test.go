@@ -957,6 +957,55 @@ func TestProjectStar_Success(t *testing.T) {
 	}
 }
 
+// TestProjectStar_EOFFallsBackToGet verifies that Star recovers from the
+// GitLab star endpoint closing the connection without a response.
+//
+// The test hijacks and closes the POST /projects/:id/star connection, then
+// expects the handler to fetch the project with GET /projects/:id and return
+// the refreshed star count. This protects clients from losing a successful
+// GitLab star operation when the API response body is unavailable.
+func TestProjectStar_EOFFallsBackToGet(t *testing.T) {
+	starCalled := false
+	getCalled := false
+	callOrder := make([]string, 0, 2)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/star":
+			starCalled = true
+			callOrder = append(callOrder, "star")
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("response writer does not support hijacking")
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Fatalf("hijack response: %v", err)
+			}
+			_ = conn.Close()
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42":
+			getCalled = true
+			callOrder = append(callOrder, "get")
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"myproject","path":"myproject","path_with_namespace":"user/myproject","visibility":"private","web_url":"https://gitlab.example.com/user/myproject","default_branch":"main","star_count":6}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := Star(context.Background(), client, StarInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("Star() unexpected error: %v", err)
+	}
+	if !starCalled || !getCalled {
+		t.Fatalf("starCalled=%t getCalled=%t, want both true", starCalled, getCalled)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "star" || callOrder[1] != "get" {
+		t.Fatalf("callOrder=%v, want [star get]", callOrder)
+	}
+	if out.StarCount != 6 {
+		t.Errorf("StarCount = %d, want 6", out.StarCount)
+	}
+}
+
 // TestProjectStar_EmptyProjectID verifies the behavior of project star empty project i d.
 func TestProjectStar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

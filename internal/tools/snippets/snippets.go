@@ -114,9 +114,31 @@ type CreateFileInput struct {
 // UpdateFileInput represents a file operation when updating a snippet.
 type UpdateFileInput struct {
 	Action       string `json:"action" jsonschema:"File action: create, update, delete, move,required"`
-	FilePath     string `json:"file_path" jsonschema:"File path,required"`
+	FilePath     string `json:"file_path" jsonschema:"Snippet file path to create/update/delete; for project_update use the file_path returned by project_get,required"`
 	Content      string `json:"content,omitempty" jsonschema:"File content (for create/update)"`
 	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Previous file path (for move)"`
+}
+
+func snippetVisibility(value string) *gl.VisibilityValue {
+	if value == "" {
+		value = "private"
+	}
+	visibility := gl.VisibilityValue(value)
+	return &visibility
+}
+
+func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions {
+	if len(files) == 0 {
+		return nil
+	}
+	options := make([]*gl.CreateSnippetFileOptions, len(files))
+	for i, file := range files {
+		options[i] = &gl.CreateSnippetFileOptions{
+			FilePath: new(file.FilePath),
+			Content:  new(file.Content),
+		}
+	}
+	return &options
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +346,7 @@ type CreateInput struct {
 	FileName    string            `json:"file_name,omitempty" jsonschema:"File name (single-file snippet, deprecated in favor of files)"`
 	Description string            `json:"description,omitempty" jsonschema:"Snippet description"`
 	ContentBody string            `json:"content,omitempty" jsonschema:"Snippet content (single-file, deprecated in favor of files)"`
-	Visibility  string            `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public"`
+	Visibility  string            `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public; defaults to private when omitted"`
 	Files       []CreateFileInput `json:"files,omitempty" jsonschema:"Files to include in the snippet"`
 }
 
@@ -345,19 +367,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ContentBody != "" {
 		opts.Content = new(input.ContentBody)
 	}
-	if input.Visibility != "" {
-		v := gl.VisibilityValue(input.Visibility)
-		opts.Visibility = &v
-	}
-	if len(input.Files) > 0 {
-		files := make([]*gl.CreateSnippetFileOptions, len(input.Files))
-		for i, f := range input.Files {
-			files[i] = &gl.CreateSnippetFileOptions{
-				FilePath: new(f.FilePath),
-				Content:  new(f.Content),
-			}
-		}
-		opts.Files = &files
+	opts.Visibility = snippetVisibility(input.Visibility)
+	if files := createSnippetFiles(input.Files); files != nil {
+		opts.Files = files
 	}
 	snippet, _, err := client.GL().Snippets.CreateSnippet(opts, gl.WithContext(ctx))
 	if err != nil {

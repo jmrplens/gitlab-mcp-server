@@ -95,7 +95,7 @@ type ProjectCreateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Title       string               `json:"title" jsonschema:"Snippet title,required"`
 	Description string               `json:"description,omitempty" jsonschema:"Snippet description"`
-	Visibility  string               `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public"`
+	Visibility  string               `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public; defaults to private when omitted"`
 	Files       []CreateFileInput    `json:"files,omitempty" jsonschema:"Files to include in the snippet"`
 	FileName    string               `json:"file_name,omitempty" jsonschema:"File name (single-file, deprecated in favor of files)"`
 	ContentBody string               `json:"content,omitempty" jsonschema:"Content (single-file, deprecated in favor of files)"`
@@ -115,19 +115,9 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.Visibility != "" {
-		v := gl.VisibilityValue(input.Visibility)
-		opts.Visibility = &v
-	}
-	if len(input.Files) > 0 {
-		files := make([]*gl.CreateSnippetFileOptions, len(input.Files))
-		for i, f := range input.Files {
-			files[i] = &gl.CreateSnippetFileOptions{
-				FilePath: new(f.FilePath),
-				Content:  new(f.Content),
-			}
-		}
-		opts.Files = &files
+	opts.Visibility = snippetVisibility(input.Visibility)
+	if files := createSnippetFiles(input.Files); files != nil {
+		opts.Files = files
 	} else if input.FileName != "" || input.ContentBody != "" {
 		file := &gl.CreateSnippetFileOptions{}
 		if input.FileName != "" {

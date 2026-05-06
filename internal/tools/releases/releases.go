@@ -25,7 +25,7 @@ type CreateInput struct {
 	Name        string               `json:"name,omitempty"        jsonschema:"Release title"`
 	Description string               `json:"description,omitempty" jsonschema:"Release notes (Markdown supported)"`
 	ReleasedAt  string               `json:"released_at,omitempty" jsonschema:"Date of the release in ISO 8601 format"`
-	Ref         string               `json:"ref,omitempty"         jsonschema:"Branch or commit SHA to create tag from (if tag does not exist)"`
+	Ref         string               `json:"ref,omitempty"         jsonschema:"Branch or commit SHA to create tag from when tag_name does not exist; include this when the prompt says ref/from ref"`
 	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release"`
 	TagMessage  string               `json:"tag_message,omitempty" jsonschema:"Message to use for the annotated tag (creates annotated tag instead of lightweight)"`
 }

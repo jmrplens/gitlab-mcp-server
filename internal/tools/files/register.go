@@ -37,7 +37,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_file_create",
 		Title:       toolutil.TitleFromName("gitlab_file_create"),
-		Description: "Create a new file in a GitLab repository. Requires branch and commit message. Optionally specify encoding (text/base64), start_branch, and author info. Returns: file_path and branch. See also: gitlab_commit_create, gitlab_file_get.",
+		Description: "Create a new file in a GitLab repository. Requires branch and commit message. Optionally specify encoding (text/base64), start_branch, and author info. Returns: file_path, branch, and current commit metadata when available. See also: gitlab_commit_create, gitlab_file_get.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconFile,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, FileInfoOutput, error) {
@@ -50,7 +50,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_file_update",
 		Title:       toolutil.TitleFromName("gitlab_file_update"),
-		Description: "Update an existing file in a GitLab repository. Requires branch and commit message. Supports last_commit_id for optimistic locking. Returns: file_path and branch. See also: gitlab_file_get.",
+		Description: "Update an existing file in a GitLab repository. Requires branch and commit message. Supports last_commit_id for optimistic locking. Returns: file_path, branch, and current commit metadata when available. See also: gitlab_file_get.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconFile,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, FileInfoOutput, error) {
