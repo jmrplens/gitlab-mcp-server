@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const searchTypeSchemaDescription = "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance."
+const searchTypeSchemaDescription = "Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance."
 
 func searchTypeEnumValues() []any {
 	values := make([]any, 0, len(allowedSearchTypes)+1)

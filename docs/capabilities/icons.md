@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1006 self-managed Enterprise/Premium tools (1011 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise), 46 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
+gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1006 self-managed Enterprise/Premium tools (1011 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (47 self-managed Enterprise, 48 GitLab.com Enterprise), 46 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 

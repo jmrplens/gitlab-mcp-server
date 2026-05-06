@@ -255,7 +255,7 @@ func toolNamesFromServer(t *testing.T, server *mcp.Server) []string {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	defer func() { _ = session.Close() }()
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf(fmtListToolsErr, err)

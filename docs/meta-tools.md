@@ -102,11 +102,20 @@ META_TOOLS=false
 |---|-------------------------|---------|-------------------------------------------|
 | 28 | `gitlab_discover_project` | 1 | Git remote URL to GitLab project resolution |
 
+### Interactive Elicitation Tools (4)
+
+| # | Tool Name | Purpose |
+|---|-----------|---------|
+| 29 | `gitlab_interactive_issue_create` | Create an issue through guided prompts with final confirmation before the GitLab API call |
+| 30 | `gitlab_interactive_mr_create` | Create a merge request through guided prompts with branch, title, metadata, and confirmation steps |
+| 31 | `gitlab_interactive_project_create` | Create a project through guided prompts for name, visibility, initialization, and confirmation |
+| 32 | `gitlab_interactive_release_create` | Create a release through guided prompts for tag, name, notes, and confirmation |
+
 ### GitLab.com Enterprise/Premium Meta-Tools (1)
 
 | # | Tool Name | Actions | Source |
 |---|-----------|---------|--------|
-| 29 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
+| 33 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
 
 ---
 

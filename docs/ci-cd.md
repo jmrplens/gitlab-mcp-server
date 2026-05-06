@@ -18,7 +18,7 @@ gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two us
 | **Deterministic** (JSON-RPC) | No | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
 | **LLM-driven** (headless MCP client) | Yes | Intelligent workflows: code review, issue triage, MR analysis | ❌ Non-deterministic |
 
-Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full individual-tool surface when using a token with `api` scope: 1006 tools on self-managed Enterprise/Premium, or 1011 tools on GitLab.com Enterprise/Premium when Orbit is available.
+Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full tool surface for Enterprise/Premium deployments when using a token with `api` scope, with additional Orbit-specific tools available on GitLab.com.
 
 ---
 

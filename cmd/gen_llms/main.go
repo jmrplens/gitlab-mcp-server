@@ -572,7 +572,9 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			desc = truncateRunes(desc, 120)
+			if name != "search_type" {
+				desc = truncateRunes(desc, 120)
+			}
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)
 		} else {
 			fmt.Fprintf(b, "- `%s` (%s)%s\n", name, typ, req)
