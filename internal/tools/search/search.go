@@ -24,11 +24,20 @@ import (
 // Shared helpers
 // ---------------------------------------------------------------------------.
 
-// searchOpts builds a [gl.SearchOptions] from pagination and optional ref.
-func searchOpts(page, perPage int, ref string) *gl.SearchOptions {
+// TypeInput defines the optional GitLab search backend selector.
+type TypeInput struct {
+	SearchType string `json:"search_type,omitempty" jsonschema:"Search backend to request: basic, advanced, or zoekt"`
+}
+
+// searchOpts builds a [gl.SearchOptions] from pagination, ref, and search type.
+func searchOpts(page, perPage int, ref, searchType string) *gl.SearchOptions {
 	opts := &gl.SearchOptions{}
 	if ref != "" {
 		opts.Ref = new(ref)
+	}
+	if searchType != "" {
+		typ := gl.SearchType(searchType)
+		opts.SearchType = &typ
 	}
 	if page > 0 {
 		opts.Page = int64(page)
@@ -62,6 +71,7 @@ type CodeInput struct {
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query text (param 'query' not 'search'),required"`
 	Ref       string               `json:"ref,omitempty"        jsonschema:"Branch or tag name to search in (default: default branch)"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -93,7 +103,7 @@ func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (Co
 		return CodeOutput{}, errors.New("searchCode: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, input.Ref)
+	opts := searchOpts(input.Page, input.PerPage, input.Ref, input.SearchType)
 
 	var (
 		blobs []*gl.Blob
@@ -140,6 +150,7 @@ type MergeRequestsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query text (param 'query' not 'search'),required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -160,7 +171,7 @@ func MergeRequests(ctx context.Context, client *gitlabclient.Client, input Merge
 		return MergeRequestsOutput{}, errors.New("searchMergeRequests: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		mrs  []*gl.MergeRequest
@@ -199,6 +210,7 @@ type IssuesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query text (param 'query' not 'search'),required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -219,7 +231,7 @@ func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput)
 		return IssuesOutput{}, errors.New("searchIssues: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		foundIssues []*gl.Issue
@@ -258,6 +270,7 @@ type CommitsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -278,7 +291,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		return CommitsOutput{}, errors.New("searchCommits: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		commitResults []*gl.Commit
@@ -317,6 +330,7 @@ type MilestonesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -337,7 +351,7 @@ func Milestones(ctx context.Context, client *gitlabclient.Client, input Mileston
 		return MilestonesOutput{}, errors.New("searchMilestones: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		msList []*gl.Milestone
@@ -374,6 +388,7 @@ func Milestones(ctx context.Context, client *gitlabclient.Client, input Mileston
 type NotesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Query     string               `json:"query"      jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -409,7 +424,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 		return NotesOutput{}, errors.New("searchNotes: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	notes, resp, err := client.GL().Search.NotesByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -450,6 +465,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 type ProjectsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id,omitempty" jsonschema:"Group ID or URL-encoded path (optional — omit for global search)"`
 	Query   string               `json:"query"              jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -470,7 +486,7 @@ func Projects(ctx context.Context, client *gitlabclient.Client, input ProjectsIn
 		return ProjectsOutput{}, errors.New("searchProjects: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		projs []*gl.Project
@@ -503,6 +519,7 @@ func Projects(ctx context.Context, client *gitlabclient.Client, input ProjectsIn
 // SnippetsInput defines parameters for searching snippet titles.
 type SnippetsInput struct {
 	Query string `json:"query" jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -537,7 +554,7 @@ func Snippets(ctx context.Context, client *gitlabclient.Client, input SnippetsIn
 		return SnippetsOutput{}, errors.New("searchSnippets: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	snippets, resp, err := client.GL().Search.SnippetTitles(input.Query, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -581,6 +598,7 @@ type UsersInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -611,7 +629,7 @@ func Users(ctx context.Context, client *gitlabclient.Client, input UsersInput) (
 		return UsersOutput{}, errors.New("searchUsers: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		users []*gl.User
@@ -657,6 +675,7 @@ type WikiInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	TypeInput
 	toolutil.PaginationInput
 }
 
@@ -685,7 +704,7 @@ func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (Wi
 		return WikiOutput{}, errors.New("searchWiki: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "")
+	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
 
 	var (
 		wikis []*gl.Wiki

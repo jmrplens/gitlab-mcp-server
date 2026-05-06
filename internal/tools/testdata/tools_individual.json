@@ -74227,6 +74227,137 @@
               "package_type": {
                 "type": "string"
               },
+              "pipeline": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "ref",
+                  "sha",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "pipelines": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name",
+                        "web_url"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "ref",
+                    "sha",
+                    "web_url"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "status": {
                 "type": "string"
               },
@@ -102117,6 +102248,10 @@
         "ref": {
           "description": "Branch or tag name to search in (default: default branch)",
           "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
+          "type": "string"
         }
       },
       "required": [
@@ -102252,6 +102387,10 @@
         },
         "query": {
           "description": "Search query string,required",
+          "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
           "type": "string"
         }
       },
@@ -102452,6 +102591,10 @@
         },
         "query": {
           "description": "Search query text (param 'query' not 'search'),required",
+          "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
           "type": "string"
         }
       },
@@ -102698,6 +102841,10 @@
         },
         "query": {
           "description": "Search query text (param 'query' not 'search'),required",
+          "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
           "type": "string"
         }
       },
@@ -103053,6 +103200,10 @@
         "query": {
           "description": "Search query string,required",
           "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
+          "type": "string"
         }
       },
       "required": [
@@ -103217,6 +103368,10 @@
         "query": {
           "description": "Search query string,required",
           "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
+          "type": "string"
         }
       },
       "required": [
@@ -103356,6 +103511,10 @@
         },
         "query": {
           "description": "Search query string,required",
+          "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
           "type": "string"
         }
       },
@@ -103677,6 +103836,10 @@
         "query": {
           "description": "Search query string,required",
           "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
+          "type": "string"
         }
       },
       "required": [
@@ -103828,6 +103991,10 @@
         "query": {
           "description": "Search query string,required",
           "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
+          "type": "string"
         }
       },
       "required": [
@@ -103959,6 +104126,10 @@
         },
         "query": {
           "description": "Search query string,required",
+          "type": "string"
+        },
+        "search_type": {
+          "description": "Search backend to request: basic, advanced, or zoekt",
           "type": "string"
         }
       },

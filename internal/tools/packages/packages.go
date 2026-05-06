@@ -243,15 +243,37 @@ type ListInput struct {
 
 // ListItem represents a single package in the list output.
 type ListItem struct {
-	ID               int64    `json:"id"`
-	Name             string   `json:"name"`
-	Version          string   `json:"version"`
-	PackageType      string   `json:"package_type"`
-	Status           string   `json:"status"`
-	CreatedAt        string   `json:"created_at,omitempty"`
-	LastDownloadedAt string   `json:"last_downloaded_at,omitempty"`
-	Tags             []string `json:"tags,omitempty"`
-	WebPath          string   `json:"web_path,omitempty"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	Version          string         `json:"version"`
+	PackageType      string         `json:"package_type"`
+	Status           string         `json:"status"`
+	Pipeline         *PipelineItem  `json:"pipeline,omitempty"`
+	Pipelines        []PipelineItem `json:"pipelines,omitempty"`
+	CreatedAt        string         `json:"created_at,omitempty"`
+	LastDownloadedAt string         `json:"last_downloaded_at,omitempty"`
+	Tags             []string       `json:"tags,omitempty"`
+	WebPath          string         `json:"web_path,omitempty"`
+}
+
+// PipelineItem represents CI pipeline metadata attached to a package.
+type PipelineItem struct {
+	ID        int64         `json:"id"`
+	Status    string        `json:"status"`
+	Ref       string        `json:"ref"`
+	SHA       string        `json:"sha"`
+	WebURL    string        `json:"web_url"`
+	CreatedAt string        `json:"created_at,omitempty"`
+	UpdatedAt string        `json:"updated_at,omitempty"`
+	User      *PipelineUser `json:"user,omitempty"`
+}
+
+// PipelineUser represents the user attached to package pipeline metadata.
+type PipelineUser struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	WebURL   string `json:"web_url"`
 }
 
 // ListOutput contains the paginated list of packages.
@@ -302,6 +324,18 @@ func packageToListItem(p *gl.Package) ListItem {
 		PackageType: p.PackageType,
 		Status:      p.Status,
 	}
+	if p.Pipeline != nil {
+		item.Pipeline = packagePipelineToOutput(p.Pipeline)
+	}
+	if len(p.Pipelines) > 0 {
+		item.Pipelines = make([]PipelineItem, 0, len(p.Pipelines))
+		for _, pipeline := range p.Pipelines {
+			if pipeline == nil {
+				continue
+			}
+			item.Pipelines = append(item.Pipelines, *packagePipelineToOutput(pipeline))
+		}
+	}
 	if p.CreatedAt != nil {
 		item.CreatedAt = p.CreatedAt.String()
 	}
@@ -317,6 +351,32 @@ func packageToListItem(p *gl.Package) ListItem {
 	}
 	if p.Links != nil {
 		item.WebPath = p.Links.WebPath
+	}
+	return item
+}
+
+// packagePipelineToOutput converts GitLab package pipeline metadata.
+func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
+	item := &PipelineItem{
+		ID:     pipeline.ID,
+		Status: pipeline.Status,
+		Ref:    pipeline.Ref,
+		SHA:    pipeline.SHA,
+		WebURL: pipeline.WebURL,
+	}
+	if pipeline.CreatedAt != nil {
+		item.CreatedAt = pipeline.CreatedAt.String()
+	}
+	if pipeline.UpdatedAt != nil {
+		item.UpdatedAt = pipeline.UpdatedAt.String()
+	}
+	if pipeline.User != nil {
+		item.User = &PipelineUser{
+			ID:       pipeline.User.ID,
+			Username: pipeline.User.Username,
+			Name:     pipeline.User.Name,
+			WebURL:   pipeline.User.WebURL,
+		}
 	}
 	return item
 }

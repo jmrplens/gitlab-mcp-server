@@ -65,6 +65,30 @@ func TestSearchCode_ProjectScope(t *testing.T) {
 	}
 }
 
+// TestSearchCode_SearchType verifies that the optional search_type parameter
+// is forwarded to GitLab Search API requests.
+func TestSearchCode_SearchType(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == scopeBlobs {
+			testutil.AssertQueryParam(t, r, "search_type", "zoekt")
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
+				"basename":"main","data":"func main()","path":"main.go",
+				"filename":"main.go","ref":"main","startline":1,"project_id":1
+			}]`, defaultPagination)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Code(context.Background(), client, CodeInput{Query: "func main", TypeInput: TypeInput{SearchType: "zoekt"}})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Blobs) != 1 {
+		t.Fatalf(fmtLenBlobsWant1, len(out.Blobs))
+	}
+}
+
 // TestSearchCode_GlobalScope verifies the behavior of search code global scope.
 func TestSearchCode_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -737,9 +761,12 @@ const (
 
 // TestSearchOpts_Defaults verifies the behavior of search opts defaults.
 func TestSearchOpts_Defaults(t *testing.T) {
-	opts := searchOpts(0, 0, "")
+	opts := searchOpts(0, 0, "", "")
 	if opts.Ref != nil {
 		t.Errorf("expected nil Ref")
+	}
+	if opts.SearchType != nil {
+		t.Errorf("expected nil SearchType")
 	}
 	if opts.Page != 0 {
 		t.Errorf("expected Page 0, got %d", opts.Page)
@@ -748,9 +775,12 @@ func TestSearchOpts_Defaults(t *testing.T) {
 
 // TestSearchOpts_AllParams verifies the behavior of search opts all params.
 func TestSearchOpts_AllParams(t *testing.T) {
-	opts := searchOpts(3, 50, "develop")
+	opts := searchOpts(3, 50, "develop", "advanced")
 	if opts.Ref == nil || *opts.Ref != "develop" {
 		t.Error("expected Ref=develop")
+	}
+	if opts.SearchType == nil || string(*opts.SearchType) != "advanced" {
+		t.Error("expected SearchType=advanced")
 	}
 	if opts.Page != 3 {
 		t.Errorf("expected Page=3, got %d", opts.Page)

@@ -316,7 +316,7 @@ func TestPackageList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageList {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","last_downloaded_at":"2026-06-01T12:00:00Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
+				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","pipeline":{"id":77,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77","user":{"id":5,"username":"alice","name":"Alice","web_url":"https://gitlab.example.com/alice"}},"pipelines":[{"id":77,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77"}],"last_downloaded_at":"2026-06-01T12:00:00Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -340,6 +340,15 @@ func TestPackageList_Success(t *testing.T) {
 	}
 	if out.Packages[0].PackageType != "generic" {
 		t.Errorf("Packages[0].PackageType = %q, want %q", out.Packages[0].PackageType, "generic")
+	}
+	if out.Packages[0].Pipeline == nil || out.Packages[0].Pipeline.ID != 77 {
+		t.Fatalf("Packages[0].Pipeline.ID = %v, want 77", out.Packages[0].Pipeline)
+	}
+	if out.Packages[0].Pipeline.User == nil || out.Packages[0].Pipeline.User.Username != "alice" {
+		t.Fatalf("Packages[0].Pipeline.User.Username = %v, want alice", out.Packages[0].Pipeline.User)
+	}
+	if len(out.Packages[0].Pipelines) != 1 || out.Packages[0].Pipelines[0].Status != "success" {
+		t.Fatalf("Packages[0].Pipelines = %v, want one success pipeline", out.Packages[0].Pipelines)
 	}
 	if out.Packages[0].LastDownloadedAt == "" {
 		t.Error("Packages[0].LastDownloadedAt should not be empty")

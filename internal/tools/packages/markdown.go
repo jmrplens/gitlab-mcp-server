@@ -56,15 +56,16 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString("No packages found.\n")
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Version | Type | Status |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	b.WriteString("| ID | Name | Version | Type | Status | Pipeline |\n")
+	b.WriteString(toolutil.TblSep6Col)
 	for _, p := range out.Packages {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
 			p.ID,
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.Version),
 			p.PackageType,
 			p.Status,
+			toolutil.EscapeMdTableCell(pipelineSummary(p)),
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -74,6 +75,20 @@ func FormatListMarkdown(out ListOutput) string {
 		"Use action 'publish' or 'publish_directory' to upload new packages",
 	)
 	return b.String()
+}
+
+func pipelineSummary(pkg ListItem) string {
+	if pkg.Pipeline != nil {
+		return fmt.Sprintf("%d %s %s", pkg.Pipeline.ID, pkg.Pipeline.Status, pkg.Pipeline.Ref)
+	}
+	if len(pkg.Pipelines) > 0 {
+		latest := pkg.Pipelines[0]
+		if len(pkg.Pipelines) == 1 {
+			return fmt.Sprintf("%d %s %s", latest.ID, latest.Status, latest.Ref)
+		}
+		return fmt.Sprintf("%d %s %s (+%d)", latest.ID, latest.Status, latest.Ref, len(pkg.Pipelines)-1)
+	}
+	return ""
 }
 
 // FormatFileListMarkdown renders a paginated list of package files as a Markdown table.

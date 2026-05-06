@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,330 |
-| Unit test functions | 9,088 |
+| Total test functions | 9,331 |
+| Unit test functions | 9,089 |
 | E2E test functions | 242 |
 | cmd test functions | 347 |
 | Test files (internal/) | 398 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,382 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,383 | 89.8% |
 | `TestFunc` (no underscore) | 692 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 256 | 2.7% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,530 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (162) | 6,984 | 307 | domain-specific GitLab tool handlers |
+| Tool sub-packages (162) | 6,985 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
 | cmd packages | 347 | 13 | server entry point and developer command utilities |
-| **Total** | **9,330** | **518** |  |
+| **Total** | **9,331** | **518** |  |
 
 ### Core Packages
 
@@ -85,9 +85,9 @@
 | samplingtools | 165 | 100.0% | 11 |
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.2% | 17 |
+| search | 107 | 100.0% | 10 |
 | awardemoji | 106 | 65.0% | 25 |
-| search | 106 | 100.0% | 10 |
-| packages | 104 | 95.2% | 9 |
+| packages | 104 | 93.8% | 9 |
 | pipelines | 99 | 97.4% | 12 |
 | resourceevents | 99 | 100.0% | 16 |
 | commits | 97 | 96.5% | 13 |
@@ -221,7 +221,7 @@
 | mrnotes | 36 | 2 | 99.3% | 5 |
 | namespaces | 36 | 1 | 98.3% | 5 |
 | notifications | 30 | 1 | 100.0% | 7 |
-| packages | 104 | 4 | 95.2% | 9 |
+| packages | 104 | 4 | 93.8% | 9 |
 | pages | 55 | 2 | 99.1% | 10 |
 | pipelines | 99 | 2 | 97.4% | 12 |
 | pipelineschedules | 80 | 2 | 97.4% | 11 |
@@ -249,7 +249,7 @@
 | runnercontrollertokens | 33 | 1 | 96.9% | 6 |
 | runners | 97 | 1 | 95.7% | 19 |
 | samplingtools | 165 | 14 | 100.0% | 11 |
-| search | 106 | 1 | 100.0% | 10 |
+| search | 107 | 1 | 100.0% | 10 |
 | securefiles | 27 | 2 | 99.0% | 5 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
@@ -273,7 +273,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **6,984** | **307** |  | **1,052** |
+| **Total** | **6,985** | **307** |  | **1,052** |
 
 </details>
 
@@ -430,7 +430,7 @@
 | mrnotes | 99.3% |
 | namespaces | 98.3% |
 | notifications | 100.0% |
-| packages | 95.2% |
+| packages | 93.8% |
 | pages | 99.1% |
 | pipelines | 97.4% |
 | pipelineschedules | 97.4% |

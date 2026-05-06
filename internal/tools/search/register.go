@@ -191,7 +191,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
 NOT for: discovering a project from a git remote (use gitlab_discover_project), listing labels / milestones / issues with structured filters (use gitlab_project, gitlab_issue, gitlab_merge_request — those support filters like state/labels/milestone), reading a known file path's contents (use gitlab_repository file_get).
 
-Scope precedence: project_id > group_id > global. Pagination: page, per_page (max 100). All actions need query*.
+Scope precedence: project_id > group_id > global. Pagination: page, per_page (max 100). All actions need query*. Optional search_type selects the GitLab search backend: basic, advanced, or zoekt.
 
 Returns:
 - code: array of {basename, data, path, ref, startline, project_id} blobs.
@@ -202,11 +202,11 @@ Returns:
 All lists paginate with {page, per_page, total, next_page}.
 Errors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hint: project_id / group_id wrong or no permission), 400 (hint: query must not be empty; some scopes only support global — e.g. snippets).
 
-- code: query*, project_id, group_id, ref
-- merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id
-- notes: query*, project_id* (project-scoped only)
-- projects: query*, group_id
-- snippets: query* (global only)
+- code: query*, project_id, group_id, ref, search_type
+- merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id, search_type
+- notes: query*, project_id* (project-scoped only), search_type
+- projects: query*, group_id, search_type
+- snippets: query*, search_type (global only)
 
 See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).`, routes, toolutil.IconSearch, markdownForResult)
 }

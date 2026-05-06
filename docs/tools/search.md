@@ -11,7 +11,7 @@
 
 ## Overview
 
-The search domain provides keyword-based search across GitLab resources: code (blobs), merge requests, issues, commits, milestones, notes (comments), projects, snippets, users, and wiki pages. Each search tool supports scoping by project, group, or global, with paginated results.
+The search domain provides keyword-based search across GitLab resources: code (blobs), merge requests, issues, commits, milestones, notes (comments), projects, snippets, users, and wiki pages. Each search tool supports scoping by project, group, or global, with paginated results. Search tools also accept optional `search_type` (`basic`, `advanced`, or `zoekt`) when the GitLab instance supports selecting the search backend.
 
 When `META_TOOLS=true` (the default), all 10 individual tools below are consolidated into a single `gitlab_search` meta-tool that dispatches by `action` parameter.
 

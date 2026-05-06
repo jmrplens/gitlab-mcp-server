@@ -52,7 +52,7 @@ Download a file from the GitLab Generic Package Registry and save it to a local 
 
 ### `gitlab_package_list`
 
-List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting.
+List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting. When GitLab includes package pipeline metadata, the response preserves both `pipeline` and `pipelines` fields.
 
 | Annotation | **Read** |
 | ---------- | -------- |
