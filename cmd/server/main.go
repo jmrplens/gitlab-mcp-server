@@ -818,6 +818,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 	}
 
 	var rootHandler http.Handler = mux
+	rootHandler = crossOriginProtectionMiddleware(rootHandler)
 	rootHandler = securityHeadersMiddleware(rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
@@ -955,6 +956,13 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// crossOriginProtectionMiddleware applies explicit CSRF-oriented checks for
+// browser-originated HTTP requests. The MCP SDK no longer enables this by
+// default when StreamableHTTPOptions.CrossOriginProtection is nil.
+func crossOriginProtectionMiddleware(next http.Handler) http.Handler {
+	return http.NewCrossOriginProtection().Handler(next)
 }
 
 // hostValidationMiddleware rejects requests whose Host header does not match

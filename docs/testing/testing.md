@@ -18,10 +18,10 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,326 |
-| Unit test functions | 9,084 |
+| Total test functions | 9,330 |
+| Unit test functions | 9,088 |
 | E2E test functions | 242 |
-| cmd test functions | 343 |
+| cmd test functions | 347 |
 | Test files (internal/) | 398 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 107 |
@@ -35,9 +35,9 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,380 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,382 | 89.8% |
 | `TestFunc` (no underscore) | 692 | 7.4% |
-| `TestFunc_Scenario_Expected` (3+ part) | 254 | 2.7% |
+| `TestFunc_Scenario_Expected` (3+ part) | 256 | 2.7% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (162) | 6,984 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
-| cmd packages | 343 | 13 | server entry point and developer command utilities |
-| **Total** | **9,326** | **518** |  |
+| cmd packages | 347 | 13 | server entry point and developer command utilities |
+| **Total** | **9,330** | **518** |  |
 
 ### Core Packages
 
@@ -292,7 +292,7 @@
 | cmd/gen_llms | 6.3% |
 | cmd/gen_readme | 14.6% |
 | cmd/gen_testing_docs | 20.7% |
-| cmd/server | 78.3% |
+| cmd/server | 78.4% |
 
 ### Core Packages
 
@@ -495,7 +495,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/eval_meta_tools** (55.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (78.4%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **wizard** (83.1%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.

@@ -60,6 +60,7 @@ See [Auto-Update](auto-update.md) for full details on update modes and configura
 | Symptom | Cause | Solution |
 | --- | --- | --- |
 | `400 Bad Request` | Missing or empty token header | Send `PRIVATE-TOKEN` or `Authorization: Bearer <token>` header |
+| `403 Forbidden` on HTTP POST before MCP JSON-RPC handling | Browser sent a cross-site `Origin` or `Sec-Fetch-Site: cross-site` header | Use a same-origin endpoint, call the server from a non-browser MCP client, or put a trusted same-origin reverse proxy in front of the server |
 | Pool eviction too frequent | Too many unique tokens | Increase `--max-http-clients` (default: 100) |
 | Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m) |
 

@@ -61,6 +61,8 @@ When running with `--http`:
 - Binds to `localhost` by default — not exposed to the network
 - No built-in authentication on the HTTP endpoint
 - For production use, place behind a reverse proxy with proper TLS and auth
+- **Cross-origin request protection** — HTTP mode applies explicit `net/http.CrossOriginProtection` middleware. Browser-originated non-safe cross-site requests are rejected before MCP dispatch, while non-browser MCP clients without `Origin` or `Sec-Fetch-Site` headers continue to work
+- **Host validation** — When listening on a specific local host, requests with unexpected `Host` headers are rejected to mitigate DNS rebinding attacks. Binding to all interfaces (`0.0.0.0` or `::`) leaves Host validation to the reverse proxy deployment
 - **`GITLAB-URL` header validation** — In multi-instance mode, the server validates client-provided `GITLAB-URL` values and rejects malformed URLs with HTTP 400. When `--gitlab-url` is configured, it is authoritative and any client-provided `GITLAB-URL` value is ignored and logged
 - **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `Fly-Client-IP`, `X-Real-IP`, `X-Forwarded-For`) so the rate limiter sees real client IPs. Only enable this flag when the server is reachable exclusively through a trusted proxy that overwrites or strips incoming copies of the header — otherwise clients can spoof it and bypass per-IP rate limiting. For multi-value headers like `X-Forwarded-For` the server uses the rightmost entry (the hop appended by the trusted proxy) to avoid trusting client-supplied values
 
