@@ -22,7 +22,7 @@ GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition 
 | Vulnerability Management                |       ❌       |       ✅        |
 | Audit Events                            |       ❌       |       ✅        |
 | Compliance Policies                     |       ❌       |       ✅        |
-| +15 enterprise meta-tools               |       ✖        |       ✅        |
+| +15 enterprise meta-tools               |       ❌       |       ✅        |
 
 To enable enterprise features in stdio mode, set `GITLAB_ENTERPRISE=true`. In HTTP mode, set `--enterprise` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition.
 
@@ -57,14 +57,16 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 ## MCP protocol features
 
-| Capability  |             Supported             |
-| ----------- | :-------------------------------: |
-| Tools       | ✅ (1006 individual / 32–47 meta) |
-| Resources   |              ✅ (44)              |
-| Prompts     |              ✅ (38)              |
-| Completions |      ✅ (17 argument types)       |
-| Sampling    |                ✅                 |
-| Elicitation |                ✅                 |
-| Roots       |                ✅                 |
-| Logging     |                ✅                 |
-| Progress    |                ✅                 |
+| Capability  |                                 Supported                                 |
+| ----------- | :-----------------------------------------------------------------------: |
+| Tools       | ✅ (up to 1011 individual / 32 base, 47 self-managed, 48 GitLab.com meta) |
+| Resources   |                                  ✅ (46)                                  |
+| Prompts     |                                  ✅ (38)                                  |
+| Completions |                          ✅ (17 argument types)                           |
+| Sampling    |                                    ✅                                     |
+| Elicitation |                                    ✅                                     |
+| Roots       |                                    ✅                                     |
+| Logging     |                                    ✅                                     |
+| Progress    |                                    ✅                                     |
+
+The 1011 individual figure is the expanded set of distinct tool instances. The 32 base, 47 self-managed, and 48 GitLab.com counts are meta-tool catalog sizes whose actions expand to that larger individual tool surface.

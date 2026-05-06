@@ -66,21 +66,9 @@ func TestDescriptionSummary_EscapesMarkdownTablePipes(t *testing.T) {
 // two-action schema. It asserts the rendered table includes the useful domain
 // sentence, excludes the generated example, and keeps the action count.
 func TestBuildTable_UsesRealMetaToolDescription(t *testing.T) {
-	tool := &mcp.Tool{
-		Name: "gitlab_issue",
-		Description: "Example: {\"action\":\"create\",\"params\":{...}}\n" +
-			"For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
-			"Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.",
-		InputSchema: map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{
-					"enum": []any{"create", "list"},
-				},
-			},
-		},
-	}
+	tool := testMetaTool("gitlab_issue", "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.", "create", "list")
 
-	table := buildTable([]*mcp.Tool{tool}, []*mcp.Tool{tool})
+	table := buildTable([]*mcp.Tool{tool}, []*mcp.Tool{tool}, []*mcp.Tool{tool})
 	if !strings.Contains(table, "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji.") {
 		t.Fatalf("table missing real description:\n%s", table)
 	}
@@ -89,5 +77,50 @@ func TestBuildTable_UsesRealMetaToolDescription(t *testing.T) {
 	}
 	if !strings.Contains(table, "| `gitlab_issue` | 2 |") {
 		t.Fatalf("table missing expected action count:\n%s", table)
+	}
+}
+
+func TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom(t *testing.T) {
+	baseTool := testMetaTool("gitlab_issue", "Manage GitLab issues.", "list")
+	selfManagedOnly := testMetaTool("gitlab_geo", "Manage self-managed Geo replication.", "list")
+	selfManagedShared := testMetaTool("gitlab_dependency", "Self-managed dependency description.", "list")
+	gitLabComShared := testMetaTool("gitlab_dependency", "GitLab.com dependency description.", "list", "get")
+	gitLabComOnly := testMetaTool("gitlab_orbit", "Query GitLab.com Orbit.", "status", "query")
+
+	table := buildTable(
+		[]*mcp.Tool{baseTool},
+		[]*mcp.Tool{baseTool, selfManagedOnly, selfManagedShared},
+		[]*mcp.Tool{baseTool, gitLabComShared, gitLabComOnly},
+	)
+
+	for _, want := range []string{
+		"| `gitlab_issue` | 1 | Manage GitLab issues. |",
+		"| `gitlab_geo` 🏢 | 1 | Manage self-managed Geo replication. |",
+		"| `gitlab_dependency` 🏢 | 2 | GitLab.com dependency description. |",
+		"| `gitlab_orbit` 🏢 | 2 | Query GitLab.com Orbit. |",
+		"**1 base** / **3 self-managed enterprise** / **3 GitLab.com Enterprise** meta-tools.",
+	} {
+		if !strings.Contains(table, want) {
+			t.Fatalf("table missing %q:\n%s", want, table)
+		}
+	}
+	if strings.Contains(table, "Self-managed dependency description") {
+		t.Fatalf("table should prefer the GitLab.com definition for shared enterprise tools:\n%s", table)
+	}
+}
+
+func testMetaTool(name, description string, actions ...string) *mcp.Tool {
+	return &mcp.Tool{
+		Name: name,
+		Description: "Example: {\"action\":\"create\",\"params\":{...}}\n" +
+			"For the params schema of any action, read the MCP resource gitlab://schema/meta/" + name + "/<action>.\n\n" +
+			description,
+		InputSchema: map[string]any{
+			"properties": map[string]any{
+				"action": map[string]any{
+					"enum": actions,
+				},
+			},
+		},
 	}
 }

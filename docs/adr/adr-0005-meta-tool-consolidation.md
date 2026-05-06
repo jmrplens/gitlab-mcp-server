@@ -1,5 +1,5 @@
 ---
-title: "ADR-0005: Meta-tool consolidation from 70 to 27 domain tools"
+title: "ADR-0005: Meta-tool consolidation from 68 to 32 base tools"
 status: "Accepted"
 date: "2026-03-06"
 authors: "jmrplens"
@@ -7,7 +7,7 @@ tags: ["architecture", "decision", "meta-tools", "consolidation", "llm-optimizat
 superseded_by: ""
 ---
 
-# ADR-0005: Meta-tool consolidation from 70 to 27 domain tools
+# ADR-0005: Meta-tool consolidation from 68 to 32 base tools
 
 ## Status
 
@@ -65,16 +65,16 @@ Analysis of production MCP servers reveals common patterns for managing large to
 - Requires client support for `tools/list_changed`
 - VS Code Copilot and Cursor do not reliably re-fetch tool lists
 
-**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The consolidation target was **25 meta-tools**, with the final result being **27 meta-tools** (2 additional tools retained for operational separation: `gitlab_health` and `gitlab_summarize_issue`). This keeps the tool list small enough for any LLM context window while covering all 1006 individual tools.
+**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The original consolidation target was **25 domain meta-tools**. The current base catalog is **32 tools**: 28 consolidated, delegated, sampling, and discovery meta-tools plus 4 standalone interactive elicitation tools (`gitlab_interactive_*`) that must remain separate because each one drives a multi-round MCP elicitation flow. Enterprise/Premium adds 15 meta-tools for **47 self-managed Enterprise/Premium tools**, and GitLab.com Enterprise/Premium adds `gitlab_orbit` for **48 tools** when Orbit is available. The current catalog keeps the tool list small enough for any LLM context window while covering 1006 self-managed Enterprise/Premium individual tools, or 1011 on GitLab.com Enterprise/Premium with Orbit.
 
 ## Decision
 
-**Consolidate 70 meta-tools into 27 domain meta-tools** by absorbing standalone `RegisterMeta` calls into the existing inline meta-tool registration functions.
+**Consolidate 68 meta-tools into a 32-tool base catalog** by absorbing standalone `RegisterMeta` calls into the existing inline meta-tool registration functions and retaining standalone tools only where the MCP flow requires them.
 
 ### Target architecture
 
 ```text
-25 meta-tools:
+32 base tools:
 ├── gitlab_project        # projects + uploads + import/export + statistics + templates + hooks
 ├── gitlab_repository     # repository + submodules + commits + commit-discussions + files + markdown
 ├── gitlab_branch         # branches + protected branches
@@ -85,22 +85,31 @@ Analysis of production MCP servers reveals common patterns for managing large to
 ├── gitlab_issue          # issues + notes + discussions + links + statistics + work-items + time-tracking
 ├── gitlab_pipeline       # pipelines + triggers
 ├── gitlab_job            # jobs + artifacts + bridges + token-scope + resource-groups
-├── gitlab_ci             # CI variables + lint + YAML templates + schedules + instance/group variables
+├── gitlab_ci_variable    # CI variables at project, group, and instance scope
+├── gitlab_template       # CI/CD, Dockerfile, gitignore, license, and project templates
 ├── gitlab_group          # groups + members + labels + milestones + boards + variables + import/export + badges + relations-export + markdown-uploads
 ├── gitlab_environment    # environments + deployments + deploy-MRs + protected-envs + freeze-periods
 ├── gitlab_user           # users + status + SSH-keys + emails + todos + events + keys + namespaces
-├── gitlab_search         # global/project/group search + code search
 ├── gitlab_wiki           # project + group wikis
 ├── gitlab_package        # packages + container-registry
-├── gitlab_snippet        # snippets + snippet-discussions + epic-discussions
-├── gitlab_runner         # runners + resource-groups
+├── gitlab_snippet        # snippets + snippet-discussions + snippet emoji
 ├── gitlab_access         # access-tokens + deploy-tokens + deploy-keys + access-requests + invites
-├── gitlab_notification   # notifications + events + resource-events + award-emoji
-├── gitlab_security       # feature-flags + user-lists + secure-files + error-tracking + alert-management
+├── gitlab_feature_flags  # feature-flags + user-lists
 ├── gitlab_admin          # settings + appearance + broadcasts + features + license + system-hooks + sidekiq + plan-limits + usage-data + db-migrations + applications + metadata + custom-attrs + bulk-imports + avatar + dependency-proxy + pages + terraform-states + cluster-agents
-├── gitlab_board          # project-boards + group-boards
-├── gitlab_health         # server health/version check
+├── gitlab_model_registry # model registry package download
+├── gitlab_ci_catalog     # CI/CD Catalog GraphQL discovery
+├── gitlab_custom_emoji   # group-level custom emoji GraphQL management
+├── gitlab_search         # global/project/group search + code search
+├── gitlab_runner         # runners + runner controllers
+├── gitlab_analyze        # sampling-powered analysis actions including issue summaries
+├── gitlab_discover_project # git remote URL to GitLab project resolution
+├── gitlab_interactive_issue_create   # elicitation-powered issue creation
+├── gitlab_interactive_mr_create      # elicitation-powered merge request creation
+├── gitlab_interactive_project_create # elicitation-powered project creation
+├── gitlab_interactive_release_create # elicitation-powered release creation
 ```
+
+Enterprise/Premium deployments add 15 gated meta-tools. GitLab.com Enterprise/Premium adds `gitlab_orbit`, a GitLab.com-only experimental Orbit Knowledge Graph meta-tool with 5 actions.
 
 ### Consolidation mapping (49 standalone → absorbed)
 
@@ -168,8 +177,8 @@ Analysis of production MCP servers reveals common patterns for managing large to
 
 ### Positive
 
-- **POS-001**: Token reduction — from 70 to 27 meta-tools reduces `tools/list` response by ~61%
-- **POS-002**: Simpler tool selection — LLMs only choose among 27 domain tools instead of 70
+- **POS-001**: Token reduction — from 68 to 32 base tools reduces `tools/list` response by ≈53%
+- **POS-002**: Simpler tool selection — LLMs choose among 32 base tools instead of 68
 - **POS-003**: Better discoverability — comprehensive action lists in tool descriptions
 - **POS-004**: Consistent granularity — every domain has exactly one meta-tool
 - **POS-005**: Universal client compatibility — fewer tools work better across all MCP clients
@@ -193,6 +202,6 @@ After consolidation:
 
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
-- `META_TOOLS=true` exposes exactly 27 meta-tools
-- `META_TOOLS=false` exposes 1006 individual tools (unchanged)
+- `META_TOOLS=true` exposes exactly 32 base tools, 47 self-managed Enterprise/Premium tools, or 48 GitLab.com Enterprise/Premium tools with Orbit
+- `META_TOOLS=false` exposes the individual catalog: 1006 tools on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

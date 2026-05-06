@@ -71,7 +71,7 @@ Example reference patterns:
 ```markdown
 <!-- Inline reference -->
 The server implements the [Model Context Protocol](https://modelcontextprotocol.io/specification)
-using the official [Go SDK](https://github.com/modelcontextprotocol/go-sdk) (v1.5.0).
+using the official [Go SDK](https://github.com/modelcontextprotocol/go-sdk) (v1.6.0).
 
 <!-- End-of-document references -->
 ## References

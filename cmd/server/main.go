@@ -261,7 +261,7 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
-  GITLAB_URL                GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
+	GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
   META_TOOLS                Enable meta-tools: true/false (default true)
@@ -317,6 +317,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
+		config.DefaultGitLabURL,
 		config.DefaultAutoUpdateRepo)
 }
 
@@ -818,6 +819,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 	}
 
 	var rootHandler http.Handler = mux
+	rootHandler = crossOriginProtectionMiddleware(rootHandler)
 	rootHandler = securityHeadersMiddleware(rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
@@ -955,6 +957,13 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// crossOriginProtectionMiddleware applies explicit CSRF-oriented checks for
+// browser-originated HTTP requests. The MCP SDK no longer enables this by
+// default when StreamableHTTPOptions.CrossOriginProtection is nil.
+func crossOriginProtectionMiddleware(next http.Handler) http.Handler {
+	return http.NewCrossOriginProtection().Handler(next)
 }
 
 // hostValidationMiddleware rejects requests whose Host header does not match

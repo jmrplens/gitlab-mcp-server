@@ -67,8 +67,8 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        TOOLS[tools<br/>1006 individual tool handlers<br/>in 162 domain sub-packages]
-        META[metatool<br/>32 base / 47 enterprise meta-tools]
+        TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
+        META[metatool<br/>32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
         RES[resources<br/>46 resource handlers]
@@ -80,7 +80,7 @@ graph TD
         SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 SVG domain icons]
-        SRV[MCP Server<br/>go-sdk/mcp v1.5.0]
+        SRV[MCP Server<br/>go-sdk/mcp v1.6.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
         POOL[serverpool<br/>Per-token+URL server pool & LRU cache]
@@ -164,21 +164,21 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1006 MCP tool implementations organized across 162 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
+The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
 
 **Orchestration files** in `internal/tools/`:
 
 | File               | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
 | `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
-| `register_meta.go` | `RegisterAllMeta()` — 24 inline + 3 delegated + 1 standalone + 4 interactive (+ 15 enterprise inline) |
+| `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive (+ 15 enterprise inline, + 1 GitLab.com Enterprise Orbit) |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |
 | `errors.go`        | Error helpers (`wrapErr`, `handleGitLabError`)                |
 | `logging.go`       | `logToolCall` helper                                          |
 
-**Domain sub-packages** (162 total, grouped by category):
+**Domain sub-packages** (163 total, grouped by category):
 
 | Category          | Sub-packages                                                                                    |
 | ----------------- | ----------------------------------------------------------------------------------------------- |
@@ -248,7 +248,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the total to 47; stdio mode enables it with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 ```mermaid
 sequenceDiagram
@@ -512,7 +512,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (32/47) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 tools | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (32/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |

@@ -48,7 +48,7 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--meta-tools` | `true` | Enable domain-level meta-tools (32 base, or 47 for Enterprise/Premium entries) instead of individual tools (1006) |
+| `--meta-tools` | `true` | Enable domain-level meta-tools (32 base, 47 for self-managed Enterprise/Premium entries, or 48 for GitLab.com Enterprise/Premium entries with Orbit) instead of individual tools |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--read-only` | `false` | Expose only read-only tools |

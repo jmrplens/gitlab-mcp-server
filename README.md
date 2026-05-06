@@ -28,8 +28,8 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 ## Highlights
 
-- **1006 MCP tools** — broad GitLab REST API v4 + GraphQL coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **32 meta-tools** (47 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
+- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional self-managed enterprise meta-tools plus the GitLab.com-only `gitlab_orbit` meta-tool are available for Premium/Ultimate features
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -223,8 +223,8 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
-| **Meta-Tools** (default) | 32 base / 47 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Individual** | 1006 | Every GitLab operation as a separate MCP tool. |
+| **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:
 
@@ -275,12 +275,13 @@ Meta-tool summary:
 | `gitlab_group_scim` 🏢 | 4 | Manage SCIM identities for GitLab group provisioning. |
 | `gitlab_member_role` 🏢 | 6 | Manage custom member roles at instance or group level. |
 | `gitlab_merge_train` 🏢 | 4 | Manage GitLab merge trains (automated merge queues). |
+| `gitlab_orbit` 🏢 | 5 | Experimental GitLab.com-only Orbit Knowledge Graph operations. |
 | `gitlab_project_alias` 🏢 | 4 | CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate). |
 | `gitlab_security_finding` 🏢 | 1 | List pipeline security report findings via GraphQL (Premium/Ultimate). |
 | `gitlab_storage_move` 🏢 | 18 | Manage repository storage moves for projects, groups, and snippets (admin only). |
 | `gitlab_vulnerability` 🏢 | 8 | List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). |
 
-**32 base** / **47 with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
+**32 base** / **47 self-managed enterprise** / **48 GitLab.com Enterprise** meta-tools. Rows marked 🏢 require the Enterprise/Premium catalog; `gitlab_orbit` additionally requires GitLab.com. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
 
 <!-- END TOOLS -->
 
@@ -288,7 +289,7 @@ Meta-tool summary:
 
 | MCP Capability | Support |
 |----------------|---------|
-| **Tools** | 1006 individual / 32–47 meta |
+| **Tools** | Up to 1011 individual / 32–48 meta |
 | **Resources** | 46 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
@@ -334,8 +335,8 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [IDE Configuration](docs/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
 | [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
-| [Tools Reference](docs/tools/README.md) | All 1006 individual tools with input/output schemas |
-| [Meta-Tools](docs/meta-tools.md) | 32/47 domain meta-tools with action dispatching |
+| [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
+| [Meta-Tools](docs/meta-tools.md) | 32/47/48 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
@@ -349,8 +350,8 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | Component | Technology |
 |-----------|------------|
 | Language | Go 1.26+ |
-| MCP SDK | `github.com/modelcontextprotocol/go-sdk` v1.5.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1 |
+| MCP SDK | `github.com/modelcontextprotocol/go-sdk` v1.6.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1 |
 | Transport | stdio (default), HTTP (Streamable HTTP) |
 
 ## Building from Source
@@ -429,66 +430,66 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 647 | 133,004 |
-| Unit tests (`_test.go`) | 411 | 216,363 |
-| End-to-end tests | 109 | 23,526 |
-| **Total** | **1,167** | **372,893** |
+| Source (`.go`, non-test) | 650 | 134,257 |
+| Unit tests (`_test.go`) | 412 | 219,088 |
+| End-to-end tests | 110 | 23,718 |
+| **Total** | **1,172** | **377,063** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,940 |
-| — exported (public) | 2,206 |
-| — unexported (private) | 1,734 |
-| Unit test functions (`TestXxx`) | 9,051 |
-| Subtests (`t.Run(...)`) | 1,933 |
-| End-to-end test functions | 243 |
+| Source functions | 3,988 |
+| — exported (public) | 2,220 |
+| — unexported (private) | 1,768 |
+| Unit test functions (`TestXxx`) | 9,132 |
+| Subtests (`t.Run(...)`) | 1,956 |
+| End-to-end test functions | 246 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
 | Test lines vs source lines | 1.63× more tests than code |
-| Average source file length | ~205 lines |
-| Average test file length | ~526 lines |
-| Comment lines in source | 10,379 (~7.8% of source) |
+| Average source file length | ~206 lines |
+| Average test file length | ~531 lines |
+| Comment lines in source | 10,436 (~7.8% of source) |
 | Test functions per source function | 2.3× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,687 |
-| `defer` statements | 716 |
-| `struct` types defined | 2,006 |
-| `//nolint` suppressions | 57 |
+| `if err != nil` checks | 5,790 |
+| `defer` statements | 728 |
+| `struct` types defined | 2,031 |
+| `//nolint` suppressions | 53 |
 | `TODO` / `FIXME` / `HACK` comments | 0 |
 
 ### Project
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 196 |
+| Go packages | 197 |
 | Direct dependencies (`go.mod`) | 11 |
-| Indirect dependencies | 46 |
-| Git commits | 124 |
+| Indirect dependencies | 47 |
+| Git commits | 103 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 5,742 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 5,759 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,418 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,837 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,441 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,958 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
-| Longest test function name | `TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement` (84 chars) |
+| Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
 <!-- END STATS -->

@@ -76,7 +76,7 @@ const jsonLd = JSON.stringify({
 			name: "GitLab MCP Server",
 			url: `${fullUrl}/`,
 			description:
-				"A Model Context Protocol (MCP) server exposing 1000+ GitLab operations as AI-accessible tools. Written in Go.",
+				"A Model Context Protocol (MCP) server exposing up to 1011 GitLab operations as AI-accessible tools. Written in Go.",
 			inLanguage: ["en", "es"],
 			publisher: {
 				"@type": "Person",
@@ -103,7 +103,7 @@ const jsonLd = JSON.stringify({
 			downloadUrl: "https://github.com/jmrplens/gitlab-mcp-server/releases",
 			license: "https://opensource.org/licenses/MIT",
 			description:
-				"Model Context Protocol server that exposes 1000+ GitLab operations as AI-accessible tools.",
+				"Model Context Protocol server that exposes up to 1011 GitLab operations as AI-accessible tools.",
 			offers: {
 				"@type": "Offer",
 				price: "0",
@@ -136,7 +136,7 @@ export default defineConfig({
 				}),
 			],
 			description:
-				"A Model Context Protocol (MCP) server exposing 1000+ GitLab operations as AI-accessible tools. Written in Go.",
+				"A Model Context Protocol (MCP) server exposing up to 1011 GitLab operations as AI-accessible tools. Written in Go.",
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
 				light: "./src/assets/logo-light.svg",
@@ -173,7 +173,8 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						property: "og:image:alt",
-						content: "GitLab MCP Server — 1000+ GitLab tools for AI assistants",
+						content:
+							"GitLab MCP Server — up to 1011 GitLab tools for AI assistants",
 					},
 				},
 				{
@@ -327,6 +328,11 @@ export default defineConfig({
 							slug: "tools/meta-tools",
 							label: "Meta-tools",
 							translations: { es: "Meta-herramientas" },
+						},
+						{
+							slug: "tools/orbit",
+							label: "Orbit",
+							translations: { es: "Orbit" },
 						},
 						{
 							slug: "tools/analysis",

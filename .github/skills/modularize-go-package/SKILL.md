@@ -309,7 +309,7 @@ When modularizing `internal/tools/`, use this mapping to understand which files 
 
 ### Service-to-SubPackage Mapping
 
-The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1. Each `client.GL().{Service}` call tells you which API domain a handler belongs to:
+The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1. Each `client.GL().{Service}` call tells you which API domain a handler belongs to:
 
 | Sub-Package | client-go Services Used | Source Files |
 |---|---|---|
@@ -339,7 +339,7 @@ The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1. Each `client.
 | `sampling/` | _(MCP-only, no GitLab API)_ | `sampling_tools.go` |
 | `elicitation/` | _(MCP-only, no GitLab API)_ | `elicitation_tools.go` |
 
-> **âš ï¸ This table may be incomplete.** Always scan the source package for files not listed here before starting a migration session. Any unlisted handler file is a new domain to add to the plan.
+> **⚠️ This table may be incomplete.** Always scan the source package for files not listed here before starting a migration session. Any unlisted handler file is a new domain to add to the plan.
 
 ### client-go Import Patterns
 

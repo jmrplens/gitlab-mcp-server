@@ -33,7 +33,10 @@ func newGenLLMSClient(t *testing.T) *gitlabclient.Client {
 // TestListResources_IncludesMetaSchemaTemplate verifies llms generation sees
 // the per-action meta-schema resource template alongside regular resources.
 func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
-	resources, templates := listResources(newGenLLMSClient(t))
+	resources, templates, err := listResources(newGenLLMSClient(t))
+	if err != nil {
+		t.Fatalf("listResources() error: %v", err)
+	}
 	if len(resources) == 0 {
 		t.Fatal("listResources() returned no static resources")
 	}

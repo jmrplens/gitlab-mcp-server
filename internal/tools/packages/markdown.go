@@ -56,24 +56,48 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString("No packages found.\n")
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Version | Type | Status |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	b.WriteString("| ID | Name | Version | Type | Status | Pipeline |\n")
+	b.WriteString(toolutil.TblSep6Col)
 	for _, p := range out.Packages {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
 			p.ID,
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.Version),
 			p.PackageType,
 			p.Status,
+			toolutil.EscapeMdTableCell(pipelineSummary(p)),
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'file_list' with a package_id to see individual files",
 		"Use action 'delete' to remove a package",
 		"Use action 'publish' or 'publish_directory' to upload new packages",
 	)
 	return b.String()
+}
+
+func pipelineSummary(pkg ListItem) string {
+	if pkg.Pipeline != nil {
+		return pipelineItemSummary(*pkg.Pipeline)
+	}
+	if len(pkg.Pipelines) > 0 {
+		latest := pkg.Pipelines[0]
+		if len(pkg.Pipelines) == 1 {
+			return pipelineItemSummary(latest)
+		}
+		return fmt.Sprintf("%s (+%d)", pipelineItemSummary(latest), len(pkg.Pipelines)-1)
+	}
+	return ""
+}
+
+func pipelineItemSummary(pipeline PipelineItem) string {
+	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
+	if pipeline.WebURL == "" {
+		return summary
+	}
+	return toolutil.MdTitleLink(summary, pipeline.WebURL)
 }
 
 // FormatFileListMarkdown renders a paginated list of package files as a Markdown table.

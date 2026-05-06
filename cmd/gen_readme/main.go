@@ -61,11 +61,19 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
 	}
+	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
+		GitLabURL:   config.DefaultGitLabURL,
+		GitLabToken: "gen-readme-token",
+	})
+	if err != nil {
+		return fmt.Errorf("create gitlab.com client: %w", err)
+	}
 
 	baseTools := listMetaTools(client, false)
-	allTools := listMetaTools(client, true)
+	selfManagedEnterpriseTools := listMetaTools(client, true)
+	gitLabComEnterpriseTools := listMetaTools(gitLabComClient, true)
 
-	table := buildTable(baseTools, allTools)
+	table := buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools)
 
 	if replaceErr := replaceSection(readmePath, startMarker, endMarker, table); replaceErr != nil {
 		return replaceErr
@@ -79,8 +87,8 @@ func run() error {
 		return replaceErr
 	}
 
-	fmt.Printf("Updated %s (%d base / %d enterprise meta-tools, stats regenerated)\n",
-		readmePath, len(baseTools), len(allTools))
+	fmt.Printf("Updated %s (%d base / %d self-managed enterprise / %d GitLab.com enterprise meta-tools, stats regenerated)\n",
+		readmePath, len(baseTools), len(selfManagedEnterpriseTools), len(gitLabComEnterpriseTools))
 	return nil
 }
 
@@ -222,20 +230,33 @@ func findSentenceEnd(s string) int {
 
 // buildTable renders the managed README Markdown table, marking tools that are
 // only available in the Enterprise/Premium catalog.
-func buildTable(baseTools, allTools []*mcp.Tool) string {
+func buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools []*mcp.Tool) string {
 	baseSet := make(map[string]bool, len(baseTools))
 	for _, t := range baseTools {
 		baseSet[t.Name] = true
 	}
 
-	var infos []toolInfo
-	for _, t := range allTools {
-		infos = append(infos, toolInfo{
+	byName := make(map[string]toolInfo, len(selfManagedEnterpriseTools)+len(gitLabComEnterpriseTools))
+	for _, t := range selfManagedEnterpriseTools {
+		byName[t.Name] = toolInfo{
 			Name:        t.Name,
 			Description: descriptionSummary(t.Description),
 			Actions:     actionCount(t),
 			Enterprise:  !baseSet[t.Name],
-		})
+		}
+	}
+	for _, t := range gitLabComEnterpriseTools {
+		byName[t.Name] = toolInfo{
+			Name:        t.Name,
+			Description: descriptionSummary(t.Description),
+			Actions:     actionCount(t),
+			Enterprise:  !baseSet[t.Name],
+		}
+	}
+
+	infos := make([]toolInfo, 0, len(byName))
+	for _, info := range byName {
+		infos = append(infos, info)
 	}
 
 	sort.Slice(infos, func(i, j int) bool {
@@ -262,8 +283,8 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", name, actions, info.Description)
 	}
 
-	fmt.Fprintf(&b, "\n**%d base** / **%d with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.\n",
-		len(baseTools), len(allTools))
+	fmt.Fprintf(&b, "\n**%d base** / **%d self-managed enterprise** / **%d GitLab.com Enterprise** meta-tools. Rows marked 🏢 require the Enterprise/Premium catalog; `gitlab_orbit` additionally requires GitLab.com. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.\n",
+		len(baseTools), len(selfManagedEnterpriseTools), len(gitLabComEnterpriseTools))
 
 	return b.String()
 }

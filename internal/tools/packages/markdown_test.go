@@ -87,6 +87,53 @@ func TestFormatListMarkdown_EmptyPackages(t *testing.T) {
 	}
 }
 
+func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
+	out := ListOutput{
+		Packages: []ListItem{{
+			ID:      1,
+			Name:    "pkg",
+			Version: "1.0.0",
+			Pipeline: &PipelineItem{
+				ID:     7,
+				Status: "success",
+				Ref:    "main",
+				WebURL: "https://gitlab.example.com/project/-/pipelines/7",
+			},
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+	}
+	got := FormatListMarkdown(out)
+	if !strings.Contains(got, "[7 success main](https://gitlab.example.com/project/-/pipelines/7)") {
+		t.Fatalf("FormatListMarkdown() = %q, want linked pipeline", got)
+	}
+	if !strings.Contains(got, toolutil.HintPreserveLinks) {
+		t.Fatalf("FormatListMarkdown() = %q, want preserve-links hint", got)
+	}
+}
+
+func TestPipelineSummary_Variants(t *testing.T) {
+	tests := []struct {
+		name string
+		pkg  ListItem
+		want string
+	}{
+		{name: "none", pkg: ListItem{}, want: ""},
+		{name: "primary", pkg: ListItem{Pipeline: &PipelineItem{ID: 7, Status: "success", Ref: "main"}}, want: "7 success main"},
+		{name: "primary link", pkg: ListItem{Pipeline: &PipelineItem{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/pipelines/7"}}, want: "[7 success main](https://gitlab.example.com/pipelines/7)"},
+		{name: "single history", pkg: ListItem{Pipelines: []PipelineItem{{ID: 8, Status: "failed", Ref: "release"}}}, want: "8 failed release"},
+		{name: "multiple history", pkg: ListItem{Pipelines: []PipelineItem{{ID: 9, Status: "running", Ref: "dev"}, {ID: 10}}}, want: "9 running dev (+1)"},
+		{name: "multiple history link", pkg: ListItem{Pipelines: []PipelineItem{{ID: 9, Status: "running", Ref: "dev", WebURL: "https://gitlab.example.com/pipelines/9"}, {ID: 10}}}, want: "[9 running dev](https://gitlab.example.com/pipelines/9) (+1)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pipelineSummary(tt.pkg); got != tt.want {
+				t.Fatalf("pipelineSummary() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFormatFileListMarkdown_EmptyFiles verifies that [FormatFileListMarkdown]
 // renders "No package files found." when the list is empty.
 func TestFormatFileListMarkdown_EmptyFiles(t *testing.T) {

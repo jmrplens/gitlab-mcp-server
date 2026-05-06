@@ -235,6 +235,56 @@ func TestNewClientWithToken_SkipTLS(t *testing.T) {
 	}
 }
 
+// TestIsGitLabDotComURL verifies host-only matching for GitLab.com detection.
+func TestIsGitLabDotComURL_HostMatching(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "canonical", raw: "https://gitlab.com", want: true},
+		{name: "canonical with path", raw: "https://gitlab.com/api/v4", want: true},
+		{name: "canonical with port", raw: "https://gitlab.com:443", want: true},
+		{name: "uppercase host", raw: "https://GITLAB.COM", want: true},
+		{name: "self managed", raw: "https://gitlab.example.com", want: false},
+		{name: "lookalike suffix", raw: "https://gitlab.com.example.com", want: false},
+		{name: "missing scheme", raw: "gitlab.com", want: false},
+		{name: "invalid", raw: ":/invalid", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsGitLabDotComURL(tt.raw); got != tt.want {
+				t.Errorf("IsGitLabDotComURL(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestClient_IsGitLabDotCom verifies clients preserve their configured base URL
+// so SaaS-only tools can be conditionally registered.
+func TestClient_IsGitLabDotCom(t *testing.T) {
+	if (*Client)(nil).IsGitLabDotCom() {
+		t.Fatal("nil client should not report GitLab.com")
+	}
+
+	client, err := NewClient(newTestConfig("https://gitlab.com", testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if !client.IsGitLabDotCom() {
+		t.Fatal("NewClient() client should report GitLab.com")
+	}
+
+	selfManaged, err := NewClientWithToken("https://gitlab.example.com", testValidToken, false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() unexpected error: %v", err)
+	}
+	if selfManaged.IsGitLabDotCom() {
+		t.Fatal("self-managed client should not report GitLab.com")
+	}
+}
+
 // TestDotUnescape_Transport verifies that [dotUnescapeTransport] replaces %2E
 // with literal dots in URL paths before sending requests, working around the
 // gitlab client library's aggressive PathEscape that encodes dots.

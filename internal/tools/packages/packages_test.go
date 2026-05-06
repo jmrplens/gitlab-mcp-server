@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
@@ -316,7 +319,7 @@ func TestPackageList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageList {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","last_downloaded_at":"2026-06-01T12:00:00Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
+				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","pipeline":{"id":77,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77","user":{"id":5,"username":"alice","name":"Alice","web_url":"https://gitlab.example.com/alice"}},"pipelines":[{"id":77,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77"}],"last_downloaded_at":"2026-06-01T12:00:00Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -341,6 +344,15 @@ func TestPackageList_Success(t *testing.T) {
 	if out.Packages[0].PackageType != "generic" {
 		t.Errorf("Packages[0].PackageType = %q, want %q", out.Packages[0].PackageType, "generic")
 	}
+	if out.Packages[0].Pipeline == nil || out.Packages[0].Pipeline.ID != 77 {
+		t.Fatalf("Packages[0].Pipeline.ID = %v, want 77", out.Packages[0].Pipeline)
+	}
+	if out.Packages[0].Pipeline.User == nil || out.Packages[0].Pipeline.User.Username != "alice" {
+		t.Fatalf("Packages[0].Pipeline.User.Username = %v, want alice", out.Packages[0].Pipeline.User)
+	}
+	if len(out.Packages[0].Pipelines) != 1 || out.Packages[0].Pipelines[0].Status != "success" {
+		t.Fatalf("Packages[0].Pipelines = %v, want one success pipeline", out.Packages[0].Pipelines)
+	}
 	if out.Packages[0].LastDownloadedAt == "" {
 		t.Error("Packages[0].LastDownloadedAt should not be empty")
 	}
@@ -349,6 +361,57 @@ func TestPackageList_Success(t *testing.T) {
 	}
 	if out.Packages[0].WebPath != "/project/-/packages/10" {
 		t.Errorf("Packages[0].WebPath = %q, want %q", out.Packages[0].WebPath, "/project/-/packages/10")
+	}
+}
+
+func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
+	now := time.Date(2026, 5, 6, 11, 0, 0, 0, time.UTC)
+	updated := now.Add(time.Minute)
+	item := packageToListItem(&gl.Package{
+		ID:          99,
+		Name:        "pkg",
+		Version:     "1.2.3",
+		PackageType: "generic",
+		Status:      "default",
+		CreatedAt:   &now,
+		Pipelines: []*gl.PackagePipeline{
+			nil,
+			{
+				ID:        77,
+				Status:    "success",
+				Ref:       "main",
+				SHA:       "abc123",
+				WebURL:    "https://gitlab.example.com/pipelines/77",
+				CreatedAt: &now,
+				UpdatedAt: &updated,
+				User: &gl.BasicUser{
+					ID:       5,
+					Username: "alice",
+					Name:     "Alice",
+					WebURL:   "https://gitlab.example.com/alice",
+				},
+			},
+		},
+	})
+
+	if item.CreatedAt == "" {
+		t.Fatal("CreatedAt should be preserved")
+	}
+	if len(item.Pipelines) != 1 {
+		t.Fatalf("Pipelines = %+v, want one non-nil pipeline", item.Pipelines)
+	}
+	pipeline := item.Pipelines[0]
+	if pipeline.CreatedAt == "" || pipeline.UpdatedAt == "" {
+		t.Fatalf("pipeline timestamps = %+v, want created and updated values", pipeline)
+	}
+	if pipeline.User == nil || pipeline.User.Username != "alice" {
+		t.Fatalf("pipeline user = %+v, want alice", pipeline.User)
+	}
+}
+
+func TestPackagePipelineToOutput_NilPipeline_ReturnsNil(t *testing.T) {
+	if got := packagePipelineToOutput(nil); got != nil {
+		t.Fatalf("packagePipelineToOutput(nil) = %+v, want nil", got)
 	}
 }
 

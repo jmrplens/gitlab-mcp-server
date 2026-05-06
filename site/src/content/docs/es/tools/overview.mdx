@@ -9,11 +9,11 @@ GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los
 
 ### Modo individual
 
-En modo individual, el servidor registra **1006 herramientas individuales**, cada una mapeada a una sola operación de la API de GitLab. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
+En modo individual, el servidor registra una herramienta por operación de GitLab: **863 herramientas** para CE, **1006 herramientas** para Enterprise/Premium autoalojado, o **1011 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
 ### Modo meta-herramientas (predeterminado)
 
-En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **32 meta-herramientas base** (o **47 con funciones enterprise**), mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
+En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **32 meta-herramientas base**, **47 en Enterprise/Premium autoalojado**, o **48 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
 ```json
 {
@@ -75,10 +75,10 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 
 ### Búsqueda y análisis
 
-| Meta-herramienta | Descripción                                                      | Acciones principales                                          |
-| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
-| `gitlab_search`  | Búsqueda entre recursos en proyectos, grupos y ámbito global     | code, issues, merge_requests, projects, users, commits, blobs |
-| `gitlab_analyze` | Análisis con sampling de IA (11 operaciones vía sampling de LLM) | analyze_mr_changes, summarize_issue, pipeline_failure, ...    |
+| Meta-herramienta | Descripción                                                      | Acciones principales                                                                      |
+| ---------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `gitlab_search`  | Búsqueda entre recursos en proyectos, grupos y ámbito global     | code, issues, merge_requests, commits, milestones, notes, projects, snippets, users, wiki |
+| `gitlab_analyze` | Análisis con sampling de IA (11 operaciones vía sampling de LLM) | analyze_mr_changes, summarize_issue, pipeline_failure, ...                                |
 
 ### Acceso y credenciales
 
@@ -109,11 +109,13 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en ambos modos cuando la autoactualización está habilitada.
 :::
 
-## Herramientas solo Enterprise (15)
+## Herramientas solo Enterprise
 
-Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 15 meta-herramientas adicionales para las funciones de GitLab Premium y Ultimate:
+Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 15 meta-herramientas adicionales para funciones Premium y Ultimate en instancias autoalojadas:
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
+
+En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con cinco acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `query` y `graph_status`.
 
 :::note
 Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate en tu instancia. Forzar el catálogo Enterprise/Premium en una instancia Community Edition registrará las herramientas, pero las llamadas a la API devolverán errores de permisos.
@@ -122,5 +124,6 @@ Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate 
 ## Lectura adicional
 
 - [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) — arquitectura detallada de meta-herramientas y uso
+- [Orbit](/gitlab-mcp-server/tools/orbit/) — herramientas Knowledge Graph para GitLab.com Enterprise/Premium
 - [Herramientas de análisis](/gitlab-mcp-server/tools/analysis/) — herramientas de sampling impulsadas por IA
 - [Recursos y prompts](/gitlab-mcp-server/tools/resources-prompts/) — contexto de solo lectura y plantillas de prompts

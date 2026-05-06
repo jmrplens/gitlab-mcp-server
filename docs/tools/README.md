@@ -4,7 +4,7 @@ Per-domain tool reference for gitlab-mcp-server. Each document covers one logica
 
 ## Server scope rationale
 
-The server exposes its 1006+ individual tools through a curated set of meta-tools, each consolidating a non-overlapping GitLab REST/GraphQL surface area. The meta-tool boundary maps 1:1 to GitLab's resource taxonomy (project, group, merge_request, issue, pipeline, etc.), so domains never duplicate functionality: lifecycle CRUD lives in the resource's own meta-tool (`gitlab_merge_request` for MR open/merge/close), peripheral concerns ship as siblings (`gitlab_mr_review` for diffs, comments, draft notes; `gitlab_pipeline` for CI runs, never MR pipelines). Read-only LLM-assisted analysis is isolated in `gitlab_analyze`, project discovery in `gitlab_discover_project`, and infrastructure self-management in `gitlab_server`. Enterprise/Premium-only domains (epics, audit events, DORA metrics, vulnerabilities, compliance, etc.) are gated by `GITLAB_ENTERPRISE` and either ship as dedicated meta-tools or attach as additional actions on the relevant base meta-tool, never as duplicate alternatives. This keeps every meta-tool independently invokable, free of overlap with its siblings, and minimal in surface area for LLM tool selection.
+The server exposes its individual tools through a curated set of meta-tools, each consolidating a non-overlapping GitLab REST/GraphQL surface area. The self-managed Enterprise/Premium catalog exposes 1006 individual tools; GitLab.com Enterprise/Premium adds 5 experimental Orbit Knowledge Graph tools for a maximum of 1011. The meta-tool boundary maps 1:1 to GitLab's resource taxonomy (project, group, merge_request, issue, pipeline, etc.), so domains never duplicate functionality: lifecycle CRUD lives in the resource's own meta-tool (`gitlab_merge_request` for MR open/merge/close), peripheral concerns ship as siblings (`gitlab_mr_review` for diffs, comments, draft notes; `gitlab_pipeline` for CI runs, never MR pipelines). Read-only LLM-assisted analysis is isolated in `gitlab_analyze`, project discovery in `gitlab_discover_project`, Orbit graph queries in `gitlab_orbit`, and infrastructure self-management in `gitlab_server`. Enterprise/Premium-only domains (epics, audit events, DORA metrics, vulnerabilities, compliance, Orbit, etc.) are gated by `GITLAB_ENTERPRISE` and either ship as dedicated meta-tools or attach as additional actions on the relevant base meta-tool, never as duplicate alternatives. This keeps every meta-tool independently invokable, free of overlap with its siblings, and minimal in surface area for LLM tool selection.
 
 ## Domains
 
@@ -25,6 +25,7 @@ The server exposes its 1006+ individual tools through a curated set of meta-tool
 | Access & Tokens | 68 | various | [access.md](access.md) |
 | Boards, Labels & Milestones | 26 | `gitlab_project`, `gitlab_group` | [boards.md](boards.md) |
 | Search | 11 | `gitlab_search` | [search.md](search.md) |
+| Orbit (GitLab.com Enterprise/Premium) | 5 | `gitlab_orbit` | [orbit.md](orbit.md) |
 | Wikis | 6 | `gitlab_wiki` | [wikis.md](wikis.md) |
 | Snippets | 24 | `gitlab_snippet` | [snippets.md](snippets.md) |
 | Packages & Registry | 28 | `gitlab_package` | [packages.md](packages.md) |
@@ -50,7 +51,7 @@ The server exposes its 1006+ individual tools through a curated set of meta-tool
 | Branch Rules | 1 | `gitlab_branch` (routed) | [branch-rules.md](branch-rules.md) |
 | Custom Emoji | 3 | `gitlab_custom_emoji` | [custom-emoji.md](custom-emoji.md) |
 
-> **Note**: The `events` sub-package (3 tools) is referenced by both Users & Todos and Notifications & Events domains. Four sub-packages (`projectimportexport`, `projectstatistics`, `uploads`, `deploymentmergerequests` — 12 tools) are covered by their parent domain docs (Projects, Environments). Five GraphQL-only domains (Vulnerabilities, Security Findings, CI/CD Catalog, Branch Rules, Custom Emoji) use the GitLab GraphQL API instead of REST — see [GraphQL Integration](../graphql.md) for details.
+> **Note**: The `events` sub-package (3 tools) is referenced by both Users & Todos and Notifications & Events domains. Four sub-packages (`projectimportexport`, `projectstatistics`, `uploads`, `deploymentmergerequests` — 12 tools) are covered by their parent domain docs (Projects, Environments). Orbit is registered only for `https://gitlab.com` connections with the Enterprise/Premium catalog enabled. Five GraphQL-only domains (Vulnerabilities, Security Findings, CI/CD Catalog, Branch Rules, Custom Emoji) use the GitLab GraphQL API instead of REST — see [GraphQL Integration](../graphql.md) for details.
 
 ## Response Format
 

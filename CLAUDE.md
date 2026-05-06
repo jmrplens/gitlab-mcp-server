@@ -10,8 +10,8 @@
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.26+                                            |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.5.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 1.4.4                                               |
@@ -20,14 +20,14 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1006                                                                                                         |
-| Meta-mode tools           | 32 base / 47 enterprise (24 inline + 3 delegated + 1 standalone + 4 interactive + 15 enterprise inline) |
+| MCP Tools (individual)    | 1006 self-managed Enterprise/Premium; 1011 on GitLab.com Enterprise/Premium with Orbit                     |
+| Meta-mode tools           | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
 | MCP Resources             | 46                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 522+ (infrastructure + 162 sub-packages)                                                                     |
+| Source files (tools)      | 629+ (infrastructure + 163 sub-packages)                                                                     |
 | Test files (tools)        | 320                                                                                                          |
 | Go packages               | 187 (16 core + 163 tool packages + 8 cmd)                                                                    |
 
@@ -53,7 +53,7 @@ gitlab-mcp-server/
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
+│   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
 │   │   ├── register_meta.go     # RegisterAllMeta() — delegates to sub-package RegisterMeta()
 │   │   ├── markdown.go          # Thin delegator to type-based markdown registry (toolutil.MarkdownForResult)
@@ -158,7 +158,7 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used by all 162 domain sub-packages:
+Four error wrapping functions in `internal/toolutil/errors.go`, used by all 163 domain sub-packages:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -436,14 +436,14 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1006 tools)      |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (163 sub-packages, 1006 self-managed tools / 1011 GitLab.com Enterprise tools) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (5 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package is split into 162 domain sub-packages (161 registered in `internal/tools/register.go` + 1 `serverupdate` registered in `cmd/server/main.go` due to its different constructor signature). Each sub-package has its own `register.go`. This provides:
+The `internal/tools/` package is split into 163 domain sub-packages (162 registered in `internal/tools/register.go` + 1 `serverupdate` registered in `cmd/server/main.go` due to its different constructor signature). Each sub-package has its own `register.go`. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks

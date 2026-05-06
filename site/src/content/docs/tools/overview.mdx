@@ -9,11 +9,11 @@ GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can 
 
 ### Individual mode
 
-In individual mode, the server registers **1006 individual tools**, each mapping to a single GitLab API operation. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
+In individual mode, the server registers one tool per GitLab operation: **863 tools** for CE, **1006 tools** for self-managed Enterprise/Premium, or **1011 tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
 
 ### Meta-tool mode (default)
 
-In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools** (or **47 with enterprise features**), dramatically improving LLM token efficiency while preserving full functionality.
+In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools**, **47 on self-managed Enterprise/Premium**, or **48 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
 
 ```json
 {
@@ -75,10 +75,10 @@ All tools follow a consistent naming pattern:
 
 ### Search & analysis
 
-| Meta-tool        | Description                                                     | Key Actions                                                   |
-| ---------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
-| `gitlab_search`  | Cross-resource search across projects, groups, and global scope | code, issues, merge_requests, projects, users, commits, blobs |
-| `gitlab_analyze` | AI-powered sampling analysis (11 operations via LLM sampling)   | analyze_mr_changes, summarize_issue, pipeline_failure, ...    |
+| Meta-tool        | Description                                                     | Key Actions                                                                               |
+| ---------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `gitlab_search`  | Cross-resource search across projects, groups, and global scope | code, issues, merge_requests, commits, milestones, notes, projects, snippets, users, wiki |
+| `gitlab_analyze` | AI-powered sampling analysis (11 operations via LLM sampling)   | analyze_mr_changes, summarize_issue, pipeline_failure, ...                                |
 
 ### Access & credentials
 
@@ -109,11 +109,13 @@ All tools follow a consistent naming pattern:
 Two additional standalone tools (`gitlab_server_check_update`, `gitlab_server_apply_update`) are registered in both modes when auto-update is enabled.
 :::
 
-## Enterprise-only tools (15)
+## Enterprise-only tools
 
-When the Enterprise/Premium catalog is enabled, the server registers 15 additional meta-tools for GitLab Premium and Ultimate features:
+When the Enterprise/Premium catalog is enabled, the server registers 15 additional self-managed meta-tools for GitLab Premium and Ultimate features:
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
+
+On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with five read-only Knowledge Graph actions: `status`, `schema`, `tools`, `query`, and `graph_status`.
 
 :::note
 Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.
@@ -122,5 +124,6 @@ Enterprise tools require a GitLab Premium or Ultimate license on your instance. 
 ## Further reading
 
 - [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — detailed meta-tool architecture and usage
+- [Orbit](/gitlab-mcp-server/tools/orbit/) — GitLab.com Enterprise/Premium Knowledge Graph tools
 - [Analysis Tools](/gitlab-mcp-server/tools/analysis/) — AI-powered sampling tools
 - [Resources & Prompts](/gitlab-mcp-server/tools/resources-prompts/) — read-only context and prompt templates

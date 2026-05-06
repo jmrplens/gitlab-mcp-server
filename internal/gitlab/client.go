@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,7 +30,8 @@ import (
 // It includes connection resilience: when GitLab is unreachable at startup, the
 // server enters degraded mode and automatically recovers when connectivity is restored.
 type Client struct {
-	inner *gl.Client
+	inner   *gl.Client
+	baseURL string
 
 	// enterprise indicates whether the GitLab instance is Premium/Ultimate.
 	// Used to select EE-specific API queries (e.g. GraphQL branch rules with
@@ -61,11 +63,31 @@ const initCooldown = 30 * time.Second
 // used during initialization (bypasses the SDK transport chain).
 const healthTimeout = 10 * time.Second
 
+// GitLabDotComHost is the canonical host for GitLab SaaS-only features.
+const GitLabDotComHost = "gitlab.com"
+
 // SetEnterprise marks the client as connected to a Premium/Ultimate instance.
 func (c *Client) SetEnterprise(v bool) { c.enterprise.Store(v) }
 
 // IsEnterprise reports whether the GitLab instance is Premium/Ultimate.
 func (c *Client) IsEnterprise() bool { return c.enterprise.Load() }
+
+// IsGitLabDotCom reports whether the client is configured for GitLab.com.
+func (c *Client) IsGitLabDotCom() bool {
+	if c == nil {
+		return false
+	}
+	return IsGitLabDotComURL(c.baseURL)
+}
+
+// IsGitLabDotComURL reports whether rawURL targets the canonical GitLab.com host.
+func IsGitLabDotComURL(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), GitLabDotComHost)
+}
 
 // NewClient creates an authenticated GitLab client from the provided configuration.
 // When cfg.SkipTLSVerify is true, TLS certificate verification is disabled (for self-signed certs).
@@ -75,6 +97,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	base := buildBaseTransport(cfg.SkipTLSVerify)
 
 	c := &Client{
+		baseURL:      cfg.GitLabURL,
 		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + "/api/v4/version",
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
@@ -110,6 +133,7 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
+		baseURL:      baseURL,
 		healthURL:    strings.TrimRight(baseURL, "/") + "/api/v4/version",
 		token:        token,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},

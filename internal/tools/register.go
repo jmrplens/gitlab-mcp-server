@@ -115,6 +115,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/namespaces"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/orbit"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
@@ -308,6 +309,9 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 
 	// Enterprise tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
 	if enterprise {
+		if client.IsGitLabDotCom() {
+			orbit.RegisterTools(server, client)
+		}
 		groupserviceaccounts.RegisterTools(server, client)
 		projects.RegisterPushRuleTools(server, client)
 		mergetrains.RegisterTools(server, client)

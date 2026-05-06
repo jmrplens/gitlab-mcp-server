@@ -33,9 +33,11 @@ import (
 
 // Audit server identity values used for in-memory MCP introspection sessions.
 const (
-	auditServerName = "audit-metrics"
-	auditClientName = "audit-metrics-client"
-	auditVersion    = "0.0.1"
+	auditServerName  = "audit-metrics"
+	auditClientName  = "audit-metrics-client"
+	auditVersion     = "0.0.1"
+	toolListFormat   = "  - %s\n"
+	metricLabelWidth = 48
 )
 
 // main builds the audit client, gathers runtime counts from the registered MCP
@@ -57,10 +59,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
+	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
+		GitLabURL:   config.DefaultGitLabURL,
+		GitLabToken: "audit-token",
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
+		os.Exit(1)
+	}
 
 	individualTools := listServerTools(client, false, false)
+	gitLabComIndividualTools := listServerTools(gitLabComClient, false, false)
 	metaBase := listServerTools(client, true, false)
 	metaEnterprise := listServerTools(client, true, true)
+	metaGitLabComEnterprise := listServerTools(gitLabComClient, true, true)
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -94,10 +106,14 @@ func main() {
 
 	fmt.Println("## Core Metrics")
 	fmt.Println()
-	printRow("Individual MCP tools", len(individualTools))
+	printRow("Individual MCP tools (self-managed enterprise)", len(individualTools))
+	printRow("Individual MCP tools (GitLab.com enterprise)", len(gitLabComIndividualTools))
 	printRow("Meta-tools (base)", len(metaBase))
-	printRow("Meta-tools (enterprise)", len(metaEnterprise))
-	printRow("Enterprise-only meta-tools", len(metaEnterprise)-len(metaBase))
+	printRow("Meta-tools (self-managed enterprise)", len(metaEnterprise))
+	printRow("Meta-tools (GitLab.com enterprise)", len(metaGitLabComEnterprise))
+	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
+	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
+	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
 	printRow("MCP Resources (total)", resourceCount)
 	printRow("  Static resources", staticResources)
 	printRow("  Resource templates", templateResources)
@@ -133,17 +149,28 @@ func main() {
 	fmt.Println()
 	fmt.Println("### Base (" + strconv.Itoa(len(metaBase)) + ")")
 	for _, t := range metaBase {
-		fmt.Printf("  - %s\n", t.Name)
+		fmt.Printf(toolListFormat, t.Name)
 	}
 	fmt.Println()
-	fmt.Println("### Enterprise-only (" + strconv.Itoa(len(metaEnterprise)-len(metaBase)) + ")")
+	fmt.Println("### Enterprise-only (" + strconv.Itoa(diffByName(metaEnterprise, metaBase)) + ")")
 	baseNames := map[string]bool{}
 	for _, t := range metaBase {
 		baseNames[t.Name] = true
 	}
 	for _, t := range metaEnterprise {
 		if !baseNames[t.Name] {
-			fmt.Printf("  - %s\n", t.Name)
+			fmt.Printf(toolListFormat, t.Name)
+		}
+	}
+	fmt.Println()
+	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(diffByName(metaGitLabComEnterprise, metaEnterprise)) + ")")
+	enterpriseNames := map[string]bool{}
+	for _, t := range metaEnterprise {
+		enterpriseNames[t.Name] = true
+	}
+	for _, t := range metaGitLabComEnterprise {
+		if !enterpriseNames[t.Name] {
+			fmt.Printf(toolListFormat, t.Name)
 		}
 	}
 }
@@ -308,7 +335,21 @@ func countSourceFiles() (src, test int) {
 
 // printRow prints a metric row with aligned formatting.
 func printRow(label string, value int) {
-	fmt.Printf("  %-30s %d\n", label, value)
+	fmt.Printf("  %-*s %d\n", metricLabelWidth, label, value)
+}
+
+func diffByName(a, b []*mcp.Tool) int {
+	seen := make(map[string]struct{}, len(b))
+	for _, tool := range b {
+		seen[tool.Name] = struct{}{}
+	}
+	count := 0
+	for _, tool := range a {
+		if _, ok := seen[tool.Name]; !ok {
+			count++
+		}
+	}
+	return count
 }
 
 // printMetaSchemaModes reports the active META_PARAM_SCHEMA mode and the

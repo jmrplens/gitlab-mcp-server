@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Context
 
-The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v2`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface (162 domain sub-packages use REST exclusively).
+The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v2`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface (158 of the 163 domain sub-packages use REST exclusively).
 
 However, several GitLab API domains are **only available via GraphQL** and have no corresponding service wrapper in `client-go`:
 
@@ -108,7 +108,7 @@ All GraphQL tool handlers are tested using the same `httptest` mock infrastructu
 - Requires no real GitLab instance for unit tests
 - Validates query variable composition and response parsing
 - Tests error paths (API errors, mutation failures, malformed responses)
-- Maintains test consistency with the 162 REST-based sub-packages
+- Maintains test consistency with the REST-only sub-packages (158 of 163) and hybrid domains such as vulnerabilities that use the same `httptest` mock pattern
 
 ## Consequences
 

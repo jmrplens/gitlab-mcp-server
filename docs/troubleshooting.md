@@ -29,7 +29,7 @@ Common issues and solutions for gitlab-mcp-server.
 
 | Symptom | Cause | Solution |
 | --- | --- | --- |
-| MCP client shows 1006 tools instead of 32 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 32 base meta-tools instead of 1006 individual tools |
+| MCP client shows hundreds of individual tools instead of 32 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 32 base meta-tools, 47 self-managed enterprise meta-tools, or 48 GitLab.com Enterprise meta-tools instead of the individual catalog |
 | Tool not found in `tools/list` | Tool not registered, or meta-tools mode mismatch | Check if the tool exists in individual mode (`META_TOOLS=false`) or meta-tool mode (`META_TOOLS=true`) — they expose different tool names |
 | `unknown action` in meta-tool call | Invalid `action` parameter | List valid actions by calling the meta-tool with `action: "list"` or check [Meta-Tools Reference](meta-tools.md) |
 | `json: unknown field "<name>"` from a meta-tool | Misspelled or stale parameter name in `params` | Meta-tools reject unknown keys (`DisallowUnknownFields`). Use the exact parameter names listed for the chosen `action` (e.g. `merge_request_iid`, `issue_iid`, `epic_iid`, `work_item_iid`, `snippet_id`) — see [Meta-Tools Reference](meta-tools.md) |
@@ -60,6 +60,7 @@ See [Auto-Update](auto-update.md) for full details on update modes and configura
 | Symptom | Cause | Solution |
 | --- | --- | --- |
 | `400 Bad Request` | Missing or empty token header | Send `PRIVATE-TOKEN` or `Authorization: Bearer <token>` header |
+| `403 Forbidden` on HTTP POST before MCP JSON-RPC handling | Browser sent a cross-site `Origin` or `Sec-Fetch-Site: cross-site` header | Use a same-origin endpoint, call the server from a non-browser MCP client, or put a trusted same-origin reverse proxy in front of the server |
 | Pool eviction too frequent | Too many unique tokens | Increase `--max-http-clients` (default: 100) |
 | Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m) |
 

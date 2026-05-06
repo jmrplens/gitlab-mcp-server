@@ -116,6 +116,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/namespaces"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/orbit"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
@@ -170,7 +171,7 @@ import (
 // RegisterAllMeta wires meta-tools to the MCP server.
 // Base: 32 tools = 28 meta-tools (24 inline + 3 delegated + 1 standalone) +
 // 4 standalone interactive elicitation tools (gitlab_interactive_*).
-// Enterprise: +15 inline meta-tools = 47 tools total.
+// Enterprise: +15 inline meta-tools = 47 tools total; GitLab.com Enterprise also adds gitlab_orbit.
 // Each meta-tool dispatches to the underlying handler based on the "action"
 // parameter. This reduces token usage for LLMs while preserving full
 // functionality. Interactive tools cannot be consolidated because they
@@ -223,6 +224,9 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 		registerStorageMoveMeta(server, client)
 		registerVulnerabilityMeta(server, client)
 		registerSecurityFindingsMeta(server, client)
+		if client.IsGitLabDotCom() {
+			orbit.RegisterMeta(server, client)
+		}
 	}
 
 	// Delegated meta-tools (sub-package RegisterMeta)

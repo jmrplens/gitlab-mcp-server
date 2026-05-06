@@ -34,20 +34,45 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
-// keep the file scannable. When a description exceeds this limit, generation
-// falls back to its first sentence; if that is still too long, the text is
-// hard-truncated at the rune boundary.
-const maxFullDescRunes = 600
+const (
+	// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
+	// keep the file scannable. When a description exceeds this limit, generation
+	// falls back to its first sentence; if that is still too long, the text is
+	// hard-truncated at the rune boundary.
+	maxFullDescRunes = 600
 
-// main introspects the live MCP catalog and regenerates llms.txt and
-// llms-full.txt in the project root.
+	// searchTypeParamName keeps backend choices visible; truncating its long
+	// description hides the basic/advanced/zoekt guidance LLMs need.
+	searchTypeParamName = "search_type"
+)
+
+type llmsCatalog struct {
+	Individual              []*mcp.Tool
+	IndividualSelfManaged   []*mcp.Tool
+	MetaBase                []*mcp.Tool
+	MetaEnterprise          []*mcp.Tool
+	MetaGitLabComEnterprise []*mcp.Tool
+	Resources               []*mcp.Resource
+	ResourceTemplates       []*mcp.ResourceTemplate
+	Prompts                 []*mcp.Prompt
+}
+
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to generate llms files: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// run introspects the live MCP catalog and regenerates llms.txt and
+// llms-full.txt in the project root.
+func run() error {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, `{"version":"17.0.0"}`)
 	}))
+	defer srv.Close()
 
 	cfg := &config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
 		GitLabURL:   srv.URL,
@@ -55,25 +80,67 @@ func main() {
 	}
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
-		srv.Close()
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("create client: %w", err)
 	}
-	defer srv.Close()
+	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
+		GitLabURL:   config.DefaultGitLabURL,
+		GitLabToken: "gen-llms-token",
+	})
+	if err != nil {
+		return fmt.Errorf("create gitlab.com client: %w", err)
+	}
 
 	version := readVersion()
-	individual := listTools(client, false)
-	metaBase := listTools(client, true)
-	metaEnterprise := listToolsEnterprise(client)
-	res, resTpl := listResources(client)
-	prm := listPrompts(client)
+	res, resTpl, err := listResources(client)
+	if err != nil {
+		return err
+	}
+	individualSelfManaged, err := listTools(client, false)
+	if err != nil {
+		return err
+	}
+	individualGitLabCom, err := listTools(gitLabComClient, false)
+	if err != nil {
+		return err
+	}
+	metaBase, err := listTools(client, true)
+	if err != nil {
+		return err
+	}
+	metaEnterprise, err := listToolsEnterprise(client)
+	if err != nil {
+		return err
+	}
+	metaGitLabComEnterprise, err := listToolsEnterprise(gitLabComClient)
+	if err != nil {
+		return err
+	}
+	promptList, err := listPrompts(client)
+	if err != nil {
+		return err
+	}
+	catalog := llmsCatalog{
+		Individual:              individualGitLabCom,
+		IndividualSelfManaged:   individualSelfManaged,
+		MetaBase:                metaBase,
+		MetaEnterprise:          metaEnterprise,
+		MetaGitLabComEnterprise: metaGitLabComEnterprise,
+		Resources:               res,
+		ResourceTemplates:       resTpl,
+		Prompts:                 promptList,
+	}
 
-	writeLLMSTxt(version, individual, metaBase, metaEnterprise, res, resTpl, prm)
-	writeLLMSFullTxt(version, individual, metaBase, metaEnterprise, res, resTpl, prm)
+	if writeErr := writeLLMSTxt(version, catalog); writeErr != nil {
+		return writeErr
+	}
+	if writeErr := writeLLMSFullTxt(version, catalog); writeErr != nil {
+		return writeErr
+	}
 
-	fmt.Printf("Generated llms.txt (%d tools, %d meta, %d resources, %d prompts)\n",
-		len(individual), len(metaBase), len(res)+len(resTpl)+1, len(prm))
+	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d resources, %d prompts)\n",
+		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
 	fmt.Printf("Generated llms-full.txt\n")
+	return nil
 }
 
 // readVersion reads the VERSION file from the project root.
@@ -86,7 +153,7 @@ func readVersion() string {
 }
 
 // newSession creates an in-memory MCP server+client session with high page size.
-func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, cleanup func()) {
+func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(), err error) {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-llms", Version: "0.0.1"}, opts)
 	setupServer(server)
@@ -94,60 +161,68 @@ func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, clea
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("server connect: %w", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-llms-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
+		serverSession.Close()
+		_ = serverSession.Wait()
+		return nil, nil, fmt.Errorf("client connect: %w", err)
 	}
 
-	return session, func() { _ = session.Close() }
+	return session, func() {
+		_ = session.Close()
+		_ = serverSession.Wait()
+	}, nil
 }
 
 // listTools returns either the enterprise individual catalog or the base
 // meta-tool catalog, depending on meta.
-func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	session, cleanup := newSession(func(server *mcp.Server) {
+func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
+	session, cleanup, err := newSession(func(server *mcp.Server) {
 		if meta {
 			tools.RegisterAllMeta(server, client, false)
 		} else {
 			tools.RegisterAll(server, client, true)
 		}
 	})
+	if err != nil {
+		return nil, err
+	}
 	defer cleanup()
 
 	result, err := session.ListTools(context.Background(), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool
+		return nil, fmt.Errorf("list tools: %w", err)
 	}
-	return result.Tools
+	return result.Tools, nil
 }
 
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
-func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
-	session, cleanup := newSession(func(server *mcp.Server) {
+func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
+	session, cleanup, err := newSession(func(server *mcp.Server) {
 		tools.RegisterAllMeta(server, client, true)
 	})
+	if err != nil {
+		return nil, err
+	}
 	defer cleanup()
 
 	result, err := session.ListTools(context.Background(), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools (enterprise): %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool
+		return nil, fmt.Errorf("list enterprise tools: %w", err)
 	}
-	return result.Tools
+	return result.Tools, nil
 }
 
 // listResources returns the static resources and resource templates advertised
 // by the MCP server, including the per-action meta-schema template.
-func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate) {
-	session, cleanup := newSession(func(server *mcp.Server) {
+func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
+	session, cleanup, err := newSession(func(server *mcp.Server) {
 		metaRoutes := toolutil.CaptureMetaRoutes(func() {
 			tools.RegisterAllMeta(server, client, false)
 		})
@@ -155,50 +230,52 @@ func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.Resourc
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 	defer cleanup()
 
 	ctx := context.Background()
 	res, err := session.ListResources(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListResources: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool exits on fatal error
+		return nil, nil, fmt.Errorf("list resources: %w", err)
 	}
 	tpl, err := session.ListResourceTemplates(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListResourceTemplates: %v\n", err)
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("list resource templates: %w", err)
 	}
-	return res.Resources, tpl.ResourceTemplates
+	return res.Resources, tpl.ResourceTemplates, nil
 }
 
 // listPrompts returns all registered MCP prompt definitions for llms output.
-func listPrompts(client *gitlabclient.Client) []*mcp.Prompt {
-	session, cleanup := newSession(func(server *mcp.Server) {
+func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
+	session, cleanup, err := newSession(func(server *mcp.Server) {
 		prompts.Register(server, client)
 	})
+	if err != nil {
+		return nil, err
+	}
 	defer cleanup()
 
 	result, err := session.ListPrompts(context.Background(), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListPrompts: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool
+		return nil, fmt.Errorf("list prompts: %w", err)
 	}
-	return result.Prompts
+	return result.Prompts, nil
 }
 
 // writeLLMSTxt generates the concise llms.txt overview.
-func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.Tool,
-	res []*mcp.Resource, resTpl []*mcp.ResourceTemplate, prm []*mcp.Prompt) {
+func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	var b strings.Builder
-	resourceCount := len(res) + len(resTpl) + 1 // +1 for workspace_roots
+	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1 // +1 for workspace_roots
 
 	b.WriteString("# gitlab-mcp-server\n\n")
 	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.\n\n")
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
-	fmt.Fprintf(&b, "It provides %d individual MCP tools across %d GitLab API domains, %d meta-tools (%d with enterprise mode),\n",
-		len(individual), countDomains(individual), len(metaBase), len(metaEnterprise))
+	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d meta-tools (%d self-managed enterprise, %d on GitLab.com Enterprise),\n",
+		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
 	fmt.Fprintf(&b, "%d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
-		resourceCount, len(prm))
+		resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Quick Start\n\n")
 	b.WriteString("1. Download the binary for your platform from the Releases page\n")
@@ -206,22 +283,23 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
 
 	b.WriteString("## Configuration (environment variables — stdio mode)\n\n")
-	b.WriteString("- GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)\n")
+	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: %s; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- META_TOOLS: Enable meta-tools for reduced tool count (default: true)\n")
-	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools (default: false)\n\n")
+	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
 
 	b.WriteString("## Tool Domains\n\n")
-	domains := classifyMetaDomains(metaBase)
+	domains := classifyMetaDomains(catalog.MetaBase)
 	b.WriteString(strings.Join(domains, ", "))
 	b.WriteString(".\n\n")
 
 	b.WriteString("## Meta-Tools (default mode)\n\n")
-	fmt.Fprintf(&b, "When META_TOOLS=true (default), %d domain meta-tools are registered instead of\n", len(metaBase))
-	fmt.Fprintf(&b, "%d individual tools. Each meta-tool groups related operations under a single\n", len(individual))
+	fmt.Fprintf(&b, "When META_TOOLS=true (default), %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
+	fmt.Fprintf(&b, "up to %d individual tools. Enterprise/Premium entries register %d meta-tools on self-managed GitLab,\n", len(catalog.Individual), len(catalog.MetaEnterprise))
+	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
-	for _, t := range metaBase {
+	for _, t := range catalog.MetaBase {
 		desc := firstSentence(stripMetaPrefix(t.Description))
 		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
@@ -230,18 +308,18 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 
 	b.WriteString("## Resources\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
-	for _, r := range res {
+	for _, r := range catalog.Resources {
 		fmt.Fprintf(&b, "- %s: %s\n", r.URI, r.Name)
 	}
-	for _, r := range resTpl {
+	for _, r := range catalog.ResourceTemplates {
 		fmt.Fprintf(&b, "- %s: %s\n", r.URITemplate, r.Name)
 	}
 	b.WriteString("- gitlab://workspace/roots: Workspace Roots\n")
 	b.WriteString("\n")
 
 	b.WriteString("## Prompts\n\n")
-	fmt.Fprintf(&b, "%d prompts:\n\n", len(prm))
-	for _, p := range prm {
+	fmt.Fprintf(&b, "%d prompts:\n\n", len(catalog.Prompts))
+	for _, p := range catalog.Prompts {
 		desc := firstSentence(p.Description)
 		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", p.Name, desc)
@@ -258,20 +336,19 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	b.WriteString("- llms-full.txt — Full tool listing with schemas\n")
 
 	if err := writeFile("llms.txt", b.String()); err != nil {
-		fmt.Fprintf(os.Stderr, "write llms.txt: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("write llms.txt: %w", err)
 	}
+	return nil
 }
 
 // writeLLMSFullTxt generates the detailed llms-full.txt with tool schemas.
-func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mcp.Tool,
-	res []*mcp.Resource, resTpl []*mcp.ResourceTemplate, prm []*mcp.Prompt) {
+func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	var b strings.Builder
-	resourceCount := len(res) + len(resTpl) + 1
+	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
-	fmt.Fprintf(&b, "> Version %s | %d tools | %d meta-tools (%d enterprise) | %d resources | %d prompts\n\n",
-		version, len(individual), len(metaBase), len(metaEnterprise), resourceCount, len(prm))
+	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d meta-tools (%d self-managed enterprise, %d GitLab.com Enterprise) | %d resources | %d prompts\n\n",
+		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
 
 	// --- Meta-tools (primary mode) ---
 	b.WriteString("## Meta-Tools\n\n")
@@ -280,7 +357,7 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 
 	allRoutes := toolutil.MetaRoutes()
 
-	for _, t := range metaBase {
+	for _, t := range catalog.MetaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 		if t.Title != "" {
 			fmt.Fprintf(&b, "**%s**\n\n", t.Title)
@@ -295,19 +372,19 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 	}
 
 	// Enterprise-only meta-tools
-	baseNames := make(map[string]bool, len(metaBase))
-	for _, t := range metaBase {
+	baseNames := make(map[string]bool, len(catalog.MetaBase))
+	for _, t := range catalog.MetaBase {
 		baseNames[t.Name] = true
 	}
 	var enterpriseOnly []*mcp.Tool
-	for _, t := range metaEnterprise {
+	for _, t := range catalog.MetaGitLabComEnterprise {
 		if !baseNames[t.Name] {
 			enterpriseOnly = append(enterpriseOnly, t)
 		}
 	}
 	if len(enterpriseOnly) > 0 {
 		b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-		fmt.Fprintf(&b, "These %d tools require GITLAB_ENTERPRISE=true.\n\n", len(enterpriseOnly))
+		fmt.Fprintf(&b, "These %d tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 		for _, t := range enterpriseOnly {
 			fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 			if t.Title != "" {
@@ -325,10 +402,10 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 
 	// --- Individual tools (by domain) ---
 	b.WriteString("## Individual Tools\n\n")
-	fmt.Fprintf(&b, "When META_TOOLS=false, all %d individual tools are registered.\n", len(individual))
+	fmt.Fprintf(&b, "When META_TOOLS=false, up to %d individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers %d.\n", len(catalog.Individual), len(catalog.IndividualSelfManaged))
 	b.WriteString("Grouped by domain:\n\n")
 
-	domainTools := groupByDomain(individual)
+	domainTools := groupByDomain(catalog.Individual)
 	domainNames := make([]string, 0, len(domainTools))
 	for d := range domainTools {
 		domainNames = append(domainNames, d)
@@ -359,7 +436,7 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 	// --- Resources ---
 	b.WriteString("## Resources\n\n")
 	fmt.Fprintf(&b, "%d resources providing read-only access to GitLab data.\n\n", resourceCount)
-	for _, r := range res {
+	for _, r := range catalog.Resources {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, r.Name)
 		fmt.Fprintf(&b, "- **URI**: `%s`\n", r.URI)
 		if r.MIMEType != "" {
@@ -370,7 +447,7 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		}
 		b.WriteString("\n")
 	}
-	for _, r := range resTpl {
+	for _, r := range catalog.ResourceTemplates {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, r.Name)
 		fmt.Fprintf(&b, "- **URI Template**: `%s`\n", r.URITemplate)
 		if r.MIMEType != "" {
@@ -387,8 +464,8 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 
 	// --- Prompts ---
 	b.WriteString("## Prompts\n\n")
-	fmt.Fprintf(&b, "%d prompt templates for AI-assisted GitLab workflows.\n\n", len(prm))
-	for _, p := range prm {
+	fmt.Fprintf(&b, "%d prompt templates for AI-assisted GitLab workflows.\n\n", len(catalog.Prompts))
+	for _, p := range catalog.Prompts {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, p.Name)
 		if p.Description != "" {
 			b.WriteString(p.Description)
@@ -412,9 +489,9 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 	}
 
 	if err := writeFile("llms-full.txt", b.String()); err != nil {
-		fmt.Fprintf(os.Stderr, "write llms-full.txt: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
+	return nil
 }
 
 // writeAnnotations writes tool annotation hints to the builder.
@@ -501,7 +578,9 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			desc = truncateRunes(desc, 120)
+			if name != searchTypeParamName {
+				desc = truncateRunes(desc, 120)
+			}
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)
 		} else {
 			fmt.Fprintf(b, "- `%s` (%s)%s\n", name, typ, req)

@@ -225,6 +225,52 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 	}
 }
 
+// TestHTTPHandler_ParameterizedContentType_ReturnsServerInfo verifies that the
+// streamable HTTP transport accepts JSON content types with parameters.
+func TestHTTPHandler_ParameterizedContentType_ReturnsServerInfo(t *testing.T) {
+	server := newTestMCPServer(t)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		return server
+	}, nil)
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(hdrContentType, "application/json; charset=utf-8")
+	req.Header.Set("Accept", mimeJSONSSE)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	result := parseJSONRPCResponse(t, resp)
+	res, ok := result["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'result' field: %v", result)
+	}
+	serverInfo, ok := res["serverInfo"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'serverInfo': %v", res)
+	}
+	if name := serverInfo["name"]; name != serverName {
+		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
+
 // TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities verifies that
 // the initialize handshake reports listChanged: true for tools, resources,
 // and prompts so that MCP clients know they will receive
@@ -1229,6 +1275,65 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost verifies HTTP mode
+// rejects browser-originated cross-site POST requests before MCP dispatch.
+func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403 Forbidden, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	cancel()
 	select {
 	case err = <-errCh:
@@ -2414,6 +2519,56 @@ func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200 for allowed host with port, got %d", rr.Code)
+	}
+}
+
+// TestCrossOriginProtectionMiddleware_AllowsNonBrowserPost verifies that MCP
+// clients without browser origin headers are not rejected.
+func TestCrossOriginProtectionMiddleware_AllowsNonBrowserPost(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := crossOriginProtectionMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-browser POST, got %d", rr.Code)
+	}
+	if !called {
+		t.Fatal("inner handler was not called")
+	}
+}
+
+// TestCrossOriginProtectionMiddleware_AllowsSameOriginPost verifies that
+// same-origin browser POST requests are not rejected.
+func TestCrossOriginProtectionMiddleware_AllowsSameOriginPost(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := crossOriginProtectionMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Origin", "http://mcp.example")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 for same-origin POST, got %d", rr.Code)
+	}
+	if !called {
+		t.Fatal("inner handler was not called")
 	}
 }
 
