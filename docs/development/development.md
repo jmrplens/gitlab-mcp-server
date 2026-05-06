@@ -40,15 +40,15 @@ gitlab-mcp-server/
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
+│   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 24 inline + 3 delegated + 1 standalone + 4 interactive = 32 meta-tools (47 with Enterprise/Premium catalog)
+│   │   ├── register_meta.go     # RegisterAllMeta() — 32 base meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise)
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # 162 domain sub-packages total
+│   │   └── ...                  # 163 domain sub-packages total
 │   ├── resources/               # 46 MCP resource handlers
 │   └── prompts/                 # 38 MCP prompt handlers (12 core + 26 extended)
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
@@ -85,7 +85,7 @@ graph TD
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** register handlers via `mcp.AddTool()` with typed input/output structs
-4. **Meta-tools** optionally group 1006 base tools into 32 domain meta-tools (47 with the Enterprise/Premium catalog) (via ADR-0005)
+4. **Meta-tools** optionally group individual tools into 32 domain meta-tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation
@@ -438,8 +438,8 @@ Install the Go extension and add to `.vscode/mcp.json`:
 
 | Dependency                               | Version | Purpose                          |
 | ---------------------------------------- | ------- | -------------------------------- |
-| `github.com/modelcontextprotocol/go-sdk` | v1.5.0  | MCP server framework             |
-| `gitlab.com/gitlab-org/api/client-go/v2`  | v2.20.1  | Official GitLab REST API client  |
+| `github.com/modelcontextprotocol/go-sdk` | v1.6.0  | MCP server framework             |
+| `gitlab.com/gitlab-org/api/client-go/v2`  | v2.24.1  | Official GitLab REST API client  |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev        |
 
 ## External References

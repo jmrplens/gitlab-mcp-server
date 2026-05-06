@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
@@ -358,6 +361,51 @@ func TestPackageList_Success(t *testing.T) {
 	}
 	if out.Packages[0].WebPath != "/project/-/packages/10" {
 		t.Errorf("Packages[0].WebPath = %q, want %q", out.Packages[0].WebPath, "/project/-/packages/10")
+	}
+}
+
+func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
+	now := time.Date(2026, 5, 6, 11, 0, 0, 0, time.UTC)
+	updated := now.Add(time.Minute)
+	item := packageToListItem(&gl.Package{
+		ID:          99,
+		Name:        "pkg",
+		Version:     "1.2.3",
+		PackageType: "generic",
+		Status:      "default",
+		CreatedAt:   &now,
+		Pipelines: []*gl.PackagePipeline{
+			nil,
+			{
+				ID:        77,
+				Status:    "success",
+				Ref:       "main",
+				SHA:       "abc123",
+				WebURL:    "https://gitlab.example.com/pipelines/77",
+				CreatedAt: &now,
+				UpdatedAt: &updated,
+				User: &gl.BasicUser{
+					ID:       5,
+					Username: "alice",
+					Name:     "Alice",
+					WebURL:   "https://gitlab.example.com/alice",
+				},
+			},
+		},
+	})
+
+	if item.CreatedAt == "" {
+		t.Fatal("CreatedAt should be preserved")
+	}
+	if len(item.Pipelines) != 1 {
+		t.Fatalf("Pipelines = %+v, want one non-nil pipeline", item.Pipelines)
+	}
+	pipeline := item.Pipelines[0]
+	if pipeline.CreatedAt == "" || pipeline.UpdatedAt == "" {
+		t.Fatalf("pipeline timestamps = %+v, want created and updated values", pipeline)
+	}
+	if pipeline.User == nil || pipeline.User.Username != "alice" {
+		t.Fatalf("pipeline user = %+v, want alice", pipeline.User)
 	}
 }
 

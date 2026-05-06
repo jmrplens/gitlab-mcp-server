@@ -18,26 +18,26 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,338 |
-| Unit test functions | 9,093 |
+| Total test functions | 9,365 |
+| Unit test functions | 9,120 |
 | E2E test functions | 245 |
 | cmd test functions | 347 |
-| Test files (internal/) | 398 |
+| Test files (internal/) | 399 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 108 |
-| Tool sub-packages tested | 162 |
+| Tool sub-packages tested | 163 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
-| Overall coverage (`go test ./internal/...`) | 96.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.0% |
+| Overall coverage (`go test ./internal/...`) | 97.0% |
 | Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,390 | 89.8% |
-| `TestFunc` (no underscore) | 692 | 7.4% |
-| `TestFunc_Scenario_Expected` (3+ part) | 256 | 2.7% |
+| `TestFunc_Scenario` (2-part) | 8,402 | 89.7% |
+| `TestFunc` (no underscore) | 693 | 7.4% |
+| `TestFunc_Scenario_Expected` (3+ part) | 270 | 2.9% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,530 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (162) | 6,989 | 307 | domain-specific GitLab tool handlers |
+| Core packages | 1,532 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration | 229 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tool sub-packages (163) | 7,012 | 308 | domain-specific GitLab tool handlers |
 | E2E integration | 245 | 108 | build-tagged real GitLab integration suite |
 | cmd packages | 347 | 13 | server entry point and developer command utilities |
-| **Total** | **9,338** | **519** |  |
+| **Total** | **9,365** | **520** |  |
 
 ### Core Packages
 
@@ -60,7 +60,7 @@
 | completions | 91 | 94.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters. |
 | config | 54 | 97.8% | Package config loads and validates server configuration from environment variables. |
 | elicitation | 78 | 92.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol. |
-| gitlab | 38 | 100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client. |
+| gitlab | 40 | 100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client. |
 | logging | 16 | 100.0% | Package logging provides MCP protocol-level logging via ServerSession. |
 | oauth | 35 | 98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode. |
 | progress | 17 | 100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations. |
@@ -72,7 +72,7 @@
 | testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 357 | 94.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 207 | 83.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,530** |  |  |
+| **Subtotal** | **1,532** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -85,9 +85,9 @@
 | samplingtools | 165 | 100.0% | 11 |
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.2% | 17 |
-| search | 111 | 97.1% | 10 |
+| search | 112 | 99.3% | 10 |
 | awardemoji | 106 | 65.0% | 25 |
-| packages | 104 | 93.8% | 9 |
+| packages | 106 | 95.5% | 9 |
 | pipelines | 99 | 97.4% | 12 |
 | resourceevents | 99 | 100.0% | 16 |
 | commits | 97 | 96.5% | 13 |
@@ -107,7 +107,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 162 tested sub-packages (click to expand)</summary>
+<summary>All 163 tested sub-packages (click to expand)</summary>
 
 | Sub-package | Tests | Test Files | Coverage | Tools |
 | --- | ---: | ---: | ---: | ---: |
@@ -221,7 +221,8 @@
 | mrnotes | 36 | 2 | 99.3% | 5 |
 | namespaces | 36 | 1 | 98.3% | 5 |
 | notifications | 30 | 1 | 100.0% | 7 |
-| packages | 104 | 4 | 93.8% | 9 |
+| orbit | 20 | 1 | 100.0% | 5 |
+| packages | 106 | 4 | 95.5% | 9 |
 | pages | 55 | 2 | 99.1% | 10 |
 | pipelines | 99 | 2 | 97.4% | 12 |
 | pipelineschedules | 80 | 2 | 97.4% | 11 |
@@ -249,7 +250,7 @@
 | runnercontrollertokens | 33 | 1 | 96.9% | 6 |
 | runners | 97 | 1 | 95.7% | 19 |
 | samplingtools | 165 | 14 | 100.0% | 11 |
-| search | 111 | 1 | 97.1% | 10 |
+| search | 112 | 1 | 99.3% | 10 |
 | securefiles | 27 | 2 | 99.0% | 5 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
@@ -273,7 +274,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **6,989** | **307** |  | **1,052** |
+| **Total** | **7,012** | **308** |  | **1,057** |
 
 </details>
 
@@ -285,12 +286,12 @@
 | --- | ---: |
 | cmd/audit_godocs | 50.7% |
 | cmd/audit_meta_schema | 80.7% |
-| cmd/audit_metrics | 9.7% |
+| cmd/audit_metrics | 8.9% |
 | cmd/audit_output | 24.6% |
 | cmd/audit_tokens | 14.0% |
 | cmd/eval_meta_tools | 55.7% |
-| cmd/gen_llms | 6.3% |
-| cmd/gen_readme | 14.6% |
+| cmd/gen_llms | 6.2% |
+| cmd/gen_readme | 14.4% |
 | cmd/gen_testing_docs | 20.7% |
 | cmd/server | 78.4% |
 
@@ -430,7 +431,8 @@
 | mrnotes | 99.3% |
 | namespaces | 98.3% |
 | notifications | 100.0% |
-| packages | 93.8% |
+| orbit | 100.0% |
+| packages | 95.5% |
 | pages | 99.1% |
 | pipelines | 97.4% |
 | pipelineschedules | 97.4% |
@@ -458,7 +460,7 @@
 | runnercontrollertokens | 96.9% |
 | runners | 95.7% |
 | samplingtools | 100.0% |
-| search | 97.1% |
+| search | 99.3% |
 | securefiles | 99.0% |
 | securityfindings | 100.0% |
 | securitysettings | 100.0% |
@@ -485,10 +487,10 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/gen_llms** (6.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_metrics** (9.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_llms** (6.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_metrics** (8.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (14.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_readme** (14.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_readme** (14.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (24.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

@@ -65,7 +65,7 @@ Analysis of production MCP servers reveals common patterns for managing large to
 - Requires client support for `tools/list_changed`
 - VS Code Copilot and Cursor do not reliably re-fetch tool lists
 
-**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The consolidation target was **25 meta-tools**, with the final result being **27 meta-tools** (2 additional tools retained for operational separation: `gitlab_health` and `gitlab_summarize_issue`). This keeps the tool list small enough for any LLM context window while covering all 1006 individual tools.
+**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The consolidation target was **25 meta-tools**, with the final result being **27 meta-tools** (2 additional tools retained for operational separation: `gitlab_health` and `gitlab_summarize_issue`). The current catalog keeps the tool list small enough for any LLM context window while covering 1006 self-managed Enterprise/Premium individual tools, or 1011 on GitLab.com Enterprise/Premium with Orbit.
 
 ## Decision
 
@@ -194,5 +194,5 @@ After consolidation:
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
 - `META_TOOLS=true` exposes exactly 27 meta-tools
-- `META_TOOLS=false` exposes 1006 individual tools (unchanged)
+- `META_TOOLS=false` exposes the individual catalog: 1006 tools on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

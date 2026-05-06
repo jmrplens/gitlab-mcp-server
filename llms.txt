@@ -3,7 +3,7 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
 gitlab-mcp-server v1.4.4 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides 1006 individual MCP tools across 96 GitLab API domains, 32 meta-tools (47 with enterprise mode),
+It provides up to 1011 individual MCP tools across 97 GitLab API domains, 32 meta-tools (47 self-managed enterprise, 48 on GitLab.com Enterprise),
 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
@@ -18,7 +18,7 @@ It provides 1006 individual MCP tools across 96 GitLab API domains, 32 meta-tool
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
 - META_TOOLS: Enable meta-tools for reduced tool count (default: true)
-- GITLAB_ENTERPRISE: Enable enterprise/premium tools (default: false)
+- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)
 
 ## Tool Domains
 
@@ -27,7 +27,8 @@ Access, Admin, Analyze, Branch, CI Catalog, CI Variable, Custom Emoji, Discover 
 ## Meta-Tools (default mode)
 
 When META_TOOLS=true (default), 32 domain meta-tools are registered instead of
-1006 individual tools. Each meta-tool groups related operations under a single
+up to 1011 individual tools. Enterprise/Premium entries register 47 meta-tools on self-managed GitLab,
+or 48 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
 
 - gitlab_access — Manage GitLab access credentials: access tokens (project/group/personal), deploy...

@@ -1,8 +1,8 @@
 ---
 title: GitLab MCP Server
-description: Servidor MCP que conecta asistentes de IA con GitLab mediante lenguaje natural
+description: Servidor MCP con hasta 1011 herramientas GitLab, 32/47/48 meta-herramientas, recursos, prompts y transportes stdio/HTTP
 hero:
-  tagline: Conecta tu asistente de IA a GitLab con más de 1006 herramientas mediante el Model Context Protocol
+  tagline: Conecta tu asistente de IA a GitLab con hasta 1011 herramientas mediante el Model Context Protocol
   image:
     dark: ../../../assets/logo-dark.svg
     light: ../../../assets/logo-light.svg
@@ -15,25 +15,6 @@ hero:
       link: https://github.com/jmrplens/gitlab-mcp-server
       icon: external
       variant: minimal
-head:
-  - tag: title
-    content: "GitLab MCP Server — 1006+ herramientas de GitLab para asistentes de IA"
-  - tag: meta
-    attrs:
-      property: "og:type"
-      content: "website"
-  - tag: meta
-    attrs:
-      property: "og:title"
-      content: "GitLab MCP Server — 1006+ herramientas de GitLab para asistentes de IA"
-  - tag: meta
-    attrs:
-      name: "twitter:title"
-      content: "GitLab MCP Server — 1006+ herramientas de GitLab para asistentes de IA"
-  - tag: meta
-    attrs:
-      name: "twitter:description"
-      content: "Servidor MCP que conecta asistentes de IA con GitLab mediante lenguaje natural"
 ---
 
 import {
@@ -68,13 +49,13 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 | Característica                  | Detalles                                                                                                                                       |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **32 Meta-herramientas**        | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases y más                       |
+| **32/47/48 Meta-herramientas**  | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, Orbit y más                |
 | **11 Herramientas de análisis** | Análisis impulsado por IA mediante MCP sampling — diagnóstico de fallos en pipelines, revisión de seguridad de MRs, detección de deuda técnica |
 | **46 Recursos MCP**             | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor y esquemas de meta-tools     |
 | **38 Prompts MCP**              | Plantillas de prompts predefinidas para informes, auditorías, análisis entre proyectos y flujos de trabajo en equipo                           |
 | **Modo HTTP multiusuario**      | Despliega como servidor compartido con aislamiento por token para entornos de equipo                                                           |
 | **GitLab CE y EE**              | Compatible con Community Edition y Enterprise Edition, incluyendo instancias autoalojadas                                                      |
-| **Herramientas Enterprise**     | 15 herramientas adicionales opcionales para funciones de GitLab Premium/Ultimate (métricas DORA, vulnerabilidades, cumplimiento)               |
+| **Herramientas Enterprise**     | Catálogo Premium/Ultimate opcional: 15 meta-herramientas autoalojadas, más Orbit Knowledge Graph solo en GitLab.com                            |
 | **Autoactualización**           | Mecanismo de autoactualización integrado — ejecuta siempre la última versión                                                                   |
 | **Multiplataforma**             | Binario único para Linux, macOS y Windows (amd64 y arm64)                                                                                      |
 

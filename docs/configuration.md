@@ -27,7 +27,7 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
+| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise instead of individual tools) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -196,8 +196,8 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
-| **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 enterprise | Most users — lower token usage |
-| **Individual tools** | `META_TOOLS=false` | 1006 separate tools | Clients that need granular tool selection |
+| **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
+| **Individual tools** | `META_TOOLS=false` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
 

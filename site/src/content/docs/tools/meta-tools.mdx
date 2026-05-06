@@ -11,18 +11,18 @@ Meta-tools are the default operating mode of GitLab MCP Server. Instead of expos
 
 ## Why meta-tools?
 
-LLMs have limited context windows. When an MCP server registers 1006 individual tools, the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
+LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1011 on GitLab.com Enterprise/Premium), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
-| Mode              | Tool Count | Token Overhead | Functionality           |
-| ----------------- | ---------- | -------------- | ----------------------- |
-| Individual        | 1006       | Very high      | Full                    |
-| Meta (base)       | 32         | Low            | Full                    |
-| Meta (enterprise) | 47         | Low            | Full + Premium/Ultimate |
+| Mode              | Tool Count        | Token Overhead | Functionality           |
+| ----------------- | ----------------- | -------------- | ----------------------- |
+| Individual        | 863 / 1006 / 1011 | Very high      | Full                    |
+| Meta (base)       | 32                | Low            | Full                    |
+| Meta (enterprise) | 47 / 48           | Low            | Full + Premium/Ultimate |
 
 Meta-tools reduce the tool count by **97%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
 :::note[Client compatibility]
-Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 tools) works within these constraints. If you disable meta-tools (`META_TOOLS=false`), clients with such limits will only see a subset of the 1006 individual tools.
+Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you disable meta-tools (`META_TOOLS=false`), clients with such limits will only see a subset of the individual tool catalog.
 :::
 
 ## How meta-tools work
@@ -136,6 +136,22 @@ The per-action schema response describes only `params`. The final tool call stil
 	}
 }
 ```
+
+### Checking Orbit availability
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "status",
+		"params": {
+			"response_format": "llm"
+		}
+	}
+}
+```
+
+`gitlab_orbit` is registered only for GitLab.com Enterprise/Premium connections and exposes five read-only Knowledge Graph actions: `status`, `schema`, `tools`, `query`, and `graph_status`.
 
 ## Key meta-tools reference
 

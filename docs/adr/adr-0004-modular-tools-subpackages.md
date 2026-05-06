@@ -97,7 +97,7 @@ The orchestration layer in `internal/tools/` delegates to all sub-packages:
 - **POS-002**: Independent test compilation — `go test ./internal/tools/branches/` runs only branch tests
 - **POS-003**: Clear domain boundaries — each sub-package is self-contained and independently reviewable
 - **POS-004**: Zero import cycles enforced by Go compiler — sub-packages cannot import each other
-- **POS-005**: Scales to 162 sub-packages and 1006 tools without package-level congestion
+- **POS-005**: Scales to 163 sub-packages and 1006 self-managed Enterprise/Premium tools (1011 on GitLab.com Enterprise/Premium with Orbit) without package-level congestion
 - **POS-006**: New tools follow a repeatable, discoverable pattern
 
 ### Negative
@@ -112,4 +112,4 @@ The orchestration layer in `internal/tools/` delegates to all sub-packages:
 - [x] All shared types live in `toolutil/` or `testutil/`
 - [x] Every sub-package has `RegisterTools()` and test coverage
 - [x] `register.go` wires all sub-packages
-- [x] Standard file layout followed across all 162 sub-packages
+- [x] Standard file layout followed across all 163 sub-packages

@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Context
 
-The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v2`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface (162 domain sub-packages use REST exclusively).
+The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v2`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface (most of the 163 domain sub-packages use REST exclusively).
 
 However, several GitLab API domains are **only available via GraphQL** and have no corresponding service wrapper in `client-go`:
 

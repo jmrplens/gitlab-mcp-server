@@ -309,7 +309,7 @@ When modularizing `internal/tools/`, use this mapping to understand which files 
 
 ### Service-to-SubPackage Mapping
 
-The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1. Each `client.GL().{Service}` call tells you which API domain a handler belongs to:
+The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1. Each `client.GL().{Service}` call tells you which API domain a handler belongs to:
 
 | Sub-Package | client-go Services Used | Source Files |
 |---|---|---|

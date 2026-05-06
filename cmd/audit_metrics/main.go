@@ -57,10 +57,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
+	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
+		GitLabURL:   "https://gitlab.com",
+		GitLabToken: "audit-token",
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
+		os.Exit(1)
+	}
 
 	individualTools := listServerTools(client, false, false)
+	gitLabComIndividualTools := listServerTools(gitLabComClient, false, false)
 	metaBase := listServerTools(client, true, false)
 	metaEnterprise := listServerTools(client, true, true)
+	metaGitLabComEnterprise := listServerTools(gitLabComClient, true, true)
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -94,10 +104,14 @@ func main() {
 
 	fmt.Println("## Core Metrics")
 	fmt.Println()
-	printRow("Individual MCP tools", len(individualTools))
+	printRow("Individual MCP tools (self-managed enterprise)", len(individualTools))
+	printRow("Individual MCP tools (GitLab.com enterprise)", len(gitLabComIndividualTools))
 	printRow("Meta-tools (base)", len(metaBase))
-	printRow("Meta-tools (enterprise)", len(metaEnterprise))
+	printRow("Meta-tools (self-managed enterprise)", len(metaEnterprise))
+	printRow("Meta-tools (GitLab.com enterprise)", len(metaGitLabComEnterprise))
 	printRow("Enterprise-only meta-tools", len(metaEnterprise)-len(metaBase))
+	printRow("GitLab.com-only meta-tools", len(metaGitLabComEnterprise)-len(metaEnterprise))
+	printRow("GitLab.com-only individual tools", len(gitLabComIndividualTools)-len(individualTools))
 	printRow("MCP Resources (total)", resourceCount)
 	printRow("  Static resources", staticResources)
 	printRow("  Resource templates", templateResources)
@@ -143,6 +157,17 @@ func main() {
 	}
 	for _, t := range metaEnterprise {
 		if !baseNames[t.Name] {
+			fmt.Printf("  - %s\n", t.Name)
+		}
+	}
+	fmt.Println()
+	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(len(metaGitLabComEnterprise)-len(metaEnterprise)) + ")")
+	enterpriseNames := map[string]bool{}
+	for _, t := range metaEnterprise {
+		enterpriseNames[t.Name] = true
+	}
+	for _, t := range metaGitLabComEnterprise {
+		if !enterpriseNames[t.Name] {
 			fmt.Printf("  - %s\n", t.Name)
 		}
 	}

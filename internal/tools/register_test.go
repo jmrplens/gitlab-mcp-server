@@ -18,6 +18,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
@@ -137,6 +138,39 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 	})
 }
 
+// TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise verifies that the
+// global catalog advertises Orbit only for GitLab.com with enterprise enabled.
+func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
+	selfManaged, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	RegisterAll(server, selfManaged, true)
+	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit_status") {
+		t.Fatalf("RegisterAll() registered Orbit for self-managed enterprise client")
+	}
+
+	gitLabDotCom, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	RegisterAll(server, gitLabDotCom, false)
+	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit_status") {
+		t.Fatalf("RegisterAll() registered Orbit for GitLab.com without enterprise")
+	}
+
+	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	RegisterAll(server, gitLabDotCom, true)
+	names := toolNamesFromServer(t, server)
+	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("RegisterAll() missing %s for GitLab.com enterprise client", want)
+		}
+	}
+}
+
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
 // the expected number of meta-tools: 32 base, 47 with enterprise.
 // Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
@@ -176,6 +210,61 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise verifies that
+// the GitLab.com-only Orbit meta-tool also requires the Enterprise catalog.
+func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.T) {
+	selfManaged, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterAllMeta(server, selfManaged, true)
+	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit") {
+		t.Fatalf("RegisterAllMeta() registered Orbit for self-managed enterprise client")
+	}
+
+	gitLabDotCom, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterAllMeta(server, gitLabDotCom, false)
+	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit") {
+		t.Fatalf("RegisterAllMeta() registered Orbit for GitLab.com without enterprise")
+	}
+
+	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterAllMeta(server, gitLabDotCom, true)
+	if names := toolNamesFromServer(t, server); !slices.Contains(names, "gitlab_orbit") {
+		t.Fatalf("RegisterAllMeta() missing gitlab_orbit for GitLab.com enterprise client")
+	}
+}
+
+func toolNamesFromServer(t *testing.T, server *mcp.Server) []string {
+	t.Helper()
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	_, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf(fmtListToolsErr, err)
+	}
+	names := make([]string, 0, len(result.Tools))
+	for _, tool := range result.Tools {
+		names = append(names, tool.Name)
+	}
+	return names
 }
 
 // TestRegisterAll_ToolNames verifies that every expected individual tool name

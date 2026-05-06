@@ -80,7 +80,7 @@ func TestBuildTable_UsesRealMetaToolDescription(t *testing.T) {
 		},
 	}
 
-	table := buildTable([]*mcp.Tool{tool}, []*mcp.Tool{tool})
+	table := buildTable([]*mcp.Tool{tool}, []*mcp.Tool{tool}, []*mcp.Tool{tool})
 	if !strings.Contains(table, "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji.") {
 		t.Fatalf("table missing real description:\n%s", table)
 	}

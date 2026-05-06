@@ -36,7 +36,7 @@ Store identity via a custom context key in all modes, bypassing `req.Extra.Token
 
 Register a wrapper around every tool handler that resolves identity and passes it via closure or struct.
 
-- **Rejected because**: Too invasive — requires modifying all 162 sub-package registrations. The context + middleware approach is transparent to handlers.
+- **Rejected because**: Too invasive — requires modifying all 163 sub-package registrations. The context + middleware approach is transparent to handlers.
 
 #### Option 3: Per-request GitLab API call in tool handlers (rejected)
 

@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "MCP server exposing 1006 GitLab REST API and GraphQL operations as tools for AI assistants.",
+  "description": "1006 GitLab MCP tools self-managed; 1011 on GitLab.com Enterprise/Premium with Orbit.",
   "version": "1.4.4",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
@@ -68,7 +68,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -189,7 +189,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -310,7 +310,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -431,7 +431,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -552,7 +552,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -673,7 +673,7 @@
         },
         {
           "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"

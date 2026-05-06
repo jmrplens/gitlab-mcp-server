@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 individual tools, **32 base meta-tools** (47 with the Enterprise/Premium catalog) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 self-managed Enterprise/Premium individual tools or 1011 GitLab.com Enterprise/Premium tools, **32 base meta-tools** (47 self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for a total of **47 tools**. Stdio mode enables that catalog with `GITLAB_ENTERPRISE=true`; HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
+In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for a total of **47 tools** on self-managed GitLab. GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**. Stdio mode enables that catalog with `GITLAB_ENTERPRISE=true`; HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition. Orbit is additionally gated to `https://gitlab.com`.
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
@@ -37,8 +37,8 @@ META_TOOLS=false
 
 | Mode                       | Tool Count | Best For                                                         |
 | -------------------------- | ---------- | ---------------------------------------------------------------- |
-| Meta-tools (`true`)        | 32 base / 47 enterprise | LLMs with limited tool context windows                           |
-| Individual tools (`false`) | 1006       | Clients that benefit from granular tool discovery                |
+| Meta-tools (`true`)        | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | LLMs with limited tool context windows                           |
+| Individual tools (`false`) | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from granular tool discovery                |
 
 ---
 
@@ -102,6 +102,12 @@ META_TOOLS=false
 |---|-------------------------|---------|-------------------------------------------|
 | 28 | `gitlab_discover_project` | 1 | Git remote URL to GitLab project resolution |
 
+### GitLab.com Enterprise/Premium Meta-Tools (1)
+
+| # | Tool Name | Actions | Source |
+|---|-----------|---------|--------|
+| 48 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
+
 ---
 
 ## Architecture
@@ -116,8 +122,9 @@ The meta-tool architecture evolved through ADR-0005:
 - **v3.0**: 60 meta-tools (43 domain inline + 1 search + 1 runner + 3 runner-controller + 11 sampling + 1 standalone)
 - **v4.0**: 40 base / 59 enterprise (23 inline + 5 delegated + 11 sampling + 1 standalone + 19 enterprise inline); 6 former standalone meta-tools consolidated into existing meta-tools as enterprise-only routes
 - **v5.0**: 42 base / 57 enterprise (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone + 15 enterprise inline); 3 runner controller delegated meta-tools consolidated into 1; 4 free-tier always-registered meta-tools added (model registry, CI catalog, branch rules, custom emoji); enterprise count reduced from 19 to 15
-- **v6.0**: 32 base / 47 enterprise (23 inline + 4 always-registered + 3 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 11 individual sampling tools consolidated into 1 `gitlab_analyze` meta-tool with 11 actions
-- **v7.1**: 32 base / 47 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
+- **v6.0**: 32 base / 47 self-managed enterprise (23 inline + 4 always-registered + 3 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 11 individual sampling tools consolidated into 1 `gitlab_analyze` meta-tool with 11 actions
+- **v7.1**: 32 base / 47 self-managed enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
+- **v7.2**: 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise; `gitlab_orbit` added for experimental GitLab.com Orbit Knowledge Graph actions
 - **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
 
 The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind the Enterprise/Premium catalog.

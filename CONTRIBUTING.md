@@ -168,7 +168,7 @@ internal/tools/
 ├── errors.go                # Error helpers (bridge to toolutil)
 ├── markdown.go              # Markdown formatting (bridge to toolutil)
 ├── logging.go               # Tool call logging (bridge to toolutil)
-└── <domain>/                # 162 domain sub-packages
+└── <domain>/                # 163 domain sub-packages
     ├── register.go          # RegisterTools() for this domain
     ├── <domain>.go          # Typed input/output structs + handlers
     ├── <domain>_test.go     # Table-driven unit tests

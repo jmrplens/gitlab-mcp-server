@@ -14,6 +14,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
@@ -811,6 +812,97 @@ func TestSearchOpts_InvalidSearchType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid search_type") || !strings.Contains(err.Error(), "basic") {
 		t.Fatalf("expected actionable search_type error, got: %v", err)
+	}
+}
+
+func TestSearchHandlers_InvalidSearchType_ReturnValidationError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not call GitLab API for invalid search_type: %s %s", r.Method, r.URL.Path)
+	}))
+
+	tests := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{
+			name: "code",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Code(ctx, client, CodeInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "merge requests",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := MergeRequests(ctx, client, MergeRequestsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "issues",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Issues(ctx, client, IssuesInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "commits",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Commits(ctx, client, CommitsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "milestones",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Milestones(ctx, client, MilestonesInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "notes",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Notes(ctx, client, NotesInput{ProjectID: "42", Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "projects",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Projects(ctx, client, ProjectsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "snippets",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Snippets(ctx, client, SnippetsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "users",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Users(ctx, client, UsersInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+		{
+			name: "wiki",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Wiki(ctx, client, WikiInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call(context.Background(), client)
+			if err == nil || !strings.Contains(err.Error(), "invalid search_type") {
+				t.Fatalf("handler error = %v, want invalid search_type validation error", err)
+			}
+		})
 	}
 }
 

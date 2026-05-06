@@ -1,0 +1,66 @@
+---
+title: Orbit
+description: Herramientas Knowledge Graph para GitLab.com Enterprise/Premium
+---
+
+Orbit expone la API experimental Knowledge Graph de GitLab.com mediante cinco herramientas MCP de solo lectura. Solo está disponible cuando el servidor se conecta a `https://gitlab.com` y el catálogo Enterprise/Premium está habilitado con `GITLAB_ENTERPRISE=true` o `--enterprise`.
+
+:::note[Referencia técnica]
+Para la referencia generada completa, consulta [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/tools/orbit.md) en el repositorio.
+:::
+
+## Disponibilidad
+
+| Requisito                   | Valor                               |
+| --------------------------- | ----------------------------------- |
+| Host de GitLab              | `https://gitlab.com`                |
+| Catálogo                    | Enterprise/Premium                  |
+| Modo meta-herramientas      | `gitlab_orbit` con cinco acciones   |
+| Modo individual             | Cinco herramientas `gitlab_orbit_*` |
+| Comportamiento de escritura | Solo lectura                        |
+
+Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado.
+
+## Acciones
+
+| Acción         | Herramienta individual      | Propósito                                                                      |
+| -------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| `status`       | `gitlab_orbit_status`       | Comprobar la salud del servicio Orbit y el estado de sus componentes           |
+| `schema`       | `gitlab_orbit_schema`       | Inspeccionar la ontología del grafo y las definiciones ampliadas de nodos      |
+| `tools`        | `gitlab_orbit_tools`        | Descubrir el manifiesto vivo de consultas Orbit                                |
+| `query`        | `gitlab_orbit_query`        | Ejecutar un objeto de consulta de solo lectura sobre el Knowledge Graph        |
+| `graph_status` | `gitlab_orbit_graph_status` | Inspeccionar el estado de indexación de un namespace, proyecto o ruta completa |
+
+## Flujo típico
+
+1. Llama a `gitlab_orbit` con `action: "status"` para confirmar que el servicio está disponible.
+2. Llama a `action: "schema"` para inspeccionar dominios, nodos y relaciones del grafo.
+3. Llama a `action: "tools"` antes de `action: "query"` para obtener el schema vivo de consultas servido por GitLab.com.
+4. Pasa un objeto JSON de consulta a `action: "query"` con `response_format` en `raw` o `llm`.
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "graph_status",
+		"params": {
+			"project_id": 278964,
+			"response_format": "llm"
+		}
+	}
+}
+```
+
+## Descubrimiento de schemas
+
+En modo meta-herramientas, los schemas de parámetros por acción están disponibles como recursos MCP:
+
+| Recurso                                          | Propósito                                            |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| `gitlab://schema/meta/gitlab_orbit/status`       | Parámetros para comprobar salud del servicio         |
+| `gitlab://schema/meta/gitlab_orbit/schema`       | Parámetros para inspeccionar la ontología            |
+| `gitlab://schema/meta/gitlab_orbit/tools`        | Parámetros para descubrir el manifiesto de consultas |
+| `gitlab://schema/meta/gitlab_orbit/query`        | Parámetros para consultas Knowledge Graph            |
+| `gitlab://schema/meta/gitlab_orbit/graph_status` | Parámetros para comprobar estado de indexación       |
+
+Estos recursos siguen disponibles con cualquier modo de `META_PARAM_SCHEMA`.
