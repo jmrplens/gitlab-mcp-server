@@ -106,7 +106,7 @@ META_TOOLS=false
 
 | # | Tool Name | Actions | Source |
 |---|-----------|---------|--------|
-| 48 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
+| 29 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
 
 ---
 
@@ -123,9 +123,9 @@ The meta-tool architecture evolved through ADR-0005:
 - **v4.0**: 40 base / 59 enterprise (23 inline + 5 delegated + 11 sampling + 1 standalone + 19 enterprise inline); 6 former standalone meta-tools consolidated into existing meta-tools as enterprise-only routes
 - **v5.0**: 42 base / 57 enterprise (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone + 15 enterprise inline); 3 runner controller delegated meta-tools consolidated into 1; 4 free-tier always-registered meta-tools added (model registry, CI catalog, branch rules, custom emoji); enterprise count reduced from 19 to 15
 - **v6.0**: 32 base / 47 self-managed enterprise (23 inline + 4 always-registered + 3 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 11 individual sampling tools consolidated into 1 `gitlab_analyze` meta-tool with 11 actions
+- **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
 - **v7.1**: 32 base / 47 self-managed enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
 - **v7.2**: 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise; `gitlab_orbit` added for experimental GitLab.com Orbit Knowledge Graph actions
-- **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
 
 The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind the Enterprise/Premium catalog.
 
@@ -225,8 +225,7 @@ See [Output Format](output-format.md) for the complete response format specifica
   "arguments": {
     "action": "code",
     "params": {
-      "scope": "blobs",
-      "search": "func RegisterTools"
+      "query": "func RegisterTools"
     }
   }
 }

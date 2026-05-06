@@ -522,6 +522,42 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 	}
 }
 
+func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
+	tests := []struct {
+		name string
+		md   string
+		want string
+	}{
+		{
+			name: "schema",
+			md: FormatSchemaMarkdown(SchemaOutput{Domains: []SchemaDomain{{
+				Name:        "core|domain",
+				Description: "Core\nentities",
+				NodeNames:   []string{"User|Account"},
+			}}}),
+			want: "core&#124;domain | Core entities | User&#124;Account",
+		},
+		{
+			name: "tools",
+			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query|graph", Description: "Run\nqueries"}}}),
+			want: "`query&#124;graph` | Run queries",
+		},
+		{
+			name: "graph status",
+			md:   FormatGraphStatusMarkdown(GraphStatusOutput{Domains: []GraphStatusDomain{{Name: "SDLC|core", Items: []GraphStatusDomainItem{{Name: "Issue|Bug", Count: 4}}}}}),
+			want: "SDLC&#124;core | Issue&#124;Bug: 4",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !strings.Contains(tt.md, tt.want) {
+				t.Fatalf("markdown = %q, want escaped substring %q", tt.md, tt.want)
+			}
+		})
+	}
+}
+
 func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	if md := FormatStatusMarkdown(StatusOutput{}); !strings.Contains(md, "No Orbit status data") {
 		t.Fatalf("FormatStatusMarkdown() = %q, want empty-state text", md)
@@ -541,8 +577,8 @@ func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	if got := decodeRaw(json.RawMessage(`{`)); got != "{" {
 		t.Fatalf("decodeRaw() = %v, want raw fallback", got)
 	}
-	if got := decodeRaw(nil); got != nil {
-		t.Fatalf("decodeRaw(nil) = %v, want nil", got)
+	if decodeRaw(nil) != nil {
+		t.Fatal("decodeRaw(nil) = non-nil, want nil")
 	}
 	if out := convertStatus(nil); out.Status != "" {
 		t.Fatalf("convertStatus(nil) = %+v, want zero value", out)
@@ -614,14 +650,19 @@ func TestGraphStatusOptions_SetsEachSupportedScope(t *testing.T) {
 }
 
 func TestGraphStatusOptions_InvalidProjectAndFormat(t *testing.T) {
-	tests := []GraphStatusInput{
-		{ProjectID: -1},
-		{FullPath: "gitlab-org/gitlab", ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}},
+	tests := []struct {
+		name  string
+		input GraphStatusInput
+	}{
+		{name: "negative project ID", input: GraphStatusInput{ProjectID: -1}},
+		{name: "invalid response format", input: GraphStatusInput{FullPath: "gitlab-org/gitlab", ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}}},
 	}
-	for _, input := range tests {
-		if _, err := graphStatusOptions(input); err == nil {
-			t.Fatalf("graphStatusOptions(%+v) error = nil, want validation error", input)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := graphStatusOptions(tt.input); err == nil {
+				t.Fatalf("graphStatusOptions(%+v) error = nil, want validation error", tt.input)
+			}
+		})
 	}
 }
 
@@ -673,7 +714,7 @@ func registeredToolNames(t *testing.T, server *mcp.Server) []string {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	_, err := server.Connect(ctx, st, nil)
+	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
@@ -682,7 +723,10 @@ func registeredToolNames(t *testing.T, server *mcp.Server) []string {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListTools() error: %v", err)
@@ -696,32 +740,22 @@ func registeredToolNames(t *testing.T, server *mcp.Server) []string {
 
 func newOrbitSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return newOrbitMCPSession(t, handler, RegisterTools)
 }
 
 func newOrbitMetaSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
+	return newOrbitMCPSession(t, handler, RegisterMeta)
+}
+
+func newOrbitMCPSession(t *testing.T, handler http.Handler, registerFn func(*mcp.Server, *gitlabclient.Client)) *mcp.ClientSession {
+	t.Helper()
 	client := testutil.NewTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
+	registerFn(server, client)
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	_, err := server.Connect(ctx, st, nil)
+	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
@@ -730,7 +764,10 @@ func newOrbitMetaSession(t *testing.T, handler http.Handler) *mcp.ClientSession 
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 	return session
 }
 

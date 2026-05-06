@@ -29,10 +29,11 @@ import (
 
 // README generation markers define the managed tools table section.
 const (
-	startMarker = "<!-- START TOOLS -->"
-	endMarker   = "<!-- END TOOLS -->"
-	readmePath  = "README.md"
-	repoRoot    = "."
+	startMarker  = "<!-- START TOOLS -->"
+	endMarker    = "<!-- END TOOLS -->"
+	readmePath   = "README.md"
+	repoRoot     = "."
+	gitLabComURL = "https://gitlab.com"
 )
 
 // main regenerates the README meta-tool table and exits non-zero on failure.
@@ -62,7 +63,7 @@ func run() error {
 		return fmt.Errorf("create client: %w", err)
 	}
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   "https://gitlab.com",
+		GitLabURL:   gitLabComURL,
 		GitLabToken: "gen-readme-token",
 	})
 	if err != nil {
@@ -236,14 +237,27 @@ func buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools 
 		baseSet[t.Name] = true
 	}
 
-	var infos []toolInfo
-	for _, t := range gitLabComEnterpriseTools {
-		infos = append(infos, toolInfo{
+	byName := make(map[string]toolInfo, len(gitLabComEnterpriseTools))
+	for _, t := range selfManagedEnterpriseTools {
+		byName[t.Name] = toolInfo{
 			Name:        t.Name,
 			Description: descriptionSummary(t.Description),
 			Actions:     actionCount(t),
 			Enterprise:  !baseSet[t.Name],
-		})
+		}
+	}
+	for _, t := range gitLabComEnterpriseTools {
+		byName[t.Name] = toolInfo{
+			Name:        t.Name,
+			Description: descriptionSummary(t.Description),
+			Actions:     actionCount(t),
+			Enterprise:  !baseSet[t.Name],
+		}
+	}
+
+	infos := make([]toolInfo, 0, len(byName))
+	for _, info := range byName {
+		infos = append(infos, info)
 	}
 
 	sort.Slice(infos, func(i, j int) bool {

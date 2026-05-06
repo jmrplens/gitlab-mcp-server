@@ -9822,7 +9822,7 @@ Actions:
 - status: response_format (raw/llm) — cluster health and component status.
 - schema: expand, format (raw/llm) — graph ontology domains, nodes, and edges.
 - tools: no params — Orbit MCP tool manifest and parameter schemas.
-- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. Read gitlab_orbit/tools first for the live query schema.
+- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. First call gitlab_orbit with action "tools" (or use gitlab_orbit_tools) to inspect the live query schema.
 - graph_status: exactly one of namespace_id, project_id, full_path; response_format (raw/llm) — graph indexing state.
 
 Errors: 404 means Orbit is not enabled or not available; 403 means the token lacks access to a Knowledge Graph-enabled namespace/project; 503 means Orbit is temporarily unavailable.
@@ -18833,7 +18833,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_graph_status
 
-Get experimental GitLab Orbit Knowledge Graph indexing status for one namespace, project, or full path on GitLab.com. This tool is registered only with the Enterprise catalog enabled. Returns: indexed project counts, domain counts, and indexing state.
+Get experimental GitLab Orbit Knowledge Graph indexing status for one namespace, project, or full path on GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: indexed project counts, domain counts, and indexing state.
 
 **Parameters:**
 
@@ -18846,7 +18846,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute an experimental GitLab Orbit Knowledge Graph query on GitLab.com. This read-only POST endpoint is registered only with the Enterprise catalog enabled. Query shape is provided by gitlab_orbit_tools and is passed through as JSON. Returns: raw result payload, query type, row count, and compiled query strings.
+Execute an experimental GitLab Orbit Knowledge Graph query on GitLab.com. This read-only POST endpoint is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Query shape is provided by gitlab_orbit_tools and is passed through as JSON. Returns: raw result payload, query type, row count, and compiled query strings.
 
 **Parameters:**
 
@@ -18878,7 +18878,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_tools
 
-Get the experimental GitLab Orbit MCP tool manifest from GitLab.com. This tool is registered only with the Enterprise catalog enabled. Returns: Orbit tool names, descriptions, and parameter schemas.
+Get the experimental GitLab Orbit MCP tool manifest from GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: Orbit tool names, descriptions, and parameter schemas.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

@@ -8,6 +8,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+const textFenceFormat = "```text\n%s\n```\n"
+
 func init() {
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
 	toolutil.RegisterMarkdown[SchemaOutput](FormatSchemaMarkdown)
@@ -21,7 +23,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Status\n\n")
 	if out.FormattedText != "" {
-		fmt.Fprintf(&b, "```text\n%s\n```\n", out.FormattedText)
+		fmt.Fprintf(&b, textFenceFormat, out.FormattedText)
 		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
 		return b.String()
 	}
@@ -59,7 +61,11 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 		b.WriteString("\n| Domain | Description | Nodes |\n")
 		b.WriteString("|---|---|---|\n")
 		for _, domain := range out.Domains {
-			fmt.Fprintf(&b, "| %s | %s | %s |\n", domain.Name, domain.Description, strings.Join(domain.NodeNames, ", "))
+			fmt.Fprintf(&b, "| %s | %s | %s |\n",
+				toolutil.EscapeMdTableCell(domain.Name),
+				toolutil.EscapeMdTableCell(domain.Description),
+				toolutil.EscapeMdTableCell(strings.Join(domain.NodeNames, ", ")),
+			)
 		}
 	}
 	toolutil.WriteHints(&b,
@@ -79,7 +85,10 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 	b.WriteString("| Tool | Description |\n")
 	b.WriteString("|---|---|\n")
 	for _, tool := range out.Tools {
-		fmt.Fprintf(&b, "| `%s` | %s |\n", tool.Name, tool.Description)
+		fmt.Fprintf(&b, "| `%s` | %s |\n",
+			toolutil.EscapeMdTableCell(tool.Name),
+			toolutil.EscapeMdTableCell(tool.Description),
+		)
 	}
 	toolutil.WriteHints(&b,
 		"Use the returned parameters JSON to build gitlab_orbit query input",
@@ -98,7 +107,7 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	if len(out.RawQueryStrings) > 0 {
 		b.WriteString("\n### Raw Query Strings\n\n")
 		for _, raw := range out.RawQueryStrings {
-			fmt.Fprintf(&b, "```text\n%s\n```\n", raw)
+			fmt.Fprintf(&b, textFenceFormat, raw)
 		}
 	}
 	if out.Result != nil {
@@ -114,7 +123,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Graph Status\n\n")
 	if out.FormattedText != "" {
-		fmt.Fprintf(&b, "```text\n%s\n```\n", out.FormattedText)
+		fmt.Fprintf(&b, textFenceFormat, out.FormattedText)
 		toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
 		return b.String()
 	}
@@ -139,7 +148,10 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 			for _, item := range domain.Items {
 				counts = append(counts, fmt.Sprintf("%s: %d", item.Name, item.Count))
 			}
-			fmt.Fprintf(&b, "| %s | %s |\n", domain.Name, strings.Join(counts, ", "))
+			fmt.Fprintf(&b, "| %s | %s |\n",
+				toolutil.EscapeMdTableCell(domain.Name),
+				toolutil.EscapeMdTableCell(strings.Join(counts, ", ")),
+			)
 		}
 	}
 	toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")

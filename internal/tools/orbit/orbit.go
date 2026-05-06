@@ -334,7 +334,7 @@ func wrapOrbitErr(op string, err error) error {
 		return toolutil.WrapErrWithHint(op, err,
 			"Orbit service is temporarily unavailable; retry later")
 	}
-	return toolutil.WrapErrWithMessage(op, err)
+	return toolutil.WrapErr(op, err)
 }
 
 func convertStatus(status *gl.OrbitStatus) StatusOutput {

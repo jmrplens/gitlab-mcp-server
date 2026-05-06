@@ -430,20 +430,20 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 650 | 134,117 |
-| Unit tests (`_test.go`) | 412 | 218,962 |
+| Source (`.go`, non-test) | 650 | 134,202 |
+| Unit tests (`_test.go`) | 412 | 219,070 |
 | End-to-end tests | 110 | 23,718 |
-| **Total** | **1,172** | **376,797** |
+| **Total** | **1,172** | **376,990** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,984 |
+| Source functions | 3,985 |
 | — exported (public) | 2,220 |
-| — unexported (private) | 1,764 |
-| Unit test functions (`TestXxx`) | 9,127 |
-| Subtests (`t.Run(...)`) | 1,954 |
+| — unexported (private) | 1,765 |
+| Unit test functions (`TestXxx`) | 9,131 |
+| Subtests (`t.Run(...)`) | 1,956 |
 | End-to-end test functions | 246 |
 
 ### Ratios worth noting
@@ -460,10 +460,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,779 |
-| `defer` statements | 726 |
-| `struct` types defined | 2,030 |
-| `//nolint` suppressions | 57 |
+| `if err != nil` checks | 5,790 |
+| `defer` statements | 728 |
+| `struct` types defined | 2,031 |
+| `//nolint` suppressions | 53 |
 | `TODO` / `FIXME` / `HACK` comments | 0 |
 
 ### Project
@@ -473,7 +473,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 197 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 101 |
+| Git commits | 102 |
 | Unique contributors | 2 |
 
 ### Hall of fame
@@ -487,8 +487,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,438 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,957 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,440 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,958 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

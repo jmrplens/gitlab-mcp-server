@@ -62,6 +62,8 @@ jobs:
       - name: SonarCloud Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          skipSignatureVerification: true
         continue-on-error: true
         env:
           SONAR_HOST_URL: https://sonarcloud.io
@@ -195,7 +197,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version: "22"
       - run: npx --yes markdownlint-cli2 "**/*.md" "#plan" "#node_modules"
 
   hadolint:

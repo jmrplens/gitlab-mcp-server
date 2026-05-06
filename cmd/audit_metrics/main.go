@@ -36,6 +36,7 @@ const (
 	auditServerName = "audit-metrics"
 	auditClientName = "audit-metrics-client"
 	auditVersion    = "0.0.1"
+	toolListFormat  = "  - %s\n"
 )
 
 // main builds the audit client, gathers runtime counts from the registered MCP
@@ -147,7 +148,7 @@ func main() {
 	fmt.Println()
 	fmt.Println("### Base (" + strconv.Itoa(len(metaBase)) + ")")
 	for _, t := range metaBase {
-		fmt.Printf("  - %s\n", t.Name)
+		fmt.Printf(toolListFormat, t.Name)
 	}
 	fmt.Println()
 	fmt.Println("### Enterprise-only (" + strconv.Itoa(len(metaEnterprise)-len(metaBase)) + ")")
@@ -157,7 +158,7 @@ func main() {
 	}
 	for _, t := range metaEnterprise {
 		if !baseNames[t.Name] {
-			fmt.Printf("  - %s\n", t.Name)
+			fmt.Printf(toolListFormat, t.Name)
 		}
 	}
 	fmt.Println()
@@ -168,7 +169,7 @@ func main() {
 	}
 	for _, t := range metaGitLabComEnterprise {
 		if !enterpriseNames[t.Name] {
-			fmt.Printf("  - %s\n", t.Name)
+			fmt.Printf(toolListFormat, t.Name)
 		}
 	}
 }

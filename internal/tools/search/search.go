@@ -46,7 +46,7 @@ func searchOpts(page, perPage int, ref, searchType string) (*gl.SearchOptions, e
 	}
 	opts := &gl.SearchOptions{}
 	if ref != "" {
-		opts.Ref = new(ref)
+		opts.Ref = &ref
 	}
 	if searchType != "" {
 		typ := gl.SearchType(searchType)

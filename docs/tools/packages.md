@@ -13,7 +13,7 @@
 
 The packages domain covers the GitLab Generic Package Registry (publish, download, list, delete packages and files) and the Container Registry (repositories, tags, protection rules). It also includes composite operations like publish-and-link (publish a file and create a release asset link in one step) and publish-directory (batch-publish files from a local directory).
 
-When `META_TOOLS=true` (the default), the 24 individual tools below are consolidated into three meta-tools: `gitlab_package` (12 actions including 4 protection rules), `gitlab_registry` (8 actions), and `gitlab_registry_protection` (4 actions).
+When `META_TOOLS=true` (the default), 24 of the 28 package-domain tools below are consolidated into three meta-tools: `gitlab_package` (12 actions including 4 protection rules), `gitlab_registry` (8 actions), and `gitlab_registry_protection` (4 actions). The 4 dependency tools remain exposed individually because they are Enterprise/Premium-only tools gated by `GITLAB_ENTERPRISE=true`.
 
 ### Common Questions
 

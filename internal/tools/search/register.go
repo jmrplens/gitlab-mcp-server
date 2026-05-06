@@ -33,14 +33,16 @@ func searchInputSchema[T any]() *jsonschema.Schema {
 
 func searchInputSchemaMap[T any]() map[string]any {
 	data, err := json.Marshal(searchInputSchema[T]())
-	if err != nil {
-		panic(fmt.Sprintf("search input schema marshal: %v", err))
-	}
+	searchSchemaPanic("marshal", err)
 	var schema map[string]any
-	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
-		panic(fmt.Sprintf("search input schema unmarshal: %v", unmarshalErr))
-	}
+	searchSchemaPanic("unmarshal", json.Unmarshal(data, &schema))
 	return schema
+}
+
+func searchSchemaPanic(operation string, err error) {
+	if err != nil {
+		panic(fmt.Sprintf("search input schema %s: %v", operation, err))
+	}
 }
 
 func searchRoute[T any, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {

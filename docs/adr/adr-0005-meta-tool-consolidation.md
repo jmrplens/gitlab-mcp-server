@@ -193,6 +193,6 @@ After consolidation:
 
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
-- `META_TOOLS=true` exposes exactly 27 meta-tools
+- `META_TOOLS=true` exposes exactly 32 base meta-tools, 47 self-managed Enterprise/Premium meta-tools, or 48 GitLab.com Enterprise/Premium meta-tools with Orbit
 - `META_TOOLS=false` exposes the individual catalog: 1006 tools on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

@@ -41,7 +41,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_orbit_tools",
 		Title:       toolutil.TitleFromName("gitlab_orbit_tools"),
-		Description: "Get the experimental GitLab Orbit MCP tool manifest from GitLab.com. This tool is registered only with the Enterprise catalog enabled. Returns: Orbit tool names, descriptions, and parameter schemas.\n\nSee also: gitlab_orbit_schema, gitlab_orbit_query.",
+		Description: "Get the experimental GitLab Orbit MCP tool manifest from GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: Orbit tool names, descriptions, and parameter schemas.\n\nSee also: gitlab_orbit_schema, gitlab_orbit_query.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ToolsInput) (*mcp.CallToolResult, ToolsOutput, error) {
@@ -54,7 +54,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_orbit_query",
 		Title:       toolutil.TitleFromName("gitlab_orbit_query"),
-		Description: "Execute an experimental GitLab Orbit Knowledge Graph query on GitLab.com. This read-only POST endpoint is registered only with the Enterprise catalog enabled. Query shape is provided by gitlab_orbit_tools and is passed through as JSON. Returns: raw result payload, query type, row count, and compiled query strings.\n\nSee also: gitlab_orbit_tools, gitlab_orbit_schema.",
+		Description: "Execute an experimental GitLab Orbit Knowledge Graph query on GitLab.com. This read-only POST endpoint is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Query shape is provided by gitlab_orbit_tools and is passed through as JSON. Returns: raw result payload, query type, row count, and compiled query strings.\n\nSee also: gitlab_orbit_tools, gitlab_orbit_schema.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input QueryInput) (*mcp.CallToolResult, QueryOutput, error) {
@@ -67,7 +67,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_orbit_graph_status",
 		Title:       toolutil.TitleFromName("gitlab_orbit_graph_status"),
-		Description: "Get experimental GitLab Orbit Knowledge Graph indexing status for one namespace, project, or full path on GitLab.com. This tool is registered only with the Enterprise catalog enabled. Returns: indexed project counts, domain counts, and indexing state.\n\nSee also: gitlab_orbit_status, gitlab_orbit_schema.",
+		Description: "Get experimental GitLab Orbit Knowledge Graph indexing status for one namespace, project, or full path on GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: indexed project counts, domain counts, and indexing state.\n\nSee also: gitlab_orbit_status, gitlab_orbit_schema.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GraphStatusInput) (*mcp.CallToolResult, GraphStatusOutput, error) {
@@ -98,7 +98,7 @@ Actions:
 - status: response_format (raw/llm) — cluster health and component status.
 - schema: expand, format (raw/llm) — graph ontology domains, nodes, and edges.
 - tools: no params — Orbit MCP tool manifest and parameter schemas.
-- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. Read gitlab_orbit/tools first for the live query schema.
+- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. First call gitlab_orbit with action "tools" (or use gitlab_orbit_tools) to inspect the live query schema.
 - graph_status: exactly one of namespace_id, project_id, full_path; response_format (raw/llm) — graph indexing state.
 
 Errors: 404 means Orbit is not enabled or not available; 403 means the token lacks access to a Knowledge Graph-enabled namespace/project; 503 means Orbit is temporarily unavailable.`, routes, toolutil.IconAnalytics, toolutil.MarkdownForResult)

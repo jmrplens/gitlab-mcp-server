@@ -6,6 +6,7 @@ package search
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -42,6 +43,10 @@ const (
 )
 
 var defaultPagination = testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
+
+type unsupportedSearchSchemaInput struct {
+	Values map[int]string `json:"values"`
+}
 
 // TestSearchCode_ProjectScope verifies the behavior of search code project scope.
 func TestSearchCode_ProjectScope(t *testing.T) {
@@ -1747,6 +1752,36 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 			requireSearchTypeEnum(t, schema)
 		})
 	}
+}
+
+func TestSearchInputSchema_UnsupportedTypePanics(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("searchInputSchema() did not panic for unsupported map key type")
+		}
+		if !strings.Contains(fmt.Sprint(recovered), "search input schema") {
+			t.Fatalf("panic = %v, want search input schema context", recovered)
+		}
+	}()
+
+	_ = searchInputSchema[unsupportedSearchSchemaInput]()
+}
+
+func TestSearchSchemaPanic_ErrorPanics(t *testing.T) {
+	searchSchemaPanic("noop", nil)
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("searchSchemaPanic() did not panic for non-nil error")
+		}
+		if !strings.Contains(fmt.Sprint(recovered), "search input schema marshal") {
+			t.Fatalf("panic = %v, want operation context", recovered)
+		}
+	}()
+
+	searchSchemaPanic("marshal", errors.New("boom"))
 }
 
 func listSearchTools(t *testing.T, server *mcp.Server) []*mcp.Tool {
