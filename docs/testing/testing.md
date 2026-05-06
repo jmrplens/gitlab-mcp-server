@@ -18,24 +18,24 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,331 |
-| Unit test functions | 9,089 |
-| E2E test functions | 242 |
+| Total test functions | 9,338 |
+| Unit test functions | 9,093 |
+| E2E test functions | 245 |
 | cmd test functions | 347 |
 | Test files (internal/) | 398 |
 | Test files (cmd/) | 13 |
-| Test files (test/e2e/suite/) | 107 |
+| Test files (test/e2e/suite/) | 108 |
 | Tool sub-packages tested | 162 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.0% |
-| Overall coverage (`go test ./internal/...`) | 97.0% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
+| Overall coverage (`go test ./internal/...`) | 96.9% |
 | Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,383 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,390 | 89.8% |
 | `TestFunc` (no underscore) | 692 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 256 | 2.7% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,530 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (162) | 6,985 | 307 | domain-specific GitLab tool handlers |
-| E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
+| Tool sub-packages (162) | 6,989 | 307 | domain-specific GitLab tool handlers |
+| E2E integration | 245 | 108 | build-tagged real GitLab integration suite |
 | cmd packages | 347 | 13 | server entry point and developer command utilities |
-| **Total** | **9,331** | **518** |  |
+| **Total** | **9,338** | **519** |  |
 
 ### Core Packages
 
@@ -85,7 +85,7 @@
 | samplingtools | 165 | 100.0% | 11 |
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.2% | 17 |
-| search | 107 | 100.0% | 10 |
+| search | 111 | 97.1% | 10 |
 | awardemoji | 106 | 65.0% | 25 |
 | packages | 104 | 93.8% | 9 |
 | pipelines | 99 | 97.4% | 12 |
@@ -249,7 +249,7 @@
 | runnercontrollertokens | 33 | 1 | 96.9% | 6 |
 | runners | 97 | 1 | 95.7% | 19 |
 | samplingtools | 165 | 14 | 100.0% | 11 |
-| search | 107 | 1 | 100.0% | 10 |
+| search | 111 | 1 | 97.1% | 10 |
 | securefiles | 27 | 2 | 99.0% | 5 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
@@ -273,7 +273,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **6,985** | **307** |  | **1,052** |
+| **Total** | **6,989** | **307** |  | **1,052** |
 
 </details>
 
@@ -458,7 +458,7 @@
 | runnercontrollertokens | 96.9% |
 | runners | 95.7% |
 | samplingtools | 100.0% |
-| search | 100.0% |
+| search | 97.1% |
 | securefiles | 99.0% |
 | securityfindings | 100.0% |
 | securitysettings | 100.0% |

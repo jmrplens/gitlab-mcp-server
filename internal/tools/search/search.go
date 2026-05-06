@@ -7,6 +7,7 @@ package search
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -29,8 +30,20 @@ type TypeInput struct {
 	SearchType string `json:"search_type,omitempty" jsonschema:"Search backend to request: basic, advanced, or zoekt"`
 }
 
+func validateSearchType(searchType string) error {
+	switch gl.SearchType(searchType) {
+	case "", gl.BasicSearch, gl.AdvancedSearch, gl.ZoektSearch:
+		return nil
+	default:
+		return fmt.Errorf("invalid search_type %q: use one of basic, advanced, or zoekt", searchType)
+	}
+}
+
 // searchOpts builds a [gl.SearchOptions] from pagination, ref, and search type.
-func searchOpts(page, perPage int, ref, searchType string) *gl.SearchOptions {
+func searchOpts(page, perPage int, ref, searchType string) (*gl.SearchOptions, error) {
+	if err := validateSearchType(searchType); err != nil {
+		return nil, err
+	}
 	opts := &gl.SearchOptions{}
 	if ref != "" {
 		opts.Ref = new(ref)
@@ -45,15 +58,19 @@ func searchOpts(page, perPage int, ref, searchType string) *gl.SearchOptions {
 	if perPage > 0 {
 		opts.PerPage = int64(perPage)
 	}
-	return opts
+	return opts, nil
 }
 
-// wrapSearchErr enriches search errors with a 422-specific hint for query syntax
-// errors, falling back to WrapErrWithMessage for all other cases.
+// wrapSearchErr enriches recoverable GitLab Search API errors with hints that
+// help callers adjust query, scope, or backend selection.
 func wrapSearchErr(op string, err error) error {
+	if toolutil.IsHTTPStatus(err, 400) {
+		return toolutil.WrapErrWithHint(op, err,
+			"check query and scope parameters; if search_type was supplied, verify that the requested backend is enabled on this GitLab instance or retry without search_type")
+	}
 	if toolutil.IsHTTPStatus(err, 422) {
 		return toolutil.WrapErrWithHint(op, err,
-			"check the search query format — GitLab advanced search supports specific scopes and operators")
+			"check the search query format — GitLab advanced search supports specific scopes and operators; retry without search_type if the selected backend does not support the query")
 	}
 	return toolutil.WrapErrWithMessage(op, err)
 }
@@ -103,12 +120,14 @@ func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (Co
 		return CodeOutput{}, errors.New("searchCode: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, input.Ref, input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, input.Ref, input.SearchType)
+	if err != nil {
+		return CodeOutput{}, err
+	}
 
 	var (
 		blobs []*gl.Blob
 		resp  *gl.Response
-		err   error
 	)
 
 	switch {
@@ -171,12 +190,14 @@ func MergeRequests(ctx context.Context, client *gitlabclient.Client, input Merge
 		return MergeRequestsOutput{}, errors.New("searchMergeRequests: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return MergeRequestsOutput{}, err
+	}
 
 	var (
 		mrs  []*gl.MergeRequest
 		resp *gl.Response
-		err  error
 	)
 
 	switch {
@@ -231,12 +252,14 @@ func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput)
 		return IssuesOutput{}, errors.New("searchIssues: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return IssuesOutput{}, err
+	}
 
 	var (
 		foundIssues []*gl.Issue
 		resp        *gl.Response
-		err         error
 	)
 
 	switch {
@@ -291,12 +314,14 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		return CommitsOutput{}, errors.New("searchCommits: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return CommitsOutput{}, err
+	}
 
 	var (
 		commitResults []*gl.Commit
 		resp          *gl.Response
-		err           error
 	)
 
 	switch {
@@ -351,12 +376,14 @@ func Milestones(ctx context.Context, client *gitlabclient.Client, input Mileston
 		return MilestonesOutput{}, errors.New("searchMilestones: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return MilestonesOutput{}, err
+	}
 
 	var (
 		msList []*gl.Milestone
 		resp   *gl.Response
-		err    error
 	)
 
 	switch {
@@ -424,7 +451,10 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 		return NotesOutput{}, errors.New("searchNotes: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return NotesOutput{}, err
+	}
 
 	notes, resp, err := client.GL().Search.NotesByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -486,12 +516,14 @@ func Projects(ctx context.Context, client *gitlabclient.Client, input ProjectsIn
 		return ProjectsOutput{}, errors.New("searchProjects: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return ProjectsOutput{}, err
+	}
 
 	var (
 		projs []*gl.Project
 		resp  *gl.Response
-		err   error
 	)
 
 	if input.GroupID != "" {
@@ -554,7 +586,10 @@ func Snippets(ctx context.Context, client *gitlabclient.Client, input SnippetsIn
 		return SnippetsOutput{}, errors.New("searchSnippets: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return SnippetsOutput{}, err
+	}
 
 	snippets, resp, err := client.GL().Search.SnippetTitles(input.Query, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -629,12 +664,14 @@ func Users(ctx context.Context, client *gitlabclient.Client, input UsersInput) (
 		return UsersOutput{}, errors.New("searchUsers: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return UsersOutput{}, err
+	}
 
 	var (
 		users []*gl.User
 		resp  *gl.Response
-		err   error
 	)
 
 	switch {
@@ -704,12 +741,14 @@ func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (Wi
 		return WikiOutput{}, errors.New("searchWiki: query is required")
 	}
 
-	opts := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	if err != nil {
+		return WikiOutput{}, err
+	}
 
 	var (
 		wikis []*gl.Wiki
 		resp  *gl.Response
-		err   error
 	)
 
 	switch {

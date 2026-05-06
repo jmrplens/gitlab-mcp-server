@@ -102250,7 +102250,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -102390,7 +102395,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -102594,7 +102604,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -102844,7 +102859,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -103202,7 +103222,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -103370,7 +103395,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -103514,7 +103544,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -103838,7 +103873,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -103993,7 +104033,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },
@@ -104129,7 +104174,12 @@
           "type": "string"
         },
         "search_type": {
-          "description": "Search backend to request: basic, advanced, or zoekt",
+          "description": "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance.",
+          "enum": [
+            "basic",
+            "advanced",
+            "zoekt"
+          ],
           "type": "string"
         }
       },

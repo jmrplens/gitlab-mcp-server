@@ -5,7 +5,10 @@ package search
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -761,7 +764,10 @@ const (
 
 // TestSearchOpts_Defaults verifies the behavior of search opts defaults.
 func TestSearchOpts_Defaults(t *testing.T) {
-	opts := searchOpts(0, 0, "", "")
+	opts, err := searchOpts(0, 0, "", "")
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
 	if opts.Ref != nil {
 		t.Errorf("expected nil Ref")
 	}
@@ -775,7 +781,10 @@ func TestSearchOpts_Defaults(t *testing.T) {
 
 // TestSearchOpts_AllParams verifies the behavior of search opts all params.
 func TestSearchOpts_AllParams(t *testing.T) {
-	opts := searchOpts(3, 50, "develop", "advanced")
+	opts, err := searchOpts(3, 50, "develop", "advanced")
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
 	if opts.Ref == nil || *opts.Ref != "develop" {
 		t.Error("expected Ref=develop")
 	}
@@ -787,6 +796,21 @@ func TestSearchOpts_AllParams(t *testing.T) {
 	}
 	if opts.PerPage != 50 {
 		t.Errorf("expected PerPage=50, got %d", opts.PerPage)
+	}
+}
+
+// TestSearchOpts_InvalidSearchType verifies that invalid search_type values
+// fail locally with an actionable message before calling GitLab.
+func TestSearchOpts_InvalidSearchType(t *testing.T) {
+	opts, err := searchOpts(0, 0, "", "semantic")
+	if err == nil {
+		t.Fatal("expected invalid search_type error, got nil")
+	}
+	if opts != nil {
+		t.Fatalf("expected nil opts for invalid search_type, got %#v", opts)
+	}
+	if !strings.Contains(err.Error(), "invalid search_type") || !strings.Contains(err.Error(), "basic") {
+		t.Fatalf("expected actionable search_type error, got: %v", err)
 	}
 }
 
@@ -1579,6 +1603,126 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	RegisterMeta(server, client)
 }
 
+// TestRegisterTools_SearchTypeSchemaEnum verifies that every individual
+// search tool exposes search_type as a constrained enum in tools/list.
+func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	RegisterTools(server, client)
+
+	tools := listSearchTools(t, server)
+	for _, name := range []string{
+		"gitlab_search_code",
+		"gitlab_search_merge_requests",
+		"gitlab_search_issues",
+		"gitlab_search_commits",
+		"gitlab_search_milestones",
+		"gitlab_search_notes",
+		"gitlab_search_projects",
+		"gitlab_search_snippets",
+		"gitlab_search_users",
+		"gitlab_search_wiki",
+	} {
+		t.Run(name, func(t *testing.T) {
+			tool := findSearchTool(t, tools, name)
+			requireSearchTypeEnum(t, schemaMapFromAny(t, tool.InputSchema))
+		})
+	}
+}
+
+// TestRegisterMeta_SearchTypeActionSchemaEnum verifies that gitlab_search
+// action schemas expose the same search_type enum as the individual tools.
+func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
+	toolutil.ClearMetaRoutes()
+	defer toolutil.ClearMetaRoutes()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	routes := toolutil.CaptureMetaRoutes(func() {
+		RegisterMeta(server, client)
+	})
+
+	for _, action := range []string{"code", "merge_requests", "issues", "commits", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
+		t.Run(action, func(t *testing.T) {
+			schema, ok := toolutil.LookupMetaActionSchema(routes, "gitlab_search", action)
+			if !ok {
+				t.Fatalf("missing gitlab_search/%s schema", action)
+			}
+			requireSearchTypeEnum(t, schema)
+		})
+	}
+}
+
+func listSearchTools(t *testing.T, server *mcp.Server) []*mcp.Tool {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st, ct := mcp.NewInMemoryTransports()
+	go server.Connect(ctx, st, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer session.Close()
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	return tools.Tools
+}
+
+func findSearchTool(t *testing.T, tools []*mcp.Tool, name string) *mcp.Tool {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	t.Fatalf("tool %q not found", name)
+	return nil
+}
+
+func schemaMapFromAny(t *testing.T, raw any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+	var schema map[string]any
+	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+		t.Fatalf("unmarshal schema: %v", unmarshalErr)
+	}
+	return schema
+}
+
+func requireSearchTypeEnum(t *testing.T, schema map[string]any) {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties missing or invalid: %#v", schema["properties"])
+	}
+	searchType, ok := properties["search_type"].(map[string]any)
+	if !ok {
+		t.Fatalf("search_type property missing or invalid: %#v", properties["search_type"])
+	}
+	got, ok := searchType["enum"].([]any)
+	if !ok {
+		t.Fatalf("search_type enum missing or invalid: %#v", searchType["enum"])
+	}
+	want := []any{"basic", "advanced", "zoekt"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("search_type enum = %#v, want %#v", got, want)
+	}
+	if !strings.Contains(fmt.Sprint(searchType["description"]), "enabled on the GitLab instance") {
+		t.Fatalf("search_type description lacks backend availability hint: %#v", searchType["description"])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // MCP round-trip
 // ---------------------------------------------------------------------------.
@@ -1877,5 +2021,21 @@ func TestWrapSearchErr_422(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "query format") {
 		t.Errorf("expected 422 hint about query format, got: %v", err)
+	}
+}
+
+// TestWrapSearchErr_400 verifies that bad request errors include guidance for
+// unsupported or disabled search_type backends.
+func TestWrapSearchErr_400(t *testing.T) {
+	glErr := &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusBadRequest},
+		Message:  "search_type is not supported",
+	}
+	err := wrapSearchErr("search_code", glErr)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "search_type") || !strings.Contains(err.Error(), "backend") {
+		t.Errorf("expected 400 hint about search_type backend availability, got: %v", err)
 	}
 }
