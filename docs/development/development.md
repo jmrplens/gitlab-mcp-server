@@ -42,7 +42,7 @@ gitlab-mcp-server/
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 32 base meta-tools (47 self-managed Enterprise, 48 GitLab.com Enterprise)
+│   │   ├── register_meta.go     # RegisterAllMeta() — 32 domain meta-tools (47 self-managed Enterprise/Premium, 48 GitLab.com Enterprise/Premium with Orbit)
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
 │   │   ├── branches/            # Branch management tools (example sub-package)
@@ -58,6 +58,8 @@ gitlab-mcp-server/
 ├── Makefile                     # Build automation
 └── .env                         # Local secrets (gitignored)
 ```
+
+Meta-tool counts are additive: 32 core/domain meta-tools, plus 15 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
 
 ## Architecture
 

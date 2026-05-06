@@ -1,5 +1,5 @@
 ---
-title: "ADR-0005: Meta-tool consolidation from 70 to 32 base tools"
+title: "ADR-0005: Meta-tool consolidation from 68 to 32 base tools"
 status: "Accepted"
 date: "2026-03-06"
 authors: "jmrplens"
@@ -7,7 +7,7 @@ tags: ["architecture", "decision", "meta-tools", "consolidation", "llm-optimizat
 superseded_by: ""
 ---
 
-# ADR-0005: Meta-tool consolidation from 70 to 32 base tools
+# ADR-0005: Meta-tool consolidation from 68 to 32 base tools
 
 ## Status
 
@@ -69,7 +69,7 @@ Analysis of production MCP servers reveals common patterns for managing large to
 
 ## Decision
 
-**Consolidate 70 meta-tools into a 32-tool base catalog** by absorbing standalone `RegisterMeta` calls into the existing inline meta-tool registration functions and retaining standalone tools only where the MCP flow requires them.
+**Consolidate 68 meta-tools into a 32-tool base catalog** by absorbing standalone `RegisterMeta` calls into the existing inline meta-tool registration functions and retaining standalone tools only where the MCP flow requires them.
 
 ### Target architecture
 
@@ -177,8 +177,8 @@ Enterprise/Premium deployments add 15 gated meta-tools. GitLab.com Enterprise/Pr
 
 ### Positive
 
-- **POS-001**: Token reduction — from 70 to 32 base tools reduces `tools/list` response by ~54%
-- **POS-002**: Simpler tool selection — LLMs choose among 32 base tools instead of 70
+- **POS-001**: Token reduction — from 68 to 32 base tools reduces `tools/list` response by ≈53%
+- **POS-002**: Simpler tool selection — LLMs choose among 32 base tools instead of 68
 - **POS-003**: Better discoverability — comprehensive action lists in tool descriptions
 - **POS-004**: Consistent granularity — every domain has exactly one meta-tool
 - **POS-005**: Universal client compatibility — fewer tools work better across all MCP clients

@@ -18,7 +18,7 @@ gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two us
 | **Deterministic** (JSON-RPC) | No | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
 | **LLM-driven** (headless MCP client) | Yes | Intelligent workflows: code review, issue triage, MR analysis | ❌ Non-deterministic |
 
-Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full tool surface for Enterprise/Premium deployments when using a token with `api` scope, with additional Orbit-specific tools available on GitLab.com.
+Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. Enterprise/Premium deployments using a token with `api` scope have access to the full tool surface. GitLab.com deployments have access to the core tool set plus additional Orbit-specific tools.
 
 ---
 
@@ -48,7 +48,7 @@ chmod +x gitlab-mcp-server
 Create a **Project Access Token** (recommended over personal PATs for CI):
 
 1. Go to **Settings > Access Tokens** in your GitLab project.
-2. Create a token with the required scope: `api` for full read/write access to the individual tool catalog, or `read_api` for read-only operations (list, get, search tools).
+2. Create a token with the required scope: `api` for full read/write access to all available tools, or `read_api` for read-only operations (list, get, search tools).
 3. Set an expiration date (90 days maximum recommended).
 
 ### 3. Store the Token as a CI Variable

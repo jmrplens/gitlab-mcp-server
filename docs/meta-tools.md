@@ -6,7 +6,11 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for a total of **47 tools** on self-managed GitLab. GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**. Stdio mode enables that catalog with `GITLAB_ENTERPRISE=true`; HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition. Orbit is additionally gated to `https://gitlab.com`.
+In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for **47 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**.
+
+Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
+
+`gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
@@ -104,12 +108,12 @@ META_TOOLS=false
 
 ### Interactive Elicitation Tools (4)
 
-| # | Tool Name | Purpose |
-|---|-----------|---------|
-| 29 | `gitlab_interactive_issue_create` | Create an issue through guided prompts with final confirmation before the GitLab API call |
-| 30 | `gitlab_interactive_mr_create` | Create a merge request through guided prompts with branch, title, metadata, and confirmation steps |
-| 31 | `gitlab_interactive_project_create` | Create a project through guided prompts for name, visibility, initialization, and confirmation |
-| 32 | `gitlab_interactive_release_create` | Create a release through guided prompts for tag, name, notes, and confirmation |
+| # | Tool Name | Actions | Domain/Source |
+|---|-----------|---------|---------------|
+| 29 | `gitlab_interactive_issue_create` | Guided prompts for issue fields with final confirmation | GitLab |
+| 30 | `gitlab_interactive_mr_create` | Guided prompts for branch, title, metadata, and confirmation | GitLab |
+| 31 | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab |
+| 32 | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation | GitLab |
 
 ### GitLab.com Enterprise/Premium Meta-Tools (1)
 
@@ -125,7 +129,7 @@ META_TOOLS=false
 
 The meta-tool architecture evolved through ADR-0005:
 
-- **v1.0**: 70 meta-tools (19 inline + 51 standalone sub-package registrations)
+- **v1.0**: 68 meta-tools (19 inline + 49 standalone sub-package registrations)
 - **v2.0**: 36 meta-tools (19 core inline + 4 consolidated inline + 2 delegated + 11 sampling)
 - **v2.1**: 40 meta-tools (+3 runner-controller delegated + 1 standalone project-discovery)
 - **v3.0**: 60 meta-tools (43 domain inline + 1 search + 1 runner + 3 runner-controller + 11 sampling + 1 standalone)
@@ -136,7 +140,7 @@ The meta-tool architecture evolved through ADR-0005:
 - **v7.1**: 32 base / 47 self-managed enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
 - **v7.2**: 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise; `gitlab_orbit` added for experimental GitLab.com Orbit Knowledge Graph actions
 
-The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind the Enterprise/Premium catalog.
+The base mode provides a ~53% reduction from the v1.0 baseline, with enterprise features gated behind the Enterprise/Premium catalog.
 
 - Token usage in `tools/list` MCP responses
 - LLM selection confusion when choosing among similar tools

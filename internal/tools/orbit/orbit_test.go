@@ -475,6 +475,9 @@ func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
 			if !result.IsError {
 				t.Fatal("CallTool() IsError = false, want true informational error result")
 			}
+			if len(result.Content) == 0 {
+				t.Fatal("CallTool() content is empty, want Orbit not-found guidance")
+			}
 			textContent, ok := result.Content[0].(*mcp.TextContent)
 			if !ok {
 				t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])

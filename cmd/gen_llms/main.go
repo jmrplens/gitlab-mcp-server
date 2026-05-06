@@ -34,11 +34,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
-// keep the file scannable. When a description exceeds this limit, generation
-// falls back to its first sentence; if that is still too long, the text is
-// hard-truncated at the rune boundary.
-const maxFullDescRunes = 600
+const (
+	// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
+	// keep the file scannable. When a description exceeds this limit, generation
+	// falls back to its first sentence; if that is still too long, the text is
+	// hard-truncated at the rune boundary.
+	maxFullDescRunes = 600
+
+	// searchTypeParamName keeps backend choices visible; truncating its long
+	// description hides the basic/advanced/zoekt guidance LLMs need.
+	searchTypeParamName = "search_type"
+)
 
 type llmsCatalog struct {
 	Individual              []*mcp.Tool
@@ -572,7 +578,7 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			if name != "search_type" {
+			if name != searchTypeParamName {
 				desc = truncateRunes(desc, 120)
 			}
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)

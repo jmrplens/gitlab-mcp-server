@@ -95,7 +95,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CodeInput) (*mcp.CallToolResult, CodeOutput, error) {
 		start := time.Now()
 		out, err := Code(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_code", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -109,7 +109,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MergeRequestsInput) (*mcp.CallToolResult, MergeRequestsOutput, error) {
 		start := time.Now()
 		out, err := MergeRequests(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_merge_requests", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -123,7 +123,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input IssuesInput) (*mcp.CallToolResult, IssuesOutput, error) {
 		start := time.Now()
 		out, err := Issues(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_issues", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -137,7 +137,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CommitsInput) (*mcp.CallToolResult, CommitsOutput, error) {
 		start := time.Now()
 		out, err := Commits(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_commits", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -151,7 +151,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MilestonesInput) (*mcp.CallToolResult, MilestonesOutput, error) {
 		start := time.Now()
 		out, err := Milestones(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_milestones", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -165,7 +165,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input NotesInput) (*mcp.CallToolResult, NotesOutput, error) {
 		start := time.Now()
 		out, err := Notes(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_notes", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -179,7 +179,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectsInput) (*mcp.CallToolResult, ProjectsOutput, error) {
 		start := time.Now()
 		out, err := Projects(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_projects", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -193,7 +193,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SnippetsInput) (*mcp.CallToolResult, SnippetsOutput, error) {
 		start := time.Now()
 		out, err := Snippets(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_snippets", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -207,7 +207,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UsersInput) (*mcp.CallToolResult, UsersOutput, error) {
 		start := time.Now()
 		out, err := Users(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_users", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 
@@ -221,7 +221,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input WikiInput) (*mcp.CallToolResult, WikiOutput, error) {
 		start := time.Now()
 		out, err := Wiki(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_search_wiki", start, err)
+		toolutil.LogToolCallAll(ctx, req, req.Params.Name, start, err)
 		return toolutil.WithHints(markdownForResult(out), out, err)
 	})
 }

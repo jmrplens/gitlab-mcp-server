@@ -94,6 +94,9 @@ func pipelineSummary(pkg ListItem) string {
 
 func pipelineItemSummary(pipeline PipelineItem) string {
 	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
+	if pipeline.WebURL == "" {
+		return summary
+	}
 	return toolutil.MdTitleLink(summary, pipeline.WebURL)
 }
 

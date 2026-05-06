@@ -146,7 +146,7 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 By default, the server registers **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) — domain-grouped dispatchers that reduce token overhead. Each meta-tool handles multiple actions via an `action` parameter.
 
-To register the individual tool catalog instead (one tool per GitLab operation; up to 1011 on GitLab.com Enterprise/Premium), set:
+To register the complete individual tool set instead (one tool per GitLab operation; up to 1011 on GitLab.com Enterprise/Premium), set:
 
 ```env
 META_TOOLS=false

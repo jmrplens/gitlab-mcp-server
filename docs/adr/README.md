@@ -16,7 +16,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | ADR-0002 | stdio as primary MCP transport | Implicit founding decision (not formally recorded) | — |
 | ADR-0003 | GitLab REST API v4 via official client | Implicit founding decision (not formally recorded) | — |
 | [ADR-0004](adr-0004-modular-tools-subpackages.md) | Modular sub-packages under `internal/tools/{domain}/` | Accepted | 2026-02-15 |
-| [ADR-0005](adr-0005-meta-tool-consolidation.md) | Meta-tool consolidation from 70 to 32 base tools | Accepted | 2026-03-06 |
+| [ADR-0005](adr-0005-meta-tool-consolidation.md) | Meta-tool consolidation from 68 to 32 base tools | Accepted | 2026-03-06 |
 | [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md) | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted | 2026-03-23 |
 | [ADR-0007](adr-0007-rich-error-semantics.md) | Rich error semantics for LLM-actionable diagnostics | Accepted | 2026-04-06 |
 | [ADR-0008](adr-0008-universal-identity.md) | Universal identity system | Accepted | 2026-04-13 |
