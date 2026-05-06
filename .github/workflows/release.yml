@@ -114,19 +114,26 @@ jobs:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
           # Bump when a new mcp-publisher release is verified. Server version published comes from
           # the git tag (handled in the previous step by update-server-json-sha.sh).
-          MCP_PUBLISHER_VERSION: "v1.7.6"
-          MCP_PUBLISHER_SHA256: "bcc96ca630cae4cf503b4550bd4a17462d42ad4819273bee56f4385bb059ddee"
+          MCP_PUBLISHER_VERSION: "v1.7.8"
+          MCP_PUBLISHER_SHA256: "48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c"
         run: |
           set -euo pipefail
           TARBALL="mcp-publisher_linux_amd64.tar.gz"
+          SIGSTORE_BUNDLE="${TARBALL}.sigstore.json"
           URL="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${TARBALL}"
           echo "Downloading ${URL}"
-          curl -fsSL --retry 3 -o "${TARBALL}" "${URL}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${URL}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${SIGSTORE_BUNDLE}" "${URL}.sigstore.json"
           if [ -n "${MCP_PUBLISHER_SHA256}" ]; then
             echo "${MCP_PUBLISHER_SHA256}  ${TARBALL}" | sha256sum -c -
           else
-            echo "::warning::MCP_PUBLISHER_SHA256 not set — skipping signature verification"
+            echo "::warning::MCP_PUBLISHER_SHA256 not set — skipping checksum verification"
           fi
+          cosign verify-blob \
+            --bundle "${SIGSTORE_BUNDLE}" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${TARBALL}"
           tar xzf "${TARBALL}" mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
