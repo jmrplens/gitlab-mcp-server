@@ -136,7 +136,17 @@ jobs:
             "${TARBALL}"
           tar xzf "${TARBALL}" mcp-publisher
           ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          set +e
+          ./mcp-publisher publish 2>&1 | tee mcp-publisher-publish.log
+          PUBLISH_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "${PUBLISH_STATUS}" -ne 0 ]; then
+            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
+              echo "::notice::MCP Registry version ${GITHUB_REF#refs/tags/v} is already published; continuing"
+            else
+              exit "${PUBLISH_STATUS}"
+            fi
+          fi
 
       - name: Commit updated server.json and plugin.json to main
         env:
