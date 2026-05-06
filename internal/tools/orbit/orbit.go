@@ -399,7 +399,9 @@ func convertSchema(schema *gl.OrbitSchema) SchemaOutput {
 	}
 	nodes := make([]any, 0, len(schema.Nodes))
 	for _, node := range schema.Nodes {
-		nodes = append(nodes, decodeRaw(node))
+		if decoded := decodeRaw(node); decoded != nil {
+			nodes = append(nodes, decoded)
+		}
 	}
 	return SchemaOutput{
 		SchemaVersion: schema.SchemaVersion,

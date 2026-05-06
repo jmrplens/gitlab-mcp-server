@@ -199,9 +199,6 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 	repository.RegisterTools(server, client)
 	jobs.RegisterTools(server, client)
 	search.RegisterTools(server, client)
-	if enterprise && client.IsGitLabDotCom() {
-		orbit.RegisterTools(server, client)
-	}
 	users.RegisterTools(server, client)
 	usergpgkeys.RegisterTools(server, client)
 	useremails.RegisterTools(server, client)
@@ -312,6 +309,9 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 
 	// Enterprise tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
 	if enterprise {
+		if client.IsGitLabDotCom() {
+			orbit.RegisterTools(server, client)
+		}
 		groupserviceaccounts.RegisterTools(server, client)
 		projects.RegisterPushRuleTools(server, client)
 		mergetrains.RegisterTools(server, client)

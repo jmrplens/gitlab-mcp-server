@@ -154,8 +154,8 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
-	name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
 	out, err := retryWithBackoff(ctx, t, "create project fixture", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
+		name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
 		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
 			Name:                 name,
 			Description:          "E2E: " + t.Name(),
@@ -208,8 +208,8 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
-	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
 	out, err := retryWithBackoff(ctx, t, "create project fixture (meta)", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
+		name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
 		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
 			"action": "create",
 			"params": map[string]any{

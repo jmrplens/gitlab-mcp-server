@@ -2,6 +2,7 @@ package orbit
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,6 +10,13 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+func orbitNotFoundResult(resource, identifier string) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(resource, identifier,
+		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
+		"Check that the token can access a Knowledge Graph-enabled namespace or project",
+	)
+}
 
 // RegisterTools registers Orbit MCP tools. Callers gate this package to GitLab.com and the Enterprise catalog.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
@@ -21,6 +29,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input StatusInput) (*mcp.CallToolResult, StatusOutput, error) {
 		start := time.Now()
 		out, err := Status(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_status", start, nil)
+			return orbitNotFoundResult("GitLab Orbit Status", "cluster status"), StatusOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_status", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatStatusMarkdown(out), toolutil.ContentDetail), out, err)
 	})
@@ -34,6 +46,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SchemaInput) (*mcp.CallToolResult, SchemaOutput, error) {
 		start := time.Now()
 		out, err := Schema(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_schema", start, nil)
+			return orbitNotFoundResult("GitLab Orbit Schema", "graph ontology"), SchemaOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_schema", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatSchemaMarkdown(out), toolutil.ContentDetail), out, err)
 	})
@@ -47,6 +63,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ToolsInput) (*mcp.CallToolResult, ToolsOutput, error) {
 		start := time.Now()
 		out, err := Tools(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_tools", start, nil)
+			return orbitNotFoundResult("GitLab Orbit Tools", "tool manifest"), ToolsOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_tools", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatToolsMarkdown(out), toolutil.ContentList), out, err)
 	})
@@ -60,6 +80,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input QueryInput) (*mcp.CallToolResult, QueryOutput, error) {
 		start := time.Now()
 		out, err := Query(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_query", start, nil)
+			return orbitNotFoundResult("GitLab Orbit Query", "submitted query"), QueryOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_query", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatQueryMarkdown(out), toolutil.ContentDetail), out, err)
 	})
@@ -73,6 +97,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GraphStatusInput) (*mcp.CallToolResult, GraphStatusOutput, error) {
 		start := time.Now()
 		out, err := GraphStatus(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_graph_status", start, nil)
+			return orbitNotFoundResult("GitLab Orbit Graph Status", "requested namespace, project, or full_path"), GraphStatusOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_graph_status", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatGraphStatusMarkdown(out), toolutil.ContentDetail), out, err)
 	})

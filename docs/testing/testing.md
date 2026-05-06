@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,370 |
-| Unit test functions | 9,125 |
+| Total test functions | 9,373 |
+| Unit test functions | 9,128 |
 | E2E test functions | 245 |
 | cmd test functions | 348 |
 | Test files (internal/) | 399 |
@@ -35,9 +35,9 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,407 | 89.7% |
-| `TestFunc` (no underscore) | 693 | 7.4% |
-| `TestFunc_Scenario_Expected` (3+ part) | 270 | 2.9% |
+| `TestFunc_Scenario` (2-part) | 8,409 | 89.7% |
+| `TestFunc` (no underscore) | 692 | 7.4% |
+| `TestFunc_Scenario_Expected` (3+ part) | 272 | 2.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,532 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 229 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (163) | 7,016 | 308 | domain-specific GitLab tool handlers |
+| Tool sub-packages (163) | 7,019 | 308 | domain-specific GitLab tool handlers |
 | E2E integration | 245 | 108 | build-tagged real GitLab integration suite |
 | cmd packages | 348 | 13 | server entry point and developer command utilities |
-| **Total** | **9,370** | **520** |  |
+| **Total** | **9,373** | **520** |  |
 
 ### Core Packages
 
@@ -86,8 +86,8 @@
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.2% | 17 |
 | search | 114 | 100.0% | 10 |
+| packages | 108 | 95.5% | 9 |
 | awardemoji | 106 | 65.0% | 25 |
-| packages | 106 | 95.5% | 9 |
 | pipelines | 99 | 97.4% | 12 |
 | resourceevents | 99 | 100.0% | 16 |
 | commits | 97 | 96.5% | 13 |
@@ -221,8 +221,8 @@
 | mrnotes | 36 | 2 | 99.3% | 5 |
 | namespaces | 36 | 1 | 98.3% | 5 |
 | notifications | 30 | 1 | 100.0% | 7 |
-| orbit | 22 | 1 | 99.7% | 5 |
-| packages | 106 | 4 | 95.5% | 9 |
+| orbit | 23 | 1 | 99.7% | 5 |
+| packages | 108 | 4 | 95.5% | 9 |
 | pages | 55 | 2 | 99.1% | 10 |
 | pipelines | 99 | 2 | 97.4% | 12 |
 | pipelineschedules | 80 | 2 | 97.4% | 11 |
@@ -274,7 +274,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,016** | **308** |  | **1,057** |
+| **Total** | **7,019** | **308** |  | **1,057** |
 
 </details>
 

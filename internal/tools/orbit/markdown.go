@@ -83,8 +83,9 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 	b.WriteString("| Tool | Description |\n")
 	b.WriteString("|---|---|\n")
 	for _, tool := range out.Tools {
+		safeName := strings.ReplaceAll(tool.Name, "`", "")
 		fmt.Fprintf(&b, "| `%s` | %s |\n",
-			toolutil.EscapeMdTableCell(tool.Name),
+			toolutil.EscapeMdTableCell(safeName),
 			toolutil.EscapeMdTableCell(tool.Description),
 		)
 	}

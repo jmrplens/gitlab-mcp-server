@@ -330,10 +330,11 @@ func packageToListItem(p *gl.Package) ListItem {
 	if len(p.Pipelines) > 0 {
 		item.Pipelines = make([]PipelineItem, 0, len(p.Pipelines))
 		for _, pipeline := range p.Pipelines {
-			if pipeline == nil {
+			pipelineItem := packagePipelineToOutput(pipeline)
+			if pipelineItem == nil {
 				continue
 			}
-			item.Pipelines = append(item.Pipelines, *packagePipelineToOutput(pipeline))
+			item.Pipelines = append(item.Pipelines, *pipelineItem)
 		}
 	}
 	if p.CreatedAt != nil {
@@ -357,6 +358,9 @@ func packageToListItem(p *gl.Package) ListItem {
 
 // packagePipelineToOutput converts GitLab package pipeline metadata.
 func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
+	if pipeline == nil {
+		return nil
+	}
 	item := &PipelineItem{
 		ID:     pipeline.ID,
 		Status: pipeline.Status,

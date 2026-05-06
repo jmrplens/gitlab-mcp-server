@@ -141,33 +141,38 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 // TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise verifies that the
 // global catalog advertises Orbit only for GitLab.com with enterprise enabled.
 func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
-	selfManaged, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, selfManaged, true)
-	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit_status") {
-		t.Fatalf("RegisterAll() registered Orbit for self-managed enterprise client")
-	}
-
-	gitLabDotCom, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, gitLabDotCom, false)
-	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit_status") {
-		t.Fatalf("RegisterAll() registered Orbit for GitLab.com without enterprise")
+	tests := []struct {
+		name       string
+		gitlabURL  string
+		enterprise bool
+		wantOrbit  bool
+	}{
+		{name: "self-managed enterprise", gitlabURL: "https://gitlab.example.com", enterprise: true},
+		{name: "gitlab.com base", gitlabURL: "https://gitlab.com", enterprise: false},
+		{name: "gitlab.com enterprise", gitlabURL: "https://gitlab.com", enterprise: true, wantOrbit: true},
 	}
 
-	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, gitLabDotCom, true)
-	names := toolNamesFromServer(t, server)
-	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
-		if !slices.Contains(names, want) {
-			t.Fatalf("RegisterAll() missing %s for GitLab.com enterprise client", want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := gitlabclient.NewClientWithToken(tt.gitlabURL, "test-token", false)
+			if err != nil {
+				t.Fatalf("NewClientWithToken() error: %v", err)
+			}
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+			RegisterAll(server, client, tt.enterprise)
+			names := toolNamesFromServer(t, server)
+			if gotOrbit := slices.Contains(names, "gitlab_orbit_status"); gotOrbit != tt.wantOrbit {
+				t.Fatalf("RegisterAll() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
+			}
+			if !tt.wantOrbit {
+				return
+			}
+			for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
+				if !slices.Contains(names, want) {
+					t.Fatalf("RegisterAll() missing %s for GitLab.com enterprise client", want)
+				}
+			}
+		})
 	}
 }
 
@@ -215,30 +220,29 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 // TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise verifies that
 // the GitLab.com-only Orbit meta-tool also requires the Enterprise catalog.
 func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.T) {
-	selfManaged, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, selfManaged, true)
-	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit") {
-		t.Fatalf("RegisterAllMeta() registered Orbit for self-managed enterprise client")
-	}
-
-	gitLabDotCom, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, gitLabDotCom, false)
-	if names := toolNamesFromServer(t, server); slices.Contains(names, "gitlab_orbit") {
-		t.Fatalf("RegisterAllMeta() registered Orbit for GitLab.com without enterprise")
+	tests := []struct {
+		name       string
+		gitlabURL  string
+		enterprise bool
+		wantOrbit  bool
+	}{
+		{name: "self-managed enterprise", gitlabURL: "https://gitlab.example.com", enterprise: true},
+		{name: "gitlab.com base", gitlabURL: "https://gitlab.com", enterprise: false},
+		{name: "gitlab.com enterprise", gitlabURL: "https://gitlab.com", enterprise: true, wantOrbit: true},
 	}
 
-	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, gitLabDotCom, true)
-	if names := toolNamesFromServer(t, server); !slices.Contains(names, "gitlab_orbit") {
-		t.Fatalf("RegisterAllMeta() missing gitlab_orbit for GitLab.com enterprise client")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := gitlabclient.NewClientWithToken(tt.gitlabURL, "test-token", false)
+			if err != nil {
+				t.Fatalf("NewClientWithToken() error: %v", err)
+			}
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			RegisterAllMeta(server, client, tt.enterprise)
+			if gotOrbit := slices.Contains(toolNamesFromServer(t, server), "gitlab_orbit"); gotOrbit != tt.wantOrbit {
+				t.Fatalf("RegisterAllMeta() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
+			}
+		})
 	}
 }
 

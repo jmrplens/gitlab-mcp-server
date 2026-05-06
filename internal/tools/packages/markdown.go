@@ -70,6 +70,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'file_list' with a package_id to see individual files",
 		"Use action 'delete' to remove a package",
 		"Use action 'publish' or 'publish_directory' to upload new packages",
@@ -79,16 +80,21 @@ func FormatListMarkdown(out ListOutput) string {
 
 func pipelineSummary(pkg ListItem) string {
 	if pkg.Pipeline != nil {
-		return fmt.Sprintf("%d %s %s", pkg.Pipeline.ID, pkg.Pipeline.Status, pkg.Pipeline.Ref)
+		return pipelineItemSummary(*pkg.Pipeline)
 	}
 	if len(pkg.Pipelines) > 0 {
 		latest := pkg.Pipelines[0]
 		if len(pkg.Pipelines) == 1 {
-			return fmt.Sprintf("%d %s %s", latest.ID, latest.Status, latest.Ref)
+			return pipelineItemSummary(latest)
 		}
-		return fmt.Sprintf("%d %s %s (+%d)", latest.ID, latest.Status, latest.Ref, len(pkg.Pipelines)-1)
+		return fmt.Sprintf("%s (+%d)", pipelineItemSummary(latest), len(pkg.Pipelines)-1)
 	}
 	return ""
+}
+
+func pipelineItemSummary(pipeline PipelineItem) string {
+	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
+	return toolutil.MdTitleLink(summary, pipeline.WebURL)
 }
 
 // FormatFileListMarkdown renders a paginated list of package files as a Markdown table.

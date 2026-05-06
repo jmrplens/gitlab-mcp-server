@@ -450,6 +450,42 @@ func TestOrbit_RegisterTools_CallThroughMCP(t *testing.T) {
 	}
 }
 
+func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
+	session := newOrbitSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "gitlab_orbit_status", args: map[string]any{}},
+		{name: "gitlab_orbit_schema", args: map[string]any{}},
+		{name: "gitlab_orbit_tools", args: map[string]any{}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{"query_type": "traversal"}}},
+		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool() error = %v, want nil", err)
+			}
+			if !result.IsError {
+				t.Fatal("CallTool() IsError = false, want true informational error result")
+			}
+			textContent, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+			}
+			if !strings.Contains(textContent.Text, "Not Found") || !strings.Contains(textContent.Text, "GitLab Orbit") {
+				t.Fatalf("content = %q, want Orbit not-found guidance", textContent.Text)
+			}
+		})
+	}
+}
+
 func TestFormatQueryMarkdown_IncludesPrettyJSON(t *testing.T) {
 	md := FormatQueryMarkdown(QueryOutput{
 		QueryType: "traversal",
@@ -557,7 +593,7 @@ func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
 		},
 		{
 			name: "tools",
-			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query|graph", Description: "Run\nqueries"}}}),
+			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query`|graph", Description: "Run\nqueries"}}}),
 			want: "`query&#124;graph` | Run queries",
 		},
 		{
@@ -692,12 +728,13 @@ func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testin
 
 	schema := convertSchema(&gl.OrbitSchema{
 		Domains: []*gl.OrbitSchemaDomain{nil, {Name: "core", NodeNames: []string{"Project"}}},
+		Nodes:   []json.RawMessage{nil, json.RawMessage(`{"name":"Project"}`)},
 		Edges: []*gl.OrbitSchemaEdge{nil, {
 			Name:     "AUTHORED",
 			Variants: []*gl.OrbitSchemaEdgeVariant{nil, {SourceType: "User", TargetType: "Issue"}},
 		}},
 	})
-	if len(schema.Domains) != 1 || len(schema.Edges) != 1 || len(schema.Edges[0].Variants) != 1 {
+	if len(schema.Domains) != 1 || len(schema.Nodes) != 1 || len(schema.Edges) != 1 || len(schema.Edges[0].Variants) != 1 {
 		t.Fatalf("convertSchema() = %+v, want nil entries skipped", schema)
 	}
 

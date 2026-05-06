@@ -224,13 +224,13 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 		registerStorageMoveMeta(server, client)
 		registerVulnerabilityMeta(server, client)
 		registerSecurityFindingsMeta(server, client)
+		if client.IsGitLabDotCom() {
+			orbit.RegisterMeta(server, client)
+		}
 	}
 
 	// Delegated meta-tools (sub-package RegisterMeta)
 	search.RegisterMeta(server, client)
-	if enterprise && client.IsGitLabDotCom() {
-		orbit.RegisterMeta(server, client)
-	}
 	runners.RegisterMeta(server, client)
 	samplingtools.RegisterMeta(server, client)
 

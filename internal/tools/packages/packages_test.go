@@ -409,6 +409,12 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 	}
 }
 
+func TestPackagePipelineToOutput_NilPipeline_ReturnsNil(t *testing.T) {
+	if got := packagePipelineToOutput(nil); got != nil {
+		t.Fatalf("packagePipelineToOutput(nil) = %+v, want nil", got)
+	}
+}
+
 // TestPackageList_WithFilters verifies the behavior of package list with filters.
 func TestPackageList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

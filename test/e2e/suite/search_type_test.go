@@ -100,6 +100,7 @@ func TestSearchType_InvalidValueFails(t *testing.T) {
 // TestSearchType_SchemasExposeEnum verifies search_type is constrained in the
 // live individual tools/list schema and the meta-tool per-action schema resource.
 func TestSearchType_SchemasExposeEnum(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -107,7 +108,8 @@ func TestSearchType_SchemasExposeEnum(t *testing.T) {
 		t.Skip("meta schema session not configured")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	toolsResult, err := sess.individual.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
@@ -142,8 +144,10 @@ func requireSearchTypeError(t *testing.T, err error) {
 	if !strings.Contains(message, "search_type") {
 		t.Fatalf("expected search_type in error, got: %v", err)
 	}
-	if !strings.Contains(message, "basic") || !strings.Contains(message, "zoekt") {
-		t.Fatalf("expected search_type choices in error, got: %v", err)
+	for _, want := range []string{"basic", "advanced", "zoekt"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("expected search_type choice %q in error, got: %v", want, err)
+		}
 	}
 }
 
