@@ -1735,7 +1735,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation)." + paramsResourceHint,
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint,
 				"additionalProperties": true,
 			},
 		},
@@ -1771,7 +1771,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	first := actions[0]
 	return fmt.Sprintf(
-		"Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
 	)
 }

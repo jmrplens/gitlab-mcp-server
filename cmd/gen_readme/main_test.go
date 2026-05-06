@@ -16,8 +16,8 @@ import (
 // the domain text, protecting README generation from regressing to unhelpful
 // envelope/example descriptions.
 func TestDescriptionSummary_StripsGeneratedMetaToolPrefix(t *testing.T) {
-	description := "Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":\"create\",\"params\":{...}}\n" +
-		"For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
+	description := "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\n" +
+		"Action params schema: gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
 		"Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive."
 
 	got := descriptionSummary(description)
@@ -112,8 +112,8 @@ func TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom(t *testing.T) {
 func testMetaTool(name, description string, actions ...string) *mcp.Tool {
 	return &mcp.Tool{
 		Name: name,
-		Description: "Example: {\"action\":\"create\",\"params\":{...}}\n" +
-			"For the params schema of any action, read the MCP resource gitlab://schema/meta/" + name + "/<action>.\n\n" +
+		Description: "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\n" +
+			"Action params schema: gitlab://schema/meta/" + name + "/<action>.\n\n" +
 			description,
 		InputSchema: map[string]any{
 			"properties": map[string]any{

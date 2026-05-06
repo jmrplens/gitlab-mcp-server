@@ -670,8 +670,9 @@ func stripMetaPrefix(s string) string {
 	}
 	firstLine := strings.TrimSpace(lines[0])
 	secondLine := strings.TrimSpace(lines[1])
-	if !strings.Contains(firstLine, `Example: {"action":`) ||
-		!strings.HasPrefix(secondLine, "For the params schema of any action") {
+	hasUsageExample := strings.Contains(firstLine, `Use {"action":`) || strings.Contains(firstLine, `Example: {"action":`)
+	hasSchemaHint := strings.HasPrefix(secondLine, "Action params schema:") || strings.HasPrefix(secondLine, "For the params schema of any action")
+	if !hasUsageExample || !hasSchemaHint {
 		return s
 	}
 	start := 2

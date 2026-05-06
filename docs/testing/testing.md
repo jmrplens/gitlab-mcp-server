@@ -86,7 +86,7 @@
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.2% | 17 |
 | search | 114 | 100.0% | 10 |
-| packages | 108 | 95.5% | 9 |
+| packages | 108 | 95.6% | 9 |
 | awardemoji | 106 | 65.0% | 25 |
 | pipelines | 99 | 97.4% | 12 |
 | resourceevents | 99 | 100.0% | 16 |
@@ -222,7 +222,7 @@
 | namespaces | 36 | 1 | 98.3% | 5 |
 | notifications | 30 | 1 | 100.0% | 7 |
 | orbit | 23 | 1 | 99.7% | 5 |
-| packages | 108 | 4 | 95.5% | 9 |
+| packages | 108 | 4 | 95.6% | 9 |
 | pages | 55 | 2 | 99.1% | 10 |
 | pipelines | 99 | 2 | 97.4% | 12 |
 | pipelineschedules | 80 | 2 | 97.4% | 11 |
@@ -291,7 +291,7 @@
 | cmd/audit_tokens | 14.0% |
 | cmd/eval_meta_tools | 55.7% |
 | cmd/gen_llms | 6.5% |
-| cmd/gen_readme | 17.0% |
+| cmd/gen_readme | 17.5% |
 | cmd/gen_testing_docs | 20.7% |
 | cmd/server | 78.4% |
 
@@ -432,7 +432,7 @@
 | namespaces | 98.3% |
 | notifications | 100.0% |
 | orbit | 99.7% |
-| packages | 95.5% |
+| packages | 95.6% |
 | pages | 99.1% |
 | pipelines | 97.4% |
 | pipelineschedules | 97.4% |
@@ -490,7 +490,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_llms** (6.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (8.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (14.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_readme** (17.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_readme** (17.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (24.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

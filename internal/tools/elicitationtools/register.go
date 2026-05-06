@@ -24,6 +24,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_issue_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_issue_create"),
 		Description: "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all issue fields are elicited. Requires permission to create issues in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- title (string, required) — issue title.\n" +
 			"- description (string, optional, multi-line, Markdown) — leave empty to skip.\n" +
@@ -56,6 +57,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_mr_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_mr_create"),
 		Description: "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all MR fields are elicited. Requires permission to create merge requests in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- source_branch (string, required) — branch with the changes to merge.\n" +
 			"- target_branch (string, required) — branch to merge into (e.g. main, develop).\n" +
@@ -91,6 +93,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_release_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_release_create"),
 		Description: "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all release fields are elicited. Requires permission to create releases in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').\n" +
 			"- name (string, optional) — release title; defaults to tag_name when left empty.\n" +
@@ -123,6 +126,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_project_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_project_create"),
 		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
+			"Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- name (string, required) — project display name and (when path is omitted) URL slug.\n" +
 			"- description (string, optional) — leave empty to skip.\n" +

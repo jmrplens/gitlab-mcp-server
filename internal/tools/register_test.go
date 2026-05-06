@@ -2222,7 +2222,7 @@ func checkMetaToolActionEnum(t *testing.T, tool *mcp.Tool) {
 
 	props, _ := schema["properties"].(map[string]any)
 	if props == nil {
-		t.Fatal("InputSchema missing 'properties'")
+		t.Skipf("tool %s has no input properties — not a domain meta-tool", tool.Name)
 	}
 
 	actionProp, _ := props["action"].(map[string]any)
@@ -2442,7 +2442,7 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 				t.Errorf("description too short (%d chars, minimum %d)",
 					len(tool.Description), auditMinDescLen)
 			}
-			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "For the params schema of any action") {
+			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "Action params schema:") {
 				t.Error("meta-tool description should point LLMs to the per-action schema resource")
 			}
 		})

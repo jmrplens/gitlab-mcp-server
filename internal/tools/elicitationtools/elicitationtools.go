@@ -29,10 +29,8 @@ const (
 
 // Input types.
 
-// ProjectInput is the minimal input for interactive project creation.
-type ProjectInput struct {
-	ProjectID string `json:"project_id,omitempty" jsonschema:"Optional: pre-fill project ID or path for tools that need it"`
-}
+// ProjectInput is empty because interactive project creation elicits every field.
+type ProjectInput struct{}
 
 // IssueInput is the minimal input for interactive issue creation.
 type IssueInput struct {

@@ -973,6 +973,9 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
 		t.Error("params.description should mention the schema resource URI")
 	}
+	if strings.Contains(desc, "unknown keys") {
+		t.Error("params.description should avoid wording that conflicts with openWorldHint")
+	}
 }
 
 // TestBuildMetaToolSchema_FullEmitsOneOf verifies that full mode produces
@@ -1057,7 +1060,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
 
-	wantExample := `Example: {"action":"create","params":{...}}`
+	wantExample := `Use {"action":"create","params":{...}}`
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
 	}
@@ -1065,7 +1068,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	if !strings.Contains(got, wantEnvelope) {
 		t.Errorf("prefix missing envelope guidance, got: %q", got)
 	}
-	wantPointer := "gitlab://schema/meta/gitlab_widget/<action>"
+	wantPointer := "Action params schema: gitlab://schema/meta/gitlab_widget/<action>"
 	if !strings.Contains(got, wantPointer) {
 		t.Errorf("prefix missing resource pointer, got: %q", got)
 	}
