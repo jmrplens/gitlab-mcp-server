@@ -29,11 +29,10 @@ import (
 
 // README generation markers define the managed tools table section.
 const (
-	startMarker  = "<!-- START TOOLS -->"
-	endMarker    = "<!-- END TOOLS -->"
-	readmePath   = "README.md"
-	repoRoot     = "."
-	gitLabComURL = "https://gitlab.com"
+	startMarker = "<!-- START TOOLS -->"
+	endMarker   = "<!-- END TOOLS -->"
+	readmePath  = "README.md"
+	repoRoot    = "."
 )
 
 // main regenerates the README meta-tool table and exits non-zero on failure.
@@ -63,7 +62,7 @@ func run() error {
 		return fmt.Errorf("create client: %w", err)
 	}
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   gitLabComURL,
+		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "gen-readme-token",
 	})
 	if err != nil {
@@ -237,7 +236,7 @@ func buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools 
 		baseSet[t.Name] = true
 	}
 
-	byName := make(map[string]toolInfo, len(gitLabComEnterpriseTools))
+	byName := make(map[string]toolInfo, len(selfManagedEnterpriseTools)+len(gitLabComEnterpriseTools))
 	for _, t := range selfManagedEnterpriseTools {
 		byName[t.Name] = toolInfo{
 			Name:        t.Name,

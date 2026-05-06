@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -30,13 +31,20 @@ type TypeInput struct {
 	SearchType string `json:"search_type,omitempty" jsonschema:"Search backend to request: basic, advanced, or zoekt"`
 }
 
+var allowedSearchTypes = []string{
+	string(gl.BasicSearch),
+	string(gl.AdvancedSearch),
+	string(gl.ZoektSearch),
+}
+
 func validateSearchType(searchType string) error {
-	switch gl.SearchType(searchType) {
-	case "", gl.BasicSearch, gl.AdvancedSearch, gl.ZoektSearch:
+	if searchType == "" {
 		return nil
-	default:
-		return fmt.Errorf("invalid search_type %q: use one of basic, advanced, or zoekt", searchType)
 	}
+	if slices.Contains(allowedSearchTypes, searchType) {
+		return nil
+	}
+	return fmt.Errorf("invalid search_type %q: use one of basic, advanced, or zoekt", searchType)
 }
 
 // searchOpts builds a [gl.SearchOptions] from pagination, ref, and search type.

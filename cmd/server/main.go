@@ -261,7 +261,7 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
-  GITLAB_URL                GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
+	GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
   META_TOOLS                Enable meta-tools: true/false (default true)
@@ -317,6 +317,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
+		config.DefaultGitLabURL,
 		config.DefaultAutoUpdateRepo)
 }
 

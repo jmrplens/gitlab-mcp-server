@@ -19,7 +19,7 @@ LLMs have limited context windows. When an MCP server registers hundreds of indi
 | Meta (base)       | 32                | Low            | Full                    |
 | Meta (enterprise) | 47 / 48           | Low            | Full + Premium/Ultimate |
 
-Meta-tools reduce the tool count by **97%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
+Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
 :::note[Client compatibility]
 Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you disable meta-tools (`META_TOOLS=false`), clients with such limits will only see a subset of the individual tool catalog.

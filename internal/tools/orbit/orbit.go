@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -272,17 +274,17 @@ func validateQuery(query map[string]any) (json.RawMessage, error) {
 	}
 	buf, err := json.Marshal(query)
 	if err != nil {
-		return nil, errors.New("query must be a JSON object")
+		return nil, fmt.Errorf("query must be a JSON object: %w", err)
 	}
 	return json.RawMessage(buf), nil
 }
 
 func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, error) {
 	if input.NamespaceID < 0 {
-		return nil, errors.New("namespace_id must be positive")
+		return nil, errors.New("namespace_id must not be negative")
 	}
 	if input.ProjectID < 0 {
-		return nil, errors.New("project_id must be positive")
+		return nil, errors.New("project_id must not be negative")
 	}
 	format, err := responseFormat(input.ResponseFormat, "response_format")
 	if err != nil {
@@ -474,10 +476,10 @@ func convertGraphStatus(status *gl.OrbitGraphStatus) GraphStatusOutput {
 	if status.Indexing != nil {
 		indexing = &GraphStatusIndexing{State: status.Indexing.State}
 		if status.Indexing.LastStartedAt != nil {
-			indexing.LastStartedAt = status.Indexing.LastStartedAt.UTC().Format("2006-01-02T15:04:05Z")
+			indexing.LastStartedAt = status.Indexing.LastStartedAt.UTC().Format(time.RFC3339)
 		}
 		if status.Indexing.LastCompletedAt != nil {
-			indexing.LastCompletedAt = status.Indexing.LastCompletedAt.UTC().Format("2006-01-02T15:04:05Z")
+			indexing.LastCompletedAt = status.Indexing.LastCompletedAt.UTC().Format(time.RFC3339)
 		}
 		if status.Indexing.LastDurationMs != nil {
 			indexing.LastDurationMs = *status.Indexing.LastDurationMs

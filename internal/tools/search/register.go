@@ -16,7 +16,12 @@ import (
 const searchTypeSchemaDescription = "Search backend to request. Use basic for GitLab's default search, advanced for Elasticsearch/OpenSearch-backed search, or zoekt for Zoekt-backed exact code search when enabled on the GitLab instance."
 
 func searchTypeEnumValues() []any {
-	return []any{"basic", "advanced", "zoekt"}
+	values := make([]any, 0, len(allowedSearchTypes)+1)
+	values = append(values, "")
+	for _, value := range allowedSearchTypes {
+		values = append(values, value)
+	}
+	return values
 }
 
 func searchInputSchema[T any]() *jsonschema.Schema {

@@ -8,8 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const textFenceFormat = "```text\n%s\n```\n"
-
 func init() {
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
 	toolutil.RegisterMarkdown[SchemaOutput](FormatSchemaMarkdown)
@@ -23,7 +21,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Status\n\n")
 	if out.FormattedText != "" {
-		fmt.Fprintf(&b, textFenceFormat, out.FormattedText)
+		b.WriteString(fencedBlock("text", out.FormattedText))
 		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
 		return b.String()
 	}
@@ -107,12 +105,12 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	if len(out.RawQueryStrings) > 0 {
 		b.WriteString("\n### Raw Query Strings\n\n")
 		for _, raw := range out.RawQueryStrings {
-			fmt.Fprintf(&b, textFenceFormat, raw)
+			b.WriteString(fencedBlock("text", raw))
 		}
 	}
 	if out.Result != nil {
 		b.WriteString("\n### Result\n\n")
-		fmt.Fprintf(&b, "```json\n%s\n```\n", prettyAny(out.Result))
+		b.WriteString(fencedBlock("json", prettyAny(out.Result)))
 	}
 	toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
 	return b.String()
@@ -123,7 +121,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Graph Status\n\n")
 	if out.FormattedText != "" {
-		fmt.Fprintf(&b, textFenceFormat, out.FormattedText)
+		b.WriteString(fencedBlock("text", out.FormattedText))
 		toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
 		return b.String()
 	}
@@ -171,4 +169,31 @@ func prettyAny(value any) string {
 		return fmt.Sprint(value)
 	}
 	return string(buf)
+}
+
+func fencedBlock(language, content string) string {
+	fence := markdownFence(content)
+	if language != "" {
+		return fmt.Sprintf("%s%s\n%s\n%s\n", fence, language, content, fence)
+	}
+	return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
+}
+
+func markdownFence(content string) string {
+	longest := 0
+	current := 0
+	for _, char := range content {
+		if char == '`' {
+			current++
+			if current > longest {
+				longest = current
+			}
+			continue
+		}
+		current = 0
+	}
+	if longest < 3 {
+		return "```"
+	}
+	return strings.Repeat("`", longest+1)
 }

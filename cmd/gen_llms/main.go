@@ -77,7 +77,7 @@ func run() error {
 		return fmt.Errorf("create client: %w", err)
 	}
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   "https://gitlab.com",
+		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "gen-llms-token",
 	})
 	if err != nil {
@@ -277,7 +277,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
 
 	b.WriteString("## Configuration (environment variables — stdio mode)\n\n")
-	b.WriteString("- GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)\n")
+	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: %s; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- META_TOOLS: Enable meta-tools for reduced tool count (default: true)\n")
@@ -378,7 +378,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	}
 	if len(enterpriseOnly) > 0 {
 		b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-		fmt.Fprintf(&b, "These %d tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.\n\n", len(enterpriseOnly))
+		fmt.Fprintf(&b, "These %d tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 		for _, t := range enterpriseOnly {
 			fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 			if t.Title != "" {

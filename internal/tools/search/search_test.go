@@ -1841,7 +1841,7 @@ func requireSearchTypeEnum(t *testing.T, schema map[string]any) {
 	if !ok {
 		t.Fatalf("search_type enum missing or invalid: %#v", searchType["enum"])
 	}
-	want := []any{"basic", "advanced", "zoekt"}
+	want := []any{"", "basic", "advanced", "zoekt"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("search_type enum = %#v, want %#v", got, want)
 	}

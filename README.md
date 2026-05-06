@@ -430,19 +430,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 650 | 134,202 |
-| Unit tests (`_test.go`) | 412 | 219,070 |
+| Source (`.go`, non-test) | 650 | 134,257 |
+| Unit tests (`_test.go`) | 412 | 219,088 |
 | End-to-end tests | 110 | 23,718 |
-| **Total** | **1,172** | **376,990** |
+| **Total** | **1,172** | **377,063** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,985 |
+| Source functions | 3,988 |
 | — exported (public) | 2,220 |
-| — unexported (private) | 1,765 |
-| Unit test functions (`TestXxx`) | 9,131 |
+| — unexported (private) | 1,768 |
+| Unit test functions (`TestXxx`) | 9,132 |
 | Subtests (`t.Run(...)`) | 1,956 |
 | End-to-end test functions | 246 |
 
@@ -473,7 +473,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 197 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 102 |
+| Git commits | 103 |
 | Unique contributors | 2 |
 
 ### Hall of fame
@@ -487,7 +487,7 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,440 pages of A4 |
+| Source code printed at 55 lines/page | ~2,441 pages of A4 |
 | Source lines mentioning `"gitlab"` | 10,958 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |

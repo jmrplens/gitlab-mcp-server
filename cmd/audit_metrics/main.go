@@ -33,10 +33,11 @@ import (
 
 // Audit server identity values used for in-memory MCP introspection sessions.
 const (
-	auditServerName = "audit-metrics"
-	auditClientName = "audit-metrics-client"
-	auditVersion    = "0.0.1"
-	toolListFormat  = "  - %s\n"
+	auditServerName  = "audit-metrics"
+	auditClientName  = "audit-metrics-client"
+	auditVersion     = "0.0.1"
+	toolListFormat   = "  - %s\n"
+	metricLabelWidth = 48
 )
 
 // main builds the audit client, gathers runtime counts from the registered MCP
@@ -59,7 +60,7 @@ func main() {
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
-		GitLabURL:   "https://gitlab.com",
+		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "audit-token",
 	})
 	if err != nil {
@@ -110,9 +111,9 @@ func main() {
 	printRow("Meta-tools (base)", len(metaBase))
 	printRow("Meta-tools (self-managed enterprise)", len(metaEnterprise))
 	printRow("Meta-tools (GitLab.com enterprise)", len(metaGitLabComEnterprise))
-	printRow("Enterprise-only meta-tools", len(metaEnterprise)-len(metaBase))
-	printRow("GitLab.com-only meta-tools", len(metaGitLabComEnterprise)-len(metaEnterprise))
-	printRow("GitLab.com-only individual tools", len(gitLabComIndividualTools)-len(individualTools))
+	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
+	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
+	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
 	printRow("MCP Resources (total)", resourceCount)
 	printRow("  Static resources", staticResources)
 	printRow("  Resource templates", templateResources)
@@ -151,7 +152,7 @@ func main() {
 		fmt.Printf(toolListFormat, t.Name)
 	}
 	fmt.Println()
-	fmt.Println("### Enterprise-only (" + strconv.Itoa(len(metaEnterprise)-len(metaBase)) + ")")
+	fmt.Println("### Enterprise-only (" + strconv.Itoa(diffByName(metaEnterprise, metaBase)) + ")")
 	baseNames := map[string]bool{}
 	for _, t := range metaBase {
 		baseNames[t.Name] = true
@@ -162,7 +163,7 @@ func main() {
 		}
 	}
 	fmt.Println()
-	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(len(metaGitLabComEnterprise)-len(metaEnterprise)) + ")")
+	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(diffByName(metaGitLabComEnterprise, metaEnterprise)) + ")")
 	enterpriseNames := map[string]bool{}
 	for _, t := range metaEnterprise {
 		enterpriseNames[t.Name] = true
@@ -334,7 +335,21 @@ func countSourceFiles() (src, test int) {
 
 // printRow prints a metric row with aligned formatting.
 func printRow(label string, value int) {
-	fmt.Printf("  %-30s %d\n", label, value)
+	fmt.Printf("  %-*s %d\n", metricLabelWidth, label, value)
+}
+
+func diffByName(a, b []*mcp.Tool) int {
+	seen := make(map[string]struct{}, len(b))
+	for _, tool := range b {
+		seen[tool.Name] = struct{}{}
+	}
+	count := 0
+	for _, tool := range a {
+		if _, ok := seen[tool.Name]; !ok {
+			count++
+		}
+	}
+	return count
 }
 
 // printMetaSchemaModes reports the active META_PARAM_SCHEMA mode and the

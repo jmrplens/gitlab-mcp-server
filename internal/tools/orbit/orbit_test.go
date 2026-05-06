@@ -124,7 +124,8 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 
 func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("handler should not be called for invalid input")
+		t.Errorf("handler should not be called for invalid input: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}))
 
 	tests := []struct {
@@ -169,7 +170,8 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 
 func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("handler should not be called for invalid input")
+		t.Errorf("handler should not be called for invalid input: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}))
 
 	tests := []struct {
@@ -325,7 +327,8 @@ func TestWrapOrbitErr_GenericError_UsesWrappedMessage(t *testing.T) {
 
 func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("handler should not be called after context cancellation")
+		t.Errorf("handler should not be called after context cancellation: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}))
 	ctx := testutil.CancelledCtx(t)
 	tests := []struct {
@@ -522,6 +525,21 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 	}
 }
 
+func TestOrbitMarkdownFormatters_UseSafeFences(t *testing.T) {
+	md := FormatQueryMarkdown(QueryOutput{
+		QueryType:       "traversal",
+		RawQueryStrings: []string{"MATCH (n) RETURN ```"},
+		Result:          map[string]any{"text": "contains ``` fenced text"},
+	})
+
+	if !strings.Contains(md, "````text\nMATCH (n) RETURN ```\n````") {
+		t.Fatalf("FormatQueryMarkdown() = %q, want four-backtick text fence", md)
+	}
+	if !strings.Contains(md, "````json\n") || !strings.Contains(md, "contains ``` fenced text") {
+		t.Fatalf("FormatQueryMarkdown() = %q, want four-backtick JSON fence", md)
+	}
+}
+
 func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
 	tests := []struct {
 		name string
@@ -571,7 +589,7 @@ func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	if md := FormatQueryMarkdown(QueryOutput{QueryType: "traversal"}); strings.Contains(md, "### Result") {
 		t.Fatalf("FormatQueryMarkdown() = %q, did not expect result section", md)
 	}
-	if got := prettyAny(func() {}); got == "" {
+	if prettyAny(func() {}) == "" {
 		t.Fatal("prettyAny() returned empty fallback")
 	}
 	if got := decodeRaw(json.RawMessage(`{`)); got != "{" {
