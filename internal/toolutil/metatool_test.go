@@ -357,6 +357,42 @@ func TestNormalizeParamAliasesForSchema_CanonicalWins(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchema_ObservedDynamicAliases verifies aliases
+// seen in dynamic execution traces normalize only when the selected schema
+// exposes the canonical field.
+func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
+	tests := map[string]struct {
+		schema map[string]any
+		params map[string]any
+		want   map[string]any
+	}{
+		"id to project_id": {
+			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "42"},
+			want:   map[string]any{"project_id": int64(42)},
+		},
+		"id to group_id": {
+			schema: map[string]any{"properties": map[string]any{"group_id": map[string]any{"type": "string"}}},
+			params: map[string]any{"id": 99},
+			want:   map[string]any{"group_id": "99"},
+		},
+		"branch to branch_name": {
+			schema: map[string]any{"properties": map[string]any{"branch_name": map[string]any{"type": "string"}}},
+			params: map[string]any{"branch": "main"},
+			want:   map[string]any{"branch_name": "main"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := NormalizeParamAliasesForSchema(tc.params, tc.schema)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("NormalizeParamAliasesForSchema() = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties verifies
 // params are returned unchanged when no schema properties are available.
 func TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties(t *testing.T) {
@@ -763,23 +799,44 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"project.member_edit":                {},
 		"merge_request.spent_time_add":       {},
 		"merge_request.time_estimate_set":    {},
+		"job.token_scope_list_inbound":       {},
+		"package.file_list":                  {},
+		"audit_event.list_group":             {},
+		"release.list":                       {},
+		"analyze.release_notes":              {},
+		"ci_variable.create":                 {},
+		"ci_variable.group_create":           {},
+		"access.deploy_key_add":              {},
+		"release.link_create":                {},
 	}
 
 	tests := map[string]string{
-		"project.schedule_storage_move":   "storage_move.schedule_project",
-		"merge_request.changes":           "mr_review.changes_get",
-		"project.hooks.list":              "project.hook_list",
-		"project.status_check_list":       "external_status_check.list_project",
-		"deploy_token.create":             "access.deploy_token_create_project",
-		"project_member.update":           "project.member_edit",
-		"project_member.edit":             "project.member_edit",
-		"project.member_remove":           "project.member_delete",
-		"project_member.remove":           "project.member_delete",
-		"mr_review.draft_notes_publish":   "mr_review.draft_note_publish_all",
-		"mr_review.publish":               "mr_review.draft_note_publish_all",
-		"package.list_generic":            "package.list",
-		"merge_request.add_spent_time":    "merge_request.spent_time_add",
-		"merge_request.set_time_estimate": "merge_request.time_estimate_set",
+		"project.schedule_storage_move":             "storage_move.schedule_project",
+		"merge_request.changes":                     "mr_review.changes_get",
+		"project.hooks.list":                        "project.hook_list",
+		"project.status_check_list":                 "external_status_check.list_project",
+		"project.status_checks.list":                "external_status_check.list_project",
+		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
+		"deploy_token.create":                       "access.deploy_token_create_project",
+		"deploy_key.create":                         "access.deploy_key_add",
+		"project_member.update":                     "project.member_edit",
+		"project_member.edit":                       "project.member_edit",
+		"project.member_remove":                     "project.member_delete",
+		"project_member.remove":                     "project.member_delete",
+		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
+		"mr_review.publish":                         "mr_review.draft_note_publish_all",
+		"package.list_generic":                      "package.list",
+		"package.files":                             "package.file_list",
+		"group.audit_events":                        "audit_event.list_group",
+		"project.releases.list":                     "release.list",
+		"release.generate_notes":                    "analyze.release_notes",
+		"release.asset_link.create":                 "release.link_create",
+		"variable.create":                           "ci_variable.create",
+		"group.variable.create":                     "ci_variable.group_create",
+		"merge_request.add_spent_time":              "merge_request.spent_time_add",
+		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
+		"merge_request.time_estimate":               "merge_request.time_estimate_set",
+		"merge_request.time_spent_add":              "merge_request.spent_time_add",
 	}
 	for alias, want := range tests {
 		if got := NormalizeActionAlias(alias, routes); got != want {

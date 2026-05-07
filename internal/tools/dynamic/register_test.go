@@ -277,19 +277,30 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	tests := map[string]string{
-		"project.schedule_storage_move":   "storage_move.schedule_project",
-		"merge_request.changes":           "mr_review.changes_get",
-		"project.hooks.list":              "project.hook_list",
-		"project.status_check_list":       "external_status_check.list_project",
-		"deploy_token.create":             "access.deploy_token_create_project",
-		"merge_request.set_time_estimate": "merge_request.time_estimate_set",
-		"mr_review.draft_notes_publish":   "mr_review.draft_note_publish_all",
-		"mr_review.publish":               "mr_review.draft_note_publish_all",
-		"package.list_generic":            "package.list",
-		"project_member.update":           "project.member_edit",
-		"project.member_remove":           "project.member_delete",
-		"project_member.remove":           "project.member_delete",
-		"webhook.add":                     "project.hook_add",
+		"project.schedule_storage_move":             "storage_move.schedule_project",
+		"merge_request.changes":                     "mr_review.changes_get",
+		"project.hooks.list":                        "project.hook_list",
+		"project.status_check_list":                 "external_status_check.list_project",
+		"project.status_checks.list":                "external_status_check.list_project",
+		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
+		"package.files":                             "package.file_list",
+		"group.audit_events":                        "audit_event.list_group",
+		"project.releases.list":                     "release.list",
+		"release.generate_notes":                    "analyze.release_notes",
+		"deploy_token.create":                       "access.deploy_token_create_project",
+		"deploy_key.create":                         "access.deploy_key_add",
+		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
+		"merge_request.time_estimate":               "merge_request.time_estimate_set",
+		"merge_request.time_spent_add":              "merge_request.spent_time_add",
+		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
+		"mr_review.publish":                         "mr_review.draft_note_publish_all",
+		"package.list_generic":                      "package.list",
+		"variable.create":                           "ci_variable.create",
+		"group.variable.create":                     "ci_variable.group_create",
+		"project_member.update":                     "project.member_edit",
+		"project.member_remove":                     "project.member_delete",
+		"project_member.remove":                     "project.member_delete",
+		"webhook.add":                               "project.hook_add",
 	}
 	for alias, want := range tests {
 		t.Run(alias, func(t *testing.T) {
@@ -569,6 +580,11 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"time": "set"}, nil
 				},
 			},
+			"spent_time_add": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"spent": "added"}, nil
+				},
+			},
 		},
 		"gitlab_issue": {
 			"update": {
@@ -601,6 +617,11 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					},
 				},
 			},
+			"group_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"key": params["key"]}, nil
+				},
+			},
 		},
 		"gitlab_repository": {
 			"file_get": {
@@ -619,6 +640,11 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			},
 		},
 		"gitlab_access": {
+			"deploy_key_add": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"deploy_key": "added"}, nil
+				},
+			},
 			"token_project_create": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"token": "created"}, nil
@@ -670,11 +696,49 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"packages": true}, nil
 				},
 			},
+			"file_list": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"files": true}, nil
+				},
+			},
 			"delete": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"deleted": true}, nil
 				},
 				Destructive: true,
+			},
+		},
+		"gitlab_audit_event": {
+			"list_group": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"events": true}, nil
+				},
+			},
+		},
+		"gitlab_job": {
+			"token_scope_list_inbound": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"allowlist": true}, nil
+				},
+			},
+		},
+		"gitlab_release": {
+			"list": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"releases": true}, nil
+				},
+			},
+			"link_create": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"link": "created"}, nil
+				},
+			},
+		},
+		"gitlab_analyze": {
+			"release_notes": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"release_notes": true}, nil
+				},
 			},
 		},
 	}
