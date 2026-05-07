@@ -86,14 +86,18 @@ func main() {
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
-	dynamicBaseTools := listDynamicTools(dynamicBaseRoutes)
-	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseRoutes)
+	dynamic3BaseTools := listDynamicTools(dynamicBaseRoutes)
+	dynamic3EnterpriseTools := listDynamicTools(dynamicEnterpriseRoutes)
+	dynamic2BaseTools := listDynamic2Tools(dynamicBaseRoutes)
+	dynamic2EnterpriseTools := listDynamic2Tools(dynamicEnterpriseRoutes)
 
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
-	dynamicBaseInfo := measureTools(dynamicBaseTools)
-	dynamicEnterpriseInfo := measureTools(dynamicEnterpriseTools)
+	dynamic3BaseInfo := measureTools(dynamic3BaseTools)
+	dynamic3EnterpriseInfo := measureTools(dynamic3EnterpriseTools)
+	dynamic2BaseInfo := measureTools(dynamic2BaseTools)
+	dynamic2EnterpriseInfo := measureTools(dynamic2EnterpriseTools)
 
 	individualResourceTokens := measureResources(client, nil)
 	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
@@ -110,8 +114,10 @@ func main() {
 	indTotal := totalTokens(individualInfo)
 	metaTotal := totalTokens(metaBaseInfo)
 	metaEntTotal := totalTokens(metaEnterpriseInfo)
-	dynamicTotal := totalTokens(dynamicBaseInfo)
-	dynamicEntTotal := totalTokens(dynamicEnterpriseInfo)
+	dynamic3Total := totalTokens(dynamic3BaseInfo)
+	dynamic3EntTotal := totalTokens(dynamic3EnterpriseInfo)
+	dynamic2Total := totalTokens(dynamic2BaseInfo)
+	dynamic2EntTotal := totalTokens(dynamic2EnterpriseInfo)
 
 	fmt.Println("## Mode Comparison")
 	fmt.Println()
@@ -121,8 +127,10 @@ func main() {
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t0\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), countActions(metaBaseRoutes), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-3 (base)\t%d\t%d\t%s\t%s\n", len(dynamic3BaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamic3Total), fmtNum(dynamic3Total*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-3 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic3EnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamic3EntTotal), fmtNum(dynamic3EntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-2 (base)\t%d\t%d\t%s\t%s\n", len(dynamic2BaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamic2Total), fmtNum(dynamic2Total*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-2 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic2EnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamic2EntTotal), fmtNum(dynamic2EntTotal*bytesPerTok))
 	_ = tw.Flush()
 	fmt.Println()
 
@@ -132,8 +140,10 @@ func main() {
 		fmt.Println()
 	}
 	if indTotal > 0 {
-		savings := float64(indTotal-dynamicTotal) / float64(indTotal) * 100
-		fmt.Printf("  Dynamic mode reduces visible tool token overhead by %.1f%% vs individual mode\n", savings)
+		savings := float64(indTotal-dynamic3Total) / float64(indTotal) * 100
+		fmt.Printf("  Dynamic-3 mode reduces visible tool token overhead by %.1f%% vs individual mode\n", savings)
+		candidateSavings := float64(indTotal-dynamic2Total) / float64(indTotal) * 100
+		fmt.Printf("  Dynamic-2 candidate reduces visible tool token overhead by %.1f%% vs individual mode\n", candidateSavings)
 		fmt.Println()
 	}
 
@@ -154,7 +164,8 @@ func main() {
 
 	fmt.Println("## Minimal Capability Candidate")
 	fmt.Println()
-	fmt.Println("  Required for dynamic action use: the three dynamic tools. `gitlab_describe_tools` returns exact schemas inline, so meta-schema resources are not required.")
+	fmt.Println("  Required for dynamic-3 action use: the three dynamic tools. `gitlab_describe_tools` returns exact schemas inline, so meta-schema resources are not required.")
+	fmt.Println("  Experimental dynamic-2 action use combines discovery and schemas in `gitlab_find_action`, plus `gitlab_execute_tool` for final execution.")
 	fmt.Println("  Retained candidate resource: `gitlab://workspace/roots` for local project discovery from .git/config remotes.")
 	fmt.Println("  Optional in the candidate: static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates.")
 	if dynamicBaseResourceTokens+promptTokens > 0 {
@@ -176,7 +187,12 @@ func main() {
 	// Dynamic tools by token cost
 	fmt.Println("## Dynamic Tools by Token Cost (base)")
 	fmt.Println()
-	printTopTools(dynamicBaseInfo, len(dynamicBaseInfo))
+	printTopTools(dynamic3BaseInfo, len(dynamic3BaseInfo))
+
+	// Dynamic-2 tools by token cost
+	fmt.Println("## Dynamic-2 Tools by Token Cost (base)")
+	fmt.Println()
+	printTopTools(dynamic2BaseInfo, len(dynamic2BaseInfo))
 
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
@@ -190,10 +206,14 @@ func main() {
 		fmtNum(indTotal), fmtNum(individualResourceTokens+promptTokens), fmtNum(indTotal+individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
 		fmtNum(metaTotal), fmtNum(metaBaseResourceTokens+promptTokens), fmtNum(metaTotal+metaBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamicTotal), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamicTotal+dynamicBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamicTotal), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicTotal+dynamicMinimalResourceTokens))
+	fmt.Printf("  Dynamic-3 mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamic3Total), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamic3Total+dynamicBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic-3 minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamic3Total), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamic3Total+dynamicMinimalResourceTokens))
+	fmt.Printf("  Dynamic-2 mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamic2Total), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamic2Total+dynamicBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic-2 minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamic2Total), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamic2Total+dynamicMinimalResourceTokens))
 	fmt.Println()
 }
 
@@ -243,6 +263,14 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 func listDynamicTools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
 	dynamictools.RegisterTools(server, routes)
+	return listToolsFromServer(server)
+}
+
+// listDynamic2Tools registers the experimental find/execute dynamic public
+// toolset backed by hidden meta-tool routes and returns the advertised tools.
+func listDynamic2Tools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
+	dynamictools.RegisterFindExecuteTools(server, routes)
 	return listToolsFromServer(server)
 }
 

@@ -29,8 +29,8 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), or `dynamic` (low-token search/describe/execute surface) |
-| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. When set, it overrides `META_TOOLS` |
+| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), `dynamic` (low-token search/describe/execute surface), or experimental `dynamic-2`/`dynamic-3` comparison surfaces |
+| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
 | `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
@@ -132,8 +132,8 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode unless `--auth-mode=oauth` is used, which requires a fixed `--gitlab-url`. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
-| `META_TOOLS` | `--meta-tools` | Legacy boolean selector. `META_TOOLS=dynamic` is supported in stdio mode; use `--tool-surface=dynamic` in HTTP mode |
-| `TOOL_SURFACE` | `--tool-surface` | Explicit selector: `meta`, `individual`, or `dynamic` |
+| `META_TOOLS` | `--meta-tools` | Legacy boolean selector. `META_TOOLS=dynamic`, `dynamic-2`, and `dynamic-3` are supported in stdio mode; use `--tool-surface` in HTTP mode |
+| `TOOL_SURFACE` | `--tool-surface` | Explicit selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
 | `CAPABILITY_SURFACE` | `--capability-surface` | Explicit selector: `full` or `minimal` |
 | `META_PARAM_SCHEMA` | `--meta-param-schema` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |

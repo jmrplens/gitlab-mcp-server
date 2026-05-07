@@ -198,6 +198,37 @@ func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
 	}
 }
 
+// TestLoad_ToolSurfaceDynamicCandidates verifies that the explicit dynamic
+// candidate selectors are accepted without changing the default surface.
+func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{value: ToolSurfaceDynamic2, want: ToolSurfaceDynamic2},
+		{value: ToolSurfaceDynamic3, want: ToolSurfaceDynamic3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv("TOOL_SURFACE", tt.value)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.ToolSurface != tt.want {
+				t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, tt.want)
+			}
+			if !cfg.MetaTools {
+				t.Fatal("MetaTools = false, want true for dynamic candidate mode")
+			}
+		})
+	}
+}
+
 // TestLoad_CapabilitySurfaceMinimal verifies that CAPABILITY_SURFACE selects
 // the non-default low-token resource and prompt surface.
 func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {

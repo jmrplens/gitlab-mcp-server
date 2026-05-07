@@ -480,6 +480,34 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 	}
 }
 
+func TestDynamicDiscoveryResult_FindIncludesSchema(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"project.get": {InputSchema: map[string]any{
+				"type":       "object",
+				"required":   []any{"project_id"},
+				"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+			}},
+		},
+	}
+
+	content, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
+		Name: dynamicFindTool,
+		Input: map[string]any{
+			"query": "project get",
+			"limit": float64(3),
+		},
+	})
+	if err != nil {
+		t.Fatalf("dynamicDiscoveryResult(find) error = %v", err)
+	}
+	for _, want := range []string{"project.get", "project_id", dynamicExecuteTool, "input_schema"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("find result = %s, want %q", content, want)
+		}
+	}
+}
+
 // TestTaskToolCallLimit_ScalesForLongWorkflows verifies that TaskToolCallLimit handles the scales for long workflows scenario correctly.
 func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
 	if got := taskToolCallLimit(3); got != 13 {
@@ -571,6 +599,49 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	}
 	if _, ok := routes["gitlab"]; ok {
 		t.Fatal("dynamic validation routes unexpectedly exposed gitlab dispatcher")
+	}
+}
+
+func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.T) {
+	client := newEvalTestClient(t, false)
+	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic2)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic-2) error = %v", err)
+	}
+	defer closeSession()
+
+	names := make([]string, 0, len(toolList))
+	for _, tool := range toolList {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
+		t.Fatalf("dynamic-2 catalog tools = %q, want find/execute", got)
+	}
+	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
+		t.Fatal("dynamic-2 validation routes missing project.get")
+	}
+	if _, ok := routes["gitlab"]; ok {
+		t.Fatal("dynamic-2 validation routes unexpectedly exposed gitlab dispatcher")
+	}
+}
+
+func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
+	tests := map[string]string{
+		"dynamic":   config.ToolSurfaceDynamic,
+		"dynamic-3": config.ToolSurfaceDynamic3,
+		"dynamic-2": config.ToolSurfaceDynamic2,
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			got, err := normalizeEvalToolSurface(input)
+			if err != nil {
+				t.Fatalf("normalizeEvalToolSurface(%q) error = %v", input, err)
+			}
+			if got != want {
+				t.Fatalf("normalizeEvalToolSurface(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
 

@@ -57,6 +57,7 @@ const (
 	maxToolResultLen    = 20_000
 	dynamicSearchTool   = "gitlab_search_tools"
 	dynamicDescribeTool = "gitlab_describe_tools"
+	dynamicFindTool     = "gitlab_find_action"
 	dynamicExecuteTool  = "gitlab_execute_tool"
 )
 
@@ -634,7 +635,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
 	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
-	flag.StringVar(&opts.ToolSurface, "tool-surface", config.ToolSurfaceMeta, "Tool catalog surface to evaluate: meta or dynamic")
+	flag.StringVar(&opts.ToolSurface, "tool-surface", config.ToolSurfaceMeta, "Tool catalog surface to evaluate: meta, dynamic, dynamic-3, or dynamic-2")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
 	flag.StringVar(&opts.Backend, "backend", backendMock, "Live catalog backend: mock or gitlab. gitlab uses GITLAB_URL/GITLAB_TOKEN, optionally loaded from --gitlab-env-file")
 	flag.StringVar(&opts.GitLabEnv, "gitlab-env-file", "", "Optional env file loaded after .env for --backend=gitlab, for example test/e2e/.env.docker")
@@ -1130,11 +1131,24 @@ func normalizeEvalToolSurface(toolSurface string) (string, error) {
 		return "", err
 	}
 	switch surface {
-	case config.ToolSurfaceMeta, config.ToolSurfaceDynamic:
+	case config.ToolSurfaceMeta, config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
 		return surface, nil
 	default:
-		return "", fmt.Errorf("--tool-surface must be %q or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, toolSurface)
+		return "", fmt.Errorf("--tool-surface must be %q, %q, %q, or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3, config.ToolSurfaceDynamic2, toolSurface)
 	}
+}
+
+func isDynamicEvalSurface(toolSurface string) bool {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+		return true
+	default:
+		return false
+	}
+}
+
+func isDynamicTwoToolEvalSurface(toolSurface string) bool {
+	return toolSurface == config.ToolSurfaceDynamic2
 }
 
 // toolExecutionMode converts the GitLab API response to the tool output format.
@@ -1322,7 +1336,7 @@ func validateTaskFixtureAgainstRoutes(tasks []evalTask, routes map[string]toolut
 // normalizeTasksForCatalog normalizes fixture expectations for the selected
 // model-facing tool catalog.
 func normalizeTasksForCatalog(tasks []evalTask, routes map[string]toolutil.ActionMap, toolSurface string) []evalTask {
-	if toolSurface == config.ToolSurfaceDynamic {
+	if isDynamicEvalSurface(toolSurface) {
 		return normalizeTasksForDynamicRoutes(tasks, routes)
 	}
 	return normalizeTasksForRoutes(tasks, routes)
@@ -1726,7 +1740,7 @@ func runMCPSmoke(opts options) error {
 		"action": "user.current",
 		"params": map[string]any{},
 	}
-	if opts.ToolSurface == config.ToolSurfaceDynamic {
+	if isDynamicEvalSurface(opts.ToolSurface) {
 		toolName = dynamicExecuteTool
 	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
@@ -3068,10 +3082,15 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.Cl
 func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-meta-tools", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	switch toolSurface {
-	case config.ToolSurfaceDynamic:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		hiddenRoutes := captureEvaluationMetaRoutes(client)
 		hiddenRoutes = dynamictools.AddStandaloneRoutes(hiddenRoutes, client, dynamictools.StandaloneOptions{})
 		dynamictools.RegisterTools(server, hiddenRoutes)
+		routes = dynamicValidationRoutes(hiddenRoutes)
+	case config.ToolSurfaceDynamic2:
+		hiddenRoutes := captureEvaluationMetaRoutes(client)
+		hiddenRoutes = dynamictools.AddStandaloneRoutes(hiddenRoutes, client, dynamictools.StandaloneOptions{})
+		dynamictools.RegisterFindExecuteTools(server, hiddenRoutes)
 		routes = dynamicValidationRoutes(hiddenRoutes)
 	case config.ToolSurfaceMeta:
 		routes = toolutil.CaptureMetaRoutes(func() {
@@ -3769,17 +3788,21 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 
 // isDynamicDiscovery reports whether a dynamic catalog lookup tool was called.
 func isDynamicDiscovery(toolUse modelContentBlock) bool {
-	return toolUse.Name == dynamicSearchTool || toolUse.Name == dynamicDescribeTool
+	return toolUse.Name == dynamicSearchTool || toolUse.Name == dynamicDescribeTool || toolUse.Name == dynamicFindTool
 }
 
 // dynamicDiscoveryResult returns simulated discovery output for dynamic search
-// and describe calls, keeping evaluation independent from live GitLab state.
+// describe, and find calls, keeping evaluation independent from live GitLab state.
 func dynamicDiscoveryResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock) (string, error) {
 	switch toolUse.Name {
 	case dynamicSearchTool:
 		query, _ := toolUse.Input["query"].(string)
 		limit := intFromAny(toolUse.Input["limit"], 20)
 		return marshalToolResult(dynamicSearchResult(ctx, routes, query, limit))
+	case dynamicFindTool:
+		query, _ := toolUse.Input["query"].(string)
+		limit := intFromAny(toolUse.Input["limit"], 20)
+		return marshalToolResult(dynamicFindResult(ctx, routes, query, limit))
 	case dynamicDescribeTool:
 		ids := dynamicDescribeIDs(toolUse.Input)
 		if len(ids) == 0 {
@@ -3796,6 +3819,17 @@ func dynamicDiscoveryResult(ctx context.Context, routes map[string]toolutil.Acti
 func dynamicSearchResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
 	registry := dynamictools.NewRegistry(dynamicHiddenRoutesFromValidationRoutes(routes))
 	_, output, err := registry.Search(ctx, nil, dynamictools.SearchInput{Query: query, Limit: limit})
+	if err != nil {
+		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}
+	}
+	return output
+}
+
+// dynamicFindResult searches and describes matches using the same runtime
+// registry as the experimental dynamic-2 toolset.
+func dynamicFindResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
+	registry := dynamictools.NewRegistry(dynamicHiddenRoutesFromValidationRoutes(routes))
+	_, output, err := registry.Find(ctx, nil, dynamictools.FindInput{Query: query, Limit: limit})
 	if err != nil {
 		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}
 	}
@@ -3996,8 +4030,8 @@ func systemPrompt() string {
 
 // systemPromptForTask is an internal helper for the main package.
 func systemPromptForTask(task evalTask, toolSurface string) string {
-	if toolSurface == config.ToolSurfaceDynamic {
-		return dynamicSystemPrompt()
+	if isDynamicEvalSurface(toolSurface) {
+		return dynamicSystemPrompt(toolSurface)
 	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
@@ -4007,16 +4041,22 @@ func systemPromptForTask(task evalTask, toolSurface string) string {
 }
 
 // dynamicSystemPrompt guides models through the low-token dynamic tool surface.
-func dynamicSystemPrompt() string {
+func dynamicSystemPrompt(toolSurface string) string {
+	if isDynamicTwoToolEvalSurface(toolSurface) {
+		return `You are evaluating GitLab MCP dynamic-2 tool mode. Use only the provided tools: gitlab_find_action and gitlab_execute_tool. The hidden GitLab operations are not directly visible as tools. Use gitlab_find_action when you need to find a canonical action ID or exact params schema. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	}
 	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool. The hidden GitLab operations are not directly visible as tools. Use gitlab_search_tools when you need to find a canonical action ID. Use gitlab_describe_tools when you need exact params for one or more action IDs. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
 func taskPromptForSurface(task evalTask, toolSurface string) string {
-	if toolSurface != config.ToolSurfaceDynamic {
+	if !isDynamicEvalSurface(toolSurface) {
 		return taskPrompt(task)
 	}
 	prompt := taskPrompt(task)
+	if isDynamicTwoToolEvalSurface(toolSurface) {
+		return prompt + "\n\nDynamic-2 mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any hidden GitLab route as a canonical action ID for gitlab_execute_tool. Use gitlab_find_action when you need to discover an action ID or exact params schema. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params."
+	}
 	return prompt + "\n\nDynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. Treat any hidden GitLab route as a canonical action ID for gitlab_execute_tool. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params."
 }
 
@@ -5481,7 +5521,7 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 // failureDiagnosticCategories returns the ordered report categories for the
 // selected tool surface.
 func failureDiagnosticCategories(opts options) []string {
-	if opts.ToolSurface == config.ToolSurfaceDynamic {
+	if isDynamicEvalSurface(opts.ToolSurface) {
 		return []string{"alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_or_sampling_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
 	}
 	return []string{"mcp_implementation_bug", "gitlab_ce_limitation", "model_provider_auth", "model_provider_model_unavailable", "model_route_selection_miss", "model_parameter_shape_miss", "fixture_setup_failure", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
@@ -5490,7 +5530,7 @@ func failureDiagnosticCategories(opts options) []string {
 // failureDiagnosticCategoryForResult classifies a failed task result for the
 // selected tool surface.
 func failureDiagnosticCategoryForResult(opts options, result taskResult) string {
-	if opts.ToolSurface == config.ToolSurfaceDynamic {
+	if isDynamicEvalSurface(opts.ToolSurface) {
 		return dynamicFailureDiagnosticCategory(result)
 	}
 	return failureDiagnosticCategory(result.Notes)

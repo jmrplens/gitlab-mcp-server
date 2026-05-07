@@ -18,6 +18,7 @@ import (
 const (
 	searchToolName   = "gitlab_search_tools"
 	describeToolName = "gitlab_describe_tools"
+	findToolName     = "gitlab_find_action"
 	executeToolName  = "gitlab_execute_tool"
 	defaultLimit     = 20
 	maxLimit         = 50
@@ -80,11 +81,44 @@ type DescribeOutput struct {
 	Actions []ActionDescription `json:"actions" jsonschema:"Detailed action descriptions."`
 }
 
+// FindInput is the input for gitlab_find_action.
+type FindInput struct {
+	Query string `json:"query" jsonschema:"Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable."`
+	Limit int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
+}
+
+// FindResult is a matching hidden action with schema details and an execute example.
+type FindResult struct {
+	ID             string         `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
+	Tool           string         `json:"tool" jsonschema:"Underlying hidden meta-tool name."`
+	Domain         string         `json:"domain" jsonschema:"Canonical action domain."`
+	Action         string         `json:"action" jsonschema:"Underlying action name inside the hidden meta-tool."`
+	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
+	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
+	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	Score          int            `json:"score" jsonschema:"Lexical relevance score for the query."`
+	InputSchema    map[string]any `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
+	OutputSchema   map[string]any `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
+	Example        ActionExample  `json:"example" jsonschema:"Example gitlab_execute_tool call."`
+}
+
+// FindOutput is the structured output for gitlab_find_action.
+type FindOutput struct {
+	Query   string       `json:"query" jsonschema:"Original search query."`
+	Count   int          `json:"count" jsonschema:"Number of returned matches."`
+	Results []FindResult `json:"results" jsonschema:"Matching hidden GitLab actions with schemas and execute examples."`
+}
+
 // ExecuteInput is the input for gitlab_execute_tool.
 type ExecuteInput struct {
-	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_search_tools or gitlab_describe_tools, such as project.list."`
+	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_search_tools, gitlab_describe_tools, or gitlab_find_action, such as project.list."`
 	Params  map[string]any `json:"params,omitempty" jsonschema:"Action-specific parameters validated by the selected action schema."`
 	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set true to explicitly confirm destructive actions."`
+}
+
+type scoredActionEntry struct {
+	entry actionEntry
+	score int
 }
 
 type actionEntry struct {
@@ -115,7 +149,19 @@ type Registry struct {
 // RegisterTools registers the dynamic search, describe, and execute tools.
 func RegisterTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 	registry := NewRegistry(routes)
+	addSearchTool(server, registry)
+	addDescribeTool(server, registry)
+	addExecuteTool(server, registry)
+}
 
+// RegisterFindExecuteTools registers the experimental two-tool dynamic catalog.
+func RegisterFindExecuteTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
+	registry := NewRegistry(routes)
+	addFindTool(server, registry)
+	addExecuteTool(server, registry)
+}
+
+func addSearchTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         searchToolName,
 		Title:        "GitLab Search Tools",
@@ -124,7 +170,9 @@ func RegisterTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
 	}, registry.Search)
+}
 
+func addDescribeTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        describeToolName,
 		Title:       "GitLab Describe Tools",
@@ -132,11 +180,24 @@ func RegisterTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 		Annotations: annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Describe Tools"),
 		Icons:       toolutil.IconConfig,
 	}, registry.Describe)
+}
 
+func addFindTool(server *mcp.Server, registry *Registry) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         findToolName,
+		Title:        "GitLab Find Action",
+		Description:  "Find hidden GitLab actions and return exact params schemas, safety metadata, and execute examples for the top matches.",
+		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Find Action"),
+		Icons:        toolutil.IconSearch,
+		OutputSchema: nil,
+	}, registry.Find)
+}
+
+func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one hidden GitLab action by canonical action ID. Call gitlab_describe_tools first for the exact params schema. Destructive actions require confirm=true.",
+		Description: "Execute one hidden GitLab action by canonical action ID. Use gitlab_describe_tools or gitlab_find_action for the exact params schema. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: toolutil.BoolPtr(true),
@@ -227,35 +288,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 		return toolutil.ErrorResult("gitlab_search_tools: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
 	}
 
-	limit := input.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-
-	type scoredEntry struct {
-		entry actionEntry
-		score int
-	}
-	terms := normalizeSearchTerms(query)
-	matches := make([]scoredEntry, 0)
-	for _, entry := range r.entries {
-		score := scoreEntry(entry, terms)
-		if score > 0 {
-			matches = append(matches, scoredEntry{entry: entry, score: score})
-		}
-	}
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
-		}
-		return matches[i].entry.ID < matches[j].entry.ID
-	})
-	if len(matches) > limit {
-		matches = matches[:limit]
-	}
+	matches := r.searchMatches(query, input.Limit)
 
 	results := make([]SearchResult, 0, len(matches))
 	for _, match := range matches {
@@ -280,7 +313,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input DescribeInput) (*mcp.CallToolResult, DescribeOutput, error) {
 	ids := normalizeDescribeIDs(input)
 	if len(ids) == 0 {
-		return toolutil.ErrorResult("gitlab_describe_tools: provide action or actions with canonical IDs from gitlab_search_tools."), DescribeOutput{}, nil
+		return toolutil.ErrorResult("gitlab_describe_tools: provide action or actions with canonical IDs from gitlab_search_tools or gitlab_find_action."), DescribeOutput{}, nil
 	}
 
 	descriptions := make([]ActionDescription, 0, len(ids))
@@ -289,30 +322,48 @@ func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input Des
 		if !ok {
 			return toolutil.ErrorResult(r.unknownActionMessage("gitlab_describe_tools", id)), DescribeOutput{}, nil
 		}
-		inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: toolutil.ActionMap{entry.Action: entry.Route}}, entry.Tool, entry.Action)
-		descriptions = append(descriptions, ActionDescription{
-			ID:             entry.ID,
-			Tool:           entry.Tool,
-			Domain:         entry.Domain,
-			Action:         entry.Action,
-			SchemaURI:      entry.SchemaURI,
-			Destructive:    entry.Destructive,
-			RequiredParams: append([]string(nil), entry.RequiredParams...),
-			InputSchema:    inputSchema,
-			OutputSchema:   cloneSchema(entry.Route.OutputSchema),
-			Example:        exampleFor(entry, inputSchema),
-		})
+		descriptions = append(descriptions, describeEntry(entry))
 	}
 
 	output := DescribeOutput{Count: len(descriptions), Actions: descriptions}
 	return toolutil.ToolResultAnnotated(formatDescribeOutput(output), toolutil.ContentDetail), output, nil
 }
 
+// Find searches hidden GitLab actions and includes exact schemas for matches.
+func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInput) (*mcp.CallToolResult, FindOutput, error) {
+	query := strings.TrimSpace(input.Query)
+	if query == "" {
+		return toolutil.ErrorResult("gitlab_find_action: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), FindOutput{}, nil
+	}
+
+	matches := r.searchMatches(query, input.Limit)
+	results := make([]FindResult, 0, len(matches))
+	for _, match := range matches {
+		description := describeEntry(match.entry)
+		results = append(results, FindResult{
+			ID:             description.ID,
+			Tool:           description.Tool,
+			Domain:         description.Domain,
+			Action:         description.Action,
+			SchemaURI:      description.SchemaURI,
+			Destructive:    description.Destructive,
+			RequiredParams: append([]string(nil), description.RequiredParams...),
+			Score:          match.score,
+			InputSchema:    description.InputSchema,
+			OutputSchema:   description.OutputSchema,
+			Example:        description.Example,
+		})
+	}
+
+	output := FindOutput{Query: query, Count: len(results), Results: results}
+	return toolutil.ToolResultAnnotated(formatFindOutput(output), toolutil.ContentDetail), output, nil
+}
+
 // Execute dispatches one hidden action through the existing meta-tool handler.
 func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, any, error) {
 	id := strings.ToLower(strings.TrimSpace(input.Action))
 	if id == "" {
-		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use gitlab_search_tools to find a canonical action ID."), nil, nil
+		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use gitlab_search_tools or gitlab_find_action to find a canonical action ID."), nil, nil
 	}
 	entry, ok := r.resolveAction(id)
 	if !ok {
@@ -509,6 +560,54 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 	return dedupeStrings(tags)
 }
 
+func (r *Registry) searchMatches(query string, limit int) []scoredActionEntry {
+	limit = normalizedLimit(limit)
+	terms := normalizeSearchTerms(query)
+	matches := make([]scoredActionEntry, 0)
+	for _, entry := range r.entries {
+		score := scoreEntry(entry, terms)
+		if score > 0 {
+			matches = append(matches, scoredActionEntry{entry: entry, score: score})
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].score != matches[j].score {
+			return matches[i].score > matches[j].score
+		}
+		return matches[i].entry.ID < matches[j].entry.ID
+	})
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches
+}
+
+func normalizedLimit(limit int) int {
+	if limit <= 0 {
+		return defaultLimit
+	}
+	if limit > maxLimit {
+		return maxLimit
+	}
+	return limit
+}
+
+func describeEntry(entry actionEntry) ActionDescription {
+	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: toolutil.ActionMap{entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	return ActionDescription{
+		ID:             entry.ID,
+		Tool:           entry.Tool,
+		Domain:         entry.Domain,
+		Action:         entry.Action,
+		SchemaURI:      entry.SchemaURI,
+		Destructive:    entry.Destructive,
+		RequiredParams: append([]string(nil), entry.RequiredParams...),
+		InputSchema:    inputSchema,
+		OutputSchema:   cloneSchema(entry.Route.OutputSchema),
+		Example:        exampleFor(entry, inputSchema),
+	}
+}
+
 func (r *Registry) resolveAction(id string) (actionEntry, bool) {
 	id = strings.ToLower(strings.TrimSpace(id))
 	if entry, ok := r.byID[id]; ok {
@@ -531,7 +630,7 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 	}
 	suggestions := r.suggestActionIDs(action, 5)
 	if len(suggestions) == 0 {
-		return fmt.Sprintf("%s: unknown action %q. Use gitlab_search_tools to find canonical action IDs.", toolName, action)
+		return fmt.Sprintf("%s: unknown action %q. Use gitlab_search_tools or gitlab_find_action to find canonical action IDs.", toolName, action)
 	}
 	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_tool.", toolName, action, strings.Join(suggestions, ", "))
 }
@@ -865,5 +964,26 @@ func formatDescribeOutput(output DescribeOutput) string {
 		}
 		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n\n", action.SchemaURI)
 	}
+	return b.String()
+}
+
+func formatFindOutput(output FindOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## GitLab Action Finder\n\n")
+	if output.Count == 0 {
+		fmt.Fprintf(&b, "No hidden actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
+		return b.String()
+	}
+	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	b.WriteString("| Action ID | Score | Destructive | Required Params |\n")
+	b.WriteString("| --- | ---: | --- | --- |\n")
+	for _, result := range output.Results {
+		required := "-"
+		if len(result.RequiredParams) > 0 {
+			required = strings.Join(result.RequiredParams, ", ")
+		}
+		fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
+	}
+	b.WriteString("\nStructured results include exact `input_schema` values and `gitlab_execute_tool` examples for each action.\n")
 	return b.String()
 }

@@ -158,7 +158,7 @@ To register the low-token dynamic toolset instead, set:
 TOOL_SURFACE=dynamic
 ```
 
-For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts while leaving dynamic action search, describe, and execute available.
+For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts while leaving dynamic action search, describe, and execute available. Experimental A/B selectors are also available: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
 
 See [Meta-Tools](meta-tools.md) for the full reference.
 
@@ -181,8 +181,8 @@ The host passes these environment variables through to the container:
 | `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
 | `GITLAB_TOKEN`           | Yes      | Personal Access Token                                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
-| `META_TOOLS`             | No       | Tool catalog selector: `true`, `false`, or `dynamic` (default `true`) |
-| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, or `dynamic` |
+| `META_TOOLS`             | No       | Tool catalog selector: `true`, `false`, `dynamic`, `dynamic-2`, or `dynamic-3` (default `true`) |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Premium/Ultimate tools (default `false`)          |
 | `GITLAB_READ_ONLY`       | No       | Disable mutating tools (default `false`)                 |

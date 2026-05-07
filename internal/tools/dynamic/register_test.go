@@ -2,6 +2,7 @@ package dynamic
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -174,6 +175,74 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	}
 	if action.Example.Arguments["confirm"] != true {
 		t.Fatalf("example missing confirm param: %+v", action.Example)
+	}
+}
+
+func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 3})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Find() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 || output.Results[0].ID != "project.delete" {
+		t.Fatalf("top result = %+v, want project.delete", output.Results)
+	}
+	found := output.Results[0]
+	if !found.Destructive || found.InputSchema == nil {
+		t.Fatalf("found result = %+v, want destructive action with schema", found)
+	}
+	if found.Example.Tool != "gitlab_execute_tool" || found.Example.Arguments["confirm"] != true {
+		t.Fatalf("example = %+v, want execute example with confirm", found.Example)
+	}
+}
+
+func TestFind_RequiresQuery(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Find(t.Context(), nil, FindInput{})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Find() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Results) != 0 {
+		t.Fatalf("Find() output = %+v, want empty output", output)
+	}
+}
+
+func TestRegisterFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+	RegisterFindExecuteTools(server, testRoutes(t))
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	if len(tools.Tools) != 2 {
+		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
+	}
+	names := []string{tools.Tools[0].Name, tools.Tools[1].Name}
+	if !slices.Contains(names, "gitlab_find_action") || !slices.Contains(names, "gitlab_execute_tool") {
+		t.Fatalf("tools = %v, want find/execute", names)
 	}
 }
 

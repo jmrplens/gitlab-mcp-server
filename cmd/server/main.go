@@ -139,7 +139,7 @@ func main() {
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
-	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic; overrides --meta-tools when set")
+	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic, dynamic-2, dynamic-3; overrides --meta-tools when set")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
@@ -254,8 +254,8 @@ FLAGS
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
-  -meta-tools               Enable meta-tools for tool discovery (default true)
-  -tool-surface string      Tool surface: meta|individual|dynamic; overrides -meta-tools
+	-meta-tools               Enable meta-tools for tool discovery (default true)
+	-tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides -meta-tools
   -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
@@ -274,9 +274,9 @@ FLAGS
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
-  GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  META_TOOLS                Tool surface selector: true|false|dynamic (default true)
-  TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic; overrides META_TOOLS
+	GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
+	META_TOOLS                Tool surface selector: true|false|dynamic|dynamic-2|dynamic-3 (default true)
+	TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
@@ -619,13 +619,20 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
 	switch toolSurface {
-	case config.ToolSurfaceDynamic:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
 		metaSchemaRoutes = dynamictools.AddStandaloneRoutes(metaSchemaRoutes, client, dynamictools.StandaloneOptions{
 			ReadOnly:     cfg.ReadOnly,
 			ExcludeTools: cfg.ExcludeTools,
 		})
 		dynamictools.RegisterTools(server, metaSchemaRoutes)
+	case config.ToolSurfaceDynamic2:
+		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
+		metaSchemaRoutes = dynamictools.AddStandaloneRoutes(metaSchemaRoutes, client, dynamictools.StandaloneOptions{
+			ReadOnly:     cfg.ReadOnly,
+			ExcludeTools: cfg.ExcludeTools,
+		})
+		dynamictools.RegisterFindExecuteTools(server, metaSchemaRoutes)
 	case config.ToolSurfaceMeta:
 		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
 			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
@@ -661,7 +668,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		slog.Warn("failed to count registered tools", "error", err)
 	}
 	switch toolSurface {
-	case config.ToolSurfaceDynamic:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
 		slog.Info("registered dynamic toolset", "tools", toolCount, "hidden_meta_tools", len(metaSchemaRoutes), "hidden_actions", countHiddenActions(metaSchemaRoutes))
 	case config.ToolSurfaceMeta:
 		slog.Info("registered meta-tools", "tools", toolCount)

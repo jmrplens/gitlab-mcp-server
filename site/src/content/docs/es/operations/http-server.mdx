@@ -35,31 +35,31 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 ## Flags de CLI
 
-| Flag                     | Por Defecto                  | Descripción                                                                                                            |
-| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                                                                      |
-| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                                                              |
-| `--gitlab-url`           | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                |
-| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                 |
-| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio. Establécelo a `false` para herramientas individuales                           |
-| `--tool-surface`         | _(vacío)_                    | Selector explícito del catálogo: `meta`, `individual` o `dynamic`; sobrescribe `--meta-tools`                          |
-| `--capability-surface`   | `full`                       | Selector del catálogo de recursos y prompts: `full` o `minimal`                                                        |
-| `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                          |
-| `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                          |
-| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                      |
-| `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                          |
-| `--embedded-resources`   | `true`                       | Incrustar URIs canónicas de recursos MCP en resultados de herramientas get\_\*                                         |
-| `--max-http-clients`     | `100`                        | Máximo de entradas únicas token+URL en el pool del servidor                                                            |
-| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                                                                         |
-| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                                                            |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                                                                          |
-| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                                                                 |
-| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                                                                   |
-| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                |
-| `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                  |
-| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                             |
-| `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                           |
-| `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
+| Flag                     | Por Defecto                  | Descripción                                                                                                             |
+| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                                                                       |
+| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                                                               |
+| `--gitlab-url`           | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                 |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                  |
+| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio. Establécelo a `false` para herramientas individuales                            |
+| `--tool-surface`         | _(vacío)_                    | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`; sobrescribe `--meta-tools` |
+| `--capability-surface`   | `full`                       | Selector del catálogo de recursos y prompts: `full` o `minimal`                                                         |
+| `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                           |
+| `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                           |
+| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                       |
+| `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                           |
+| `--embedded-resources`   | `true`                       | Incrustar URIs canónicas de recursos MCP en resultados de herramientas get\_\*                                          |
+| `--max-http-clients`     | `100`                        | Máximo de entradas únicas token+URL en el pool del servidor                                                             |
+| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                                                                          |
+| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                                                             |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                                                                           |
+| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                                                                  |
+| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                                                                    |
+| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                 |
+| `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                   |
+| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                              |
+| `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                            |
+| `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`)  |
 
 :::note
 `--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.

@@ -224,7 +224,7 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. Experimental comparison surfaces: `dynamic-3` (explicit current mode) and `dynamic-2` (`gitlab_find_action` + `gitlab_execute_tool`). |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.

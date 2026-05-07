@@ -49,7 +49,7 @@ gitlab-mcp-server --http \
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
 | `--meta-tools` | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
-| `--tool-surface` | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
+| `--tool-surface` | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |

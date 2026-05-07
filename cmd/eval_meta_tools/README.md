@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta` or `dynamic`. Dynamic exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. |
+| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface; `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |
@@ -80,7 +80,7 @@ timeout 1800s go run ./cmd/eval_meta_tools \
 
 When neither `--model` nor `--models` is provided, `.env` `EVAL_MODELS` is used if present; otherwise the evaluator uses the source-defined default model.
 
-Run the full fixture corpus against Haiku using the low-token dynamic surface:
+Run the full fixture corpus against Haiku using the current low-token dynamic surface:
 
 ```bash
 timeout 7200s go run ./cmd/eval_meta_tools \
@@ -91,6 +91,22 @@ timeout 7200s go run ./cmd/eval_meta_tools \
   --retries=4 \
   --retry-wait=65s \
   --out dist/evaluation/meta-tools/dynamic-haiku-all.md
+```
+
+Compare the two dynamic candidates with schema-only dry-runs:
+
+```bash
+timeout 300s go run ./cmd/eval_meta_tools \
+  --tool-surface=dynamic-3 \
+  --dry-run \
+  --repeat=1 \
+  --out dist/evaluation/meta-tools/dynamic-3-dry-run.md
+
+timeout 300s go run ./cmd/eval_meta_tools \
+  --tool-surface=dynamic-2 \
+  --dry-run \
+  --repeat=1 \
+  --out dist/evaluation/meta-tools/dynamic-2-dry-run.md
 ```
 
 Prepare Docker fixtures:

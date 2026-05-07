@@ -930,6 +930,39 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	}
 }
 
+// TestCreateServer_DynamicTwoToolSurface verifies the experimental two-tool
+// dynamic surface exposes find and execute while retaining hidden schemas.
+func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic2}, nil)
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_find_action":  false,
+		"gitlab_execute_tool": false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic-2 tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic-2 tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic-2 surface should expose hidden action schema resources: %v", err)
+	}
+}
+
 // TestCreateServer_MinimalCapabilitySurface verifies the explicit low-token
 // capability surface keeps workspace roots while omitting optional schema,
 // workflow, static data resources, and prompts.

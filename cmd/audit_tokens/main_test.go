@@ -82,3 +82,27 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 		t.Fatalf("dynamic tools = %q, want search/describe/execute", got)
 	}
 }
+
+// TestListDynamic2Tools_ExposesFindExecuteSurface verifies the token audit can
+// measure the experimental two-tool candidate independently from dynamic-3.
+func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
+	client := newAuditTokensClient(t)
+	routes := captureMetaRoutes(client, false)
+	if countActions(routes) == 0 {
+		t.Fatal("captureMetaRoutes() returned no hidden actions")
+	}
+
+	dynamic3 := listDynamicTools(routes)
+	dynamic2 := listDynamic2Tools(routes)
+	names := make([]string, 0, len(dynamic2))
+	for _, tool := range dynamic2 {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
+		t.Fatalf("dynamic-2 tools = %q, want find/execute", got)
+	}
+	if len(dynamic2) >= len(dynamic3) {
+		t.Fatalf("dynamic-2 tool count = %d, want less than dynamic-3 count %d", len(dynamic2), len(dynamic3))
+	}
+}
