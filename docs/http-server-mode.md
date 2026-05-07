@@ -48,7 +48,8 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--meta-tools` | `true` | Enable domain-level meta-tools (32 base, 47 for self-managed Enterprise/Premium entries, or 48 for GitLab.com Enterprise/Premium entries with Orbit) instead of individual tools |
+| `--meta-tools` | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
+| `--tool-surface` | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--read-only` | `false` | Expose only read-only tools |
@@ -75,7 +76,7 @@ HTTP mode has a narrow request-controlled surface. GitLab identity always comes 
 | --- | --- | --- | --- |
 | GitLab token | `PRIVATE-TOKEN` or `Authorization: Bearer` request header | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry |
 | GitLab URL | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted | Conditional | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options` |
-| Tool catalog and behavior | `--meta-tools`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `META-PARAM-SCHEMA` or `GITLAB-SAFE-MODE` |
+| Tool catalog and behavior | `--meta-tools`, `--tool-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE` |
 | Rate limits and HTTP pool policy | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--trusted-proxy-header` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS` |
 | Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl` | No | Ignored and logged in `ignored_options` |
 | Update policy and logging | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL` | No | Ignored and logged in `ignored_options` |
@@ -411,7 +412,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 | --- | --- | --- |
 | Fixed GitLab URL | `--gitlab-url` | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL` |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
-| Meta-tools mode | `--meta-tools` | Same registration mode for all clients; scope and CE/EE filtering still happen per server entry |
+| Tool surface | `--meta-tools`, `--tool-surface` | Same registration mode for all clients; scope and CE/EE filtering still happen per server entry |
 | Upload limits | Compile-time defaults | Max file size |
 
 The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.

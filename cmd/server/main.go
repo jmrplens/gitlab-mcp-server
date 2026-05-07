@@ -61,6 +61,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -90,6 +91,8 @@ type httpConfig struct {
 	gitlabURL          string
 	skipTLSVerify      bool
 	metaTools          bool
+	metaToolsSet       bool
+	toolSurface        string
 	enterprise         bool
 	enterpriseSet      bool
 	readOnly           bool
@@ -135,6 +138,7 @@ func main() {
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
+	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic; overrides --meta-tools when set")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
@@ -156,8 +160,11 @@ func main() {
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "enterprise" {
+		switch f.Name {
+		case "enterprise":
 			hcfg.enterpriseSet = true
+		case "meta-tools":
+			hcfg.metaToolsSet = true
 		}
 	})
 
@@ -246,6 +253,7 @@ FLAGS
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
   -meta-tools               Enable meta-tools for tool discovery (default true)
+  -tool-surface string      Tool surface: meta|individual|dynamic; overrides -meta-tools
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
   -exclude-tools string     Comma-separated tool names to exclude from registration
@@ -264,7 +272,8 @@ ENVIRONMENT VARIABLES (stdio mode)
 	GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  META_TOOLS                Enable meta-tools: true/false (default true)
+  META_TOOLS                Tool surface selector: true|false|dynamic (default true)
+  TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic; overrides META_TOOLS
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
@@ -363,10 +372,16 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	}
 
+	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+	if err != nil {
+		return err
+	}
+
 	cfg := &config.Config{
 		GitLabURL:            hcfg.gitlabURL,
 		SkipTLSVerify:        hcfg.skipTLSVerify,
-		MetaTools:            hcfg.metaTools,
+		MetaTools:            metaTools,
+		ToolSurface:          toolSurface,
 		Enterprise:           hcfg.enterprise,
 		AutoDetectEnterprise: !hcfg.enterpriseSet,
 		ReadOnly:             hcfg.readOnly,
@@ -433,8 +448,8 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
 	}
 
-	if err := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); err != nil {
-		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", err)
+	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
+		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -581,14 +596,21 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		KeepAlive: 30 * time.Second,
 	})
 
+	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap
-	if cfg.MetaTools {
+	if toolSurface != config.ToolSurfaceIndividual {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
+	}
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
+		dynamictools.RegisterTools(server, metaSchemaRoutes)
+	case config.ToolSurfaceMeta:
 		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
 			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
 			gitlabtools.RegisterMCPMeta(server, client, updater)
 		})
-	} else {
+	default:
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
 	}
@@ -617,13 +639,16 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	if err != nil {
 		slog.Warn("failed to count registered tools", "error", err)
 	}
-	if cfg.MetaTools {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		slog.Info("registered dynamic toolset", "tools", toolCount, "hidden_meta_tools", len(metaSchemaRoutes), "hidden_actions", countHiddenActions(metaSchemaRoutes))
+	case config.ToolSurfaceMeta:
 		slog.Info("registered meta-tools", "tools", toolCount)
-	} else {
+	default:
 		slog.Info("registered individual tools", "tools", toolCount)
 	}
 
-	if cfg.MetaTools {
+	if toolSurface == config.ToolSurfaceMeta {
 		var routesErr error
 		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
 		if routesErr != nil {
@@ -632,7 +657,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	resources.Register(server, client)
-	if cfg.MetaTools {
+	if toolSurface != config.ToolSurfaceIndividual {
 		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
 	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
@@ -1336,6 +1361,43 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 		}
 	}
 	return visibleRoutes, nil
+}
+
+// captureDynamicMetaRoutes builds the hidden action registry from the same
+// meta-tool route snapshot that production meta mode would expose after
+// configured tool-level filters. Safe mode is applied to the public execute
+// tool later, so it does not remove hidden routes here.
+func captureDynamicMetaRoutes(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) map[string]toolutil.ActionMap {
+	hidden := mcp.NewServer(&mcp.Implementation{Name: "gitlab-hidden-meta", Version: version}, nil)
+	routes := toolutil.CaptureMetaRoutes(func() {
+		gitlabtools.RegisterAllMeta(hidden, client, cfg.Enterprise)
+		gitlabtools.RegisterMCPMeta(hidden, client, updater)
+	})
+
+	if len(cfg.ExcludeTools) > 0 {
+		_ = removeExcludedTools(hidden, cfg.ExcludeTools)
+	}
+	if cfg.TokenScopes != nil {
+		_ = gitlabtools.RemoveScopeFilteredTools(hidden, cfg.TokenScopes)
+	}
+	if cfg.ReadOnly {
+		_ = removeNonReadOnlyTools(hidden)
+	}
+
+	visibleRoutes, err := visibleMetaSchemaRoutes(hidden, routes)
+	if err != nil {
+		slog.Warn("failed to filter dynamic hidden routes to visible meta-tools", "error", err)
+		return routes
+	}
+	return visibleRoutes
+}
+
+func countHiddenActions(routes map[string]toolutil.ActionMap) int {
+	total := 0
+	for _, actions := range routes {
+		total += len(actions)
+	}
+	return total
 }
 
 // removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory

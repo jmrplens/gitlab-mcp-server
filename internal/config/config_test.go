@@ -146,7 +146,7 @@ func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 }
 
 // TestLoad_MetaToolsInvalid verifies that [Load] returns an error when
-// META_TOOLS contains a non-boolean string.
+// META_TOOLS contains an unsupported tool surface value.
 func TestLoad_MetaToolsInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
@@ -156,6 +156,45 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() expected error for invalid META_TOOLS, got nil")
+	}
+}
+
+// TestLoad_MetaToolsDynamic verifies that META_TOOLS=dynamic selects the
+// low-token dynamic tool surface while preserving legacy MetaTools truthiness.
+func TestLoad_MetaToolsDynamic(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "dynamic")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
+	}
+	if !cfg.MetaTools {
+		t.Fatal("MetaTools = false, want true for dynamic mode")
+	}
+}
+
+// TestLoad_ToolSurfaceOverridesMetaTools verifies that TOOL_SURFACE is the
+// explicit catalog-mode knob when both new and legacy settings are present.
+func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "false")
+	t.Setenv("TOOL_SURFACE", "dynamic")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
+	}
+	if !cfg.MetaTools {
+		t.Fatal("MetaTools = false, want true for dynamic mode")
 	}
 }
 
@@ -698,6 +737,7 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 		RateLimitRPS:    2.5,
 		RateLimitBurst:  7,
 		MetaParamSchema: MetaParamSchemaFull,
+		ToolSurface:     ToolSurfaceDynamic,
 	}
 
 	snapshot := cfg.ServerConfig()
@@ -709,6 +749,9 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 	if snapshot.MetaParamSchema != MetaParamSchemaFull {
 		t.Fatalf("MetaParamSchema = %q, want %q", snapshot.MetaParamSchema, MetaParamSchemaFull)
+	}
+	if snapshot.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", snapshot.ToolSurface, ToolSurfaceDynamic)
 	}
 	if !slices.Equal(snapshot.ExcludeTools, cfg.ExcludeTools) {
 		t.Fatalf("ExcludeTools = %v, want %v", snapshot.ExcludeTools, cfg.ExcludeTools)
@@ -737,7 +780,7 @@ func TestLoad_InvalidSkipTLS(t *testing.T) {
 }
 
 // TestLoad_InvalidMetaTools verifies that Load returns an error when
-// META_TOOLS has an invalid boolean value.
+// META_TOOLS has an invalid tool surface value.
 func TestLoad_InvalidMetaTools(t *testing.T) {
 	t.Setenv("META_TOOLS", "notabool")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")

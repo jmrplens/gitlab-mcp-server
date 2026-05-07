@@ -29,7 +29,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional self-managed enterprise meta-tools plus the GitLab.com-only `gitlab_orbit` meta-tool are available for Premium/Ultimate features
+- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same hidden GitLab action registry
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -219,11 +219,12 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 ## Tool Modes
 
-Two registration modes, controlled by the `META_TOOLS` environment variable:
+Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:

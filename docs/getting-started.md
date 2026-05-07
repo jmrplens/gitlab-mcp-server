@@ -152,6 +152,12 @@ To register the complete individual tool set instead (one tool per GitLab operat
 META_TOOLS=false
 ```
 
+To register the low-token dynamic toolset instead, set:
+
+```env
+TOOL_SURFACE=dynamic
+```
+
 See [Meta-Tools](meta-tools.md) for the full reference.
 
 ---
@@ -173,7 +179,8 @@ The host passes these environment variables through to the container:
 | `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
 | `GITLAB_TOKEN`           | Yes      | Personal Access Token                                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
-| `META_TOOLS`             | No       | Group tools per domain (default `true`)                  |
+| `META_TOOLS`             | No       | Tool catalog selector: `true`, `false`, or `dynamic` (default `true`) |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, or `dynamic` |
 | `GITLAB_ENTERPRISE`      | No       | Enable Premium/Ultimate tools (default `false`)          |
 | `GITLAB_READ_ONLY`       | No       | Disable mutating tools (default `false`)                 |
 | `GITLAB_SAFE_MODE`       | No       | Preview mutating tool inputs (default `false`)           |

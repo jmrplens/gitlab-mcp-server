@@ -276,7 +276,8 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 | Variable            | Predeterminado | Descripción                                                                                                                                                           |
 | ------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales.                                                                                |
+| `META_TOOLS`        | `true`         | Selector del catálogo: `true` para meta-herramientas, `false` para herramientas individuales, o `dynamic` para la superficie dinámica de bajo consumo.                |
+| `TOOL_SURFACE`      | —              | Selector explícito del catálogo: `meta`, `individual` o `dynamic`. Cuando se establece, sobrescribe `META_TOOLS`.                                                     |
 | `META_PARAM_SCHEMA` | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema siguen disponibles en todos los modos. |
 | `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                |
 | `--enterprise`      | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                             |

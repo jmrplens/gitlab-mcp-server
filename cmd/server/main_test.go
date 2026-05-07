@@ -895,6 +895,57 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	}
 }
 
+// TestCreateServer_DynamicToolSurface verifies that the low-token dynamic
+// surface exposes only search, describe, and execute tools while still
+// advertising meta-schema resources for the hidden action registry.
+func TestCreateServer_DynamicToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, nil)
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_search_tools":   false,
+		"gitlab_describe_tools": false,
+		"gitlab_execute_tool":   false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic surface should expose hidden action schema resources: %v", err)
+	}
+}
+
+// TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
+// keeps discovery tools but removes execution from the dynamic surface.
+func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true}, nil)
+	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
+	if err != nil {
+		t.Fatalf("list dynamic read-only tools: %v", err)
+	}
+	for _, tool := range toolsResult {
+		if tool.Name == "gitlab_execute_tool" {
+			t.Fatal("read-only dynamic surface should remove gitlab_execute_tool")
+		}
+	}
+}
+
 // TestCreateServer_MetaSchemaResourcesFollowMetaMode verifies that the
 // per-action schema resources are only advertised when meta-tools are active.
 func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {

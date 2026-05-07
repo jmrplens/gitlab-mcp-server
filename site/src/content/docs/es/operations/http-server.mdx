@@ -41,7 +41,8 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                                                              |
 | `--gitlab-url`           | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                 |
-| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (32 base, 47 enterprise autoalojadas o 48 GitLab.com Enterprise con Orbit)      |
+| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio. Establécelo a `false` para herramientas individuales                           |
+| `--tool-surface`         | _(vacío)_                    | Selector explícito del catálogo: `meta`, `individual` o `dynamic`; sobrescribe `--meta-tools`                          |
 | `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                          |
 | `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                          |
 | `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                      |

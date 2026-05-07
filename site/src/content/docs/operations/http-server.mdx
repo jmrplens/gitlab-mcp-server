@@ -41,7 +41,8 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                                                          |
 | `--gitlab-url`           | _(optional)_                 | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                        |
 | `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                                                    |
-| `--meta-tools`           | `true`                       | Enable domain meta-tools (32 base, 47 self-managed enterprise, or 48 GitLab.com Enterprise with Orbit)     |
+| `--meta-tools`           | `true`                       | Enable domain meta-tools. Set `false` for individual tools                                                 |
+| `--tool-surface`         | _(empty)_                    | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools`               |
 | `--meta-param-schema`    | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                |
 | `--enterprise`           | `false`                      | Force Enterprise/Premium tools; omit to auto-detect CE/EE per token+URL entry                              |
 | `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                 |

@@ -23,6 +23,7 @@ var serverManagedRequestOptions = []requestOptionAlias{
 	{name: "GITLAB_URL", headers: []string{"GITLAB_URL"}},
 	{name: "GITLAB_SKIP_TLS_VERIFY", headers: []string{"GITLAB_SKIP_TLS_VERIFY", "GITLAB-SKIP-TLS-VERIFY", "SKIP-TLS-VERIFY"}},
 	{name: "META_TOOLS", headers: []string{"META_TOOLS", "META-TOOLS"}},
+	{name: "TOOL_SURFACE", headers: []string{"TOOL_SURFACE", "TOOL-SURFACE"}},
 	{name: "META_PARAM_SCHEMA", headers: []string{"META_PARAM_SCHEMA", "META-PARAM-SCHEMA"}},
 	{name: "GITLAB_ENTERPRISE", headers: []string{"GITLAB_ENTERPRISE", "GITLAB-ENTERPRISE", "ENTERPRISE"}},
 	{name: "GITLAB_READ_ONLY", headers: []string{"GITLAB_READ_ONLY", "GITLAB-READ-ONLY", "READ-ONLY"}},

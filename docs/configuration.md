@@ -27,7 +27,8 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise instead of individual tools) |
+| `META_TOOLS` | `true` | Tool catalog selector: `true` for domain meta-tools, `false` for individual tools, or `dynamic` for the low-token search/describe/execute surface |
+| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. When set, it overrides `META_TOOLS` |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -197,6 +198,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
 | **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
+| **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
 | **Individual tools** | `META_TOOLS=false` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
@@ -211,7 +213,8 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--http-addr` | `:8080` | HTTP listen address |
 | `--gitlab-url` | *(optional)* | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
-| `--meta-tools` | `true` | Enable meta-tools |
+| `--meta-tools` | `true` | Enable meta-tools. Use `--meta-tools=false` for individual tools |
+| `--tool-surface` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |

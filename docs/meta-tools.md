@@ -39,10 +39,20 @@ Meta-tools are **enabled by default**. To switch to individual tools:
 META_TOOLS=false
 ```
 
+To switch to the low-token dynamic toolset:
+
+```env
+TOOL_SURFACE=dynamic
+```
+
 | Mode                       | Tool Count | Best For                                                         |
 | -------------------------- | ---------- | ---------------------------------------------------------------- |
 | Meta-tools (`true`)        | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | LLMs with limited tool context windows                           |
+| Dynamic toolset (`dynamic`) | 3 visible tools plus a hidden action registry | Low-token clients that can call search, describe, then execute actions |
 | Individual tools (`false`) | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from granular tool discovery                |
+
+The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It reuses the same
+underlying meta-tool routes and safety checks, but hides the full action catalog from the initial `tools/list` response.
 
 ---
 
