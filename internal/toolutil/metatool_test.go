@@ -268,21 +268,23 @@ func TestUnmarshalParams_CoercesNumericPathAliasesToStrings(t *testing.T) {
 func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
-			"query":             map[string]any{"type": "string"},
-			"merge_request_iid": map[string]any{"type": "integer"},
-			"project_id":        map[string]any{"type": "string"},
-			"link_url":          map[string]any{"type": "string"},
-			"labels":            map[string]any{"type": "string"},
-			"source_branch":     map[string]any{"type": "string"},
-			"target_branch":     map[string]any{"type": "string"},
-			"environment_scope": map[string]any{"type": "string"},
-			"auto_merge":        map[string]any{"type": "boolean"},
-			"paused":            map[string]any{"type": "boolean"},
-			"assignee_ids":      map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
-			"variables":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"weight":            map[string]any{"type": "number"},
-			"path":              map[string]any{"type": "string"},
-			"filename":          map[string]any{"type": "string"},
+			"query":                    map[string]any{"type": "string"},
+			"merge_request_iid":        map[string]any{"type": "integer"},
+			"project_id":               map[string]any{"type": "string"},
+			"link_url":                 map[string]any{"type": "string"},
+			"labels":                   map[string]any{"type": "string"},
+			"source_branch":            map[string]any{"type": "string"},
+			"target_branch":            map[string]any{"type": "string"},
+			"environment_scope":        map[string]any{"type": "string"},
+			"auto_merge":               map[string]any{"type": "boolean"},
+			"paused":                   map[string]any{"type": "boolean"},
+			"assignee_ids":             map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
+			"variables":                map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"weight":                   map[string]any{"type": "number"},
+			"path":                     map[string]any{"type": "string"},
+			"filename":                 map[string]any{"type": "string"},
+			"note":                     map[string]any{"type": "string"},
+			"destination_storage_name": map[string]any{"type": "string"},
 		},
 	}
 	params := map[string]any{
@@ -300,6 +302,8 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 		"variables":                    "DEPLOY_ENV=prod",
 		"weight":                       "3.5",
 		"file_path":                    "packages/npm/package.tgz",
+		"body":                         "review note",
+		"shard":                        "default",
 	}
 
 	got := NormalizeParamAliasesForSchema(params, schema)
@@ -327,7 +331,10 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	if got["path"] != "packages/npm" || got["filename"] != "package.tgz" {
 		t.Fatalf("file_path split values = %#v", got)
 	}
-	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path"} {
+	if got["note"] != "review note" || got["destination_storage_name"] != "default" {
+		t.Fatalf("note/storage shard values = %#v", got)
+	}
+	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path", "body", "shard"} {
 		if _, exists := got[alias]; exists {
 			t.Fatalf("alias %q still present in %#v", alias, got)
 		}
@@ -740,6 +747,44 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	out, ok := raw.(testOutput)
 	if !ok || out.Result != "ok" {
 		t.Fatalf("raw = %#v, want test output", raw)
+	}
+}
+
+func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
+	routes := ActionMap{
+		"storage_move.schedule_project":      {},
+		"mr_review.changes_get":              {},
+		"mr_review.draft_note_publish_all":   {},
+		"package.list":                       {},
+		"project.hook_list":                  {},
+		"external_status_check.list_project": {},
+		"access.deploy_token_create_project": {},
+		"project.member_delete":              {},
+		"project.member_edit":                {},
+		"merge_request.spent_time_add":       {},
+		"merge_request.time_estimate_set":    {},
+	}
+
+	tests := map[string]string{
+		"project.schedule_storage_move":   "storage_move.schedule_project",
+		"merge_request.changes":           "mr_review.changes_get",
+		"project.hooks.list":              "project.hook_list",
+		"project.status_check_list":       "external_status_check.list_project",
+		"deploy_token.create":             "access.deploy_token_create_project",
+		"project_member.update":           "project.member_edit",
+		"project_member.edit":             "project.member_edit",
+		"project.member_remove":           "project.member_delete",
+		"project_member.remove":           "project.member_delete",
+		"mr_review.draft_notes_publish":   "mr_review.draft_note_publish_all",
+		"mr_review.publish":               "mr_review.draft_note_publish_all",
+		"package.list_generic":            "package.list",
+		"merge_request.add_spent_time":    "merge_request.spent_time_add",
+		"merge_request.set_time_estimate": "merge_request.time_estimate_set",
+	}
+	for alias, want := range tests {
+		if got := NormalizeActionAlias(alias, routes); got != want {
+			t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
+		}
 	}
 }
 

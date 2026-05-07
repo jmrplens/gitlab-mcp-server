@@ -1350,6 +1350,12 @@ func normalizeTasksForDynamicRoutes(tasks []evalTask, routes map[string]toolutil
 // gitlab_execute_tool when that route exists in the dynamic catalog.
 func normalizeExpectedDynamicRoute(tool, action string, routes map[string]toolutil.ActionMap) (normalizedTool, normalizedAction string) {
 	if action == "" {
+		executeRoutes := routes[dynamicExecuteTool]
+		for _, candidate := range standaloneDynamicActionCandidates(tool) {
+			if _, ok := executeRoutes[candidate]; ok {
+				return dynamicExecuteTool, candidate
+			}
+		}
 		return tool, action
 	}
 	executeRoutes := routes[dynamicExecuteTool]
@@ -1359,6 +1365,23 @@ func normalizeExpectedDynamicRoute(tool, action string, routes map[string]toolut
 		}
 	}
 	return tool, action
+}
+
+func standaloneDynamicActionCandidates(tool string) []string {
+	switch tool {
+	case "gitlab_discover_project":
+		return []string{"discover_project.resolve"}
+	case "gitlab_interactive_issue_create":
+		return []string{"interactive.issue_create"}
+	case "gitlab_interactive_mr_create":
+		return []string{"interactive.mr_create"}
+	case "gitlab_interactive_project_create":
+		return []string{"interactive.project_create"}
+	case "gitlab_interactive_release_create":
+		return []string{"interactive.release_create"}
+	default:
+		return nil
+	}
 }
 
 // dynamicActionCandidates returns likely dynamic action IDs for a fixture route.
@@ -3047,6 +3070,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		hiddenRoutes := captureEvaluationMetaRoutes(client)
+		hiddenRoutes = dynamictools.AddStandaloneRoutes(hiddenRoutes, client, dynamictools.StandaloneOptions{})
 		dynamictools.RegisterTools(server, hiddenRoutes)
 		routes = dynamicValidationRoutes(hiddenRoutes)
 	case config.ToolSurfaceMeta:
@@ -3280,7 +3304,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			}
 			if isDynamicDiscovery(toolUse) {
 				result.SchemaLookupUsed = true
-				payload, lookupErr := dynamicDiscoveryResult(routes, toolUse)
+				payload, lookupErr := dynamicDiscoveryResult(ctx, routes, toolUse)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
 				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
@@ -3419,7 +3443,7 @@ func isReadOnlyUnexpectedAction(action string) bool {
 
 // taskToolCallLimit is an internal helper for the main package.
 func taskToolCallLimit(stepCount int) int {
-	limit := stepCount*2 + 4
+	limit := stepCount*3 + 4
 	if limit < toolCallLimit {
 		return toolCallLimit
 	}
@@ -3430,10 +3454,17 @@ func taskToolCallLimit(stepCount int) int {
 func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, nextStep, totalSteps int) string {
 	result := map[string]any{"ok": true, "next_step": nextStep, "total_steps": totalSteps}
 	action, _ := toolUse.Input["action"].(string)
+	if step.ExpectedAction != "" {
+		action = toolutil.NormalizeActionAlias(action, toolutil.ActionMap{step.ExpectedAction: {}})
+	}
 	params, _ := toolUse.Input["params"].(map[string]any)
+	addSimulatedResourceIDs(result, action, params)
 	switch {
-	case toolUse.Name == "gitlab_discover_project":
+	case toolUse.Name == "gitlab_discover_project" || action == "discover_project.resolve":
 		remoteURL, _ := toolUse.Input["remote_url"].(string)
+		if remoteURL == "" {
+			remoteURL, _ = params["remote_url"].(string)
+		}
 		projectPath := projectPathFromRemoteURL(remoteURL)
 		result["project"] = map[string]any{
 			"id":                  42,
@@ -3472,6 +3503,61 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
 	}
 	return string(data)
+}
+
+func addSimulatedResourceIDs(result map[string]any, action string, params map[string]any) {
+	switch action {
+	case "project.hook_add":
+		addTopLevelID(result, "hook_id", 101)
+		result["hook"] = map[string]any{"id": 101, "hook_id": 101, "project_id": params["project_id"]}
+	case "project.badge_add":
+		addTopLevelID(result, "badge_id", 102)
+		result["badge"] = map[string]any{"id": 102, "badge_id": 102, "project_id": params["project_id"]}
+	case "snippet.project_create":
+		addTopLevelID(result, "snippet_id", 103)
+		filePath := snippetFilePathFromParams(params)
+		result["snippet"] = map[string]any{"id": 103, "snippet_id": 103, "project_id": params["project_id"], "file_path": filePath, "file_name": filePath}
+	case "mr_review.note_create", "mr_review.draft_note_create":
+		addTopLevelID(result, "note_id", 104)
+		result["note"] = map[string]any{"id": 104, "note_id": 104, "project_id": params["project_id"], "merge_request_iid": params["merge_request_iid"]}
+	case "access.deploy_token_create_project":
+		addTopLevelID(result, "deploy_token_id", 105)
+		result["deploy_token"] = map[string]any{"id": 105, "deploy_token_id": 105, "project_id": params["project_id"]}
+	case "access.deploy_key_add":
+		addTopLevelID(result, "deploy_key_id", 106)
+		result["deploy_key"] = map[string]any{"id": 106, "deploy_key_id": 106, "project_id": params["project_id"]}
+	case "project.member_add":
+		addTopLevelID(result, "user_id", 107)
+		result["member"] = map[string]any{"id": 107, "user_id": 107, "project_id": params["project_id"]}
+	case "group.group_milestone_create":
+		addTopLevelID(result, "milestone_iid", 108)
+		result["milestone"] = map[string]any{"id": 108, "milestone_iid": 108, "group_id": params["group_id"]}
+	case "pipeline.schedule_create":
+		addTopLevelID(result, "schedule_id", 109)
+		result["schedule"] = map[string]any{"id": 109, "schedule_id": 109, "project_id": params["project_id"]}
+	case "merge_request.emoji_mr_create":
+		addTopLevelID(result, "award_id", 110)
+		result["award"] = map[string]any{"id": 110, "award_id": 110, "project_id": params["project_id"], "merge_request_iid": params["merge_request_iid"]}
+	}
+}
+
+func addTopLevelID(result map[string]any, name string, id int) {
+	result["id"] = id
+	result[name] = id
+}
+
+func snippetFilePathFromParams(params map[string]any) string {
+	if fileName, ok := params["file_name"].(string); ok && fileName != "" {
+		return fileName
+	}
+	files, _ := params["files"].([]any)
+	for _, file := range files {
+		object, _ := file.(map[string]any)
+		if filePath, ok := object["file_path"].(string); ok && filePath != "" {
+			return filePath
+		}
+	}
+	return "snippet.txt"
 }
 
 // projectPathFromRemoteURL is an internal helper for the main package.
@@ -3688,88 +3774,32 @@ func isDynamicDiscovery(toolUse modelContentBlock) bool {
 
 // dynamicDiscoveryResult returns simulated discovery output for dynamic search
 // and describe calls, keeping evaluation independent from live GitLab state.
-func dynamicDiscoveryResult(routes map[string]toolutil.ActionMap, toolUse modelContentBlock) (string, error) {
+func dynamicDiscoveryResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock) (string, error) {
 	switch toolUse.Name {
 	case dynamicSearchTool:
 		query, _ := toolUse.Input["query"].(string)
 		limit := intFromAny(toolUse.Input["limit"], 20)
-		return marshalToolResult(dynamicSearchResult(routes, query, limit))
+		return marshalToolResult(dynamicSearchResult(ctx, routes, query, limit))
 	case dynamicDescribeTool:
 		ids := dynamicDescribeIDs(toolUse.Input)
 		if len(ids) == 0 {
 			return "", errors.New("gitlab_describe_tools requires action or actions")
 		}
-		return marshalToolResult(dynamicDescribeResult(routes, ids))
+		return marshalToolResult(dynamicDescribeResult(ctx, routes, ids))
 	default:
 		return "", fmt.Errorf("unsupported dynamic discovery tool %q", toolUse.Name)
 	}
 }
 
-// dynamicSearchResult performs a lightweight lexical search over dynamic action IDs.
-func dynamicSearchResult(routes map[string]toolutil.ActionMap, query string, limit int) map[string]any {
-	if limit <= 0 || limit > 50 {
-		limit = 20
+// dynamicSearchResult searches with the same intent index as the runtime
+// dynamic toolset so model evaluation reflects production discovery behavior.
+func dynamicSearchResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
+	registry := dynamictools.NewRegistry(dynamicHiddenRoutesFromValidationRoutes(routes))
+	_, output, err := registry.Search(ctx, nil, dynamictools.SearchInput{Query: query, Limit: limit})
+	if err != nil {
+		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}
 	}
-	terms := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
-	type match struct {
-		ID    string
-		Route toolutil.ActionRoute
-		Score int
-	}
-	var matches []match
-	for actionID, route := range routes[dynamicExecuteTool] {
-		score := dynamicSearchScore(actionID, route.InputSchema, terms)
-		if score > 0 {
-			matches = append(matches, match{ID: actionID, Route: route, Score: score})
-		}
-	}
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].Score != matches[j].Score {
-			return matches[i].Score > matches[j].Score
-		}
-		return matches[i].ID < matches[j].ID
-	})
-	if len(matches) > limit {
-		matches = matches[:limit]
-	}
-	results := make([]map[string]any, 0, len(matches))
-	for _, match := range matches {
-		results = append(results, map[string]any{
-			"id":              match.ID,
-			"destructive":     match.Route.Destructive,
-			"required_params": schemaStringSlice(match.Route.InputSchema["required"]),
-			"score":           match.Score,
-		})
-	}
-	return map[string]any{"query": query, "count": len(results), "results": results}
-}
-
-// dynamicSearchScore gives deterministic lexical scores for action lookup.
-func dynamicSearchScore(actionID string, schema map[string]any, terms []string) int {
-	if len(terms) == 0 {
-		return 0
-	}
-	searchParts := []string{strings.ReplaceAll(actionID, ".", " "), actionID}
-	if properties, ok := schema["properties"].(map[string]any); ok {
-		for name := range properties {
-			searchParts = append(searchParts, strings.ReplaceAll(name, "_", " "), name)
-		}
-	}
-	searchText := strings.ToLower(strings.Join(searchParts, " "))
-	score := 0
-	for _, term := range terms {
-		switch {
-		case actionID == term:
-			score += 100
-		case strings.Contains(actionID, term):
-			score += 70
-		case strings.Contains(searchText, term):
-			score += 20
-		default:
-			return 0
-		}
-	}
-	return score
+	return output
 }
 
 // dynamicDescribeIDs extracts one or many action IDs from describe input.
@@ -3801,40 +3831,32 @@ func dynamicDescribeIDs(input map[string]any) []string {
 }
 
 // dynamicDescribeResult returns per-action schema information for dynamic mode.
-func dynamicDescribeResult(routes map[string]toolutil.ActionMap, ids []string) map[string]any {
-	actions := make([]map[string]any, 0, len(ids))
-	for _, id := range ids {
-		route, ok := routes[dynamicExecuteTool][id]
-		if !ok {
-			actions = append(actions, map[string]any{"id": id, "error": "unknown action"})
-			continue
-		}
-		actions = append(actions, map[string]any{
-			"id":              id,
-			"tool":            dynamicExecuteTool,
-			"destructive":     route.Destructive,
-			"required_params": schemaStringSlice(route.InputSchema["required"]),
-			"input_schema":    route.InputSchema,
-			"example": map[string]any{
-				"tool":      dynamicExecuteTool,
-				"arguments": dynamicExecutionExample(id, route),
-			},
-		})
+func dynamicDescribeResult(ctx context.Context, routes map[string]toolutil.ActionMap, ids []string) any {
+	registry := dynamictools.NewRegistry(dynamicHiddenRoutesFromValidationRoutes(routes))
+	result, output, err := registry.Describe(ctx, nil, dynamictools.DescribeInput{Actions: ids})
+	if err != nil {
+		return map[string]any{"count": 0, "actions": []any{}, "error": err.Error()}
 	}
-	return map[string]any{"count": len(actions), "actions": actions}
+	if result != nil && result.IsError {
+		return map[string]any{"count": 0, "actions": []any{}, "error": toolResultContent(result)}
+	}
+	return output
 }
 
-// dynamicExecutionExample builds a gitlab_execute_tool argument example.
-func dynamicExecutionExample(actionID string, route toolutil.ActionRoute) map[string]any {
-	params := make(map[string]any)
-	for _, required := range schemaStringSlice(route.InputSchema["required"]) {
-		params[required] = "<" + required + ">"
+func dynamicHiddenRoutesFromValidationRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	hiddenRoutes := make(map[string]toolutil.ActionMap)
+	for actionID, route := range routes[dynamicExecuteTool] {
+		domain, action, ok := strings.Cut(actionID, ".")
+		if !ok || domain == "" || action == "" {
+			continue
+		}
+		toolName := "gitlab_" + domain
+		if hiddenRoutes[toolName] == nil {
+			hiddenRoutes[toolName] = make(toolutil.ActionMap)
+		}
+		hiddenRoutes[toolName][action] = route
 	}
-	arguments := map[string]any{"action": actionID, "params": params}
-	if route.Destructive {
-		arguments["confirm"] = true
-	}
-	return arguments
+	return hiddenRoutes
 }
 
 // intFromAny converts JSON numeric values to int with a fallback default.
@@ -5431,7 +5453,7 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 		if result.FinalSuccess {
 			continue
 		}
-		category := failureDiagnosticCategory(result.Notes)
+		category := failureDiagnosticCategoryForResult(opts, result)
 		counts[category]++
 		if examples[category] == "" {
 			examples[category] = result.Task.ID
@@ -5447,13 +5469,94 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 	}
 	fmt.Fprintf(b, "\n## %s\n\n", title)
 	fmt.Fprintf(b, "| Category | Count | Example task |\n| --- | ---: | --- |\n")
-	for _, category := range []string{"mcp_implementation_bug", "gitlab_ce_limitation", "model_provider_auth", "model_provider_model_unavailable", "model_route_selection_miss", "model_parameter_shape_miss", "fixture_setup_failure", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"} {
+	for _, category := range failureDiagnosticCategories(opts) {
 		count := counts[category]
 		if count == 0 {
 			continue
 		}
 		fmt.Fprintf(b, "| %s | %d | %s |\n", category, count, examples[category])
 	}
+}
+
+// failureDiagnosticCategories returns the ordered report categories for the
+// selected tool surface.
+func failureDiagnosticCategories(opts options) []string {
+	if opts.ToolSurface == config.ToolSurfaceDynamic {
+		return []string{"alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_or_sampling_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
+	}
+	return []string{"mcp_implementation_bug", "gitlab_ce_limitation", "model_provider_auth", "model_provider_model_unavailable", "model_route_selection_miss", "model_parameter_shape_miss", "fixture_setup_failure", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
+}
+
+// failureDiagnosticCategoryForResult classifies a failed task result for the
+// selected tool surface.
+func failureDiagnosticCategoryForResult(opts options, result taskResult) string {
+	if opts.ToolSurface == config.ToolSurfaceDynamic {
+		return dynamicFailureDiagnosticCategory(result)
+	}
+	return failureDiagnosticCategory(result.Notes)
+}
+
+// dynamicFailureDiagnosticCategory separates dynamic-mode failures into buckets
+// that map directly to follow-up implementation work.
+func dynamicFailureDiagnosticCategory(result taskResult) string {
+	text := strings.ToLower(strings.Join(result.Notes, "\n"))
+	switch {
+	case text == "":
+		return "other"
+	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
+		return "model_provider_auth"
+	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, "not found"):
+		return "model_provider_model_unavailable"
+	case strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || strings.Contains(text, "integer") && strings.Contains(text, "invalid"):
+		return "mcp_implementation_bug"
+	case strings.Contains(text, "500") || strings.Contains(text, "502") || strings.Contains(text, "503") || strings.Contains(text, "504") || strings.Contains(text, "internal server error") || strings.Contains(text, "bad gateway") || strings.Contains(text, "service unavailable") || strings.Contains(text, "gateway timeout"):
+		return "transient_gitlab_5xx"
+	case strings.Contains(text, "sampling_unsupported") || strings.Contains(text, "sampling capability unsupported") || strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || strings.Contains(text, "requires premium") || strings.Contains(text, "requires ultimate") || strings.Contains(text, "license") || strings.Contains(text, "not available"):
+		return "ce_or_sampling_limitation"
+	case strings.Contains(text, "expected tool gitlab_discover_project") || strings.Contains(text, "expected tool gitlab_interactive_") || strings.Contains(text, "standalone tool"):
+		return "standalone_unavailable"
+	case dynamicAliasMiss(text):
+		return "alias_miss"
+	case strings.Contains(text, "missing required params") || strings.Contains(text, "unknown params") || strings.Contains(text, "unexpected top-level parameter"):
+		return "params_shape_miss"
+	case dynamicMultiStepOrderMiss(text):
+		return "multi_step_order_miss"
+	case strings.Contains(text, "expected action") || strings.Contains(text, "expected tool") || strings.Contains(text, "unknown action") || strings.Contains(text, "model returned no tool_use"):
+		return "true_discovery_miss"
+	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
+		return "destructive_safety"
+	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
+		return "timeout_resource_exhaustion"
+	case strings.Contains(text, "404") || strings.Contains(text, "not found"):
+		return "not_found"
+	default:
+		return "other"
+	}
+}
+
+func dynamicAliasMiss(text string) bool {
+	if !strings.Contains(text, "expected action") || !strings.Contains(text, "got ") {
+		return false
+	}
+	aliasMarkers := []string{
+		"repository_file.", "project_access_token.", "gitlab_server.", "deploy_key.",
+		"webhook.", "badge.", "broadcast_message.", "feature_flag.",
+		"group.custom_member_roles_", "merge_train.list", "project.schedule_storage_move",
+		"personal_snippet.", "runner.delete", "ci_catalog.", "enterprise_user.",
+	}
+	for _, marker := range aliasMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func dynamicMultiStepOrderMiss(text string) bool {
+	if !strings.Contains(text, "tool-call step limit reached after") {
+		return false
+	}
+	return !strings.Contains(text, "after 0/")
 }
 
 // failureDiagnosticCategory is an internal helper for the main package.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -91,6 +92,8 @@ type actionEntry struct {
 	Tool           string
 	Domain         string
 	Action         string
+	Aliases        []string
+	Tags           []string
 	SchemaURI      string
 	Destructive    bool
 	RequiredParams []string
@@ -104,6 +107,7 @@ type toolHandler func(context.Context, *mcp.CallToolRequest, toolutil.MetaToolIn
 type Registry struct {
 	entries  []actionEntry
 	byID     map[string]actionEntry
+	aliases  map[string]string
 	handlers map[string]toolHandler
 }
 
@@ -146,6 +150,7 @@ func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
 	routes = toolutil.CloneMetaSchemaRoutes(routes)
 	registry := &Registry{
 		byID:     make(map[string]actionEntry),
+		aliases:  make(map[string]string),
 		handlers: make(map[string]toolHandler),
 	}
 
@@ -169,19 +174,26 @@ func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
 			route := actions[action]
 			domain := domainFromTool(tool)
 			id := domain + "." + action
+			aliases := aliasesForCanonicalAction(id)
+			tags := actionTags(id, domain, action, route.InputSchema)
 			entry := actionEntry{
 				ID:             id,
 				Tool:           tool,
 				Domain:         domain,
 				Action:         action,
+				Aliases:        aliases,
+				Tags:           tags,
 				SchemaURI:      toolutil.MetaSchemaURI(tool, action),
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
-				SearchText:     buildSearchText(id, tool, domain, action, route.InputSchema),
+				SearchText:     buildSearchText(id, tool, domain, action, aliases, tags, route.InputSchema),
 				Route:          route,
 			}
 			registry.entries = append(registry.entries, entry)
 			registry.byID[id] = entry
+			for _, alias := range aliases {
+				registry.aliases[alias] = id
+			}
 		}
 	}
 
@@ -207,7 +219,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 		entry actionEntry
 		score int
 	}
-	terms := strings.Fields(strings.ToLower(query))
+	terms := normalizeSearchTerms(query)
 	matches := make([]scoredEntry, 0)
 	for _, entry := range r.entries {
 		score := scoreEntry(entry, terms)
@@ -253,9 +265,9 @@ func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input Des
 
 	descriptions := make([]ActionDescription, 0, len(ids))
 	for _, id := range ids {
-		entry, ok := r.byID[id]
+		entry, ok := r.resolveAction(id)
 		if !ok {
-			return toolutil.ErrorResult(fmt.Sprintf("gitlab_describe_tools: unknown action %q. Use gitlab_search_tools to find canonical action IDs.", id)), DescribeOutput{}, nil
+			return toolutil.ErrorResult(r.unknownActionMessage("gitlab_describe_tools", id)), DescribeOutput{}, nil
 		}
 		inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: toolutil.ActionMap{entry.Action: entry.Route}}, entry.Tool, entry.Action)
 		descriptions = append(descriptions, ActionDescription{
@@ -282,15 +294,16 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if id == "" {
 		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use gitlab_search_tools to find a canonical action ID."), nil, nil
 	}
-	entry, ok := r.byID[id]
+	entry, ok := r.resolveAction(id)
 	if !ok {
-		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: unknown action %q. Use gitlab_search_tools to find canonical action IDs.", input.Action)), nil, nil
+		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_tool", input.Action)), nil, nil
 	}
 
 	params := maps.Clone(input.Params)
 	if params == nil {
 		params = map[string]any{}
 	}
+	params = toolutil.NormalizeParamAliasesForSchema(params, entry.Route.InputSchema)
 	if input.Confirm {
 		params["confirm"] = true
 	}
@@ -315,8 +328,12 @@ func domainFromTool(tool string) string {
 	return strings.TrimPrefix(tool, "gitlab_")
 }
 
-func buildSearchText(id, tool, domain, action string, schema map[string]any) string {
+func buildSearchText(id, tool, domain, action string, aliases, tags []string, schema map[string]any) string {
 	parts := []string{id, strings.ReplaceAll(id, ".", " "), tool, domain, strings.ReplaceAll(domain, "_", " "), action, strings.ReplaceAll(action, "_", " ")}
+	for _, alias := range aliases {
+		parts = append(parts, alias, strings.ReplaceAll(alias, ".", " "), strings.ReplaceAll(alias, "_", " "))
+	}
+	parts = append(parts, tags...)
 	parts = append(parts, requiredParams(schema)...)
 	if properties, ok := schema["properties"].(map[string]any); ok {
 		for name := range properties {
@@ -326,26 +343,334 @@ func buildSearchText(id, tool, domain, action string, schema map[string]any) str
 	return strings.ToLower(strings.Join(parts, " "))
 }
 
-func scoreEntry(entry actionEntry, terms []string) int {
+type searchTerm struct {
+	Raw          string
+	Alternatives []string
+}
+
+func normalizeSearchTerms(query string) []searchTerm {
+	fields := strings.Fields(strings.ToLower(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(query)))
+	terms := make([]searchTerm, 0, len(fields))
+	for _, field := range fields {
+		alternatives := []string{field}
+		if synonyms, ok := searchSynonyms()[field]; ok {
+			alternatives = append(alternatives, synonyms...)
+		}
+		if verbs, ok := verbSynonyms()[field]; ok {
+			alternatives = append(alternatives, verbs...)
+		}
+		terms = append(terms, searchTerm{Raw: field, Alternatives: dedupeStrings(alternatives)})
+	}
+	return terms
+}
+
+func dedupeStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(strings.ToLower(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func searchSynonyms() map[string][]string {
+	return map[string][]string{
+		"access":     {"token", "deploy", "member"},
+		"artifact":   {"job", "download"},
+		"ci":         {"pipeline", "job", "variable", "lint"},
+		"deploy":     {"deployment", "environment", "key"},
+		"deployment": {"deploy", "environment"},
+		"details":    {"get"},
+		"env":        {"environment"},
+		"file":       {"repository", "blob", "content"},
+		"info":       {"get"},
+		"metadata":   {"get", "details"},
+		"mr":         {"merge", "request", "merge_request"},
+		"read":       {"get", "file", "content"},
+		"repo":       {"repository", "file", "tree", "branch", "tag"},
+		"secret":     {"variable", "ci_variable", "token"},
+		"show":       {"get"},
+		"verify":     {"get"},
+		"webhook":    {"hook"},
+		"webhooks":   {"hook"},
+		"yaml":       {"ci", "lint", "template"},
+		"yml":        {"ci", "lint", "template"},
+	}
+}
+
+func verbSynonyms() map[string][]string {
+	return map[string][]string{
+		"add":       {"create", "enable", "register"},
+		"cancel":    {"stop"},
+		"close":     {"update", "state_event", "closed"},
+		"disable":   {"delete", "remove", "stop"},
+		"download":  {"artifact", "trace", "raw", "content"},
+		"destroy":   {"delete", "remove"},
+		"enable":    {"add", "create", "register"},
+		"lock":      {"protect"},
+		"remove":    {"delete"},
+		"rerun":     {"retry"},
+		"revoke":    {"delete", "remove"},
+		"run":       {"play", "create", "trigger"},
+		"unlock":    {"unprotect"},
+		"unapprove": {"reset", "approval"},
+	}
+}
+
+func actionTags(id, domain, action string, schema map[string]any) []string {
+	var tags []string
+	add := func(values ...string) {
+		for _, value := range values {
+			value = strings.TrimSpace(strings.ToLower(value))
+			if value != "" {
+				tags = append(tags, value)
+			}
+		}
+	}
+
+	switch {
+	case strings.Contains(id, "hook_"):
+		add("webhook", "web hook", "project webhook")
+	case strings.Contains(id, "deploy_key"):
+		add("deploy key", "ssh key", "access key")
+	case domain == "discover_project":
+		add("project discovery", "git remote", "remote url", "resolve project")
+	case domain == "interactive":
+		add("guided", "elicitation", "wizard", strings.ReplaceAll(action, "_", " "))
+	case strings.Contains(id, "token_project") || strings.Contains(id, "token_group") || strings.Contains(id, "token_personal"):
+		add("access token", "project access token", "personal access token")
+	case domain == "repository" && strings.HasPrefix(action, "file_"):
+		add("repository file", "repo file", "file content")
+	case domain == "merge_request":
+		add("mr", "merge request")
+	case domain == "ci_variable":
+		add("ci variable", "secret", "environment variable")
+	case domain == "environment":
+		add("env", "deployment")
+	case domain == "job":
+		add("ci job", "pipeline job")
+	case domain == "pipeline":
+		add("ci pipeline")
+	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
+		add("protected environment", "environment protection")
+	case strings.Contains(id, "member_role"):
+		add("custom role", "member role")
+	}
+
+	if properties, ok := schema["properties"].(map[string]any); ok {
+		for name := range properties {
+			switch name {
+			case "state_event":
+				add("close", "reopen", "state")
+			case "ref":
+				add("branch", "tag", "commit")
+			case "file_path":
+				add("repository file", "path")
+			case "url":
+				add("webhook", "link")
+			}
+		}
+	}
+
+	return dedupeStrings(tags)
+}
+
+func (r *Registry) resolveAction(id string) (actionEntry, bool) {
+	id = strings.ToLower(strings.TrimSpace(id))
+	if entry, ok := r.byID[id]; ok {
+		return entry, true
+	}
+	canonical, ok := r.aliases[id]
+	if !ok {
+		return actionEntry{}, false
+	}
+	entry, ok := r.byID[canonical]
+	return entry, ok
+}
+
+func (r *Registry) unknownActionMessage(toolName, action string) string {
+	suggestions := r.suggestActionIDs(action, 5)
+	if len(suggestions) == 0 {
+		return fmt.Sprintf("%s: unknown action %q. Use gitlab_search_tools to find canonical action IDs.", toolName, action)
+	}
+	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_tool.", toolName, action, strings.Join(suggestions, ", "))
+}
+
+func (r *Registry) suggestActionIDs(query string, limit int) []string {
+	terms := normalizeSearchTerms(query)
+	if len(terms) == 0 {
+		return nil
+	}
+	type scoredEntry struct {
+		id    string
+		score int
+	}
+	scored := make([]scoredEntry, 0)
+	for _, entry := range r.entries {
+		score := 0
+		for _, term := range terms {
+			best := 0
+			for _, alternative := range term.Alternatives {
+				candidate := scoreSearchAlternative(entry, term.Raw, alternative)
+				if candidate > best {
+					best = candidate
+				}
+			}
+			if best > 0 {
+				score += best
+			}
+		}
+		if score > 0 {
+			scored = append(scored, scoredEntry{id: entry.ID, score: score})
+		}
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].id < scored[j].id
+	})
+	if len(scored) > limit {
+		scored = scored[:limit]
+	}
+	suggestions := make([]string, 0, len(scored))
+	for _, entry := range scored {
+		suggestions = append(suggestions, "`"+entry.id+"`")
+	}
+	return suggestions
+}
+
+func aliasesForCanonicalAction(id string) []string {
+	var aliases []string
+	for alias, canonical := range actionAliases() {
+		if canonical == id {
+			aliases = append(aliases, alias)
+		}
+	}
+	sort.Strings(aliases)
+	return aliases
+}
+
+func actionAliases() map[string]string {
+	return map[string]string{
+		"badge.create":                              "project.badge_add",
+		"badge.delete":                              "project.badge_delete",
+		"broadcast_message.create":                  "admin.broadcast_message_create",
+		"broadcast_message.delete":                  "admin.broadcast_message_delete",
+		"ci_catalog.resource_list":                  "ci_catalog.list",
+		"deploy_key.list":                           "access.deploy_key_list_project",
+		"deploy_token.create":                       "access.deploy_token_create_project",
+		"deploy_token.delete":                       "access.deploy_token_delete_project",
+		"deploy_token.get":                          "access.deploy_token_get_project",
+		"deploy_token.list":                         "access.deploy_token_list_project",
+		"enterprise_user.group_list":                "enterprise_user.list",
+		"external_status_check.list_project_checks": "external_status_check.list_project",
+		"feature_flag.list":                         "feature_flags.feature_flag_list",
+		"geo.node_list":                             "geo.list",
+		"gitlab_server.health_check":                "server.health_check",
+		"group.custom_member_roles_list":            "member_role.list_group",
+		"job.download_single_artifact":              "job.artifact_download",
+		"merge_train.list":                          "merge_train.list_project",
+		"merge_request.changes":                     "mr_review.changes_get",
+		"merge_request_note.create":                 "mr_review.note_create",
+		"merge_request_note.delete":                 "mr_review.note_delete",
+		"merge_request_note.get":                    "mr_review.note_get",
+		"merge_request_note.update":                 "mr_review.note_update",
+		"merge_request.add_spent_time":              "merge_request.spent_time_add",
+		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
+		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
+		"mr_review.publish":                         "mr_review.draft_note_publish_all",
+		"package.list_generic":                      "package.list",
+		"personal_snippet.raw":                      "snippet.content",
+		"project.hooks.list":                        "project.hook_list",
+		"project.member_remove":                     "project.member_delete",
+		"project.member_update":                     "project.member_edit",
+		"project.schedule_storage_move":             "storage_move.schedule_project",
+		"project.status_check_list":                 "external_status_check.list_project",
+		"project_member.add":                        "project.member_add",
+		"project_member.delete":                     "project.member_delete",
+		"project_member.edit":                       "project.member_edit",
+		"project_member.get":                        "project.member_get",
+		"project_member.remove":                     "project.member_delete",
+		"project_member.update":                     "project.member_edit",
+		"project_access_token.create":               "access.token_project_create",
+		"project_access_token.revoke":               "access.token_project_revoke",
+		"repository_file.create":                    "repository.file_create",
+		"repository_file.delete":                    "repository.file_delete",
+		"repository_file.get":                       "repository.file_get",
+		"gitlab_discover_project":                   "discover_project.resolve",
+		"interactive_issue.create":                  "interactive.issue_create",
+		"interactive_issue_create":                  "interactive.issue_create",
+		"gitlab_interactive_issue_create":           "interactive.issue_create",
+		"gitlab_interactive_mr_create":              "interactive.mr_create",
+		"gitlab_interactive_project_create":         "interactive.project_create",
+		"gitlab_interactive_release_create":         "interactive.release_create",
+		"runner.delete":                             "runner.remove",
+		"webhook.add":                               "project.hook_add",
+		"webhook.create":                            "project.hook_add",
+		"webhook.delete":                            "project.hook_delete",
+	}
+}
+
+func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	if len(terms) == 0 {
 		return 0
 	}
 	score := 0
 	for _, term := range terms {
-		switch {
-		case entry.ID == term || entry.Action == term || entry.Domain == term:
-			score += 100
-		case strings.Contains(entry.ID, term):
-			score += 70
-		case strings.Contains(entry.Domain, term) || strings.Contains(entry.Action, term):
-			score += 50
-		case strings.Contains(entry.SearchText, term):
-			score += 20
-		default:
+		matched := false
+		best := 0
+		for _, alternative := range term.Alternatives {
+			candidateScore := scoreSearchAlternative(entry, term.Raw, alternative)
+			if candidateScore > best {
+				best = candidateScore
+			}
+			if candidateScore > 0 {
+				matched = true
+			}
+		}
+		if !matched {
 			return 0
 		}
+		score += best
 	}
 	return score
+}
+
+func scoreSearchAlternative(entry actionEntry, raw, alternative string) int {
+	switch {
+	case entry.ID == alternative:
+		return 120
+	case stringInSlice(entry.Aliases, alternative):
+		return 100
+	case entry.Action == alternative || entry.Domain == alternative:
+		return 80
+	case stringInSlice(entry.Tags, alternative):
+		return 90
+	case strings.Contains(entry.ID, alternative):
+		return 55
+	case strings.Contains(entry.Domain, alternative) || strings.Contains(entry.Action, alternative):
+		return 45
+	case strings.Contains(entry.SearchText, alternative):
+		if raw == alternative {
+			return 25
+		}
+		return 18
+	default:
+		return 0
+	}
+}
+
+func stringInSlice(values []string, needle string) bool {
+	return slices.Contains(values, needle)
 }
 
 func requiredParams(schema map[string]any) []string {

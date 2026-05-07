@@ -70,12 +70,14 @@ func main() {
 
 	metaBaseRoutes := captureMetaRoutes(client, false)
 	metaEnterpriseRoutes := captureMetaRoutes(client, true)
+	dynamicBaseRoutes := dynamictools.AddStandaloneRoutes(toolutil.CloneMetaSchemaRoutes(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicEnterpriseRoutes := dynamictools.AddStandaloneRoutes(toolutil.CloneMetaSchemaRoutes(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
 
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
-	dynamicBaseTools := listDynamicTools(metaBaseRoutes)
-	dynamicEnterpriseTools := listDynamicTools(metaEnterpriseRoutes)
+	dynamicBaseTools := listDynamicTools(dynamicBaseRoutes)
+	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseRoutes)
 
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
@@ -85,7 +87,7 @@ func main() {
 
 	individualResourceTokens := measureResources(client, nil)
 	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
-	dynamicBaseResourceTokens := measureResources(client, metaBaseRoutes)
+	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes)
 	promptTokens := measurePrompts(client)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
@@ -108,8 +110,8 @@ func main() {
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t0\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), countActions(metaBaseRoutes), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), countActions(metaBaseRoutes), fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
 	_ = tw.Flush()
 	fmt.Println()
 

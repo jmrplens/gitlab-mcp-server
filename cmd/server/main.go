@@ -604,6 +604,10 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
+		metaSchemaRoutes = dynamictools.AddStandaloneRoutes(metaSchemaRoutes, client, dynamictools.StandaloneOptions{
+			ReadOnly:     cfg.ReadOnly,
+			ExcludeTools: cfg.ExcludeTools,
+		})
 		dynamictools.RegisterTools(server, metaSchemaRoutes)
 	case config.ToolSurfaceMeta:
 		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -410,12 +411,84 @@ func TestFailureDiagnosticCategory_SeparatesPhase4Buckets(t *testing.T) {
 	}
 }
 
+// TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets verifies that
+// dynamic-mode failures map to discovery follow-up buckets.
+func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T) {
+	tests := []struct {
+		name  string
+		notes []string
+		want  string
+	}{
+		{name: "alias miss", notes: []string{"step 1: expected action repository.file_get, got repository_file.get"}, want: "alias_miss"},
+		{name: "standalone unavailable", notes: []string{"step 1: expected tool gitlab_discover_project, got gitlab_execute_tool; standalone tool uses top-level input fields, not params"}, want: "standalone_unavailable"},
+		{name: "params shape", notes: []string{"step 1: missing required params.project_id"}, want: "params_shape_miss"},
+		{name: "multi step order", notes: []string{"tool-call step limit reached after 2/3 scenario steps"}, want: "multi_step_order_miss"},
+		{name: "ce or sampling", notes: []string{"step 1 simulation sampling_unsupported_continue: simulated sampling capability unsupported"}, want: "ce_or_sampling_limitation"},
+		{name: "true discovery", notes: []string{"model returned no tool_use block"}, want: "true_discovery_miss"},
+	}
+	opts := options{ToolSurface: config.ToolSurfaceDynamic}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := taskResult{Notes: tt.notes}
+			if got := failureDiagnosticCategoryForResult(opts, result); got != tt.want {
+				t.Fatalf("failureDiagnosticCategoryForResult() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
+	hiddenRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	routes := dynamicValidationRoutes(hiddenRoutes)
+
+	tests := []struct {
+		tool       string
+		wantAction string
+	}{
+		{tool: "gitlab_discover_project", wantAction: "discover_project.resolve"},
+		{tool: "gitlab_interactive_issue_create", wantAction: "interactive.issue_create"},
+		{tool: "gitlab_interactive_mr_create", wantAction: "interactive.mr_create"},
+		{tool: "gitlab_interactive_project_create", wantAction: "interactive.project_create"},
+		{tool: "gitlab_interactive_release_create", wantAction: "interactive.release_create"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			gotTool, gotAction := normalizeExpectedDynamicRoute(tt.tool, "", routes)
+			if gotTool != dynamicExecuteTool || gotAction != tt.wantAction {
+				t.Fatalf("normalizeExpectedDynamicRoute() = %s/%s, want %s/%s", gotTool, gotAction, dynamicExecuteTool, tt.wantAction)
+			}
+		})
+	}
+}
+
+func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
+	hiddenRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	routes := dynamicValidationRoutes(hiddenRoutes)
+
+	content, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
+		Name: dynamicSearchTool,
+		Input: map[string]any{
+			"query": "remote url project",
+			"limit": float64(3),
+		},
+	})
+	if err != nil {
+		t.Fatalf("dynamicDiscoveryResult() error = %v", err)
+	}
+	if !strings.Contains(content, "discover_project.resolve") {
+		t.Fatalf("dynamicDiscoveryResult() = %s, want discover_project.resolve", content)
+	}
+}
+
 // TestTaskToolCallLimit_ScalesForLongWorkflows verifies that TaskToolCallLimit handles the scales for long workflows scenario correctly.
 func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
-	if got := taskToolCallLimit(3); got != toolCallLimit {
-		t.Fatalf("taskToolCallLimit(3) = %d, want baseline %d", got, toolCallLimit)
+	if got := taskToolCallLimit(3); got != 13 {
+		t.Fatalf("taskToolCallLimit(3) = %d, want enough turns for schema lookups and 3 steps", got)
 	}
-	if got := taskToolCallLimit(8); got != 20 {
+	if got := taskToolCallLimit(4); got != 16 {
+		t.Fatalf("taskToolCallLimit(4) = %d, want enough turns for schema lookups and 4 steps", got)
+	}
+	if got := taskToolCallLimit(8); got != 28 {
 		t.Fatalf("taskToolCallLimit(8) = %d, want enough turns for schema lookups and 8 steps", got)
 	}
 }
@@ -575,14 +648,14 @@ func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
 		},
 	}
 
-	search, err := dynamicDiscoveryResult(routes, modelContentBlock{Name: dynamicSearchTool, Input: map[string]any{"query": "project get"}})
+	search, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{Name: dynamicSearchTool, Input: map[string]any{"query": "project get"}})
 	if err != nil {
 		t.Fatalf("dynamicDiscoveryResult(search) error = %v", err)
 	}
 	if !strings.Contains(search, "project.get") {
 		t.Fatalf("search result = %s, want project.get", search)
 	}
-	describe, err := dynamicDiscoveryResult(routes, modelContentBlock{Name: dynamicDescribeTool, Input: map[string]any{"action": "project.get"}})
+	describe, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{Name: dynamicDescribeTool, Input: map[string]any{"action": "project.get"}})
 	if err != nil {
 		t.Fatalf("dynamicDiscoveryResult(describe) error = %v", err)
 	}
@@ -590,6 +663,31 @@ func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
 		if !strings.Contains(describe, want) {
 			t.Fatalf("describe result = %s, want %q", describe, want)
 		}
+	}
+}
+
+func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T) {
+	content := successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.badge_add"}, modelContentBlock{
+		Name: dynamicExecuteTool,
+		Input: map[string]any{
+			"action": "project.badge_add",
+			"params": map[string]any{"project_id": "my-org/project"},
+		},
+	}, 2, 4)
+
+	if !strings.Contains(content, `"badge_id":102`) || !strings.Contains(content, `"id":102`) {
+		t.Fatalf("successfulSimulatedToolContent() = %s, want badge id fields", content)
+	}
+
+	content = successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "mr_review.note_create"}, modelContentBlock{
+		Name: dynamicExecuteTool,
+		Input: map[string]any{
+			"action": "merge_request_note.create",
+			"params": map[string]any{"project_id": "my-org/project", "merge_request_iid": float64(7)},
+		},
+	}, 2, 4)
+	if !strings.Contains(content, `"note_id":104`) {
+		t.Fatalf("successfulSimulatedToolContent(alias) = %s, want note_id", content)
 	}
 }
 
