@@ -1803,6 +1803,9 @@ func StripMetaToolDescriptionPrefix(description string) string {
 	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
 		start++
 	}
+	if start >= len(lines) {
+		return description
+	}
 	return strings.Join(lines[start:], "\n")
 }
 

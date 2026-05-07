@@ -2448,7 +2448,7 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 					len(tool.Description), auditMinDescLen)
 			}
 			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, metaToolDescriptionAuditPhrase) {
-				t.Error("meta-tool description should point LLMs to the per-action schema resource")
+				t.Errorf("meta-tool description should contain %q, got %q", metaToolDescriptionAuditPhrase, tool.Description)
 			}
 		})
 	}

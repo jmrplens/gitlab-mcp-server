@@ -971,7 +971,7 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 	}
 	desc, _ := paramsProp["description"].(string)
 	if desc != metaToolParamsDescription {
-		t.Errorf("params.description = %q, want canonical metaToolParamsDescription", desc)
+		t.Errorf("params.description = %q, want %q", desc, metaToolParamsDescription)
 	}
 	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
 		t.Error("params.description should mention the schema resource URI")
@@ -1087,13 +1087,22 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 // TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix verifies the generated
 // concise prefix is removed before documentation summaries are rendered.
 func TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix(t *testing.T) {
-	description := "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\n" +
-		"Action params schema: gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
-		"Manage GitLab issues."
+	description := MetaToolDescriptionPrefix("gitlab_issue", ActionMap{"create": Route(nil)}) + "Manage GitLab issues."
 
 	got := StripMetaToolDescriptionPrefix(description)
 	if got != "Manage GitLab issues." {
 		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want real description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_PreservesPrefixOnlyDescription verifies the
+// defensive fallback for future callers that pass only the generated prefix.
+func TestStripMetaToolDescriptionPrefix_PreservesPrefixOnlyDescription(t *testing.T) {
+	description := MetaToolDescriptionPrefix("gitlab_issue", ActionMap{"create": Route(nil)})
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != description {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want original description", got)
 	}
 }
 
