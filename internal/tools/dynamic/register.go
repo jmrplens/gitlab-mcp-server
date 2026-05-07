@@ -186,7 +186,7 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         findToolName,
 		Title:        "GitLab Find Action",
-		Description:  "Find hidden GitLab actions and return exact params schemas, safety metadata, and execute examples for the top matches. Use this before gitlab_execute_tool when the canonical action ID or params schema is not exact.",
+		Description:  "Find hidden GitLab actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known—do NOT invent action IDs.",
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Find Action"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -197,7 +197,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one hidden GitLab action by canonical action ID. Use gitlab_describe_tools or gitlab_find_action first when the canonical action ID or exact params schema is not already known. Destructive actions require confirm=true.",
+		Description: "Execute one hidden GitLab action by canonical action ID (e.g. domain.action). ALWAYS use gitlab_find_action first unless the exact action ID and all required param names are already known—do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true. If params are missing, use gitlab_find_action to retrieve the exact schema.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: toolutil.BoolPtr(true),
