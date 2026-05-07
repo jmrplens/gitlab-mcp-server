@@ -24,7 +24,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_issue_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_issue_create"),
 		Description: "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\n" +
-			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all issue fields are elicited. Requires permission to create issues in that project.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all other issue fields are elicited. Requires permission to create issues in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- title (string, required) — issue title.\n" +
 			"- description (string, optional, multi-line, Markdown) — leave empty to skip.\n" +
@@ -34,7 +34,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop issue creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state).\n\nSee also: gitlab_issue.",
+			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid maps GitLab's iid field.\n\nSee also: gitlab_issue.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input IssueInput) (*mcp.CallToolResult, issues.Output, error) {
@@ -57,7 +57,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_mr_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_mr_create"),
 		Description: "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\n" +
-			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all MR fields are elicited. Requires permission to create merge requests in that project.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all other MR fields are elicited. Requires permission to create merge requests in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- source_branch (string, required) — branch with the changes to merge.\n" +
 			"- target_branch (string, required) — branch to merge into (e.g. main, develop).\n" +
@@ -70,7 +70,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop MR creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
+			"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid maps GitLab's iid field.\n\nSee also: gitlab_merge_request, gitlab_branch.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, mergerequests.Output, error) {
@@ -93,7 +93,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_interactive_release_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_release_create"),
 		Description: "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
-			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all release fields are elicited. Requires permission to create releases in that project.\n\n" +
+			"Input: project_id (numeric ID or URL-encoded path) selects the target project; all other release fields are elicited. Requires permission to create releases in that project.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').\n" +
 			"- name (string, optional) — release title; defaults to tag_name when left empty.\n" +
@@ -135,6 +135,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n" +
 			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
+			"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group.",
 		Annotations: toolutil.CreateAnnotations,

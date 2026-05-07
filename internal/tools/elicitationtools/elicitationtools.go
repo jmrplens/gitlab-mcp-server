@@ -291,7 +291,10 @@ type mrSummaryParams struct {
 	Squash       *bool
 }
 
-// buildMRSummary constructs the request parameters from the input.
+// buildMRSummary returns a Markdown confirmation summary for an interactive
+// merge request creation flow. It includes the project, title, source and target
+// branches, and omits optional sections for empty description, labels, remove
+// source branch, and squash values.
 func buildMRSummary(p mrSummaryParams) string {
 	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s → **Target**: %s",
 		p.ProjectID, p.Title, p.SourceBranch, p.TargetBranch)

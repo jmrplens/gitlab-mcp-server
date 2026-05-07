@@ -16,11 +16,9 @@ import (
 // the domain text, protecting README generation from regressing to unhelpful
 // envelope/example descriptions.
 func TestDescriptionSummary_StripsGeneratedMetaToolPrefix(t *testing.T) {
-	description := "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\n" +
-		"Action params schema: gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
-		"Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive."
+	tool := testMetaTool("gitlab_issue", "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.", "create", "list")
 
-	got := descriptionSummary(description)
+	got := descriptionSummary(tool.Description)
 	want := "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji."
 	if got != want {
 		t.Fatalf("descriptionSummary() = %q, want %q", got, want)

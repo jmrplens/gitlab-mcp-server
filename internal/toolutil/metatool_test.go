@@ -970,6 +970,9 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 		t.Errorf("params.additionalProperties = %v, want true", paramsProp["additionalProperties"])
 	}
 	desc, _ := paramsProp["description"].(string)
+	if desc != metaToolParamsDescription {
+		t.Errorf("params.description = %q, want canonical metaToolParamsDescription", desc)
+	}
 	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
 		t.Error("params.description should mention the schema resource URI")
 	}

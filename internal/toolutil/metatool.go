@@ -1706,10 +1706,16 @@ func currentMetaParamSchemaMode() string {
 	return metaParamSchemaMode
 }
 
-// paramsResourceHint is appended to the description of the params property
-// in every meta-tool input schema, regardless of mode. It points the LLM at
-// the per-action JSON Schema available via the gitlab://schema/meta resource.
-const paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+const (
+	// paramsResourceHint is appended to the description of the params property
+	// in every meta-tool input schema, regardless of mode. It points the LLM at
+	// the per-action JSON Schema available via the gitlab://schema/meta resource.
+	paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+
+	// metaToolParamsDescription is the canonical description for the params
+	// property generated in every meta-tool input schema.
+	metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint
+)
 
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
 // chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
@@ -1735,7 +1741,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint,
+				"description":          metaToolParamsDescription,
 				"additionalProperties": true,
 			},
 		},

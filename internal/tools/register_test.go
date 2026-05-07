@@ -2076,10 +2076,15 @@ var toolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)+
 // metaToolNameRe matches meta-tool names like gitlab_{domain}[_{subdomain}].
 var metaToolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)*$`)
 
-// auditMinDescLen is the minimum useful MCP tool description length enforced
-// by metadata audits.
-// Tool metadata audit thresholds.
-const auditMinDescLen = 20
+const (
+	// auditMinDescLen is the minimum useful MCP tool description length enforced
+	// by metadata audits.
+	auditMinDescLen = 20
+
+	// metaToolDescriptionAuditPhrase is the schema-resource phrase every
+	// action-based meta-tool description must include.
+	metaToolDescriptionAuditPhrase = "Action params schema:"
+)
 
 // auditHandler returns an HTTP handler that responds to all GitLab API
 // requests with minimal valid JSON. Audit tests only need to register
@@ -2442,7 +2447,7 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 				t.Errorf("description too short (%d chars, minimum %d)",
 					len(tool.Description), auditMinDescLen)
 			}
-			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "Action params schema:") {
+			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, metaToolDescriptionAuditPhrase) {
 				t.Error("meta-tool description should point LLMs to the per-action schema resource")
 			}
 		})
