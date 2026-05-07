@@ -316,6 +316,46 @@ func TestExecute_UnknownActionSuggestsCanonicalIDs(t *testing.T) {
 	}
 }
 
+func TestExecute_RejectsAmbiguousAlias(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "danger.delete", Params: map[string]any{"project_id": 123}, Confirm: true})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	text := textContent(result)
+	if !strings.Contains(text, "ambiguous") || !strings.Contains(text, "`project.delete`") || !strings.Contains(text, "`package.delete`") {
+		t.Fatalf("Execute() error text = %q, want ambiguous canonical suggestions", text)
+	}
+}
+
+func TestDescribe_RejectsAmbiguousAlias(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "danger.delete"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Describe() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Actions) != 0 {
+		t.Fatalf("Describe() output = %+v, want empty output", output)
+	}
+}
+
 func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -560,6 +600,12 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"packages": true}, nil
 				},
+			},
+			"delete": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"deleted": true}, nil
+				},
+				Destructive: true,
 			},
 		},
 	}

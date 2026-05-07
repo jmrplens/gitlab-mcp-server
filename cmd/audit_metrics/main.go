@@ -28,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -73,6 +74,12 @@ func main() {
 	metaBase := listServerTools(client, true, false)
 	metaEnterprise := listServerTools(client, true, true)
 	metaGitLabComEnterprise := listServerTools(gitLabComClient, true, true)
+	dynamicBaseRoutes := dynamicActionRoutes(client, false)
+	dynamicEnterpriseRoutes := dynamicActionRoutes(client, true)
+	dynamicGitLabComEnterpriseRoutes := dynamicActionRoutes(gitLabComClient, true)
+	dynamicBase := listDynamicTools(dynamicBaseRoutes)
+	dynamicEnterprise := listDynamicTools(dynamicEnterpriseRoutes)
+	dynamicGitLabComEnterprise := listDynamicTools(dynamicGitLabComEnterpriseRoutes)
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -111,6 +118,12 @@ func main() {
 	printRow("Meta-tools (base)", len(metaBase))
 	printRow("Meta-tools (self-managed enterprise)", len(metaEnterprise))
 	printRow("Meta-tools (GitLab.com enterprise)", len(metaGitLabComEnterprise))
+	printRow("Dynamic tools (base)", len(dynamicBase))
+	printRow("Dynamic tools (self-managed enterprise)", len(dynamicEnterprise))
+	printRow("Dynamic tools (GitLab.com enterprise)", len(dynamicGitLabComEnterprise))
+	printRow("Dynamic hidden actions (base)", countActionRoutes(dynamicBaseRoutes))
+	printRow("Dynamic hidden actions (self-managed enterprise)", countActionRoutes(dynamicEnterpriseRoutes))
+	printRow("Dynamic hidden actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
 	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
 	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
 	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
@@ -175,19 +188,36 @@ func main() {
 	}
 }
 
-// listServerTools registers tools on an in-memory MCP server and returns
-// the full tool list. When meta is true, meta-tools are registered.
-// Enterprise controls whether Enterprise/Premium meta-tools are included.
-func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
-	opts := &mcp.ServerOptions{PageSize: 2000}
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
-
-	if meta {
+// dynamicActionRoutes builds the hidden dynamic action catalog from production
+// meta routes and the standalone tools included in dynamic mode.
+func dynamicActionRoutes(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
+	routes := toolutil.CaptureMetaRoutes(func() {
 		tools.RegisterAllMeta(server, client, enterprise)
-	} else {
-		tools.RegisterAll(server, client, true)
-	}
+		tools.RegisterMCPMeta(server, client, nil)
+	})
+	return dynamictools.AddStandaloneRoutes(routes, client, dynamictools.StandaloneOptions{})
+}
 
+// listDynamicTools registers the low-token dynamic public toolset backed by
+// hidden action routes and returns the advertised tool definitions.
+func listDynamicTools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000})
+	dynamictools.RegisterTools(server, routes)
+	return listToolsFromServer(server)
+}
+
+// countActionRoutes counts hidden action routes in a dynamic/meta route map.
+func countActionRoutes(routes map[string]toolutil.ActionMap) int {
+	count := 0
+	for _, actions := range routes {
+		count += len(actions)
+	}
+	return count
+}
+
+// listToolsFromServer connects to server in-memory and returns advertised tools.
+func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
@@ -207,9 +237,25 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
 	}
 	return result.Tools
+}
+
+// listServerTools registers tools on an in-memory MCP server and returns
+// the full tool list. When meta is true, meta-tools are registered.
+// Enterprise controls whether Enterprise/Premium meta-tools are included.
+func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+	opts := &mcp.ServerOptions{PageSize: 2000}
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
+
+	if meta {
+		tools.RegisterAllMeta(server, client, enterprise)
+	} else {
+		tools.RegisterAll(server, client, true)
+	}
+
+	return listToolsFromServer(server)
 }
 
 // countResources registers all MCP resources and returns static and template counts.

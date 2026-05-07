@@ -105,10 +105,11 @@ type toolHandler func(context.Context, *mcp.CallToolRequest, toolutil.MetaToolIn
 
 // Registry holds a deterministic hidden action index and dispatch handlers.
 type Registry struct {
-	entries  []actionEntry
-	byID     map[string]actionEntry
-	aliases  map[string]string
-	handlers map[string]toolHandler
+	entries          []actionEntry
+	byID             map[string]actionEntry
+	aliases          map[string]string
+	ambiguousAliases map[string][]string
+	handlers         map[string]toolHandler
 }
 
 // RegisterTools registers the dynamic search, describe, and execute tools.
@@ -147,12 +148,18 @@ func RegisterTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
 func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
+	return newRegistry(routes, actionAliases())
+}
+
+func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *Registry {
 	routes = toolutil.CloneMetaSchemaRoutes(routes)
 	registry := &Registry{
-		byID:     make(map[string]actionEntry),
-		aliases:  make(map[string]string),
-		handlers: make(map[string]toolHandler),
+		byID:             make(map[string]actionEntry),
+		aliases:          make(map[string]string),
+		ambiguousAliases: make(map[string][]string),
+		handlers:         make(map[string]toolHandler),
 	}
+	aliasTargets := make(map[string][]string)
 
 	toolNames := make([]string, 0, len(routes))
 	for tool := range routes {
@@ -174,30 +181,43 @@ func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
 			route := actions[action]
 			domain := domainFromTool(tool)
 			id := domain + "." + action
-			aliases := aliasesForCanonicalAction(id)
+			entryAliases := aliasesForCanonicalAction(id, aliases)
 			tags := actionTags(id, domain, action, route.InputSchema)
 			entry := actionEntry{
 				ID:             id,
 				Tool:           tool,
 				Domain:         domain,
 				Action:         action,
-				Aliases:        aliases,
+				Aliases:        entryAliases,
 				Tags:           tags,
 				SchemaURI:      toolutil.MetaSchemaURI(tool, action),
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
-				SearchText:     buildSearchText(id, tool, domain, action, aliases, tags, route.InputSchema),
+				SearchText:     buildSearchText(id, tool, domain, action, entryAliases, tags, route.InputSchema),
 				Route:          route,
 			}
 			registry.entries = append(registry.entries, entry)
 			registry.byID[id] = entry
-			for _, alias := range aliases {
-				registry.aliases[alias] = id
+			for _, alias := range entryAliases {
+				aliasTargets[alias] = append(aliasTargets[alias], id)
 			}
 		}
 	}
+	registry.indexAliases(aliasTargets)
 
 	return registry
+}
+
+func (r *Registry) indexAliases(aliasTargets map[string][]string) {
+	for alias, targets := range aliasTargets {
+		targets = dedupeStrings(targets)
+		sort.Strings(targets)
+		if len(targets) == 1 {
+			r.aliases[alias] = targets[0]
+			continue
+		}
+		r.ambiguousAliases[alias] = targets
+	}
 }
 
 // Search finds hidden GitLab actions by lexical matching over action metadata.
@@ -381,6 +401,12 @@ func dedupeStrings(values []string) []string {
 	return out
 }
 
+func dedupeSortedStrings(values []string) []string {
+	out := dedupeStrings(values)
+	sort.Strings(out)
+	return out
+}
+
 func searchSynonyms() map[string][]string {
 	return map[string][]string{
 		"access":     {"token", "deploy", "member"},
@@ -488,6 +514,9 @@ func (r *Registry) resolveAction(id string) (actionEntry, bool) {
 	if entry, ok := r.byID[id]; ok {
 		return entry, true
 	}
+	if _, ambiguous := r.ambiguousAliases[id]; ambiguous {
+		return actionEntry{}, false
+	}
 	canonical, ok := r.aliases[id]
 	if !ok {
 		return actionEntry{}, false
@@ -497,11 +526,20 @@ func (r *Registry) resolveAction(id string) (actionEntry, bool) {
 }
 
 func (r *Registry) unknownActionMessage(toolName, action string) string {
+	if targets := r.ambiguousAliasTargets(action); len(targets) > 0 {
+		return fmt.Sprintf("%s: action alias %q is ambiguous. Use one canonical action ID explicitly: %s.", toolName, action, strings.Join(backtickStrings(targets), ", "))
+	}
 	suggestions := r.suggestActionIDs(action, 5)
 	if len(suggestions) == 0 {
 		return fmt.Sprintf("%s: unknown action %q. Use gitlab_search_tools to find canonical action IDs.", toolName, action)
 	}
 	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_tool.", toolName, action, strings.Join(suggestions, ", "))
+}
+
+func (r *Registry) ambiguousAliasTargets(action string) []string {
+	action = strings.ToLower(strings.TrimSpace(action))
+	targets := append([]string(nil), r.ambiguousAliases[action]...)
+	return targets
 }
 
 func (r *Registry) suggestActionIDs(query string, limit int) []string {
@@ -543,80 +581,96 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 	}
 	suggestions := make([]string, 0, len(scored))
 	for _, entry := range scored {
-		suggestions = append(suggestions, "`"+entry.id+"`")
+		suggestions = append(suggestions, backtickString(entry.id))
 	}
 	return suggestions
 }
 
-func aliasesForCanonicalAction(id string) []string {
-	var aliases []string
-	for alias, canonical := range actionAliases() {
-		if canonical == id {
-			aliases = append(aliases, alias)
-		}
+func backtickStrings(values []string) []string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, backtickString(value))
 	}
-	sort.Strings(aliases)
-	return aliases
+	return quoted
 }
 
-func actionAliases() map[string]string {
-	return map[string]string{
-		"badge.create":                              "project.badge_add",
-		"badge.delete":                              "project.badge_delete",
-		"broadcast_message.create":                  "admin.broadcast_message_create",
-		"broadcast_message.delete":                  "admin.broadcast_message_delete",
-		"ci_catalog.resource_list":                  "ci_catalog.list",
-		"deploy_key.list":                           "access.deploy_key_list_project",
-		"deploy_token.create":                       "access.deploy_token_create_project",
-		"deploy_token.delete":                       "access.deploy_token_delete_project",
-		"deploy_token.get":                          "access.deploy_token_get_project",
-		"deploy_token.list":                         "access.deploy_token_list_project",
-		"enterprise_user.group_list":                "enterprise_user.list",
-		"external_status_check.list_project_checks": "external_status_check.list_project",
-		"feature_flag.list":                         "feature_flags.feature_flag_list",
-		"geo.node_list":                             "geo.list",
-		"gitlab_server.health_check":                "server.health_check",
-		"group.custom_member_roles_list":            "member_role.list_group",
-		"job.download_single_artifact":              "job.artifact_download",
-		"merge_train.list":                          "merge_train.list_project",
-		"merge_request.changes":                     "mr_review.changes_get",
-		"merge_request_note.create":                 "mr_review.note_create",
-		"merge_request_note.delete":                 "mr_review.note_delete",
-		"merge_request_note.get":                    "mr_review.note_get",
-		"merge_request_note.update":                 "mr_review.note_update",
-		"merge_request.add_spent_time":              "merge_request.spent_time_add",
-		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
-		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
-		"mr_review.publish":                         "mr_review.draft_note_publish_all",
-		"package.list_generic":                      "package.list",
-		"personal_snippet.raw":                      "snippet.content",
-		"project.hooks.list":                        "project.hook_list",
-		"project.member_remove":                     "project.member_delete",
-		"project.member_update":                     "project.member_edit",
-		"project.schedule_storage_move":             "storage_move.schedule_project",
-		"project.status_check_list":                 "external_status_check.list_project",
-		"project_member.add":                        "project.member_add",
-		"project_member.delete":                     "project.member_delete",
-		"project_member.edit":                       "project.member_edit",
-		"project_member.get":                        "project.member_get",
-		"project_member.remove":                     "project.member_delete",
-		"project_member.update":                     "project.member_edit",
-		"project_access_token.create":               "access.token_project_create",
-		"project_access_token.revoke":               "access.token_project_revoke",
-		"repository_file.create":                    "repository.file_create",
-		"repository_file.delete":                    "repository.file_delete",
-		"repository_file.get":                       "repository.file_get",
-		"gitlab_discover_project":                   "discover_project.resolve",
-		"interactive_issue.create":                  "interactive.issue_create",
-		"interactive_issue_create":                  "interactive.issue_create",
-		"gitlab_interactive_issue_create":           "interactive.issue_create",
-		"gitlab_interactive_mr_create":              "interactive.mr_create",
-		"gitlab_interactive_project_create":         "interactive.project_create",
-		"gitlab_interactive_release_create":         "interactive.release_create",
-		"runner.delete":                             "runner.remove",
-		"webhook.add":                               "project.hook_add",
-		"webhook.create":                            "project.hook_add",
-		"webhook.delete":                            "project.hook_delete",
+func backtickString(value string) string {
+	return "`" + value + "`"
+}
+
+func aliasesForCanonicalAction(id string, allAliases []actionAlias) []string {
+	var aliases []string
+	for _, actionAlias := range allAliases {
+		if actionAlias.Canonical == id {
+			aliases = append(aliases, actionAlias.Alias)
+		}
+	}
+	return dedupeSortedStrings(aliases)
+}
+
+type actionAlias struct {
+	Alias     string
+	Canonical string
+}
+
+func actionAliases() []actionAlias {
+	return []actionAlias{
+		{Alias: "badge.create", Canonical: "project.badge_add"},
+		{Alias: "badge.delete", Canonical: "project.badge_delete"},
+		{Alias: "broadcast_message.create", Canonical: "admin.broadcast_message_create"},
+		{Alias: "broadcast_message.delete", Canonical: "admin.broadcast_message_delete"},
+		{Alias: "ci_catalog.resource_list", Canonical: "ci_catalog.list"},
+		{Alias: "deploy_key.list", Canonical: "access.deploy_key_list_project"},
+		{Alias: "deploy_token.create", Canonical: "access.deploy_token_create_project"},
+		{Alias: "deploy_token.delete", Canonical: "access.deploy_token_delete_project"},
+		{Alias: "deploy_token.get", Canonical: "access.deploy_token_get_project"},
+		{Alias: "deploy_token.list", Canonical: "access.deploy_token_list_project"},
+		{Alias: "enterprise_user.group_list", Canonical: "enterprise_user.list"},
+		{Alias: "external_status_check.list_project_checks", Canonical: "external_status_check.list_project"},
+		{Alias: "feature_flag.list", Canonical: "feature_flags.feature_flag_list"},
+		{Alias: "geo.node_list", Canonical: "geo.list"},
+		{Alias: "gitlab_server.health_check", Canonical: "server.health_check"},
+		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},
+		{Alias: "job.download_single_artifact", Canonical: "job.artifact_download"},
+		{Alias: "merge_train.list", Canonical: "merge_train.list_project"},
+		{Alias: "merge_request.changes", Canonical: "mr_review.changes_get"},
+		{Alias: "merge_request_note.create", Canonical: "mr_review.note_create"},
+		{Alias: "merge_request_note.delete", Canonical: "mr_review.note_delete"},
+		{Alias: "merge_request_note.get", Canonical: "mr_review.note_get"},
+		{Alias: "merge_request_note.update", Canonical: "mr_review.note_update"},
+		{Alias: "merge_request.add_spent_time", Canonical: "merge_request.spent_time_add"},
+		{Alias: "merge_request.set_time_estimate", Canonical: "merge_request.time_estimate_set"},
+		{Alias: "mr_review.draft_notes_publish", Canonical: "mr_review.draft_note_publish_all"},
+		{Alias: "mr_review.publish", Canonical: "mr_review.draft_note_publish_all"},
+		{Alias: "package.list_generic", Canonical: "package.list"},
+		{Alias: "personal_snippet.raw", Canonical: "snippet.content"},
+		{Alias: "project.hooks.list", Canonical: "project.hook_list"},
+		{Alias: "project.member_remove", Canonical: "project.member_delete"},
+		{Alias: "project.member_update", Canonical: "project.member_edit"},
+		{Alias: "project.schedule_storage_move", Canonical: "storage_move.schedule_project"},
+		{Alias: "project.status_check_list", Canonical: "external_status_check.list_project"},
+		{Alias: "project_member.add", Canonical: "project.member_add"},
+		{Alias: "project_member.delete", Canonical: "project.member_delete"},
+		{Alias: "project_member.edit", Canonical: "project.member_edit"},
+		{Alias: "project_member.get", Canonical: "project.member_get"},
+		{Alias: "project_member.remove", Canonical: "project.member_delete"},
+		{Alias: "project_member.update", Canonical: "project.member_edit"},
+		{Alias: "project_access_token.create", Canonical: "access.token_project_create"},
+		{Alias: "project_access_token.revoke", Canonical: "access.token_project_revoke"},
+		{Alias: "repository_file.create", Canonical: "repository.file_create"},
+		{Alias: "repository_file.delete", Canonical: "repository.file_delete"},
+		{Alias: "repository_file.get", Canonical: "repository.file_get"},
+		{Alias: "gitlab_discover_project", Canonical: "discover_project.resolve"},
+		{Alias: "interactive_issue.create", Canonical: "interactive.issue_create"},
+		{Alias: "interactive_issue_create", Canonical: "interactive.issue_create"},
+		{Alias: "gitlab_interactive_issue_create", Canonical: "interactive.issue_create"},
+		{Alias: "gitlab_interactive_mr_create", Canonical: "interactive.mr_create"},
+		{Alias: "gitlab_interactive_project_create", Canonical: "interactive.project_create"},
+		{Alias: "gitlab_interactive_release_create", Canonical: "interactive.release_create"},
+		{Alias: "runner.delete", Canonical: "runner.remove"},
+		{Alias: "webhook.add", Canonical: "project.hook_add"},
+		{Alias: "webhook.create", Canonical: "project.hook_add"},
+		{Alias: "webhook.delete", Canonical: "project.hook_delete"},
 	}
 }
 
