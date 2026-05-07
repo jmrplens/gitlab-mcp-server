@@ -43,6 +43,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                 |
 | `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio. Establécelo a `false` para herramientas individuales                           |
 | `--tool-surface`         | _(vacío)_                    | Selector explícito del catálogo: `meta`, `individual` o `dynamic`; sobrescribe `--meta-tools`                          |
+| `--capability-surface`   | `full`                       | Selector del catálogo de recursos y prompts: `full` o `minimal`                                                        |
 | `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                          |
 | `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                          |
 | `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                      |
@@ -66,9 +67,9 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 ### Precedencia de configuración
 
-Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode` y `--trusted-proxy-header` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
+Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode` y `--trusted-proxy-header` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
 
-Si un cliente envía cabeceras con aspecto de configuración, como `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores.
+Si un cliente envía cabeceras con aspecto de configuración, como `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores.
 
 ## Autenticación
 

@@ -227,6 +227,8 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
+
 Meta-tool summary:
 
 <!-- START TOOLS -->

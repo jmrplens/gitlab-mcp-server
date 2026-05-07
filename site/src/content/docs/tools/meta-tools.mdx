@@ -274,10 +274,11 @@ You can check which tools your server has registered by looking at the startup l
 
 ## Configuration
 
-| Variable            | Default  | Description                                                                                                                                               |
-| ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `META_TOOLS`        | `true`   | Tool catalog selector: `true` for meta-tools, `false` for individual tools, or `dynamic` for the low-token dynamic surface.                               |
-| `TOOL_SURFACE`      | —        | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. When set, it overrides `META_TOOLS`.                                                  |
-| `META_PARAM_SCHEMA` | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Schema resources remain available in every mode. |
-| `GITLAB_ENTERPRISE` | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                              |
-| `--enterprise`      | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                            |
+| Variable             | Default  | Description                                                                                                                                                                                |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `META_TOOLS`         | `true`   | Tool catalog selector: `true` for meta-tools, `false` for individual tools, or `dynamic` for the low-token dynamic surface.                                                                |
+| `TOOL_SURFACE`       | —        | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. When set, it overrides `META_TOOLS`.                                                                                   |
+| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and omits optional resources and prompts.                                         |
+| `META_PARAM_SCHEMA`  | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Schema resources remain available unless `CAPABILITY_SURFACE=minimal` is enabled. |
+| `GITLAB_ENTERPRISE`  | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                                                               |
+| `--enterprise`       | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                                                             |

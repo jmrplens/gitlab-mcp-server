@@ -47,6 +47,22 @@ func TestMeasureResources_SeparatesMetaSchema(t *testing.T) {
 	}
 }
 
+// TestMeasureResourcesWithOptions_MinimalCandidate verifies the dynamic-minimal
+// candidate keeps a measurable project-discovery resource while dropping the
+// heavier optional resource groups.
+func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
+	client := newAuditTokensClient(t)
+	fullDynamicTokens := measureResources(client, captureMetaRoutes(client, false))
+	minimalTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
+
+	if minimalTokens <= 0 {
+		t.Fatalf("minimal resource tokens = %d, want positive workspace_roots estimate", minimalTokens)
+	}
+	if minimalTokens >= fullDynamicTokens {
+		t.Fatalf("minimal resource tokens = %d, want less than full dynamic %d", minimalTokens, fullDynamicTokens)
+	}
+}
+
 // TestListDynamicTools_ExposesLowTokenSurface verifies the dynamic audit path
 // measures the three public tools backed by the hidden route registry.
 func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {

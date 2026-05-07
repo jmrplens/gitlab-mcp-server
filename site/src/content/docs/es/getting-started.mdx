@@ -95,6 +95,7 @@ El host debe proporcionar estas variables antes de habilitar el plugin:
 | `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                   |
 | `META_TOOLS`             | No          | Selector del catálogo: `true`, `false` o `dynamic` (por defecto `true`)                                       |
 | `TOOL_SURFACE`           | No          | Selector explícito del catálogo: `meta`, `individual` o `dynamic`                                             |
+| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                          |
 | `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                     |
 | `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                      |
 | `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                             |
@@ -488,6 +489,8 @@ Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automá
 Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) para la referencia completa.
 
 Para el catálogo visible más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo registro oculto de acciones de GitLab.
+
+Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y omitir recursos y prompts opcionales cuando necesites el contexto MCP inicial más pequeño.
 :::
 
 ## Próximos pasos

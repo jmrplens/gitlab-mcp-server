@@ -158,6 +158,8 @@ To register the low-token dynamic toolset instead, set:
 TOOL_SURFACE=dynamic
 ```
 
+For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts while leaving dynamic action search, describe, and execute available.
+
 See [Meta-Tools](meta-tools.md) for the full reference.
 
 ---
@@ -181,6 +183,7 @@ The host passes these environment variables through to the container:
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
 | `META_TOOLS`             | No       | Tool catalog selector: `true`, `false`, or `dynamic` (default `true`) |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, or `dynamic` |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Premium/Ultimate tools (default `false`)          |
 | `GITLAB_READ_ONLY`       | No       | Disable mutating tools (default `false`)                 |
 | `GITLAB_SAFE_MODE`       | No       | Preview mutating tool inputs (default `false`)           |

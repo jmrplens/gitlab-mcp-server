@@ -40,6 +40,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
 | `-tool-surface` | string | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. Overrides `--meta-tools` when set |
+| `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and disables optional resources and prompts |
 | `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. See [env-reference.md](env-reference.md) |
 | `-enterprise` | bool | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
@@ -163,6 +164,9 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --meta-tools=false
 
 # Start HTTP server with the low-token dynamic toolset
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
+
+# Start HTTP server with the dynamic toolset and minimal non-tool capabilities
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
 
 # Start with auto-update in check-only mode
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check

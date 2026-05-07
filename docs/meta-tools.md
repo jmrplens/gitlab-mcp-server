@@ -53,6 +53,7 @@ TOOL_SURFACE=dynamic
 
 The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It reuses the same
 underlying meta-tool routes and safety checks, but hides the full action catalog from the initial `tools/list` response.
+Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources and prompts.
 
 ---
 
@@ -277,7 +278,7 @@ If the MCP client supports elicitation, the server will ask for user confirmatio
 
 Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
 
-1. **MCP Resource** (recommended, works in every mode) — read the per-action JSON Schema:
+1. **MCP Resource** (recommended, available unless `CAPABILITY_SURFACE=minimal` is enabled) — read the per-action JSON Schema:
 
    ```text
    gitlab://schema/meta/{tool}/{action}

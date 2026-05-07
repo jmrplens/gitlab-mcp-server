@@ -50,6 +50,7 @@ gitlab-mcp-server --http \
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
 | `--meta-tools` | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
 | `--tool-surface` | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
+| `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--read-only` | `false` | Expose only read-only tools |
@@ -76,7 +77,7 @@ HTTP mode has a narrow request-controlled surface. GitLab identity always comes 
 | --- | --- | --- | --- |
 | GitLab token | `PRIVATE-TOKEN` or `Authorization: Bearer` request header | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry |
 | GitLab URL | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted | Conditional | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options` |
-| Tool catalog and behavior | `--meta-tools`, `--tool-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE` |
+| Tool catalog and behavior | `--meta-tools`, `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE` |
 | Rate limits and HTTP pool policy | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--trusted-proxy-header` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS` |
 | Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl` | No | Ignored and logged in `ignored_options` |
 | Update policy and logging | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL` | No | Ignored and logged in `ignored_options` |

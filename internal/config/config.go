@@ -83,6 +83,16 @@ const (
 	DefaultToolSurface = ToolSurfaceMeta
 )
 
+// Capability surface modes select which non-tool MCP capabilities are exposed.
+const (
+	// CapabilitySurfaceFull exposes the current resource and prompt catalog.
+	CapabilitySurfaceFull = "full"
+	// CapabilitySurfaceMinimal exposes only capabilities required for dynamic use.
+	CapabilitySurfaceMinimal = "minimal"
+	// DefaultCapabilitySurface preserves the existing resource and prompt catalog.
+	DefaultCapabilitySurface = CapabilitySurfaceFull
+)
+
 // Config holds all configuration values for the MCP server.
 type Config struct {
 	GitLabURL            string
@@ -90,6 +100,7 @@ type Config struct {
 	SkipTLSVerify        bool
 	MetaTools            bool
 	ToolSurface          string
+	CapabilitySurface    string
 	Enterprise           bool
 	AutoDetectEnterprise bool
 	ReadOnly             bool
@@ -127,17 +138,18 @@ type Config struct {
 // ServerConfig is an immutable configuration snapshot used to build one MCP
 // server instance for a specific GitLab URL and credential principal.
 type ServerConfig struct {
-	GitLabURL       string
-	MetaTools       bool
-	ToolSurface     string
-	Enterprise      bool
-	ReadOnly        bool
-	SafeMode        bool
-	ExcludeTools    []string
-	TokenScopes     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	MetaParamSchema string
+	GitLabURL         string
+	MetaTools         bool
+	ToolSurface       string
+	CapabilitySurface string
+	Enterprise        bool
+	ReadOnly          bool
+	SafeMode          bool
+	ExcludeTools      []string
+	TokenScopes       []string
+	RateLimitRPS      float64
+	RateLimitBurst    int
+	MetaParamSchema   string
 }
 
 // ServerConfig returns the server-scoped subset of Config. Callers may enrich
@@ -148,16 +160,17 @@ func (c *Config) ServerConfig() *ServerConfig {
 		return &ServerConfig{}
 	}
 	return &ServerConfig{
-		GitLabURL:       c.GitLabURL,
-		MetaTools:       c.MetaTools,
-		ToolSurface:     c.ToolSurface,
-		Enterprise:      c.Enterprise,
-		ReadOnly:        c.ReadOnly,
-		SafeMode:        c.SafeMode,
-		ExcludeTools:    slices.Clone(c.ExcludeTools),
-		RateLimitRPS:    c.RateLimitRPS,
-		RateLimitBurst:  c.RateLimitBurst,
-		MetaParamSchema: c.MetaParamSchema,
+		GitLabURL:         c.GitLabURL,
+		MetaTools:         c.MetaTools,
+		ToolSurface:       c.ToolSurface,
+		CapabilitySurface: c.CapabilitySurface,
+		Enterprise:        c.Enterprise,
+		ReadOnly:          c.ReadOnly,
+		SafeMode:          c.SafeMode,
+		ExcludeTools:      slices.Clone(c.ExcludeTools),
+		RateLimitRPS:      c.RateLimitRPS,
+		RateLimitBurst:    c.RateLimitBurst,
+		MetaParamSchema:   c.MetaParamSchema,
 	}
 }
 
@@ -189,6 +202,11 @@ func Load() (*Config, error) {
 	toolSurface, metaTools, err := parseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
 	if err != nil {
 		return nil, err
+	}
+
+	capabilitySurface, err := parseCapabilitySurface(os.Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CAPABILITY_SURFACE value: %w", err)
 	}
 
 	enterprise, err := parseBool(os.Getenv("GITLAB_ENTERPRISE"), false)
@@ -292,6 +310,7 @@ func Load() (*Config, error) {
 		SkipTLSVerify:      skipTLS,
 		MetaTools:          metaTools,
 		ToolSurface:        toolSurface,
+		CapabilitySurface:  capabilitySurface,
 		Enterprise:         enterprise,
 		ReadOnly:           readOnly,
 		SafeMode:           safeMode,
@@ -365,6 +384,13 @@ func (c *Config) validate() error {
 			return fmt.Errorf("TOOL_SURFACE must be %q, %q, or %q (got %q)", ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, c.ToolSurface)
 		}
 	}
+	if c.CapabilitySurface != "" {
+		switch c.CapabilitySurface {
+		case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
+		default:
+			return fmt.Errorf("CAPABILITY_SURFACE must be %q or %q (got %q)", CapabilitySurfaceFull, CapabilitySurfaceMinimal, c.CapabilitySurface)
+		}
+	}
 	if c.OAuthCacheTTL != 0 {
 		if c.OAuthCacheTTL < MinOAuthCacheTTL {
 			return fmt.Errorf("OAUTH_CACHE_TTL %s is below minimum of %s", c.OAuthCacheTTL, MinOAuthCacheTTL)
@@ -413,6 +439,16 @@ func EffectiveToolSurface(metaTools bool, toolSurface string) string {
 	return ToolSurfaceIndividual
 }
 
+// EffectiveCapabilitySurface returns the canonical capability surface.
+func EffectiveCapabilitySurface(capabilitySurface string) string {
+	switch capabilitySurface {
+	case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
+		return capabilitySurface
+	default:
+		return DefaultCapabilitySurface
+	}
+}
+
 // ParseToolSurface resolves the explicit TOOL_SURFACE value and legacy
 // META_TOOLS value into a canonical tool surface and compatible MetaTools bool.
 func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, metaTools bool, err error) {
@@ -449,6 +485,20 @@ func parseToolSurfaceValue(value, name string) (string, error) {
 		return ToolSurfaceDynamic, nil
 	default:
 		return "", fmt.Errorf("invalid %s value: expected true, false, %q, %q, or %q, got %q", name, ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, value)
+	}
+}
+
+func parseCapabilitySurface(s, defaultValue string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return defaultValue, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case CapabilitySurfaceFull, "default":
+		return CapabilitySurfaceFull, nil
+	case CapabilitySurfaceMinimal, "minimum", "low-token":
+		return CapabilitySurfaceMinimal, nil
+	default:
+		return "", fmt.Errorf("expected %q or %q, got %q", CapabilitySurfaceFull, CapabilitySurfaceMinimal, s)
 	}
 }
 

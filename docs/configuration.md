@@ -29,6 +29,7 @@ These are the settings every user needs to get started.
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `META_TOOLS` | `true` | Tool catalog selector: `true` for domain meta-tools, `false` for individual tools, or `dynamic` for the low-token search/describe/execute surface |
 | `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`. When set, it overrides `META_TOOLS` |
+| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources and prompts; `minimal` keeps only `gitlab://workspace/roots` and omits optional resource and prompt templates |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -203,6 +204,10 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
 
+### Capability Surface
+
+`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_describe_tools` returns exact action schemas inline.
+
 ### HTTP Server Mode
 
 When running the server for multiple users, use HTTP mode. Configuration comes from CLI flags instead of environment variables:
@@ -215,6 +220,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools. Use `--meta-tools=false` for individual tools |
 | `--tool-surface` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
+| `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |

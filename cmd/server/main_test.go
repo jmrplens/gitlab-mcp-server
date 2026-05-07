@@ -930,6 +930,45 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	}
 }
 
+// TestCreateServer_MinimalCapabilitySurface verifies the explicit low-token
+// capability surface keeps workspace roots while omitting optional schema,
+// workflow, static data resources, and prompts.
+func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := createServer(client, &config.ServerConfig{
+		MetaTools:         true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+	}, nil)
+	session := newInMemorySession(t, server)
+
+	resourcesResult, err := session.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResources() error = %v", err)
+	}
+	if len(resourcesResult.Resources) != 1 || resourcesResult.Resources[0].URI != "gitlab://workspace/roots" {
+		t.Fatalf("minimal resources = %+v, want only workspace_roots", resourcesResult.Resources)
+	}
+
+	templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", err)
+	}
+	if len(templatesResult.ResourceTemplates) != 0 {
+		t.Fatalf("minimal resource templates = %+v, want none", templatesResult.ResourceTemplates)
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err == nil {
+		t.Fatal("minimal capability surface should omit meta-schema resources")
+	}
+
+	promptsResult, err := session.ListPrompts(t.Context(), nil)
+	if err == nil && len(promptsResult.Prompts) > 0 {
+		t.Fatalf("minimal prompts = %+v, want none", promptsResult.Prompts)
+	}
+}
+
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
 // keeps discovery tools but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {

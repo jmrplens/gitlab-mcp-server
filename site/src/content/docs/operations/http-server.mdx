@@ -43,6 +43,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                                                    |
 | `--meta-tools`           | `true`                       | Enable domain meta-tools. Set `false` for individual tools                                                 |
 | `--tool-surface`         | _(empty)_                    | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools`               |
+| `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`                                                  |
 | `--meta-param-schema`    | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                |
 | `--enterprise`           | `false`                      | Force Enterprise/Premium tools; omit to auto-detect CE/EE per token+URL entry                              |
 | `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                 |
@@ -66,9 +67,9 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 
 ### Configuration precedence
 
-HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
+HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
 
-If a client sends config-like headers such as `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values.
+If a client sends config-like headers such as `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values.
 
 ## Authentication
 

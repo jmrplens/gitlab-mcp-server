@@ -198,6 +198,44 @@ func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
 	}
 }
 
+// TestLoad_CapabilitySurfaceMinimal verifies that CAPABILITY_SURFACE selects
+// the non-default low-token resource and prompt surface.
+func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("CAPABILITY_SURFACE", "minimal")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.CapabilitySurface != CapabilitySurfaceMinimal {
+		t.Fatalf("CapabilitySurface = %q, want %q", cfg.CapabilitySurface, CapabilitySurfaceMinimal)
+	}
+}
+
+// TestLoad_CapabilitySurfaceInvalid verifies unsupported capability surfaces
+// are rejected during environment configuration loading.
+func TestLoad_CapabilitySurfaceInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("CAPABILITY_SURFACE", "everything")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for invalid CAPABILITY_SURFACE, got nil")
+	}
+}
+
+func TestEffectiveCapabilitySurface(t *testing.T) {
+	if got := EffectiveCapabilitySurface(""); got != CapabilitySurfaceFull {
+		t.Fatalf("EffectiveCapabilitySurface(empty) = %q, want %q", got, CapabilitySurfaceFull)
+	}
+	if got := EffectiveCapabilitySurface(CapabilitySurfaceMinimal); got != CapabilitySurfaceMinimal {
+		t.Fatalf("EffectiveCapabilitySurface(minimal) = %q, want %q", got, CapabilitySurfaceMinimal)
+	}
+}
+
 // TestLoad_MetaParamSchemaDefault verifies that [Load] defaults
 // MetaParamSchema to "opaque" when the env var is unset.
 func TestLoad_MetaParamSchemaDefault(t *testing.T) {
@@ -728,16 +766,17 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 
 	cfg := &Config{
-		GitLabURL:       "https://gitlab.example.com",
-		MetaTools:       true,
-		Enterprise:      true,
-		ReadOnly:        true,
-		SafeMode:        true,
-		ExcludeTools:    []string{"gitlab_create_project"},
-		RateLimitRPS:    2.5,
-		RateLimitBurst:  7,
-		MetaParamSchema: MetaParamSchemaFull,
-		ToolSurface:     ToolSurfaceDynamic,
+		GitLabURL:         "https://gitlab.example.com",
+		MetaTools:         true,
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		ExcludeTools:      []string{"gitlab_create_project"},
+		RateLimitRPS:      2.5,
+		RateLimitBurst:    7,
+		MetaParamSchema:   MetaParamSchemaFull,
+		ToolSurface:       ToolSurfaceDynamic,
+		CapabilitySurface: CapabilitySurfaceMinimal,
 	}
 
 	snapshot := cfg.ServerConfig()
@@ -752,6 +791,9 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 	if snapshot.ToolSurface != ToolSurfaceDynamic {
 		t.Fatalf("ToolSurface = %q, want %q", snapshot.ToolSurface, ToolSurfaceDynamic)
+	}
+	if snapshot.CapabilitySurface != CapabilitySurfaceMinimal {
+		t.Fatalf("CapabilitySurface = %q, want %q", snapshot.CapabilitySurface, CapabilitySurfaceMinimal)
 	}
 	if !slices.Equal(snapshot.ExcludeTools, cfg.ExcludeTools) {
 		t.Fatalf("ExcludeTools = %v, want %v", snapshot.ExcludeTools, cfg.ExcludeTools)

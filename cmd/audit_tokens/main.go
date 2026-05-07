@@ -26,6 +26,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -46,6 +47,15 @@ type toolTokenInfo struct {
 	Domain string
 	Tokens int
 	Bytes  int
+}
+
+// resourceRegistrationOptions selects which MCP resource groups are advertised
+// for token-audit measurements.
+type resourceRegistrationOptions struct {
+	Core           bool
+	MetaSchema     bool
+	WorkflowGuides bool
+	WorkspaceRoots bool
 }
 
 // main creates the mock GitLab-backed client, measures all MCP catalog modes,
@@ -88,6 +98,7 @@ func main() {
 	individualResourceTokens := measureResources(client, nil)
 	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
 	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes)
+	dynamicMinimalResourceTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
 	promptTokens := measurePrompts(client)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
@@ -132,10 +143,24 @@ func main() {
 	fmt.Printf("  Resources (individual): ~%s tokens (%s bytes)\n", fmtNum(individualResourceTokens), fmtNum(individualResourceTokens*bytesPerTok))
 	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaBaseResourceTokens), fmtNum(metaBaseResourceTokens*bytesPerTok))
 	fmt.Printf("  Resources (dynamic): ~%s tokens (%s bytes)\n", fmtNum(dynamicBaseResourceTokens), fmtNum(dynamicBaseResourceTokens*bytesPerTok))
-	fmt.Printf("  Prompts:   ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
+	fmt.Printf("  Resources (dynamic-minimal candidate): ~%s tokens (%s bytes)\n", fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicMinimalResourceTokens*bytesPerTok))
+	fmt.Printf("  Prompts (full): ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
+	fmt.Println("  Prompts (dynamic-minimal candidate): ~0 tokens (0 bytes)")
 	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaBaseResourceTokens+promptTokens))
 	fmt.Printf("  Dynamic total:    ~%s tokens\n", fmtNum(dynamicBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic-minimal candidate total: ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
+	fmt.Println()
+
+	fmt.Println("## Minimal Capability Candidate")
+	fmt.Println()
+	fmt.Println("  Required for dynamic action use: the three dynamic tools. `gitlab_describe_tools` returns exact schemas inline, so meta-schema resources are not required.")
+	fmt.Println("  Retained candidate resource: `gitlab://workspace/roots` for local project discovery from .git/config remotes.")
+	fmt.Println("  Optional in the candidate: static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates.")
+	if dynamicBaseResourceTokens+promptTokens > 0 {
+		savings := float64(dynamicBaseResourceTokens+promptTokens-dynamicMinimalResourceTokens) / float64(dynamicBaseResourceTokens+promptTokens) * 100
+		fmt.Printf("  Shared-overhead reduction: %.1f%% vs current dynamic resources+prompts\n", savings)
+	}
 	fmt.Println()
 
 	// Top 30 individual tools by token cost
@@ -167,6 +192,8 @@ func main() {
 		fmtNum(metaTotal), fmtNum(metaBaseResourceTokens+promptTokens), fmtNum(metaTotal+metaBaseResourceTokens+promptTokens))
 	fmt.Printf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
 		fmtNum(dynamicTotal), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamicTotal+dynamicBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic-minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamicTotal), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicTotal+dynamicMinimalResourceTokens))
 	fmt.Println()
 }
 
@@ -285,12 +312,28 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 // meta-schema MCP resources, then estimates the token cost of their advertised
 // definitions.
 func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap) int {
+	return measureResourcesWithOptions(client, metaRoutes, resourceRegistrationOptions{
+		Core:           true,
+		MetaSchema:     len(metaRoutes) > 0,
+		WorkflowGuides: true,
+		WorkspaceRoots: true,
+	})
+}
+
+func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
-	resources.Register(server, client)
-	if len(metaRoutes) > 0 {
+	if opts.Core {
+		resources.Register(server, client)
+	}
+	if opts.MetaSchema && len(metaRoutes) > 0 {
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 	}
-	resources.RegisterWorkflowGuides(server)
+	if opts.WorkspaceRoots {
+		resources.RegisterWorkspaceRoots(server, roots.NewManager())
+	}
+	if opts.WorkflowGuides {
+		resources.RegisterWorkflowGuides(server)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

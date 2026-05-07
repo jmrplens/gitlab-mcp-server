@@ -93,6 +93,7 @@ type httpConfig struct {
 	metaTools          bool
 	metaToolsSet       bool
 	toolSurface        string
+	capabilitySurface  string
 	enterprise         bool
 	enterpriseSet      bool
 	readOnly           bool
@@ -139,6 +140,7 @@ func main() {
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic; overrides --meta-tools when set")
+	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
@@ -254,6 +256,7 @@ FLAGS
   -skip-tls-verify          Skip TLS certificate verification (default false)
   -meta-tools               Enable meta-tools for tool discovery (default true)
   -tool-surface string      Tool surface: meta|individual|dynamic; overrides -meta-tools
+  -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
   -exclude-tools string     Comma-separated tool names to exclude from registration
@@ -269,11 +272,12 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
-	GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
+  GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
   META_TOOLS                Tool surface selector: true|false|dynamic (default true)
   TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic; overrides META_TOOLS
+  CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
@@ -382,6 +386,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		SkipTLSVerify:        hcfg.skipTLSVerify,
 		MetaTools:            metaTools,
 		ToolSurface:          toolSurface,
+		CapabilitySurface:    hcfg.capabilitySurface,
 		Enterprise:           hcfg.enterprise,
 		AutoDetectEnterprise: !hcfg.enterpriseSet,
 		ReadOnly:             hcfg.readOnly,
@@ -418,6 +423,14 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	default:
 		return fmt.Errorf("--meta-param-schema must be one of %q, %q, %q, got %q",
 			config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull, cfg.MetaParamSchema)
+	}
+	switch cfg.CapabilitySurface {
+	case "":
+		cfg.CapabilitySurface = config.DefaultCapabilitySurface
+	case config.CapabilitySurfaceFull, config.CapabilitySurfaceMinimal:
+	default:
+		return fmt.Errorf("--capability-surface must be %q or %q, got %q",
+			config.CapabilitySurfaceFull, config.CapabilitySurfaceMinimal, cfg.CapabilitySurface)
 	}
 	// OAuth mode requires a fixed --gitlab-url because the RFC 9728
 	// protected-resource metadata and token verifier are initialized at
@@ -535,6 +548,15 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 
 	completionHandler := completions.NewHandler(client)
 	rootsManager := roots.NewManager()
+	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
+	serverCapabilities := &mcp.ServerCapabilities{
+		Logging:   &mcp.LoggingCapabilities{},
+		Tools:     &mcp.ToolCapabilities{ListChanged: true},
+		Resources: &mcp.ResourceCapabilities{ListChanged: true},
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		serverCapabilities.Prompts = &mcp.PromptCapabilities{ListChanged: true}
+	}
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:       "gitlab-mcp-server",
@@ -567,13 +589,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			"ID vs IID — GitLab uses two identifiers for issues and merge requests:\n" +
 			"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most tools expect IID.\n" +
 			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
-		Logger: slog.Default(),
-		Capabilities: &mcp.ServerCapabilities{
-			Logging:   &mcp.LoggingCapabilities{},
-			Tools:     &mcp.ToolCapabilities{ListChanged: true},
-			Resources: &mcp.ResourceCapabilities{ListChanged: true},
-			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
-		},
+		Logger:       slog.Default(),
+		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
 		},
@@ -660,13 +677,17 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 	}
 
-	resources.Register(server, client)
-	if toolSurface != config.ToolSurfaceIndividual {
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.Register(server, client)
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull && toolSurface != config.ToolSurfaceIndividual {
 		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
 	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
-	resources.RegisterWorkflowGuides(server)
-	prompts.Register(server, client)
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.RegisterWorkflowGuides(server)
+		prompts.Register(server, client)
+	}
 
 	// Force `additionalProperties: false` on tool input schemas so unknown
 	// properties produce actionable validation errors LLMs can self-correct
