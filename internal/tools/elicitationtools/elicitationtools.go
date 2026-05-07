@@ -29,10 +29,8 @@ const (
 
 // Input types.
 
-// ProjectInput is the minimal input for interactive project creation.
-type ProjectInput struct {
-	ProjectID string `json:"project_id,omitempty" jsonschema:"Optional: pre-fill project ID or path for tools that need it"`
-}
+// ProjectInput is empty because interactive project creation elicits every field.
+type ProjectInput struct{}
 
 // IssueInput is the minimal input for interactive issue creation.
 type IssueInput struct {
@@ -293,7 +291,10 @@ type mrSummaryParams struct {
 	Squash       *bool
 }
 
-// buildMRSummary constructs the request parameters from the input.
+// buildMRSummary returns a Markdown confirmation summary for an interactive
+// merge request creation flow. It includes the project, title, source and target
+// branches, and omits optional sections for empty description, labels, remove
+// source branch, and squash values.
 func buildMRSummary(p mrSummaryParams) string {
 	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s → **Target**: %s",
 		p.ProjectID, p.Title, p.SourceBranch, p.TargetBranch)

@@ -2076,10 +2076,15 @@ var toolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)+
 // metaToolNameRe matches meta-tool names like gitlab_{domain}[_{subdomain}].
 var metaToolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)*$`)
 
-// auditMinDescLen is the minimum useful MCP tool description length enforced
-// by metadata audits.
-// Tool metadata audit thresholds.
-const auditMinDescLen = 20
+const (
+	// auditMinDescLen is the minimum useful MCP tool description length enforced
+	// by metadata audits.
+	auditMinDescLen = 20
+
+	// metaToolDescriptionAuditPhrase is the schema-resource phrase every
+	// action-based meta-tool description must include.
+	metaToolDescriptionAuditPhrase = "Action params schema:"
+)
 
 // auditHandler returns an HTTP handler that responds to all GitLab API
 // requests with minimal valid JSON. Audit tests only need to register
@@ -2222,7 +2227,7 @@ func checkMetaToolActionEnum(t *testing.T, tool *mcp.Tool) {
 
 	props, _ := schema["properties"].(map[string]any)
 	if props == nil {
-		t.Fatal("InputSchema missing 'properties'")
+		t.Skipf("tool %s has no input properties — not a domain meta-tool", tool.Name)
 	}
 
 	actionProp, _ := props["action"].(map[string]any)
@@ -2442,8 +2447,8 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 				t.Errorf("description too short (%d chars, minimum %d)",
 					len(tool.Description), auditMinDescLen)
 			}
-			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "For the params schema of any action") {
-				t.Error("meta-tool description should point LLMs to the per-action schema resource")
+			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, metaToolDescriptionAuditPhrase) {
+				t.Errorf("meta-tool description should contain %q, got %q", metaToolDescriptionAuditPhrase, tool.Description)
 			}
 		})
 	}

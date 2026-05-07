@@ -6,56 +6,42 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestDescriptionSummary_StripsGeneratedMetaToolPrefix verifies that README
-// table summaries ignore the generated meta-tool usage header.
-//
-// The test uses the same two-line prefix emitted by toolutil.MetaToolDescriptionPrefix
-// followed by a real domain description. It asserts that the summary starts at
-// the domain text, protecting README generation from regressing to unhelpful
-// envelope/example descriptions.
-func TestDescriptionSummary_StripsGeneratedMetaToolPrefix(t *testing.T) {
-	description := "Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":\"create\",\"params\":{...}}\n" +
-		"For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
-		"Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive."
-
-	got := descriptionSummary(description)
-	want := "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji."
-	if got != want {
-		t.Fatalf("descriptionSummary() = %q, want %q", got, want)
+// TestDescriptionSummary_TableDriven verifies summary extraction for generated
+// meta-tool prefixes, standalone examples, and Markdown table escaping.
+func TestDescriptionSummary_TableDriven(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		want        string
+	}{
+		{
+			name:        "strips generated meta-tool prefix",
+			description: testMetaTool("gitlab_issue", "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.", "create", "list").Description,
+			want:        "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji.",
+		},
+		{
+			name:        "preserves standalone examples",
+			description: "Example: resolve this remote before listing projects. More details follow.",
+			want:        "Example: resolve this remote before listing projects.",
+		},
+		{
+			name:        "escapes Markdown table pipes",
+			description: "Manage group | project access. Extra details follow.",
+			want:        "Manage group \\| project access.",
+		},
 	}
-}
 
-// TestDescriptionSummary_PreservesStandaloneExampleDescriptions verifies that
-// standalone tool descriptions are not stripped just because they begin with an
-// example sentence.
-//
-// The generated meta-tool prefix is only removed when both its usage-example
-// line and schema-resource hint are present. This keeps normal descriptions
-// intact for tools that are listed next to meta-tools in README output.
-func TestDescriptionSummary_PreservesStandaloneExampleDescriptions(t *testing.T) {
-	description := "Example: resolve this remote before listing projects. More details follow."
-
-	got := descriptionSummary(description)
-	want := "Example: resolve this remote before listing projects."
-	if got != want {
-		t.Fatalf("descriptionSummary() = %q, want %q", got, want)
-	}
-}
-
-// TestDescriptionSummary_EscapesMarkdownTablePipes verifies that summaries are
-// safe for Markdown table cells.
-//
-// The generated README table uses pipe-delimited Markdown, so any literal pipe
-// in a tool description must be escaped after the summary is extracted.
-func TestDescriptionSummary_EscapesMarkdownTablePipes(t *testing.T) {
-	description := "Manage group | project access. Extra details follow."
-
-	got := descriptionSummary(description)
-	want := "Manage group \\| project access."
-	if got != want {
-		t.Fatalf("descriptionSummary() = %q, want %q", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := descriptionSummary(tt.description)
+			if got != tt.want {
+				t.Fatalf("descriptionSummary() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -110,11 +96,14 @@ func TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom(t *testing.T) {
 }
 
 func testMetaTool(name, description string, actions ...string) *mcp.Tool {
+	routes := make(toolutil.ActionMap, len(actions))
+	for _, action := range actions {
+		routes[action] = toolutil.Route(nil)
+	}
+
 	return &mcp.Tool{
-		Name: name,
-		Description: "Example: {\"action\":\"create\",\"params\":{...}}\n" +
-			"For the params schema of any action, read the MCP resource gitlab://schema/meta/" + name + "/<action>.\n\n" +
-			description,
+		Name:        name,
+		Description: toolutil.MetaToolDescriptionPrefix(name, routes) + description,
 		InputSchema: map[string]any{
 			"properties": map[string]any{
 				"action": map[string]any{

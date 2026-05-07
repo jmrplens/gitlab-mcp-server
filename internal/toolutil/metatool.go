@@ -1706,10 +1706,16 @@ func currentMetaParamSchemaMode() string {
 	return metaParamSchemaMode
 }
 
-// paramsResourceHint is appended to the description of the params property
-// in every meta-tool input schema, regardless of mode. It points the LLM at
-// the per-action JSON Schema available via the gitlab://schema/meta resource.
-const paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+const (
+	// paramsResourceHint is appended to the description of the params property
+	// in every meta-tool input schema, regardless of mode. It points the LLM at
+	// the per-action JSON Schema available via the gitlab://schema/meta resource.
+	paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+
+	// metaToolParamsDescription is the canonical description for the params
+	// property generated in every meta-tool input schema.
+	metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint
+)
 
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
 // chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
@@ -1735,7 +1741,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation)." + paramsResourceHint,
+				"description":          metaToolParamsDescription,
 				"additionalProperties": true,
 			},
 		},
@@ -1771,9 +1777,36 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	first := actions[0]
 	return fmt.Sprintf(
-		"Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
 	)
+}
+
+// StripMetaToolDescriptionPrefix removes the generated meta-tool usage header
+// added by MetaToolDescriptionPrefix while preserving standalone descriptions
+// that happen to start with an example.
+func StripMetaToolDescriptionPrefix(description string) string {
+	lines := strings.Split(description, "\n")
+	if len(lines) < 2 {
+		return description
+	}
+
+	firstLine := strings.TrimSpace(lines[0])
+	secondLine := strings.TrimSpace(lines[1])
+	hasUsageExample := strings.Contains(firstLine, `Use {"action":`) || strings.Contains(firstLine, `Example: {"action":`)
+	hasSchemaHint := strings.HasPrefix(secondLine, "Action params schema:") || strings.HasPrefix(secondLine, "For the params schema of any action")
+	if !hasUsageExample || !hasSchemaHint {
+		return description
+	}
+
+	start := 2
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	if start >= len(lines) {
+		return description
+	}
+	return strings.Join(lines[start:], "\n")
 }
 
 // buildMetaOneOf constructs the oneOf branch list for full/compact modes.

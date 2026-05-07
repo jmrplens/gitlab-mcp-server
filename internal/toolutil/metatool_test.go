@@ -970,8 +970,14 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 		t.Errorf("params.additionalProperties = %v, want true", paramsProp["additionalProperties"])
 	}
 	desc, _ := paramsProp["description"].(string)
+	if desc != metaToolParamsDescription {
+		t.Errorf("params.description = %q, want %q", desc, metaToolParamsDescription)
+	}
 	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
 		t.Error("params.description should mention the schema resource URI")
+	}
+	if strings.Contains(desc, "unknown keys") {
+		t.Error("params.description should avoid wording that conflicts with openWorldHint")
 	}
 }
 
@@ -1057,7 +1063,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
 
-	wantExample := `Example: {"action":"create","params":{...}}`
+	wantExample := `Use {"action":"create","params":{...}}`
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
 	}
@@ -1065,7 +1071,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	if !strings.Contains(got, wantEnvelope) {
 		t.Errorf("prefix missing envelope guidance, got: %q", got)
 	}
-	wantPointer := "gitlab://schema/meta/gitlab_widget/<action>"
+	wantPointer := "Action params schema: gitlab://schema/meta/gitlab_widget/<action>"
 	if !strings.Contains(got, wantPointer) {
 		t.Errorf("prefix missing resource pointer, got: %q", got)
 	}
@@ -1075,6 +1081,52 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 
 	if MetaToolDescriptionPrefix("gitlab_empty", ActionMap{}) != "" {
 		t.Error("empty routes should yield empty prefix")
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix verifies the generated
+// concise prefix is removed before documentation summaries are rendered.
+func TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix(t *testing.T) {
+	description := MetaToolDescriptionPrefix("gitlab_issue", ActionMap{"create": Route(nil)}) + "Manage GitLab issues."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != "Manage GitLab issues." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want real description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_PreservesPrefixOnlyDescription verifies the
+// defensive fallback for future callers that pass only the generated prefix.
+func TestStripMetaToolDescriptionPrefix_PreservesPrefixOnlyDescription(t *testing.T) {
+	description := MetaToolDescriptionPrefix("gitlab_issue", ActionMap{"create": Route(nil)})
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != description {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want original description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix keeps README and llms
+// generation compatible with descriptions emitted before the concise prefix.
+func TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix(t *testing.T) {
+	description := "Example: {\"action\":\"create\",\"params\":{...}}\n" +
+		"For the params schema of any action, read gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
+		"Manage GitLab issues."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != "Manage GitLab issues." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want real description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_PreservesStandaloneExample verifies normal
+// descriptions are left intact when only one generated-prefix line is present.
+func TestStripMetaToolDescriptionPrefix_PreservesStandaloneExample(t *testing.T) {
+	description := "Example: resolve this remote before listing projects. More details follow."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != description {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want original description", got)
 	}
 }
 

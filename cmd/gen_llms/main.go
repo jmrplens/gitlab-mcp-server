@@ -300,7 +300,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
 	for _, t := range catalog.MetaBase {
-		desc := firstSentence(stripMetaPrefix(t.Description))
+		desc := firstSentence(toolutil.StripMetaToolDescriptionPrefix(t.Description))
 		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
 	}
@@ -659,26 +659,6 @@ func truncateRunes(s string, maxRunes int) string {
 		size += w
 	}
 	return s[:size] + "..."
-}
-
-// stripMetaPrefix removes the generated meta-tool usage header so llms.txt
-// summary lines show the actual user-facing domain description.
-func stripMetaPrefix(s string) string {
-	lines := strings.Split(s, "\n")
-	if len(lines) < 2 {
-		return s
-	}
-	firstLine := strings.TrimSpace(lines[0])
-	secondLine := strings.TrimSpace(lines[1])
-	if !strings.Contains(firstLine, `Example: {"action":`) ||
-		!strings.HasPrefix(secondLine, "For the params schema of any action") {
-		return s
-	}
-	start := 2
-	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
-		start++
-	}
-	return strings.Join(lines[start:], "\n")
 }
 
 // firstParagraph returns text up to the first blank-line paragraph break (\n\n).
