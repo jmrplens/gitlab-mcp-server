@@ -1464,6 +1464,7 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 var knownExceptions = map[string]string{
 	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
 	// it is registered in cmd/server/main.go.
+	"dynamic":      "registered in cmd/server/main.go from captured meta routes",
 	"serverupdate": "registered in cmd/server/main.go with *autoupdate.Updater",
 	"testdata":     "contains test data, not a tool package",
 }
@@ -1973,7 +1974,8 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
 		"unshare": true, "disable_project": true, "import_from_file": true,
-		"cancel_github": true, "rotate": true,
+		"cancel_github": true, "rotate": true, "mirror_force_push": true,
+		"db_migration_mark": true, "terraform_state_unlock": true,
 	}
 
 	var failures int

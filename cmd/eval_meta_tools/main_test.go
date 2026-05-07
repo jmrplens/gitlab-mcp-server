@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -451,7 +452,7 @@ func taskIDs(tasks []evalTask) string {
 // TestBuildCatalogSession_UsesClientEnterpriseMode verifies that BuildCatalogSession handles the uses client enterprise mode scenario correctly.
 func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, _, routes, err := buildCatalogSession(client)
+	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=false) error = %v", err)
 	}
@@ -461,7 +462,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	}
 
 	client = newEvalTestClient(t, true)
-	_, closeSession, _, routes, err = buildCatalogSession(client)
+	_, closeSession, _, routes, err = buildCatalogSession(client, config.ToolSurfaceMeta)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=true) error = %v", err)
 	}
@@ -469,6 +470,125 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	if _, routeOK := routes["gitlab"]["merge_train.list_project"]; !routeOK {
 		if _, fallbackOK := routes["gitlab_merge_train"]["list_project"]; !fallbackOK {
 			t.Skip("main catalog does not expose enterprise merge train routes")
+		}
+	}
+}
+
+// TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes verifies dynamic
+// mode advertises only the low-token public tools while retaining hidden routes
+// for validation and execution.
+func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
+	client := newEvalTestClient(t, false)
+	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic) error = %v", err)
+	}
+	defer closeSession()
+
+	names := make([]string, 0, len(toolList))
+	for _, tool := range toolList {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
+		t.Fatalf("dynamic catalog tools = %q, want search/describe/execute", got)
+	}
+	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
+		t.Fatal("dynamic validation routes missing project.get")
+	}
+	if _, ok := routes["gitlab"]; ok {
+		t.Fatal("dynamic validation routes unexpectedly exposed gitlab dispatcher")
+	}
+}
+
+// TestNormalizeTasksForDynamicRoutes_RewritesActionSteps verifies fixture
+// expectations are mapped onto gitlab_execute_tool action IDs.
+func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"project.get":          {},
+			"repository.file_get":  {},
+			"server.health_check":  {},
+			"merge_request.create": {},
+		},
+	}
+	tasks := []evalTask{{
+		ID:             "single",
+		ExpectedTool:   "gitlab_project",
+		ExpectedAction: "get",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_server", ExpectedAction: "health_check"},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get"},
+		},
+	}}
+
+	normalized := normalizeTasksForDynamicRoutes(tasks, routes)
+	if normalized[0].ExpectedTool != dynamicExecuteTool || normalized[0].ExpectedAction != "project.get" {
+		t.Fatalf("top-level expectation = %s/%s", normalized[0].ExpectedTool, normalized[0].ExpectedAction)
+	}
+	if normalized[0].Steps[0].ExpectedTool != dynamicExecuteTool || normalized[0].Steps[0].ExpectedAction != "server.health_check" {
+		t.Fatalf("first step = %+v", normalized[0].Steps[0])
+	}
+	if normalized[0].Steps[1].ExpectedTool != dynamicExecuteTool || normalized[0].Steps[1].ExpectedAction != "repository.file_get" {
+		t.Fatalf("second step = %+v", normalized[0].Steps[1])
+	}
+}
+
+// TestValidateActionToolCall_DynamicConfirmTopLevel verifies destructive
+// dynamic execution accepts confirm at the gitlab_execute_tool top level.
+func TestValidateActionToolCall_DynamicConfirmTopLevel(t *testing.T) {
+	step := evalStep{
+		ExpectedTool:   dynamicExecuteTool,
+		ExpectedAction: "project.delete",
+		RequiredParams: []string{"project_id"},
+		Destructive:    true,
+	}
+
+	valid := validateActionToolCall(step, dynamicExecuteTool, map[string]any{
+		"action":  "project.delete",
+		"params":  map[string]any{"project_id": "my-org/project"},
+		"confirm": true,
+	})
+	if !valid.Valid || !valid.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic top-level confirm) = %+v, want valid safe", valid)
+	}
+
+	invalid := validateActionToolCall(step, dynamicExecuteTool, map[string]any{
+		"action": "project.delete",
+		"params": map[string]any{"project_id": "my-org/project"},
+	})
+	if invalid.Valid || invalid.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic missing confirm) = %+v, want unsafe invalid", invalid)
+	}
+}
+
+// TestDynamicDiscoveryResult_SearchAndDescribe verifies dynamic discovery
+// tools return enough action metadata for the next execute call.
+func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"project.get": {InputSchema: map[string]any{
+				"type":       "object",
+				"required":   []any{"project_id"},
+				"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+			}},
+		},
+	}
+
+	search, err := dynamicDiscoveryResult(routes, modelContentBlock{Name: dynamicSearchTool, Input: map[string]any{"query": "project get"}})
+	if err != nil {
+		t.Fatalf("dynamicDiscoveryResult(search) error = %v", err)
+	}
+	if !strings.Contains(search, "project.get") {
+		t.Fatalf("search result = %s, want project.get", search)
+	}
+	describe, err := dynamicDiscoveryResult(routes, modelContentBlock{Name: dynamicDescribeTool, Input: map[string]any{"action": "project.get"}})
+	if err != nil {
+		t.Fatalf("dynamicDiscoveryResult(describe) error = %v", err)
+	}
+	for _, want := range []string{"project.get", "project_id", dynamicExecuteTool} {
+		if !strings.Contains(describe, want) {
+			t.Fatalf("describe result = %s, want %q", describe, want)
 		}
 	}
 }
@@ -1685,7 +1805,7 @@ func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
 		}
 	}
 
-	system := systemPromptForTask(task)
+	system := systemPromptForTask(task, config.ToolSurfaceMeta)
 	if !strings.Contains(system, "Return tool calls only") || strings.Contains(system, "runner.list_project") {
 		t.Fatalf("systemPromptForTask() = %q, want compact exact-call system prompt", system)
 	}
@@ -1847,7 +1967,7 @@ func TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID(t *testing.T) {
 			t.Fatalf("taskPrompt() = %q, want compact pipeline trigger delete guidance without %q", prompt, unwanted)
 		}
 	}
-	system := systemPromptForTask(task)
+	system := systemPromptForTask(task, config.ToolSurfaceMeta)
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
 		if strings.Contains(system, unwanted) {
 			t.Fatalf("systemPromptForTask() = %q, want compact pipeline trigger delete system prompt without %q", system, unwanted)
@@ -1883,7 +2003,7 @@ func TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID(t *testing.T) {
 			t.Fatalf("taskPrompt() = %q, want compact pipeline schedule delete guidance without %q", prompt, unwanted)
 		}
 	}
-	system := systemPromptForTask(task)
+	system := systemPromptForTask(task, config.ToolSurfaceMeta)
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
 		if strings.Contains(system, unwanted) {
 			t.Fatalf("systemPromptForTask() = %q, want compact pipeline schedule delete system prompt without %q", system, unwanted)

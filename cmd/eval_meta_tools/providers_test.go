@@ -60,8 +60,8 @@ func TestResolveModelSpecs_RejectsEmptySource(t *testing.T) {
 	}
 	t.Setenv("EVAL_MODELS", "")
 	t.Setenv("ANTHROPIC_MODEL", "")
-	if specs, err := resolveModelSpecs(options{}); err != nil || len(specs) != 1 || specs[0].Provider != providerAnthropic {
-		t.Fatalf("resolveModelSpecs(default) = %#v, %v", specs, err)
+	if specs, err := resolveModelSpecs(options{}); err != nil || len(specs) != 1 || specs[0].String() != defaultModel {
+		t.Fatalf("resolveModelSpecs(default) = %#v, %v; want %s", specs, err, defaultModel)
 	}
 }
 

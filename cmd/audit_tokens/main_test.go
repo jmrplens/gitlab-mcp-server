@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
@@ -35,12 +37,32 @@ func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 // resources that only appear when meta-tools are enabled.
 func TestMeasureResources_SeparatesMetaSchema(t *testing.T) {
 	client := newAuditTokensClient(t)
-	individualTokens := measureResources(client, false)
-	metaTokens := measureResources(client, true)
+	individualTokens := measureResources(client, nil)
+	metaTokens := measureResources(client, captureMetaRoutes(client, false))
 	if individualTokens <= 0 {
 		t.Fatalf("measureResources(includeMetaSchema=false) = %d, want positive token estimate", individualTokens)
 	}
 	if metaTokens <= individualTokens {
 		t.Fatalf("measureResources(includeMetaSchema=true) = %d, want greater than individual %d", metaTokens, individualTokens)
+	}
+}
+
+// TestListDynamicTools_ExposesLowTokenSurface verifies the dynamic audit path
+// measures the three public tools backed by the hidden route registry.
+func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
+	client := newAuditTokensClient(t)
+	routes := captureMetaRoutes(client, false)
+	if countActions(routes) == 0 {
+		t.Fatal("captureMetaRoutes() returned no hidden actions")
+	}
+
+	toolList := listDynamicTools(routes)
+	names := make([]string, 0, len(toolList))
+	for _, tool := range toolList {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
+		t.Fatalf("dynamic tools = %q, want search/describe/execute", got)
 	}
 }

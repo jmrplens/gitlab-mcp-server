@@ -39,21 +39,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
-	defaultTasksPath = "cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md"
-	defaultEvalDir   = "dist/evaluation/meta-tools"
-	defaultFixtures  = "dist/evaluation/meta-tools/e2e-fixtures.json"
-	defaultModel     = "anthropic:claude-sonnet-4-6"
-	backendMock      = "mock"
-	backendGitLab    = "gitlab"
-	anthropicAPI     = "https://api.anthropic.com/v1/messages"
-	anthropicVersion = "2023-06-01"
-	toolCallLimit    = 12
-	maxResponseBytes = 1 << 20
-	maxToolResultLen = 20_000
+	defaultTasksPath    = "cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md"
+	defaultEvalDir      = "dist/evaluation/meta-tools"
+	defaultFixtures     = "dist/evaluation/meta-tools/e2e-fixtures.json"
+	defaultModel        = "anthropic:claude-haiku-4-5-20251001"
+	backendMock         = "mock"
+	backendGitLab       = "gitlab"
+	anthropicAPI        = "https://api.anthropic.com/v1/messages"
+	anthropicVersion    = "2023-06-01"
+	toolCallLimit       = 12
+	maxResponseBytes    = 1 << 20
+	maxToolResultLen    = 20_000
+	dynamicSearchTool   = "gitlab_search_tools"
+	dynamicDescribeTool = "gitlab_describe_tools"
+	dynamicExecuteTool  = "gitlab_execute_tool"
 )
 
 const (
@@ -105,6 +109,7 @@ type options struct {
 	PublishMode       string
 	Preset            string
 	Partition         string
+	ToolSurface       string
 	CoverageReport    string
 	Backend           string
 	GitLabEnv         string
@@ -394,6 +399,11 @@ func run() error {
 	if presetErr != nil {
 		return presetErr
 	}
+	var surfaceErr error
+	opts.ToolSurface, surfaceErr = normalizeEvalToolSurface(opts.ToolSurface)
+	if surfaceErr != nil {
+		return surfaceErr
+	}
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("load .env: %w", err)
 	}
@@ -487,7 +497,7 @@ func run() error {
 			return smokeErr
 		}
 	}
-	tasks = normalizeTasksForRoutes(tasks, routes)
+	tasks = normalizeTasksForCatalog(tasks, routes, opts.ToolSurface)
 	if opts.Partition != "" {
 		var partitionErr error
 		tasks, partitionErr = filterTasksByPartition(tasks, opts.Partition)
@@ -556,15 +566,16 @@ func run() error {
 			return keyErr
 		}
 		runner := &modelRunner{
-			apiKey:     apiKey,
-			provider:   spec.Provider,
-			model:      spec.Model,
-			modelLabel: spec.String(),
-			maxTokens:  opts.MaxTokens,
-			retries:    opts.Retries,
-			retryWait:  opts.RetryWait,
-			client:     &http.Client{Timeout: 60 * time.Second},
-			mcpSession: mcpSession,
+			apiKey:      apiKey,
+			provider:    spec.Provider,
+			model:       spec.Model,
+			modelLabel:  spec.String(),
+			toolSurface: opts.ToolSurface,
+			maxTokens:   opts.MaxTokens,
+			retries:     opts.Retries,
+			retryWait:   opts.RetryWait,
+			client:      &http.Client{Timeout: 60 * time.Second},
+			mcpSession:  mcpSession,
 		}
 		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
 			if opts.Execute && opts.UseFixtures {
@@ -623,6 +634,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
 	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
+	flag.StringVar(&opts.ToolSurface, "tool-surface", config.ToolSurfaceMeta, "Tool catalog surface to evaluate: meta or dynamic")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
 	flag.StringVar(&opts.Backend, "backend", backendMock, "Live catalog backend: mock or gitlab. gitlab uses GITLAB_URL/GITLAB_TOKEN, optionally loaded from --gitlab-env-file")
 	flag.StringVar(&opts.GitLabEnv, "gitlab-env-file", "", "Optional env file loaded after .env for --backend=gitlab, for example test/e2e/.env.docker")
@@ -945,6 +957,9 @@ func taskArchivesSharedProject(task evalTask) bool {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "archive" {
 			return true
 		}
+		if step.ExpectedTool == dynamicExecuteTool && step.ExpectedAction == "project.archive" {
+			return true
+		}
 	}
 	return false
 }
@@ -1041,7 +1056,7 @@ func catalogHasRoute(routes map[string]toolutil.ActionMap, tool, action string) 
 // routeUnavailableOnCE is an internal helper for the main package.
 func routeUnavailableOnCE(tool, action string) bool {
 	route := action
-	if tool != "gitlab" && action != "" {
+	if tool != "gitlab" && tool != dynamicExecuteTool && action != "" {
 		route = strings.TrimPrefix(tool, "gitlab_") + "." + action
 	}
 	switch route {
@@ -1102,6 +1117,24 @@ func normalizedBackend(backend string) string {
 		return backendMock
 	}
 	return backend
+}
+
+// normalizeEvalToolSurface validates the model-facing tool catalog surface.
+func normalizeEvalToolSurface(toolSurface string) (string, error) {
+	surface := strings.ToLower(strings.TrimSpace(toolSurface))
+	if surface == "" {
+		return config.ToolSurfaceMeta, nil
+	}
+	surface, _, err := config.ParseToolSurface(surface, "true")
+	if err != nil {
+		return "", err
+	}
+	switch surface {
+	case config.ToolSurfaceMeta, config.ToolSurfaceDynamic:
+		return surface, nil
+	default:
+		return "", fmt.Errorf("--tool-surface must be %q or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, toolSurface)
+	}
 }
 
 // toolExecutionMode converts the GitLab API response to the tool output format.
@@ -1284,6 +1317,57 @@ func validateTaskFixtureAgainstRoutes(tasks []evalTask, routes map[string]toolut
 		}
 	}
 	return problems
+}
+
+// normalizeTasksForCatalog normalizes fixture expectations for the selected
+// model-facing tool catalog.
+func normalizeTasksForCatalog(tasks []evalTask, routes map[string]toolutil.ActionMap, toolSurface string) []evalTask {
+	if toolSurface == config.ToolSurfaceDynamic {
+		return normalizeTasksForDynamicRoutes(tasks, routes)
+	}
+	return normalizeTasksForRoutes(tasks, routes)
+}
+
+// normalizeTasksForDynamicRoutes rewrites action-based expectations to the
+// gitlab_execute_tool envelope used by dynamic mode.
+func normalizeTasksForDynamicRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
+	out := make([]evalTask, len(tasks))
+	copy(out, tasks)
+	for i := range out {
+		out[i].ExpectedTool, out[i].ExpectedAction = normalizeExpectedDynamicRoute(out[i].ExpectedTool, out[i].ExpectedAction, routes)
+		if len(out[i].Steps) == 0 {
+			continue
+		}
+		out[i].Steps = slices.Clone(out[i].Steps)
+		for j := range out[i].Steps {
+			out[i].Steps[j].ExpectedTool, out[i].Steps[j].ExpectedAction = normalizeExpectedDynamicRoute(out[i].Steps[j].ExpectedTool, out[i].Steps[j].ExpectedAction, routes)
+		}
+	}
+	return out
+}
+
+// normalizeExpectedDynamicRoute maps a fixture's hidden route expectation to
+// gitlab_execute_tool when that route exists in the dynamic catalog.
+func normalizeExpectedDynamicRoute(tool, action string, routes map[string]toolutil.ActionMap) (normalizedTool, normalizedAction string) {
+	if action == "" {
+		return tool, action
+	}
+	executeRoutes := routes[dynamicExecuteTool]
+	for _, candidate := range dynamicActionCandidates(tool, action) {
+		if _, ok := executeRoutes[candidate]; ok {
+			return dynamicExecuteTool, candidate
+		}
+	}
+	return tool, action
+}
+
+// dynamicActionCandidates returns likely dynamic action IDs for a fixture route.
+func dynamicActionCandidates(tool, action string) []string {
+	candidates := []string{action}
+	if tool != "" && tool != "gitlab" && strings.HasPrefix(tool, "gitlab_") {
+		candidates = append(candidates, dynamicActionID(tool, action))
+	}
+	return candidates
 }
 
 // normalizeTasksForRoutes is an internal helper for the main package.
@@ -1549,12 +1633,16 @@ func loadCatalog(opts options) ([]modelTool, map[string]toolutil.ActionMap, erro
 	if opts.ToolsFile != "" {
 		return loadToolsSnapshot(opts.ToolsFile)
 	}
+	toolSurface, err := normalizeEvalToolSurface(opts.ToolSurface)
+	if err != nil {
+		return nil, nil, err
+	}
 	client, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer cleanup()
-	mcpTools, routes, err := buildCatalog(client)
+	mcpTools, routes, err := buildCatalog(client, toolSurface)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1602,7 +1690,7 @@ func runMCPSmoke(opts options) error {
 		return err
 	}
 	defer cleanup()
-	session, closeSession, err := newCatalogSession(client)
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
 	if err != nil {
 		return err
 	}
@@ -1610,20 +1698,25 @@ func runMCPSmoke(opts options) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	toolName := "gitlab"
+	arguments := map[string]any{
+		"action": "user.current",
+		"params": map[string]any{},
+	}
+	if opts.ToolSurface == config.ToolSurfaceDynamic {
+		toolName = dynamicExecuteTool
+	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab",
-		Arguments: map[string]any{
-			"action": "user.current",
-			"params": map[string]any{},
-		},
+		Name:      toolName,
+		Arguments: arguments,
 	})
 	if err != nil {
-		return fmt.Errorf("mcp smoke gitlab/user.current: %w", err)
+		return fmt.Errorf("mcp smoke %s/user.current: %w", toolName, err)
 	}
 	if result != nil && result.IsError {
-		return fmt.Errorf("mcp smoke gitlab/user.current: %s", callToolResultText(result))
+		return fmt.Errorf("mcp smoke %s/user.current: %s", toolName, callToolResultText(result))
 	}
-	fmt.Println("mcp-smoke: gitlab/user.current succeeded against GitLab backend")
+	fmt.Printf("mcp-smoke: %s/user.current succeeded against GitLab backend\n", toolName)
 	return nil
 }
 
@@ -1640,7 +1733,7 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	session, closeSession, err := newCatalogSession(client)
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
 	if err != nil {
 		cleanup()
 		return nil, nil, nil, err
@@ -2930,8 +3023,8 @@ func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 }
 
 // buildCatalog constructs the request parameters from the input.
-func buildCatalog(client *gitlabclient.Client) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
-	session, closeSession, toolsResult, routes, err := buildCatalogSession(client)
+func buildCatalog(client *gitlabclient.Client, toolSurface string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
+	session, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface)
 	if closeSession != nil {
 		defer closeSession()
 	}
@@ -2943,18 +3036,27 @@ func buildCatalog(client *gitlabclient.Client) ([]*mcp.Tool, map[string]toolutil
 }
 
 // newCatalogSession is an internal helper for the main package.
-func newCatalogSession(client *gitlabclient.Client) (*mcp.ClientSession, func(), error) {
-	session, closeSession, _, _, err := buildCatalogSession(client)
+func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.ClientSession, func(), error) {
+	session, closeSession, _, _, err := buildCatalogSession(client, toolSurface)
 	return session, closeSession, err
 }
 
 // buildCatalogSession constructs the request parameters from the input.
-func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
+func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-meta-tools", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	routes = toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, client, client.IsEnterprise())
-		tools.RegisterMCPMeta(server, client, nil)
-	})
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		hiddenRoutes := captureEvaluationMetaRoutes(client)
+		dynamictools.RegisterTools(server, hiddenRoutes)
+		routes = dynamicValidationRoutes(hiddenRoutes)
+	case config.ToolSurfaceMeta:
+		routes = toolutil.CaptureMetaRoutes(func() {
+			tools.RegisterAllMeta(server, client, client.IsEnterprise())
+			tools.RegisterMCPMeta(server, client, nil)
+		})
+	default:
+		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -2974,6 +3076,33 @@ func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSessio
 		return nil, nil, nil, nil, fmt.Errorf("list tools: %w", err)
 	}
 	return session, func() { session.Close() }, result.Tools, routes, nil
+}
+
+// captureEvaluationMetaRoutes captures the hidden action catalog used by the
+// dynamic evaluation surface.
+func captureEvaluationMetaRoutes(client *gitlabclient.Client) map[string]toolutil.ActionMap {
+	hidden := mcp.NewServer(&mcp.Implementation{Name: "eval-hidden-meta-tools", Version: "0.0.1"}, nil)
+	return toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(hidden, client, client.IsEnterprise())
+		tools.RegisterMCPMeta(hidden, client, nil)
+	})
+}
+
+// dynamicValidationRoutes converts hidden meta-tool routes into the single
+// gitlab_execute_tool action namespace used by dynamic mode.
+func dynamicValidationRoutes(hiddenRoutes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	executeRoutes := make(toolutil.ActionMap)
+	for toolName, actions := range hiddenRoutes {
+		for action, route := range actions {
+			executeRoutes[dynamicActionID(toolName, action)] = route
+		}
+	}
+	return map[string]toolutil.ActionMap{dynamicExecuteTool: executeRoutes}
+}
+
+// dynamicActionID returns the canonical dynamic action ID for a hidden route.
+func dynamicActionID(toolName, action string) string {
+	return strings.TrimPrefix(toolName, "gitlab_") + "." + action
 }
 
 // evalCreateMessageHandler performs the eval create message handler operation using the GitLab API and returns [*mcp.CreateMessageResult].
@@ -3089,22 +3218,23 @@ func actionEnumFromSchema(schema map[string]any) []string {
 
 // modelRunner holds data for main operations.
 type modelRunner struct {
-	apiKey     string
-	provider   string
-	model      string
-	modelLabel string
-	maxTokens  int
-	retries    int
-	retryWait  time.Duration
-	client     *http.Client
-	mcpSession *mcp.ClientSession
+	apiKey      string
+	provider    string
+	model       string
+	modelLabel  string
+	toolSurface string
+	maxTokens   int
+	retries     int
+	retryWait   time.Duration
+	client      *http.Client
+	mcpSession  *mcp.ClientSession
 }
 
 // evaluateTask performs the evaluate task operation on *modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
 	steps := taskSteps(task)
-	userPrompt := taskPrompt(task)
-	systemPrompt := systemPromptForTask(task)
+	userPrompt := taskPromptForSurface(task, r.toolSurface)
+	systemPrompt := systemPromptForTask(task, r.toolSurface)
 	result := taskResult{Task: task, Model: r.modelLabel, DestructiveSafe: true, Trace: newTaskTrace(task, systemPrompt, userPrompt)}
 	result.Trace.Model = r.modelLabel
 	messages := []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: userPrompt}}}}
@@ -3140,6 +3270,17 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			if isSchemaLookup(toolUse) {
 				result.SchemaLookupUsed = true
 				payload, lookupErr := schemaLookupResult(routes, toolUse.Input)
+				block := toolResultBlock(toolUse.ID, payload, lookupErr)
+				followups = append(followups, block)
+				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+				if lookupErr != nil {
+					result.Notes = append(result.Notes, lookupErr.Error())
+				}
+				continue
+			}
+			if isDynamicDiscovery(toolUse) {
+				result.SchemaLookupUsed = true
+				payload, lookupErr := dynamicDiscoveryResult(routes, toolUse)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
 				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
@@ -3540,6 +3681,180 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 	return action == "schema_get" || action == "schema_index"
 }
 
+// isDynamicDiscovery reports whether a dynamic catalog lookup tool was called.
+func isDynamicDiscovery(toolUse modelContentBlock) bool {
+	return toolUse.Name == dynamicSearchTool || toolUse.Name == dynamicDescribeTool
+}
+
+// dynamicDiscoveryResult returns simulated discovery output for dynamic search
+// and describe calls, keeping evaluation independent from live GitLab state.
+func dynamicDiscoveryResult(routes map[string]toolutil.ActionMap, toolUse modelContentBlock) (string, error) {
+	switch toolUse.Name {
+	case dynamicSearchTool:
+		query, _ := toolUse.Input["query"].(string)
+		limit := intFromAny(toolUse.Input["limit"], 20)
+		return marshalToolResult(dynamicSearchResult(routes, query, limit))
+	case dynamicDescribeTool:
+		ids := dynamicDescribeIDs(toolUse.Input)
+		if len(ids) == 0 {
+			return "", errors.New("gitlab_describe_tools requires action or actions")
+		}
+		return marshalToolResult(dynamicDescribeResult(routes, ids))
+	default:
+		return "", fmt.Errorf("unsupported dynamic discovery tool %q", toolUse.Name)
+	}
+}
+
+// dynamicSearchResult performs a lightweight lexical search over dynamic action IDs.
+func dynamicSearchResult(routes map[string]toolutil.ActionMap, query string, limit int) map[string]any {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	terms := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	type match struct {
+		ID    string
+		Route toolutil.ActionRoute
+		Score int
+	}
+	var matches []match
+	for actionID, route := range routes[dynamicExecuteTool] {
+		score := dynamicSearchScore(actionID, route.InputSchema, terms)
+		if score > 0 {
+			matches = append(matches, match{ID: actionID, Route: route, Score: score})
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].Score != matches[j].Score {
+			return matches[i].Score > matches[j].Score
+		}
+		return matches[i].ID < matches[j].ID
+	})
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+	results := make([]map[string]any, 0, len(matches))
+	for _, match := range matches {
+		results = append(results, map[string]any{
+			"id":              match.ID,
+			"destructive":     match.Route.Destructive,
+			"required_params": schemaStringSlice(match.Route.InputSchema["required"]),
+			"score":           match.Score,
+		})
+	}
+	return map[string]any{"query": query, "count": len(results), "results": results}
+}
+
+// dynamicSearchScore gives deterministic lexical scores for action lookup.
+func dynamicSearchScore(actionID string, schema map[string]any, terms []string) int {
+	if len(terms) == 0 {
+		return 0
+	}
+	searchParts := []string{strings.ReplaceAll(actionID, ".", " "), actionID}
+	if properties, ok := schema["properties"].(map[string]any); ok {
+		for name := range properties {
+			searchParts = append(searchParts, strings.ReplaceAll(name, "_", " "), name)
+		}
+	}
+	searchText := strings.ToLower(strings.Join(searchParts, " "))
+	score := 0
+	for _, term := range terms {
+		switch {
+		case actionID == term:
+			score += 100
+		case strings.Contains(actionID, term):
+			score += 70
+		case strings.Contains(searchText, term):
+			score += 20
+		default:
+			return 0
+		}
+	}
+	return score
+}
+
+// dynamicDescribeIDs extracts one or many action IDs from describe input.
+func dynamicDescribeIDs(input map[string]any) []string {
+	seen := map[string]struct{}{}
+	var ids []string
+	appendID := func(value any) {
+		id, ok := value.(string)
+		if !ok {
+			return
+		}
+		id = strings.ToLower(strings.TrimSpace(id))
+		if id == "" {
+			return
+		}
+		if _, exists := seen[id]; exists {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	appendID(input["action"])
+	if rawActions, ok := input["actions"].([]any); ok {
+		for _, rawAction := range rawActions {
+			appendID(rawAction)
+		}
+	}
+	return ids
+}
+
+// dynamicDescribeResult returns per-action schema information for dynamic mode.
+func dynamicDescribeResult(routes map[string]toolutil.ActionMap, ids []string) map[string]any {
+	actions := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		route, ok := routes[dynamicExecuteTool][id]
+		if !ok {
+			actions = append(actions, map[string]any{"id": id, "error": "unknown action"})
+			continue
+		}
+		actions = append(actions, map[string]any{
+			"id":              id,
+			"tool":            dynamicExecuteTool,
+			"destructive":     route.Destructive,
+			"required_params": schemaStringSlice(route.InputSchema["required"]),
+			"input_schema":    route.InputSchema,
+			"example": map[string]any{
+				"tool":      dynamicExecuteTool,
+				"arguments": dynamicExecutionExample(id, route),
+			},
+		})
+	}
+	return map[string]any{"count": len(actions), "actions": actions}
+}
+
+// dynamicExecutionExample builds a gitlab_execute_tool argument example.
+func dynamicExecutionExample(actionID string, route toolutil.ActionRoute) map[string]any {
+	params := make(map[string]any)
+	for _, required := range schemaStringSlice(route.InputSchema["required"]) {
+		params[required] = "<" + required + ">"
+	}
+	arguments := map[string]any{"action": actionID, "params": params}
+	if route.Destructive {
+		arguments["confirm"] = true
+	}
+	return arguments
+}
+
+// intFromAny converts JSON numeric values to int with a fallback default.
+func intFromAny(value any, fallback int) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err == nil {
+			return int(parsed)
+		}
+	}
+	return fallback
+}
+
 // schemaLookupResult performs the schema lookup result operation using the GitLab API and returns [string].
 func schemaLookupResult(routes map[string]toolutil.ActionMap, input map[string]any) (string, error) {
 	action, _ := input["action"].(string)
@@ -3658,12 +3973,29 @@ func systemPrompt() string {
 }
 
 // systemPromptForTask is an internal helper for the main package.
-func systemPromptForTask(task evalTask) string {
+func systemPromptForTask(task evalTask, toolSurface string) string {
+	if toolSurface == config.ToolSurfaceDynamic {
+		return dynamicSystemPrompt()
+	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
 		return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Function-call arguments must be one valid JSON object. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. Use domain.action values with the unified gitlab dispatcher. If a task provides a project ID or namespace path, pass it inside params as project_id. Schema lookup counts as an extra tool call; skip it when the prompt provides the exact action and params. For destructive tasks, include confirm:true in params. Return tool calls only; do not answer with explanatory text.`
 	}
 	return systemPrompt()
+}
+
+// dynamicSystemPrompt guides models through the low-token dynamic tool surface.
+func dynamicSystemPrompt() string {
+	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool. The hidden GitLab operations are not directly visible as tools. Use gitlab_search_tools when you need to find a canonical action ID. Use gitlab_describe_tools when you need exact params for one or more action IDs. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+}
+
+// taskPromptForSurface returns task guidance for the selected tool catalog.
+func taskPromptForSurface(task evalTask, toolSurface string) string {
+	if toolSurface != config.ToolSurfaceDynamic {
+		return taskPrompt(task)
+	}
+	prompt := taskPrompt(task)
+	return prompt + "\n\nDynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. Treat any hidden GitLab route as a canonical action ID for gitlab_execute_tool. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params."
 }
 
 // taskPrompt is an internal helper for the main package.
@@ -3840,13 +4172,7 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 		params[param] = exampleParamValue(param, task.Prompt)
 	}
 
-	example := struct {
-		Action string         `json:"action"`
-		Params map[string]any `json:"params"`
-	}{
-		Action: step.ExpectedAction,
-		Params: params,
-	}
+	example := actionGuidanceExample(step, params)
 	data, err := marshalGuidanceExample(example)
 	toolName := step.ExpectedTool
 	if toolName == "" {
@@ -3860,6 +4186,18 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 		toolDisambiguation = " The exact tool name is gitlab_merge_request; do not use gitlab_mr_review, which is for MR notes, discussions, and diffs."
 	}
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s.%s Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data, toolDisambiguation)
+}
+
+// actionGuidanceExample builds an action+params example for task prompts.
+func actionGuidanceExample(step evalStep, params map[string]any) map[string]any {
+	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
+	if step.ExpectedTool == dynamicExecuteTool {
+		if step.Destructive || isTruthy(params["confirm"]) {
+			delete(params, "confirm")
+			arguments["confirm"] = true
+		}
+	}
+	return arguments
 }
 
 // usesCompactExactPrompt is an internal helper for the main package.
@@ -3887,13 +4225,7 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 			params[param] = value
 		}
 	}
-	example := struct {
-		Action string         `json:"action"`
-		Params map[string]any `json:"params"`
-	}{
-		Action: step.ExpectedAction,
-		Params: params,
-	}
+	example := actionGuidanceExample(step, params)
 	data, err := marshalGuidanceExample(example)
 	if err != nil {
 		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the gitlab tool once with action %s and the params named in the task. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, step.ExpectedAction)
@@ -4360,7 +4692,7 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 		problems = append(problems, fmt.Sprintf("expected action %s, got %s", step.ExpectedAction, action))
 	}
 	for key := range input {
-		if key != "action" && key != "params" {
+		if key != "action" && key != "params" && (step.ExpectedTool != dynamicExecuteTool || key != "confirm") {
 			problems = append(problems, fmt.Sprintf("unexpected top-level parameter %s; put action-specific fields under params", key))
 		}
 	}
@@ -4373,8 +4705,15 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	result.DestructiveSafe = true
 	if step.Destructive && result.ToolMatches && result.ActionMatches {
 		result.DestructiveSafe = isTruthy(params["confirm"])
+		if step.ExpectedTool == dynamicExecuteTool {
+			result.DestructiveSafe = result.DestructiveSafe || isTruthy(input["confirm"])
+		}
 		if !result.DestructiveSafe {
-			problems = append(problems, "destructive task requires params.confirm=true")
+			if step.ExpectedTool == dynamicExecuteTool {
+				problems = append(problems, "destructive dynamic task requires top-level confirm=true")
+			} else {
+				problems = append(problems, "destructive task requires params.confirm=true")
+			}
 		}
 	}
 	result.Valid = len(problems) == 0
@@ -4422,10 +4761,13 @@ func expectedActionCallExample(step evalStep) string {
 	for _, required := range step.RequiredParams {
 		params[required] = "<" + required + ">"
 	}
-	if step.Destructive || hasParam(step.OptionalParams, "confirm") {
+	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
+	if step.ExpectedTool == dynamicExecuteTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
+		arguments["confirm"] = true
+	} else if step.Destructive || hasParam(step.OptionalParams, "confirm") {
 		params["confirm"] = true
 	}
-	data, err := json.Marshal(map[string]any{"action": step.ExpectedAction, "params": params})
+	data, err := json.Marshal(arguments)
 	if err != nil {
 		return fmt.Sprintf("{\"action\":%q,\"params\":{...}}", step.ExpectedAction)
 	}
@@ -4530,6 +4872,7 @@ type comparisonInput struct {
 	Date          string
 	Mode          string
 	Model         string
+	ToolSurface   string
 	Backend       string
 	Preset        string
 	Partition     string
@@ -4598,6 +4941,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 		input.Date = firstMetadataValue(content, "Date")
 		input.Mode = firstMetadataValue(content, "Mode")
 		input.Model = firstMetadataValue(content, "Model")
+		input.ToolSurface = firstMetadataValue(content, "Tool surface")
 		input.Backend = firstMetadataValue(content, "Backend")
 		input.Preset = firstMetadataValue(content, "Preset")
 		input.Partition = firstMetadataValue(content, "Partition")
@@ -4628,11 +4972,11 @@ func buildComparisonReport(inputs []comparisonInput) string {
 	fmt.Fprintf(&b, "# Meta-Tool Evaluation Comparison\n\n")
 	fmt.Fprintf(&b, "Date: %s\n\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "## Inputs\n\n")
-	fmt.Fprintf(&b, "| Label | Kind | Source | Mode | Backend | Tasks | Catalog tools |\n")
-	fmt.Fprintf(&b, "| --- | --- | --- | --- | --- | ---: | ---: |\n")
+	fmt.Fprintf(&b, "| Label | Kind | Source | Mode | Surface | Backend | Tasks | Catalog tools |\n")
+	fmt.Fprintf(&b, "| --- | --- | --- | --- | --- | --- | ---: | ---: |\n")
 	for _, input := range inputs {
-		fmt.Fprintf(&b, "| `%s` | %s | `%s` | %s | %s | %d | %d |\n",
-			escapeTable(input.Label), input.Kind, escapeTable(input.Path), emptyDash(input.Mode), emptyDash(input.Backend), input.TaskAttempts, input.CatalogTools)
+		fmt.Fprintf(&b, "| `%s` | %s | `%s` | %s | %s | %s | %d | %d |\n",
+			escapeTable(input.Label), input.Kind, escapeTable(input.Path), emptyDash(input.Mode), emptyDash(input.ToolSurface), emptyDash(input.Backend), input.TaskAttempts, input.CatalogTools)
 	}
 	writeEvaluationComparison(&b, inputs)
 	writeTokenComparison(&b, inputs)
@@ -5009,6 +5353,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	fmt.Fprintf(&b, "Mode: %s\n", mode)
 	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
+	fmt.Fprintf(&b, "Tool surface: `%s`\n", opts.ToolSurface)
 	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
 	if opts.Preset != "" {
 		fmt.Fprintf(&b, "Preset: `%s`\n", opts.Preset)

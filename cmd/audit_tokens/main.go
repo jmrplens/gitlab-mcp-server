@@ -27,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -67,16 +68,24 @@ func main() {
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
 
-	individualTools := listTools(client, false, true)
-	metaBaseTools := listTools(client, true, false)
-	metaEnterpriseTools := listTools(client, true, true)
+	metaBaseRoutes := captureMetaRoutes(client, false)
+	metaEnterpriseRoutes := captureMetaRoutes(client, true)
+
+	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
+	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
+	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
+	dynamicBaseTools := listDynamicTools(metaBaseRoutes)
+	dynamicEnterpriseTools := listDynamicTools(metaEnterpriseRoutes)
 
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
+	dynamicBaseInfo := measureTools(dynamicBaseTools)
+	dynamicEnterpriseInfo := measureTools(dynamicEnterpriseTools)
 
-	individualResourceTokens := measureResources(client, false)
-	metaResourceTokens := measureResources(client, true)
+	individualResourceTokens := measureResources(client, nil)
+	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
+	dynamicBaseResourceTokens := measureResources(client, metaBaseRoutes)
 	promptTokens := measurePrompts(client)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
@@ -88,15 +97,19 @@ func main() {
 	indTotal := totalTokens(individualInfo)
 	metaTotal := totalTokens(metaBaseInfo)
 	metaEntTotal := totalTokens(metaEnterpriseInfo)
+	dynamicTotal := totalTokens(dynamicBaseInfo)
+	dynamicEntTotal := totalTokens(dynamicEnterpriseInfo)
 
 	fmt.Println("## Mode Comparison")
 	fmt.Println()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "  Mode\tTools\tTokens\tBytes\n")
-	fmt.Fprintf(tw, "  ────\t─────\t──────\t─────\n")
-	fmt.Fprintf(tw, "  Individual (all)\t%d\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%s\t%s\n", len(metaBaseInfo), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%s\t%s\n", len(metaEnterpriseInfo), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Mode\tTools\tHidden actions\tTokens\tBytes\n")
+	fmt.Fprintf(tw, "  ────\t─────\t──────────────\t──────\t─────\n")
+	fmt.Fprintf(tw, "  Individual (all)\t%d\t0\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), countActions(metaBaseRoutes), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), countActions(metaBaseRoutes), fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
 	_ = tw.Flush()
 	fmt.Println()
 
@@ -105,15 +118,22 @@ func main() {
 		fmt.Printf("  Meta-tools reduce token overhead by %.1f%% vs individual mode\n", savings)
 		fmt.Println()
 	}
+	if indTotal > 0 {
+		savings := float64(indTotal-dynamicTotal) / float64(indTotal) * 100
+		fmt.Printf("  Dynamic mode reduces visible tool token overhead by %.1f%% vs individual mode\n", savings)
+		fmt.Println()
+	}
 
 	// Shared overhead (resources + prompts)
 	fmt.Println("## Shared Overhead (Resources + Prompts)")
 	fmt.Println()
 	fmt.Printf("  Resources (individual): ~%s tokens (%s bytes)\n", fmtNum(individualResourceTokens), fmtNum(individualResourceTokens*bytesPerTok))
-	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaResourceTokens), fmtNum(metaResourceTokens*bytesPerTok))
+	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaBaseResourceTokens), fmtNum(metaBaseResourceTokens*bytesPerTok))
+	fmt.Printf("  Resources (dynamic): ~%s tokens (%s bytes)\n", fmtNum(dynamicBaseResourceTokens), fmtNum(dynamicBaseResourceTokens*bytesPerTok))
 	fmt.Printf("  Prompts:   ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
 	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
-	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaResourceTokens+promptTokens))
+	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic total:    ~%s tokens\n", fmtNum(dynamicBaseResourceTokens+promptTokens))
 	fmt.Println()
 
 	// Top 30 individual tools by token cost
@@ -126,6 +146,11 @@ func main() {
 	fmt.Println()
 	printTopTools(metaBaseInfo, len(metaBaseInfo))
 
+	// Dynamic tools by token cost
+	fmt.Println("## Dynamic Tools by Token Cost (base)")
+	fmt.Println()
+	printTopTools(dynamicBaseInfo, len(dynamicBaseInfo))
+
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
 	fmt.Println()
@@ -137,22 +162,74 @@ func main() {
 	fmt.Printf("  Individual mode: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
 		fmtNum(indTotal), fmtNum(individualResourceTokens+promptTokens), fmtNum(indTotal+individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(metaTotal), fmtNum(metaResourceTokens+promptTokens), fmtNum(metaTotal+metaResourceTokens+promptTokens))
+		fmtNum(metaTotal), fmtNum(metaBaseResourceTokens+promptTokens), fmtNum(metaTotal+metaBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamicTotal), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamicTotal+dynamicBaseResourceTokens+promptTokens))
 	fmt.Println()
 }
 
 // listTools registers either individual tools or meta-tools on an in-memory MCP
 // server and returns the published tool definitions for measurement.
-func listTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool) []*mcp.Tool {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, opts)
 
-	if meta {
+	switch toolSurface {
+	case config.ToolSurfaceMeta:
 		tools.RegisterAllMeta(server, client, enterprise)
-	} else {
+		tools.RegisterMCPMeta(server, client, nil)
+	case config.ToolSurfaceIndividual:
 		tools.RegisterAll(server, client, enterprise)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown tool surface %q\n", toolSurface)
+		os.Exit(1)
 	}
 
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
+		os.Exit(1)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
+		os.Exit(1)
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
+		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+	}
+	return result.Tools
+}
+
+// listDynamicTools registers the low-token dynamic public toolset backed by
+// hidden meta-tool routes and returns the advertised tool definitions.
+func listDynamicTools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
+	dynamictools.RegisterTools(server, routes)
+	return listToolsFromServer(server)
+}
+
+// captureMetaRoutes builds the hidden action route catalog that backs both
+// meta-schema resources and the dynamic toolset.
+func captureMetaRoutes(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	return toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(server, client, enterprise)
+		tools.RegisterMCPMeta(server, client, nil)
+	})
+}
+
+// listToolsFromServer connects to server in-memory and returns the advertised
+// tool definitions.
+func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
@@ -205,13 +282,10 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 // measureResources registers static, template, workflow, and optionally
 // meta-schema MCP resources, then estimates the token cost of their advertised
 // definitions.
-func measureResources(client *gitlabclient.Client, includeMetaSchema bool) int {
+func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
 	resources.Register(server, client)
-	if includeMetaSchema {
-		metaRoutes := toolutil.CaptureMetaRoutes(func() {
-			tools.RegisterAllMeta(server, client, false)
-		})
+	if len(metaRoutes) > 0 {
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 	}
 	resources.RegisterWorkflowGuides(server)
@@ -259,6 +333,15 @@ func measureResources(client *gitlabclient.Client, includeMetaSchema bool) int {
 	}
 
 	return totalBytes / bytesPerTok
+}
+
+// countActions returns the number of hidden actions in a route catalog.
+func countActions(routes map[string]toolutil.ActionMap) int {
+	total := 0
+	for _, actions := range routes {
+		total += len(actions)
+	}
+	return total
 }
 
 // measurePrompts registers MCP prompts and estimates the token cost of their
