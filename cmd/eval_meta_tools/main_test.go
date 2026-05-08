@@ -521,6 +521,27 @@ func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
 	}
 }
 
+func TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom(t *testing.T) {
+	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceDynamic3); got != 20 {
+		t.Fatalf("taskToolCallLimitForSurface(4, dynamic-3) = %d, want 20", got)
+	}
+	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceMeta); got != 16 {
+		t.Fatalf("taskToolCallLimitForSurface(4, meta) = %d, want 16", got)
+	}
+}
+
+func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
+	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic3); got != 2 {
+		t.Fatalf("repairAttemptLimitForSurface(dynamic-3) = %d, want 2", got)
+	}
+	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic2); got != 1 {
+		t.Fatalf("repairAttemptLimitForSurface(dynamic-2) = %d, want 1", got)
+	}
+	if got := repairAttemptLimitForSurface(config.ToolSurfaceMeta); got != 1 {
+		t.Fatalf("repairAttemptLimitForSurface(meta) = %d, want 1", got)
+	}
+}
+
 // TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes verifies that BuildRouteCoverageReport handles the lists uncovered high risk routes scenario correctly.
 func TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
@@ -642,6 +663,32 @@ func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 				t.Fatalf("normalizeEvalToolSurface(%q) = %q, want %q", input, got, want)
 			}
 		})
+	}
+}
+
+func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testing.T) {
+	task := evalTask{ID: "MS-002", Prompt: "Investigate a pipeline failure for git remote `git@gitlab.example.com:group/project.git` and summarize the failing job."}
+
+	system := systemPromptForTask(task, config.ToolSurfaceDynamic3)
+	for _, want := range []string{
+		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first.",
+		"If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool.",
+		"Do not guess or invent alias action IDs such as merge_request.accept, issue.notes, or pipeline.jobs.",
+	} {
+		if !strings.Contains(system, want) {
+			t.Fatalf("systemPromptForTask() = %q, want dynamic-3 guidance containing %q", system, want)
+		}
+	}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	for _, want := range []string{
+		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool.",
+		"If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool.",
+		"params limited to the described input schema",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPromptForSurface() = %q, want dynamic-3 override containing %q", prompt, want)
+		}
 	}
 }
 
@@ -3308,6 +3355,66 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	if !result.SchemaLookupUsed || !result.FinalSuccess || result.ModelCalls != 2 {
 		t.Fatalf("result = %+v, want schema lookup and final success in two calls", result)
 	}
+}
+
+func TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("search", dynamicExecuteTool, map[string]any{"action": "search.projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
+		toolUseResponse("resolve", dynamicExecuteTool, map[string]any{"action": "discover_project.resolve", "params": map[string]any{"remote_url": "git@gitlab.example.com:my-org/tools/gitlab-mcp-server.git"}}),
+	)
+	runner.toolSurface = config.ToolSurfaceDynamic3
+	task := evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {
+		"search.projects":          {},
+		"discover_project.resolve": {},
+	}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if result.RepairAttempted {
+		t.Fatalf("result = %+v, want accepted prelude without repair", result)
+	}
+	if !result.FirstPass || !result.FinalSuccess {
+		t.Fatalf("result = %+v, want accepted prelude and final success", result)
+	}
+	if result.FirstAction != "search.projects" {
+		t.Fatalf("FirstAction = %q, want preserved prelude action", result.FirstAction)
+	}
+}
+
+func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing.T) {
+	t.Run("project search prelude", func(t *testing.T) {
+		result := taskResult{
+			Task: evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}},
+			ToolSurface: config.ToolSurfaceDynamic3,
+			FirstTool:   dynamicExecuteTool,
+			FirstAction: "search.projects",
+			FirstPass:   true,
+			FinalSuccess: true,
+		}
+		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
+		if !toolOK || !actionOK || !firstPassOK {
+			t.Fatalf("effectiveFirstOutcome() = %t, %t, %t, want all true", toolOK, actionOK, firstPassOK)
+		}
+	})
+
+	t.Run("unsupported analyzer fallback", func(t *testing.T) {
+		result := taskResult{
+			Task: evalTask{ID: "MF-004", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "analyze.issue_summary", RequiredParams: []string{"project_id", "issue_iid"}, Simulation: "sampling_unsupported_continue"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.get", RequiredParams: []string{"project_id", "issue_iid"}},
+			}},
+			ToolSurface: config.ToolSurfaceDynamic3,
+			FirstTool:   dynamicExecuteTool,
+			FirstAction: "issue.get",
+			FirstPass:   false,
+			FinalSuccess: true,
+		}
+		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
+		if !toolOK || !actionOK || !firstPassOK {
+			t.Fatalf("effectiveFirstOutcome() = %t, %t, %t, want all true", toolOK, actionOK, firstPassOK)
+		}
+	})
 }
 
 // TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies that EvaluateTask handles the records trace for prompt tool use and validation scenario correctly.

@@ -277,8 +277,12 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	tests := map[string]string{
+		"issue.notes":                               "issue.note_list",
+		"issue.notes.list":                          "issue.note_list",
+		"pipeline.jobs":                             "job.list",
 		"project.schedule_storage_move":             "storage_move.schedule_project",
 		"merge_request.changes":                     "mr_review.changes_get",
+		"merge_request.accept":                      "merge_request.merge",
 		"project.hooks.list":                        "project.hook_list",
 		"project.status_check_list":                 "external_status_check.list_project",
 		"project.status_checks.list":                "external_status_check.list_project",
@@ -301,6 +305,9 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"project.member_remove":                     "project.member_delete",
 		"project_member.remove":                     "project.member_delete",
 		"webhook.add":                               "project.hook_add",
+		"group.ldap_link_delete":                    "group.ldap_link_delete_for_provider",
+		"release.create_link":                       "release.link_create",
+		"package.list_project":                      "package.list",
 	}
 	for alias, want := range tests {
 		t.Run(alias, func(t *testing.T) {
@@ -500,6 +507,29 @@ func TestRegisterTools_ExposesThreeDynamicTools(t *testing.T) {
 	}
 }
 
+func TestSearch_PartialMatchLongQuery(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	// Simulate a realistic LLM query that includes incidental words ("open") that
+	// do not map to any tool name but should not suppress relevant results.
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merge request list open", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches for partial query, want at least one merge_request result")
+	}
+	found := slices.ContainsFunc(output.Results, func(r SearchResult) bool {
+		return strings.HasPrefix(r.ID, "merge_request.")
+	})
+	if !found {
+		t.Fatalf("Search() results = %+v, want at least one merge_request.* result", output.Results)
+	}
+}
+
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	t.Helper()
 	return map[string]toolutil.ActionMap{
@@ -570,9 +600,27 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			},
 		},
 		"gitlab_merge_request": {
+			"list": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"state": params["state"], "author_username": params["author_username"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id":      map[string]any{"type": "integer"},
+						"state":           map[string]any{"type": "string"},
+						"author_username": map[string]any{"type": "string"},
+					},
+				},
+			},
 			"approve": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"approved": true}, nil
+				},
+			},
+			"merge": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"merged": true}, nil
 				},
 			},
 			"time_estimate_set": {
@@ -587,6 +635,11 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			},
 		},
 		"gitlab_issue": {
+			"note_list": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"notes": true}, nil
+				},
+			},
 			"update": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
 					return map[string]any{"state_event": params["state_event"]}, nil
@@ -656,6 +709,13 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 		},
+		"gitlab_group": {
+			"ldap_link_delete_for_provider": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"deleted": true}, nil
+				},
+			},
+		},
 		"gitlab_storage_move": {
 			"schedule_project": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
@@ -716,6 +776,11 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			},
 		},
 		"gitlab_job": {
+			"list": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{"jobs": true}, nil
+				},
+			},
 			"token_scope_list_inbound": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"allowlist": true}, nil

@@ -165,7 +165,7 @@ func addSearchTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         searchToolName,
 		Title:        "GitLab Search Tools",
-		Description:  "Search the hidden GitLab action registry. Use this first when you need to find the canonical action ID for gitlab_execute_tool.",
+		Description:  "Search the hidden GitLab action registry for the exact canonical action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Then pass the returned canonical domain.action ID to gitlab_describe_tools or gitlab_execute_tool. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Search Tools"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -176,7 +176,7 @@ func addDescribeTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        describeToolName,
 		Title:       "GitLab Describe Tools",
-		Description: "Describe one or more hidden GitLab actions by canonical action ID, returning exact params schema, output summary, safety metadata, and an execute example.",
+		Description: "Describe one or more hidden GitLab actions by canonical action ID and return the exact params schema, required params, safety metadata, and an execute example. Use this before gitlab_execute_tool whenever params are not already exact. Rely on the returned schema and example for param names. Do NOT invent alias params or unsupported params.",
 		Annotations: annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Describe Tools"),
 		Icons:       toolutil.IconConfig,
 	}, registry.Describe)
@@ -197,7 +197,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one hidden GitLab action by canonical action ID (e.g. domain.action). ALWAYS use gitlab_find_action first unless the exact action ID and all required param names are already known—do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true. If params are missing, use gitlab_find_action to retrieve the exact schema.",
+		Description: "Execute one hidden GitLab action by canonical action ID (e.g. domain.action). For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: toolutil.BoolPtr(true),
@@ -461,20 +461,39 @@ func dedupeSortedStrings(values []string) []string {
 func searchSynonyms() map[string][]string {
 	return map[string][]string{
 		"access":     {"token", "deploy", "member"},
+		"approve":    {"approval", "review", "feedback"},
+		"approved":   {"approval", "review", "approved"},
 		"artifact":   {"job", "download"},
+		"assignee":   {"assigned", "assign", "delegate", "list"},
+		"author":     {"creator", "created_by", "owner", "list"},
 		"ci":         {"pipeline", "job", "variable", "lint"},
+		"closed":     {"close", "list", "filter"},
+		"comment":    {"note", "discussion", "reply"},
 		"deploy":     {"deployment", "environment", "key"},
 		"deployment": {"deploy", "environment"},
 		"details":    {"get"},
+		"discussion": {"comment", "thread", "note"},
+		"draft":      {"wip", "work_in_progress", "proposal"},
 		"env":        {"environment"},
 		"file":       {"repository", "blob", "content"},
+		"filter":     {"search", "query", "find", "list"},
 		"info":       {"get"},
+		"label":      {"tag", "category", "list"},
+		"merged":     {"merge", "integrated", "list"},
 		"metadata":   {"get", "details"},
+		"milestone":  {"sprint", "release", "deadline", "list"},
 		"mr":         {"merge", "request", "merge_request"},
+		"note":       {"comment", "discussion", "reply"},
+		"open":       {"active", "unresolved", "status_open", "list"},
+		"owned":      {"my", "personal", "mine", "owner", "list"},
+		"pending":    {"list", "filter", "todo"},
 		"read":       {"get", "file", "content"},
+		"review":     {"approval", "feedback", "assessment"},
 		"repo":       {"repository", "file", "tree", "branch", "tag"},
-		"secret":     {"variable", "ci_variable", "token"},
+		"secret":     {"variable", "ci_variable", "token", "password"},
 		"show":       {"get"},
+		"state":      {"status", "condition", "filter", "list"},
+		"unresolved": {"open", "active", "list"},
 		"verify":     {"get"},
 		"webhook":    {"hook"},
 		"webhooks":   {"hook"},
@@ -732,8 +751,13 @@ func actionAliases() []actionAlias {
 		{Alias: "geo.node_list", Canonical: "geo.list"},
 		{Alias: "gitlab_server.health_check", Canonical: "server.health_check"},
 		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},
+		{Alias: "group.ldap_link_delete", Canonical: "group.ldap_link_delete_for_provider"},
+		{Alias: "issue.notes", Canonical: "issue.note_list"},
+		{Alias: "issue.notes.list", Canonical: "issue.note_list"},
 		{Alias: "job.download_single_artifact", Canonical: "job.artifact_download"},
+		{Alias: "pipeline.jobs", Canonical: "job.list"},
 		{Alias: "merge_train.list", Canonical: "merge_train.list_project"},
+		{Alias: "merge_request.accept", Canonical: "merge_request.merge"},
 		{Alias: "merge_request.changes", Canonical: "mr_review.changes_get"},
 		{Alias: "merge_request_note.create", Canonical: "mr_review.note_create"},
 		{Alias: "merge_request_note.delete", Canonical: "mr_review.note_delete"},
@@ -766,8 +790,10 @@ func actionAliases() []actionAlias {
 		{Alias: "repository_file.create", Canonical: "repository.file_create"},
 		{Alias: "repository_file.delete", Canonical: "repository.file_delete"},
 		{Alias: "repository_file.get", Canonical: "repository.file_get"},
+		{Alias: "release.create_link", Canonical: "release.link_create"},
 		{Alias: "release.asset_link.create", Canonical: "release.link_create"},
 		{Alias: "release.generate_notes", Canonical: "analyze.release_notes"},
+		{Alias: "package.list_project", Canonical: "package.list"},
 		{Alias: "variable.create", Canonical: "ci_variable.create"},
 		{Alias: "group.variable.create", Canonical: "ci_variable.group_create"},
 		{Alias: "group.audit_events", Canonical: "audit_event.list_group"},
@@ -789,25 +815,37 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	if len(terms) == 0 {
 		return 0
 	}
-	score := 0
+	totalScore := 0
+	matchedCount := 0
 	for _, term := range terms {
-		matched := false
 		best := 0
 		for _, alternative := range term.Alternatives {
 			candidateScore := scoreSearchAlternative(entry, term.Raw, alternative)
 			if candidateScore > best {
 				best = candidateScore
 			}
-			if candidateScore > 0 {
-				matched = true
-			}
 		}
-		if !matched {
-			return 0
+		if best > 0 {
+			matchedCount++
+			totalScore += best
 		}
-		score += best
 	}
-	return score
+	if matchedCount == 0 {
+		return 0
+	}
+	// For short queries (1–2 terms) all terms must match.
+	// For longer queries allow at most one unmatched term so that incidental
+	// words like state values ("open") or prepositions don't suppress results.
+	minRequired := len(terms)
+	if len(terms) > 2 {
+		minRequired = len(terms) - 1
+	}
+	if matchedCount < minRequired {
+		return 0
+	}
+	// Scale the total score by the match ratio so fully-matched entries rank
+	// above partial matches.
+	return totalScore * matchedCount / len(terms)
 }
 
 func scoreSearchAlternative(entry actionEntry, raw, alternative string) int {
