@@ -25,10 +25,12 @@ func fuzzyTokenScore(needle string, searchTokens []string) int {
 	}
 
 	total := 0
+	eligibleParts := 0
 	for _, part := range parts {
 		if len(part) < fuzzyMinTokenLen {
 			continue
 		}
+		eligibleParts++
 
 		best := 0
 		for _, token := range searchTokens {
@@ -42,10 +44,7 @@ func fuzzyTokenScore(needle string, searchTokens []string) int {
 			}
 
 			score := fuzzyDistanceScore(distance)
-			if score == 0 {
-				continue
-			}
-			if strings.HasPrefix(token, part[:1]) {
+			if strings.HasPrefix(token, firstRuneString(part)) {
 				score += 2
 			}
 			if score > best {
@@ -59,10 +58,10 @@ func fuzzyTokenScore(needle string, searchTokens []string) int {
 		total += best
 	}
 
-	if total == 0 {
+	if total == 0 || eligibleParts == 0 {
 		return 0
 	}
-	return total / len(parts)
+	return total / eligibleParts
 }
 
 func fuzzyScoreEntry(entry actionEntry, terms []searchTerm) int {
@@ -106,23 +105,25 @@ func splitWordTokens(value string) []string {
 		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
 	})
 	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		out = append(out, part)
-	}
+	out = append(out, parts...)
 	return out
 }
 
 func comparableTokenLength(needle, token string) bool {
-	ln := len(needle)
-	lt := len(token)
+	ln := len([]rune(needle))
+	lt := len([]rune(token))
 	diff := ln - lt
 	if diff < 0 {
 		diff = -diff
 	}
 	return diff <= fuzzyMaxDistance
+}
+
+func firstRuneString(value string) string {
+	for _, r := range value {
+		return string(r)
+	}
+	return ""
 }
 
 func fuzzyDistanceScore(distance int) int {
@@ -142,52 +143,48 @@ func boundedLevenshtein(a, b string, maxDistance int) (int, bool) {
 	if a == b {
 		return 0, true
 	}
-	if len(a) == 0 {
-		if len(b) <= maxDistance {
-			return len(b), true
+	ar := []rune(a)
+	br := []rune(b)
+	if len(ar) == 0 {
+		if len(br) <= maxDistance {
+			return len(br), true
 		}
 		return 0, false
 	}
-	if len(b) == 0 {
-		if len(a) <= maxDistance {
-			return len(a), true
+	if len(br) == 0 {
+		if len(ar) <= maxDistance {
+			return len(ar), true
 		}
 		return 0, false
 	}
 
-	if len(a) > len(b) {
-		a, b = b, a
+	if len(ar) > len(br) {
+		ar, br = br, ar
 	}
-	if len(b)-len(a) > maxDistance {
+	if len(br)-len(ar) > maxDistance {
 		return 0, false
 	}
 
-	previous := make([]int, len(a)+1)
-	current := make([]int, len(a)+1)
-	for i := 0; i <= len(a); i++ {
+	previous := make([]int, len(ar)+1)
+	current := make([]int, len(ar)+1)
+	for i := 0; i <= len(ar); i++ {
 		previous[i] = i
 	}
 
-	for i := 1; i <= len(b); i++ {
+	for i := 1; i <= len(br); i++ {
 		current[0] = i
 		minInRow := current[0]
-		bi := b[i-1]
-		for j := 1; j <= len(a); j++ {
+		brune := br[i-1]
+		for j := 1; j <= len(ar); j++ {
 			cost := 0
-			if a[j-1] != bi {
+			if ar[j-1] != brune {
 				cost = 1
 			}
 
 			deletion := previous[j] + 1
 			insertion := current[j-1] + 1
 			substitution := previous[j-1] + cost
-			best := deletion
-			if insertion < best {
-				best = insertion
-			}
-			if substitution < best {
-				best = substitution
-			}
+			best := min(deletion, insertion, substitution)
 
 			current[j] = best
 			if best < minInRow {
@@ -201,7 +198,7 @@ func boundedLevenshtein(a, b string, maxDistance int) (int, bool) {
 		previous, current = current, previous
 	}
 
-	distance := previous[len(a)]
+	distance := previous[len(ar)]
 	if distance > maxDistance {
 		return 0, false
 	}

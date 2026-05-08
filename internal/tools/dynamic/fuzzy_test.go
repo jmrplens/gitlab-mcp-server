@@ -2,6 +2,38 @@ package dynamic
 
 import "testing"
 
+// TestBuildSearchTokens verifies that fuzzy search tokens are normalized,
+// deduplicated, and omitted when the search text has no word characters.
+// This matters because every dynamic action entry reuses these cached tokens
+// during typo fallback search.
+func TestBuildSearchTokens(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "normalizes separators and removes duplicates", text: "Merge merge_request merge", want: []string{"merge", "request"}},
+		{name: "returns nil for punctuation only input", text: "...---___", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildSearchTokens(tt.text)
+			if len(got) != len(tt.want) {
+				t.Fatalf("buildSearchTokens() = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("buildSearchTokens() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+// TestBoundedLevenshtein validates the edit-distance helper used by DIY fuzzy
+// search. It covers exact matches, close typo recovery, distance cutoffs, empty
+// strings, swapped input lengths, final threshold rejection, and Unicode text.
 func TestBoundedLevenshtein(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -14,6 +46,13 @@ func TestBoundedLevenshtein(t *testing.T) {
 		{name: "exact", a: "merge", b: "merge", maxDistance: 2, wantOK: true, wantDist: 0},
 		{name: "single substitution", a: "merje", b: "merge", maxDistance: 2, wantOK: true, wantDist: 1},
 		{name: "single insertion", a: "request", b: "requesst", maxDistance: 2, wantOK: true, wantDist: 1},
+		{name: "empty left within threshold", a: "", b: "ab", maxDistance: 2, wantOK: true, wantDist: 2},
+		{name: "empty left beyond threshold", a: "", b: "abc", maxDistance: 2, wantOK: false, wantDist: 0},
+		{name: "empty right within threshold", a: "ab", b: "", maxDistance: 2, wantOK: true, wantDist: 2},
+		{name: "empty right beyond threshold", a: "abc", b: "", maxDistance: 2, wantOK: false, wantDist: 0},
+		{name: "swaps longer left input", a: "merge", b: "merg", maxDistance: 2, wantOK: true, wantDist: 1},
+		{name: "rejects by final threshold", a: "abc", b: "abd", maxDistance: 0, wantOK: false, wantDist: 0},
+		{name: "unicode substitution counts runes", a: "proyécto", b: "proyecto", maxDistance: 1, wantOK: true, wantDist: 1},
 		{name: "too far", a: "abc", b: "project", maxDistance: 2, wantOK: false, wantDist: 0},
 	}
 
@@ -30,23 +69,75 @@ func TestBoundedLevenshtein(t *testing.T) {
 	}
 }
 
+// TestFuzzyDistanceScore validates the fixed score mapping used after a token
+// passes the bounded Levenshtein check. The default branch is covered directly
+// so future scoring changes do not silently accept out-of-range distances.
+func TestFuzzyDistanceScore(t *testing.T) {
+	tests := []struct {
+		distance int
+		want     int
+	}{
+		{distance: 0, want: 40},
+		{distance: 1, want: 34},
+		{distance: 2, want: 28},
+		{distance: 3, want: 0},
+	}
+
+	for _, tt := range tests {
+		got := fuzzyDistanceScore(tt.distance)
+		if got != tt.want {
+			t.Fatalf("fuzzyDistanceScore(%d) = %d, want %d", tt.distance, got, tt.want)
+		}
+	}
+}
+
+// TestFirstRuneString verifies that prefix scoring works with both ASCII and
+// Unicode tokens. This protects the fuzzy bonus from byte-slicing multibyte
+// runes in non-English project or action terms.
+func TestFirstRuneString(t *testing.T) {
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{value: "merge", want: "m"},
+		{value: "ñandú", want: "ñ"},
+		{value: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		got := firstRuneString(tt.value)
+		if got != tt.want {
+			t.Fatalf("firstRuneString(%q) = %q, want %q", tt.value, got, tt.want)
+		}
+	}
+}
+
+// TestFuzzyTokenScore validates scoring for exact tokens, typo tokens,
+// multi-token typo recovery, ignored short tokens, empty inputs, and non-matches.
+// These are the primitive behaviors that make gitlab_search_tools recover from
+// small spelling mistakes without replacing exact search ranking.
 func TestFuzzyTokenScore(t *testing.T) {
 	tokens := buildSearchTokens("merge_request list project issue")
 
 	tests := []struct {
 		name    string
 		query   string
+		tokens  []string
 		wantMin int
 	}{
-		{name: "exact token", query: "merge", wantMin: 30},
-		{name: "typo token", query: "merje", wantMin: 20},
-		{name: "multi token typo", query: "merje requesy", wantMin: 20},
-		{name: "no match", query: "abcdef", wantMin: 0},
+		{name: "exact token", query: "merge", tokens: tokens, wantMin: 30},
+		{name: "typo token", query: "merje", tokens: tokens, wantMin: 20},
+		{name: "multi token typo", query: "merje requesy", tokens: tokens, wantMin: 20},
+		{name: "short token ignored", query: "mr", tokens: tokens, wantMin: 0},
+		{name: "short token does not penalize eligible token", query: "mr merje", tokens: tokens, wantMin: 30},
+		{name: "empty query", query: "", tokens: tokens, wantMin: 0},
+		{name: "empty search tokens", query: "merge", tokens: nil, wantMin: 0},
+		{name: "no match", query: "abcdef", tokens: tokens, wantMin: 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := fuzzyTokenScore(tt.query, tokens)
+			got := fuzzyTokenScore(tt.query, tt.tokens)
 			if tt.wantMin == 0 {
 				if got != 0 {
 					t.Fatalf("fuzzyTokenScore() = %d, want 0", got)
@@ -55,6 +146,42 @@ func TestFuzzyTokenScore(t *testing.T) {
 			}
 			if got < tt.wantMin {
 				t.Fatalf("fuzzyTokenScore() = %d, want >= %d", got, tt.wantMin)
+			}
+		})
+	}
+}
+
+// TestFuzzyScoreEntry validates action-level fuzzy scoring across empty terms,
+// no matches, full matches, and N-1 threshold rejection. This is the final gate
+// before typo fallback results are added to the dynamic search result set.
+func TestFuzzyScoreEntry(t *testing.T) {
+	entry := actionEntry{
+		ID:           "merge_request.list",
+		SearchTokens: buildSearchTokens("merge_request list project author"),
+	}
+
+	tests := []struct {
+		name    string
+		terms   []searchTerm
+		wantMin int
+	}{
+		{name: "empty terms", terms: nil, wantMin: 0},
+		{name: "no matched terms", terms: normalizeSearchTerms("abcdef"), wantMin: 0},
+		{name: "matches typo terms", terms: normalizeSearchTerms("merje requesy"), wantMin: 20},
+		{name: "rejects too many missing terms", terms: normalizeSearchTerms("merje requesy zzz yyy"), wantMin: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fuzzyScoreEntry(entry, tt.terms)
+			if tt.wantMin == 0 {
+				if got != 0 {
+					t.Fatalf("fuzzyScoreEntry() = %d, want 0", got)
+				}
+				return
+			}
+			if got < tt.wantMin {
+				t.Fatalf("fuzzyScoreEntry() = %d, want >= %d", got, tt.wantMin)
 			}
 		})
 	}

@@ -3385,11 +3385,11 @@ func TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude(t *testing.T) {
 func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing.T) {
 	t.Run("project search prelude", func(t *testing.T) {
 		result := taskResult{
-			Task: evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}},
-			ToolSurface: config.ToolSurfaceDynamic3,
-			FirstTool:   dynamicExecuteTool,
-			FirstAction: "search.projects",
-			FirstPass:   true,
+			Task:         evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}},
+			ToolSurface:  config.ToolSurfaceDynamic3,
+			FirstTool:    dynamicExecuteTool,
+			FirstAction:  "search.projects",
+			FirstPass:    true,
 			FinalSuccess: true,
 		}
 		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
@@ -3404,10 +3404,10 @@ func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing
 				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "analyze.issue_summary", RequiredParams: []string{"project_id", "issue_iid"}, Simulation: "sampling_unsupported_continue"},
 				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.get", RequiredParams: []string{"project_id", "issue_iid"}},
 			}},
-			ToolSurface: config.ToolSurfaceDynamic3,
-			FirstTool:   dynamicExecuteTool,
-			FirstAction: "issue.get",
-			FirstPass:   false,
+			ToolSurface:  config.ToolSurfaceDynamic3,
+			FirstTool:    dynamicExecuteTool,
+			FirstAction:  "issue.get",
+			FirstPass:    false,
 			FinalSuccess: true,
 		}
 		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)

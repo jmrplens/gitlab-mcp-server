@@ -3,7 +3,6 @@ package dynamic
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -623,7 +622,7 @@ func normalizedLimit(limit int) int {
 }
 
 func describeEntry(entry actionEntry) ActionDescription {
-	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: toolutil.ActionMap{entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
 	return ActionDescription{
 		ID:             entry.ID,
 		Tool:           entry.Tool,
@@ -980,15 +979,28 @@ func cloneSchema(schema map[string]any) map[string]any {
 	if schema == nil {
 		return nil
 	}
-	data, err := json.Marshal(schema)
-	if err != nil {
-		return nil
-	}
-	var clone map[string]any
-	if decodeErr := json.Unmarshal(data, &clone); decodeErr != nil {
-		return nil
+	clone := make(map[string]any, len(schema))
+	for key, value := range schema {
+		clone[key] = cloneSchemaValue(value)
 	}
 	return clone
+}
+
+func cloneSchemaValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneSchema(typed)
+	case []any:
+		clone := make([]any, len(typed))
+		for i, item := range typed {
+			clone[i] = cloneSchemaValue(item)
+		}
+		return clone
+	case []string:
+		return append([]string(nil), typed...)
+	default:
+		return typed
+	}
 }
 
 func formatSearchOutput(output SearchOutput) string {

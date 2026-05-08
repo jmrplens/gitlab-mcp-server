@@ -35,7 +35,7 @@ func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				result, output, err := registry.Search(ctx, nil, input)
 				if err != nil {
 					b.Fatalf("Search() error: %v", err)
