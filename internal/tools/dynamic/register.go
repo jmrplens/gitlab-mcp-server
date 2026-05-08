@@ -132,6 +132,7 @@ type actionEntry struct {
 	Destructive    bool
 	RequiredParams []string
 	SearchText     string
+	SearchTokens   []string
 	Route          toolutil.ActionRoute
 }
 
@@ -244,6 +245,7 @@ func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *R
 			id := domain + "." + action
 			entryAliases := aliasesForCanonicalAction(id, aliases)
 			tags := actionTags(id, domain, action, route.InputSchema)
+			searchText := buildSearchText(id, tool, domain, action, entryAliases, tags, route.InputSchema)
 			entry := actionEntry{
 				ID:             id,
 				Tool:           tool,
@@ -254,7 +256,8 @@ func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *R
 				SchemaURI:      toolutil.MetaSchemaURI(tool, action),
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
-				SearchText:     buildSearchText(id, tool, domain, action, entryAliases, tags, route.InputSchema),
+				SearchText:     searchText,
+				SearchTokens:   buildSearchTokens(searchText),
 				Route:          route,
 			}
 			registry.entries = append(registry.entries, entry)
@@ -587,6 +590,14 @@ func (r *Registry) searchMatches(query string, limit int) []scoredActionEntry {
 		score := scoreEntry(entry, terms)
 		if score > 0 {
 			matches = append(matches, scoredActionEntry{entry: entry, score: score})
+		}
+	}
+	if len(matches) == 0 {
+		for _, entry := range r.entries {
+			score := fuzzyScoreEntry(entry, terms)
+			if score > 0 {
+				matches = append(matches, scoredActionEntry{entry: entry, score: score})
+			}
 		}
 	}
 	sort.Slice(matches, func(i, j int) bool {

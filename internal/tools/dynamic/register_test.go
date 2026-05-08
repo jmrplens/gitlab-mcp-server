@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -527,6 +528,47 @@ func TestSearch_PartialMatchLongQuery(t *testing.T) {
 	})
 	if !found {
 		t.Fatalf("Search() results = %+v, want at least one merge_request.* result", output.Results)
+	}
+}
+
+func TestSearch_TypoQueryReturnsRelevantActions(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merje requesy list", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches for typo query, want at least one merge_request result")
+	}
+	if !slices.ContainsFunc(output.Results, func(r SearchResult) bool {
+		return strings.HasPrefix(r.ID, "merge_request.")
+	}) {
+		t.Fatalf("Search() results = %+v, want at least one merge_request.* result", output.Results)
+	}
+}
+
+func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
+	routes := toolutil.CaptureMetaRoutes(func() {
+		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test-catalog", Version: "0.0.1"}, nil)
+		tools.RegisterAllMeta(server, nil, false)
+		tools.RegisterMCPMeta(server, nil, nil)
+	})
+	routes = AddStandaloneRoutes(routes, nil, StandaloneOptions{})
+
+	registry := NewRegistry(routes)
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merje requesy", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches for typo query on meta catalog")
 	}
 }
 
