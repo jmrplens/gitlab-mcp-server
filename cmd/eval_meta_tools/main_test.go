@@ -462,21 +462,48 @@ func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
 }
 
 func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
-	hiddenRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	hiddenRoutes := map[string]toolutil.ActionMap{
+		"gitlab_merge_request": {
+			"list": {InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":      map[string]any{"type": "integer"},
+					"state":           map[string]any{"type": "string"},
+					"author_username": map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+	hiddenRoutes = dynamictools.AddStandaloneRoutes(hiddenRoutes, nil, dynamictools.StandaloneOptions{})
 	routes := dynamicValidationRoutes(hiddenRoutes)
 
-	content, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
-		Name: dynamicSearchTool,
-		Input: map[string]any{
-			"query": "remote url project",
-			"limit": float64(3),
-		},
-	})
-	if err != nil {
-		t.Fatalf("dynamicDiscoveryResult() error = %v", err)
+	tests := []struct {
+		query string
+		want  []string
+	}{
+		{query: "discover project from remote url", want: []string{"discover_project.resolve"}},
+		{query: "merge request list open authored by me project", want: []string{"merge_request.list"}},
+		{query: "discover project from remote url merge request list current user open authored", want: []string{"discover_project.resolve", "merge_request.list"}},
 	}
-	if !strings.Contains(content, "discover_project.resolve") {
-		t.Fatalf("dynamicDiscoveryResult() = %s, want discover_project.resolve", content)
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			content, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
+				Name: dynamicSearchTool,
+				Input: map[string]any{
+					"query": tt.query,
+					"limit": float64(3),
+				},
+			})
+			if err != nil {
+				t.Fatalf("dynamicDiscoveryResult() error = %v", err)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(content, want) {
+					t.Fatalf("dynamicDiscoveryResult() = %s, want %s", content, want)
+				}
+			}
+		})
 	}
 }
 

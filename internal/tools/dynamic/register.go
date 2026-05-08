@@ -21,6 +21,8 @@ const (
 	executeToolName  = "gitlab_execute_tool"
 	defaultLimit     = 20
 	maxLimit         = 50
+	minSegmentTerms  = 3
+	maxSegmentTerms  = 6
 )
 
 // SearchInput is the input for gitlab_search_tools.
@@ -425,6 +427,9 @@ func normalizeSearchTerms(query string) []searchTerm {
 	fields := strings.Fields(strings.ToLower(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(query)))
 	terms := make([]searchTerm, 0, len(fields))
 	for _, field := range fields {
+		if _, stop := searchStopWords()[field]; stop {
+			continue
+		}
 		alternatives := []string{field}
 		if synonyms, ok := searchSynonyms()[field]; ok {
 			alternatives = append(alternatives, synonyms...)
@@ -435,6 +440,13 @@ func normalizeSearchTerms(query string) []searchTerm {
 		terms = append(terms, searchTerm{Raw: field, Alternatives: dedupeStrings(alternatives)})
 	}
 	return terms
+}
+
+func searchStopWords() map[string]struct{} {
+	return map[string]struct{}{
+		"a": {}, "an": {}, "and": {}, "as": {}, "at": {}, "by": {}, "for": {}, "from": {}, "in": {},
+		"of": {}, "on": {}, "or": {}, "please": {}, "the": {}, "to": {}, "using": {}, "via": {}, "with": {},
+	}
 }
 
 func dedupeStrings(values []string) []string {
@@ -466,11 +478,14 @@ func searchSynonyms() map[string][]string {
 		"approve":    {"approval", "review", "feedback"},
 		"approved":   {"approval", "review", "approved"},
 		"artifact":   {"job", "download"},
+		"assigned":   {"assignee", "assignee_username", "assignee_id", "list"},
 		"assignee":   {"assigned", "assign", "delegate", "list"},
 		"author":     {"creator", "created_by", "owner", "list"},
+		"authored":   {"author", "author_username", "creator", "created_by", "owner", "list"},
 		"ci":         {"pipeline", "job", "variable", "lint"},
 		"closed":     {"close", "list", "filter"},
 		"comment":    {"note", "discussion", "reply"},
+		"current":    {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username"},
 		"deploy":     {"deployment", "environment", "key"},
 		"deployment": {"deploy", "environment"},
 		"details":    {"get"},
@@ -483,8 +498,11 @@ func searchSynonyms() map[string][]string {
 		"label":      {"tag", "category", "list"},
 		"merged":     {"merge", "integrated", "list"},
 		"metadata":   {"get", "details"},
+		"me":         {"author", "author_username", "assignee", "assignee_username", "current_user", "self", "list"},
 		"milestone":  {"sprint", "release", "deadline", "list"},
+		"mine":       {"my", "owned", "owner", "author", "list"},
 		"mr":         {"merge", "request", "merge_request"},
+		"my":         {"owned", "owner", "author", "assignee", "list"},
 		"note":       {"comment", "discussion", "reply"},
 		"open":       {"active", "unresolved", "status_open", "list"},
 		"owned":      {"my", "personal", "mine", "owner", "list"},
@@ -496,6 +514,8 @@ func searchSynonyms() map[string][]string {
 		"show":       {"get"},
 		"state":      {"status", "condition", "filter", "list"},
 		"unresolved": {"open", "active", "list"},
+		"user":       {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
+		"users":      {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 		"verify":     {"get"},
 		"webhook":    {"hook"},
 		"webhooks":   {"hook"},
@@ -584,21 +604,57 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 func (r *Registry) searchMatches(query string, limit int) []scoredActionEntry {
 	limit = normalizedLimit(limit)
 	terms := normalizeSearchTerms(query)
+	matches := r.scoredMatches(terms, scoreEntry)
+	if len(matches) == 0 {
+		matches = r.scoredMatches(terms, fuzzyScoreEntry)
+	}
+	if len(matches) == 0 {
+		matches = r.segmentedSearchMatches(terms)
+	}
+	return sortAndLimitMatches(matches, limit)
+}
+
+type searchScorer func(actionEntry, []searchTerm) int
+
+func (r *Registry) scoredMatches(terms []searchTerm, scorer searchScorer) []scoredActionEntry {
 	matches := make([]scoredActionEntry, 0)
 	for _, entry := range r.entries {
-		score := scoreEntry(entry, terms)
+		score := scorer(entry, terms)
 		if score > 0 {
 			matches = append(matches, scoredActionEntry{entry: entry, score: score})
 		}
 	}
-	if len(matches) == 0 {
-		for _, entry := range r.entries {
-			score := fuzzyScoreEntry(entry, terms)
-			if score > 0 {
-				matches = append(matches, scoredActionEntry{entry: entry, score: score})
+	return matches
+}
+
+func (r *Registry) segmentedSearchMatches(terms []searchTerm) []scoredActionEntry {
+	if len(terms) < minSegmentTerms {
+		return nil
+	}
+
+	bestByID := make(map[string]scoredActionEntry)
+	maxWindow := min(maxSegmentTerms, len(terms))
+	for windowSize := maxWindow; windowSize >= minSegmentTerms; windowSize-- {
+		for start := 0; start+windowSize <= len(terms); start++ {
+			window := terms[start : start+windowSize]
+			for _, match := range r.scoredMatches(window, scoreEntry) {
+				match.score += windowSize * 10
+				current, ok := bestByID[match.entry.ID]
+				if !ok || match.score > current.score {
+					bestByID[match.entry.ID] = match
+				}
 			}
 		}
 	}
+
+	matches := make([]scoredActionEntry, 0, len(bestByID))
+	for _, match := range bestByID {
+		matches = append(matches, match)
+	}
+	return matches
+}
+
+func sortAndLimitMatches(matches []scoredActionEntry, limit int) []scoredActionEntry {
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].score != matches[j].score {
 			return matches[i].score > matches[j].score
@@ -632,7 +688,6 @@ func describeEntry(entry actionEntry) ActionDescription {
 		Destructive:    entry.Destructive,
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
 		InputSchema:    inputSchema,
-		OutputSchema:   cloneSchema(entry.Route.OutputSchema),
 		Example:        exampleFor(entry, inputSchema),
 	}
 }

@@ -2,6 +2,7 @@ package dynamic
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -179,6 +180,79 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	}
 }
 
+func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
+	routes := toolutil.CaptureMetaRoutes(func() {
+		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-schema-profile-test", Version: "0.0.1"}, nil)
+		tools.RegisterAllMeta(server, nil, false)
+		tools.RegisterMCPMeta(server, nil, nil)
+	})
+	registry := NewRegistry(routes)
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Actions: []string{
+		"project.list",
+		"merge_request.list",
+		"user.current_user_status",
+		"user.list",
+	}})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	if output.Count != 4 {
+		t.Fatalf("Describe() Count = %d, want 4", output.Count)
+	}
+	structured, err := json.Marshal(output)
+	if err != nil {
+		t.Fatalf("json.Marshal(DescribeOutput) error = %v", err)
+	}
+	if strings.Contains(string(structured), "output_schema") {
+		t.Fatalf("DescribeOutput JSON contains output_schema: %s", structured)
+	}
+	markdown := textContent(result)
+	for _, notWant := range []string{"input_schema", "output_schema", "properties"} {
+		if strings.Contains(markdown, notWant) {
+			t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
+		}
+	}
+
+	projectList := actionDescriptionByID(t, output, "project.list")
+	assertSchemaHasProperties(t, projectList.InputSchema, "search", "owned", "per_page")
+	if projectList.OutputSchema != nil {
+		t.Fatalf("project.list OutputSchema = %v, want nil", projectList.OutputSchema)
+	}
+	if len(projectList.RequiredParams) != 0 {
+		t.Fatalf("project.list RequiredParams = %v, want none", projectList.RequiredParams)
+	}
+
+	mergeRequestList := actionDescriptionByID(t, output, "merge_request.list")
+	assertSchemaHasProperties(t, mergeRequestList.InputSchema, "project_id", "state", "author_username", "scope")
+	if mergeRequestList.OutputSchema != nil {
+		t.Fatalf("merge_request.list OutputSchema = %v, want nil", mergeRequestList.OutputSchema)
+	}
+	if !slices.Contains(mergeRequestList.RequiredParams, "project_id") {
+		t.Fatalf("merge_request.list RequiredParams = %v, want project_id", mergeRequestList.RequiredParams)
+	}
+	if got := mergeRequestList.Example.Arguments["params"].(map[string]any)["project_id"]; got != 123 {
+		t.Fatalf("merge_request.list example project_id = %v, want 123", got)
+	}
+
+	currentUserStatus := actionDescriptionByID(t, output, "user.current_user_status")
+	if len(schemaProperties(currentUserStatus.InputSchema)) != 0 {
+		t.Fatalf("user.current_user_status input properties = %v, want none", schemaProperties(currentUserStatus.InputSchema))
+	}
+	if currentUserStatus.OutputSchema != nil {
+		t.Fatalf("user.current_user_status OutputSchema = %v, want nil", currentUserStatus.OutputSchema)
+	}
+
+	userList := actionDescriptionByID(t, output, "user.list")
+	assertSchemaHasProperties(t, userList.InputSchema, "search", "username", "per_page")
+	if userList.OutputSchema != nil {
+		t.Fatalf("user.list OutputSchema = %v, want nil", userList.OutputSchema)
+	}
+}
+
 func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -195,6 +269,9 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	found := output.Results[0]
 	if !found.Destructive || found.InputSchema == nil {
 		t.Fatalf("found result = %+v, want destructive action with schema", found)
+	}
+	if found.OutputSchema != nil {
+		t.Fatalf("found OutputSchema = %v, want nil", found.OutputSchema)
 	}
 	if found.Example.Tool != "gitlab_execute_tool" || found.Example.Arguments["confirm"] != true {
 		t.Fatalf("example = %+v, want execute example with confirm", found.Example)
@@ -531,6 +608,134 @@ func TestSearch_PartialMatchLongQuery(t *testing.T) {
 	}
 }
 
+func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
+	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "discover project from remote url", query: "discover project from remote url", want: "discover_project.resolve"},
+		{name: "merge request list open authored by me project", query: "merge request list open authored by me project", want: "merge_request.list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 5})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == tt.want }) {
+				t.Fatalf("Search(%q) results = %+v, want %s", tt.query, output.Results, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
+	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{
+		Query: "discover project from remote url merge request list current user open authored",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	for _, want := range []string{"discover_project.resolve", "merge_request.list"} {
+		if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == want }) {
+			t.Fatalf("Search() results = %+v, want %s", output.Results, want)
+		}
+	}
+}
+
+func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
+	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+
+	tests := []struct {
+		name  string
+		query string
+		limit int
+		want  []string
+	}{
+		{name: "short canonical action", query: "project list", want: []string{"project.list"}},
+		{name: "short synonym intent", query: "project info", want: []string{"project.get"}},
+		{name: "short alias intent", query: "deploy key", want: []string{"access.deploy_key_add"}},
+		{name: "typo phrase", query: "merje requesy list", want: []string{"merge_request.list"}},
+		{name: "long polite metadata phrase", query: "please find project metadata details using id", want: []string{"project.get"}},
+		{name: "long repository content phrase", query: "download repository file content from project ref", want: []string{"repository.file_get"}},
+		{name: "observed authored current user phrase", query: "current user open authored merge request list", want: []string{"merge_request.list"}},
+		{name: "standalone discovery without verb", query: "project remote url lookup", want: []string{"discover_project.resolve"}},
+		{name: "pipeline jobs alias", query: "pipeline jobs list", want: []string{"job.list"}},
+		{name: "ci secret create", query: "create ci secret variable", want: []string{"ci_variable.create"}},
+		{name: "package remove intent", query: "remove package", want: []string{"package.delete"}},
+		{name: "release notes alias", query: "release generate notes", want: []string{"analyze.release_notes"}},
+		{name: "project status checks alias", query: "project status checks list", want: []string{"external_status_check.list_project"}},
+		{name: "group audit events alias", query: "group audit events", want: []string{"audit_event.list_group"}},
+		{name: "mixed webhook and repository", query: "webhook create repository file read", limit: 10, want: []string{"project.hook_add", "repository.file_get"}},
+		{name: "mixed deploy key and package", query: "deploy key create package delete", limit: 10, want: []string{"access.deploy_key_add", "package.delete"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: tt.limit})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want...)
+		})
+	}
+}
+
+func TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet(t *testing.T) {
+	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+
+	tests := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{
+			name:  "discover and merge request lookup",
+			query: "discover project from remote url merge request list current user open authored",
+			want:  []string{"merge_request.list", "discover_project.resolve"},
+		},
+		{
+			name:  "webhook creation and repository read",
+			query: "webhook create repository file read",
+			want:  []string{"repository.file_get", "project.hook_add"},
+		},
+		{
+			name:  "release link creation and package deletion",
+			query: "release link create package remove",
+			want:  []string{"release.link_create", "package.delete"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: len(tt.want)})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultIDsEqual(t, output.Results, tt.want...)
+		})
+	}
+}
+
 func TestSearch_TypoQueryReturnsRelevantActions(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -570,6 +775,71 @@ func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
 	if output.Count == 0 {
 		t.Fatal("Search() returned no matches for typo query on meta catalog")
 	}
+}
+
+func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) ActionDescription {
+	t.Helper()
+	for _, action := range output.Actions {
+		if action.ID == id {
+			return action
+		}
+	}
+	t.Fatalf("DescribeOutput missing action %q: %+v", id, output.Actions)
+	return ActionDescription{}
+}
+
+func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...string) {
+	t.Helper()
+	for _, actionID := range want {
+		if slices.ContainsFunc(results, func(result SearchResult) bool { return result.ID == actionID }) {
+			continue
+		}
+		t.Fatalf("Search() results = %+v, want %s", results, actionID)
+	}
+}
+
+func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...string) {
+	t.Helper()
+	if len(results) != len(want) {
+		t.Fatalf("Search() results = %+v, want exactly %v", results, want)
+	}
+	gotIDs := make([]string, 0, len(results))
+	for _, result := range results {
+		gotIDs = append(gotIDs, result.ID)
+	}
+	slices.Sort(gotIDs)
+	wantIDs := append([]string(nil), want...)
+	slices.Sort(wantIDs)
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Fatalf("Search() result IDs = %v, want exactly %v", gotIDs, wantIDs)
+	}
+}
+
+func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...string) {
+	t.Helper()
+	properties := schemaProperties(schema)
+	for _, name := range names {
+		if _, ok := properties[name]; !ok {
+			t.Fatalf("schema properties = %v, want %q", sortedPropertyNames(properties), name)
+		}
+	}
+}
+
+func schemaProperties(schema map[string]any) map[string]any {
+	properties, _ := schema["properties"].(map[string]any)
+	if properties == nil {
+		return map[string]any{}
+	}
+	return properties
+}
+
+func sortedPropertyNames(properties map[string]any) []string {
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
 }
 
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {

@@ -141,6 +141,13 @@ func TestRegistryHelperCoverage(t *testing.T) {
 			t.Fatalf("scoreEntry(empty terms) = %d, want 0", got)
 		}
 	})
+
+	t.Run("segmented search ignores short queries", func(t *testing.T) {
+		registry := NewRegistry(testRoutes(t))
+		if got := registry.segmentedSearchMatches(normalizeSearchTerms("project get")); got != nil {
+			t.Fatalf("segmentedSearchMatches(short query) = %v, want nil", got)
+		}
+	})
 }
 
 // TestScoreSearchAlternative covers every ranking branch in the exact search
