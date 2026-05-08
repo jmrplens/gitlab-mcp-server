@@ -560,7 +560,7 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 	case strings.Contains(id, "deploy_key"):
 		add("deploy key", "ssh key", "access key")
 	case domain == "discover_project":
-		add("project discovery", "git remote", "remote url", "resolve project")
+		add("discover", "project", "remote", "url", "lookup", "resolve", "project discovery", "git remote", "remote url", "resolve project")
 	case domain == "interactive":
 		add("guided", "elicitation", "wizard", strings.ReplaceAll(action, "_", " "))
 	case strings.Contains(id, "token_project") || strings.Contains(id, "token_group") || strings.Contains(id, "token_personal"):
@@ -608,8 +608,8 @@ func (r *Registry) searchMatches(query string, limit int) []scoredActionEntry {
 	if len(matches) == 0 {
 		matches = r.scoredMatches(terms, fuzzyScoreEntry)
 	}
-	if len(matches) == 0 {
-		matches = r.segmentedSearchMatches(terms)
+	if segmented := r.segmentedSearchMatches(terms); len(segmented) > 0 {
+		matches = mergeBestMatches(matches, segmented)
 	}
 	return sortAndLimitMatches(matches, limit)
 }
@@ -638,7 +638,7 @@ func (r *Registry) segmentedSearchMatches(terms []searchTerm) []scoredActionEntr
 		for start := 0; start+windowSize <= len(terms); start++ {
 			window := terms[start : start+windowSize]
 			for _, match := range r.scoredMatches(window, scoreEntry) {
-				match.score += windowSize * 10
+				match.score += windowSize * 60
 				current, ok := bestByID[match.entry.ID]
 				if !ok || match.score > current.score {
 					bestByID[match.entry.ID] = match
@@ -663,6 +663,23 @@ func sortAndLimitMatches(matches []scoredActionEntry, limit int) []scoredActionE
 	})
 	if len(matches) > limit {
 		matches = matches[:limit]
+	}
+	return matches
+}
+
+func mergeBestMatches(groups ...[]scoredActionEntry) []scoredActionEntry {
+	bestByID := make(map[string]scoredActionEntry)
+	for _, group := range groups {
+		for _, match := range group {
+			current, ok := bestByID[match.entry.ID]
+			if !ok || match.score > current.score {
+				bestByID[match.entry.ID] = match
+			}
+		}
+	}
+	matches := make([]scoredActionEntry, 0, len(bestByID))
+	for _, match := range bestByID {
+		matches = append(matches, match)
 	}
 	return matches
 }

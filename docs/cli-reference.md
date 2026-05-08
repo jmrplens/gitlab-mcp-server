@@ -165,6 +165,9 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --meta-tools=false
 # Start HTTP server with the low-token dynamic toolset
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
 
+# Start HTTP server with the explicit current dynamic candidate name
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic-3
+
 # Start HTTP server with the dynamic toolset and minimal non-tool capabilities
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
 
@@ -190,5 +193,6 @@ gitlab-mcp-server --shutdown
 
 - [Configuration](configuration.md) — Environment variables and `.env` files
 - [HTTP Server Mode](http-server-mode.md) — Architecture and deployment details
+- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute mode
 - [Auto-Update](auto-update.md) — Update modes, release requirements, troubleshooting
 - [Getting Started](getting-started.md) — Step-by-step tutorial

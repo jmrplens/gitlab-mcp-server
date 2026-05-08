@@ -69,6 +69,7 @@ graph TD
         GL[gitlab<br/>API client wrapper]
         TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
         META[metatool<br/>32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
+        DYN[dynamic<br/>3 visible tools over hidden action registry]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
         RES[resources<br/>46 resource handlers]
@@ -94,6 +95,8 @@ graph TD
     POOL -->|one server per token+URL| SRV
     TOOLS --> GL
     META --> TOOLS
+    DYN --> META
+    DYN --> TOOLS
     SAMP --> GL
     SAMP --> SAMPLING
     ELIC --> ELICIT
@@ -102,6 +105,7 @@ graph TD
     PROMPTS --> GL
     MAIN -->|register| TOOLS
     MAIN -->|register| META
+    MAIN -->|register| DYN
     MAIN -->|register| SAMP
     MAIN -->|register| ELIC
     MAIN -->|register| RES
@@ -269,6 +273,61 @@ sequenceDiagram
     META-->>MCP: CallToolResult (Markdown + structured JSON)
     MCP-->>LLM: JSON-RPC response
 ```
+
+### Dynamic Toolset (`internal/tools/dynamic`)
+
+The dynamic toolset is a progressive-disclosure layer over the meta-tool route catalog. Instead of exposing all domain
+meta-tools in `tools/list`, it exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
+The current default remains meta-tools, but dynamic mode is the low-token candidate for a future default.
+
+Startup builds the hidden registry from the same `ActionMap` route definitions used by meta-tools, then adds standalone
+routes such as project discovery. This preserves existing typed schemas, route classification, markdown formatters,
+read-only filtering, safe-mode behavior, destructive confirmation, and GitLab API handlers.
+
+```mermaid
+flowchart TD
+    START[Server startup] --> META_ROUTES[Register meta-tool route maps]
+    META_ROUTES --> CAPTURE[Capture ActionMap routes]
+    CAPTURE --> STANDALONE[Add standalone routes]
+    STANDALONE --> REGISTRY[Hidden dynamic registry]
+
+    subgraph Public Dynamic Tools
+        SEARCH[gitlab_search_tools]
+        DESCRIBE[gitlab_describe_tools]
+        EXECUTE[gitlab_execute_tool]
+    end
+
+    REGISTRY --> SEARCH
+    REGISTRY --> DESCRIBE
+    REGISTRY --> EXECUTE
+    EXECUTE --> VALIDATE[Validate canonical action and params]
+    VALIDATE --> ROUTE[Reuse ActionRoute handler]
+    ROUTE --> HANDLER[Typed domain handler]
+    HANDLER --> GITLAB[GitLab REST v4 or GraphQL]
+```
+
+Runtime use follows a search, describe, execute sequence:
+
+```mermaid
+sequenceDiagram
+    participant LLM as AI Client
+    participant DYN as Dynamic Registry
+    participant TOOL as Domain Handler
+    participant GL as GitLab API
+
+    LLM->>DYN: gitlab_search_tools(query)
+    DYN-->>LLM: Candidate action IDs
+    LLM->>DYN: gitlab_describe_tools(actions)
+    DYN-->>LLM: Input schemas, examples, safety metadata
+    LLM->>DYN: gitlab_execute_tool(action, params)
+    DYN->>TOOL: Existing handler through ActionRoute
+    TOOL->>GL: REST or GraphQL request
+    GL-->>TOOL: JSON response
+    TOOL-->>DYN: Typed output + Markdown
+    DYN-->>LLM: MCP tool result
+```
+
+See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety behavior, and troubleshooting.
 
 ### Resources (`internal/resources`)
 

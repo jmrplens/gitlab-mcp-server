@@ -1,8 +1,9 @@
 //go:build e2e
 
 // setup_test.go is the main E2E test infrastructure file. It provides
-// [TestMain] for initializing the test environment, five in-process MCP
-// server/client pairs (individual, meta, sampling, elicitation, safe-mode),
+// [TestMain] for initializing the test environment, six in-process MCP
+// server/client pairs (individual, meta, dynamic, sampling, elicitation,
+// safe mode),
 // snapshot guardrails for self-hosted mode, and shared helper functions used
 // across all domain test files.
 
@@ -32,6 +33,8 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -57,6 +60,7 @@ var e2eProjectPrefix = "e2e-"
 type sessions struct {
 	individual  *mcp.ClientSession
 	meta        *mcp.ClientSession
+	dynamic     *mcp.ClientSession
 	sampling    *mcp.ClientSession
 	elicitation *mcp.ClientSession
 	safeMode    *mcp.ClientSession
@@ -85,11 +89,11 @@ type resourceSnapshot struct {
 }
 
 // TestMain initializes the E2E test environment by loading configuration,
-// creating a GitLab client, verifying connectivity, and starting five
+// creating a GitLab client, verifying connectivity, and starting six
 // in-process MCP server/client pairs: individual tools, meta-tools,
-// sampling-enabled, elicitation-enabled, and safe-mode (mutating tools
-// return previews). It populates the global [sess] struct and tears down
-// servers after all tests complete.
+// dynamic tools, sampling-enabled, elicitation-enabled, and safe-mode
+// (mutating tools return previews). It populates the global [sess] struct and
+// tears down servers after all tests complete.
 //
 // In self-hosted mode, it snapshots all pre-existing groups and projects
 // before running tests, and verifies they remain unchanged after tests
@@ -204,7 +208,45 @@ func TestMain(m *testing.M) {
 		log.Fatalf("e2e: connect meta MCP client: %v", err)
 	}
 
-	// Create a third MCP server/client pair with sampling capability (mock LLM).
+	// Create a dynamic MCP server/client pair with the low-token search,
+	// describe, and execute surface backed by the hidden meta-tool catalog.
+	dynamicServer := mcp.NewServer(&mcp.Implementation{
+		Name:    "gitlab-mcp-server-e2e-dynamic",
+		Version: "test",
+	}, nil)
+	dynamicHiddenServer := mcp.NewServer(&mcp.Implementation{
+		Name:    "gitlab-mcp-server-e2e-dynamic-hidden",
+		Version: "test",
+	}, nil)
+	dynamicRoutes := toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(dynamicHiddenServer, glClient, enterprise)
+		tools.RegisterMCPMeta(dynamicHiddenServer, glClient, nil)
+	})
+	dynamicRoutes = dynamictools.AddStandaloneRoutes(dynamicRoutes, glClient, dynamictools.StandaloneOptions{})
+	dynamictools.RegisterTools(dynamicServer, dynamicRoutes)
+
+	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()
+
+	dynamicServerCtx, dynamicServerCancel := context.WithCancel(context.Background())
+	go func() {
+		if srvErr := dynamicServer.Run(dynamicServerCtx, dynamicServerTransport); srvErr != nil && dynamicServerCtx.Err() == nil {
+			log.Printf("e2e: dynamic server stopped unexpectedly: %v", srvErr)
+		}
+	}()
+
+	dynamicClient := mcp.NewClient(&mcp.Implementation{
+		Name:    "e2e-test-dynamic-client",
+		Version: "test",
+	}, nil)
+	dynamicSession, err := dynamicClient.Connect(context.Background(), dynamicClientTransport, nil)
+	if err != nil {
+		serverCancel()
+		metaServerCancel()
+		dynamicServerCancel()
+		log.Fatalf("e2e: connect dynamic MCP client: %v", err)
+	}
+
+	// Create an MCP server/client pair with sampling capability (mock LLM).
 	samplingServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-sampling",
 		Version: "test",
@@ -230,11 +272,12 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		serverCancel()
 		metaServerCancel()
+		dynamicServerCancel()
 		samplingServerCancel()
 		log.Fatalf("e2e: connect sampling MCP client: %v", err)
 	}
 
-	// Create a fourth MCP server/client pair with elicitation capability (auto-accept mock).
+	// Create an MCP server/client pair with elicitation capability (auto-accept mock).
 	elicitServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-elicit",
 		Version: "test",
@@ -260,12 +303,13 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		serverCancel()
 		metaServerCancel()
+		dynamicServerCancel()
 		samplingServerCancel()
 		elicitServerCancel()
 		log.Fatalf("e2e: connect elicit MCP client: %v", err)
 	}
 
-	// Create a fifth MCP server with Safe Mode enabled (mutating tools return previews).
+	// Create an MCP server with Safe Mode enabled (mutating tools return previews).
 	safeModeServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-safemode",
 		Version: "test",
@@ -290,6 +334,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		serverCancel()
 		metaServerCancel()
+		dynamicServerCancel()
 		samplingServerCancel()
 		elicitServerCancel()
 		safeModeServerCancel()
@@ -299,6 +344,7 @@ func TestMain(m *testing.M) {
 	sess = sessions{
 		individual:  session,
 		meta:        metaSession,
+		dynamic:     dynamicSession,
 		sampling:    samplingSession,
 		elicitation: elicitSession,
 		safeMode:    safeModeSession,
@@ -338,6 +384,8 @@ func TestMain(m *testing.M) {
 	serverCancel()
 	_ = metaSession.Close()
 	metaServerCancel()
+	_ = dynamicSession.Close()
+	dynamicServerCancel()
 	_ = samplingSession.Close()
 	samplingServerCancel()
 	_ = elicitSession.Close()

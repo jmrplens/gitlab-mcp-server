@@ -1,0 +1,195 @@
+---
+title: Conjunto de herramientas dinámico
+description: Modo de búsqueda, descripción y ejecución con bajo consumo de tokens para catálogos grandes de GitLab MCP
+---
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) en el repositorio.
+:::
+
+El conjunto de herramientas dinámico es el modo de bajo consumo de tokens de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab, pero muestra a tu cliente de IA solo tres herramientas públicas:
+
+| Herramienta             | Qué hace                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_search_tools`   | Encuentra la acción correcta de GitLab a partir de lenguaje natural, dominios, verbos, alias y coincidencia tolerante a errores |
+| `gitlab_describe_tools` | Devuelve los parámetros exactos, ejemplos y metadatos de seguridad de una o varias acciones                                     |
+| `gitlab_execute_tool`   | Ejecuta la acción elegida tras validar el ID de acción y los parámetros                                                         |
+
+Las meta-herramientas siguen siendo el modo predeterminado hoy porque son la superficie más compatible. El modo dinámico es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro.
+
+## Por qué existe el modo dinámico
+
+Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1011 operaciones individuales, e incluso el catálogo predeterminado de meta-herramientas anuncia entre 32 y 48 herramientas de dominio.
+
+El modo dinámico mueve ese catálogo detrás de un registro oculto. El modelo descubre solo lo que necesita para la tarea actual.
+
+```mermaid
+flowchart LR
+    A[tools/list] --> B[3 herramientas dinámicas públicas]
+    B --> C[Buscar en registro oculto]
+    C --> D[Describir acciones elegidas]
+    D --> E[Ejecutar una acción canónica]
+    E --> F[GitLab REST v4 o GraphQL]
+```
+
+Esto suele añadir una o dos llamadas de descubrimiento por tarea, pero mantiene muy pequeño el contexto inicial de herramientas MCP.
+
+## Activar el modo dinámico
+
+### Clientes stdio
+
+Añade `TOOL_SURFACE=dynamic` al entorno del servidor:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
+				"TOOL_SURFACE": "dynamic"
+			}
+		}
+	}
+}
+```
+
+### Despliegues HTTP
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.com \
+  --tool-surface=dynamic
+```
+
+Para el contexto inicial más pequeño, usa también la superficie mínima de capacidades:
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.com \
+  --tool-surface=dynamic \
+  --capability-surface=minimal
+```
+
+:::tip[Nombres actuales]
+`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la misma superficie actual de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites un nombre explícito de candidato en evaluaciones.
+
+`TOOL_SURFACE=dynamic-2` es un modo de comparación aparcado con `gitlab_find_action` más `gitlab_execute_tool`.
+:::
+
+## Flujo del modelo
+
+El modo dinámico funciona mejor cuando el asistente sigue un ritmo simple: buscar, describir, ejecutar.
+
+```mermaid
+sequenceDiagram
+    participant User as Usuario
+    participant AI as Asistente IA
+    participant Search as gitlab_search_tools
+    participant Describe as gitlab_describe_tools
+    participant Execute as gitlab_execute_tool
+    participant GitLab
+
+    User->>AI: Lista merge requests abiertas creadas por mí
+    AI->>Search: merge request list open authored by me
+    Search-->>AI: merge_request.list
+    AI->>Describe: merge_request.list
+    Describe-->>AI: Schema de parámetros y ejemplos
+    AI->>Execute: merge_request.list con parámetros validados
+    Execute->>GitLab: Petición API
+    GitLab-->>Execute: Datos de GitLab
+    Execute-->>AI: Markdown y JSON estructurado
+    AI-->>User: Respuesta formateada
+```
+
+## Ejemplo
+
+Primero, busca la acción:
+
+```json
+{
+	"tool": "gitlab_search_tools",
+	"arguments": {
+		"query": "merge request list open authored by me project",
+		"limit": 5
+	}
+}
+```
+
+Después, describe la acción elegida:
+
+```json
+{
+	"tool": "gitlab_describe_tools",
+	"arguments": {
+		"actions": ["merge_request.list"]
+	}
+}
+```
+
+Por último, ejecútala:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "merge_request.list",
+		"params": {
+			"project_id": "my-group/my-project",
+			"state": "opened",
+			"scope": "created_by_me",
+			"per_page": 20
+		}
+	}
+}
+```
+
+El asistente debe ejecutar el ID de acción canónico devuelto por búsqueda o descripción. Los alias ayudan al descubrimiento, pero los IDs canónicos son el contrato estable de ejecución.
+
+## Las acciones destructivas siguen protegidas
+
+El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `YOLO_MODE` o `AUTOPILOT`.
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` dentro de los parámetros de la acción.
+
+Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
+
+## Dinámico vs meta-herramientas
+
+| Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                                     |
+| --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| Qué aparece en `tools/list` | 32 a 48 herramientas de dominio                             | 3 herramientas públicas de descubrimiento y ejecución                 |
+| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Busca en el registro oculto y después describe la acción              |
+| Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_describe_tools`                                               |
+| Mejor uso actual            | Compatibilidad predeterminada                               | Clientes con pocos tokens y preparación para el futuro predeterminado |
+| Vuelta atrás                | Ya es el modo predeterminado                                | Quita `TOOL_SURFACE` o usa `TOOL_SURFACE=meta`                        |
+
+## Solución de problemas
+
+| Síntoma                                           | Qué hacer                                                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Solo ves tres herramientas                        | Es lo esperado en modo dinámico. Pide al asistente que busque y describa acciones antes de ejecutar |
+| La búsqueda devuelve resultados demasiado amplios | Incluye dominio, recurso, acción y filtros, por ejemplo `merge request list open authored by me`    |
+| Execute rechaza una acción                        | Busca de nuevo y usa el ID canónico `domain.action` del resultado                                   |
+| Execute rechaza parámetros                        | Describe la acción y reintenta con los nombres y tipos exactos                                      |
+| Recursos y prompts siguen consumiendo contexto    | Añade `CAPABILITY_SURFACE=minimal` o `--capability-surface=minimal`                                 |
+
+## Lectura adicional
+
+- [Visión general de herramientas](/gitlab-mcp-server/es/tools/overview/)
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/)
+- [Configuración](/gitlab-mcp-server/es/configuration/)
+- [Arquitectura](/gitlab-mcp-server/es/architecture/)

@@ -712,6 +712,34 @@ func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 	}
 }
 
+// TestSearch_MultiIntentLongQueryOnMetaCatalog_ReturnsSegmentMatches verifies
+// the observed long dynamic query against the real captured meta catalog.
+//
+// The full catalog already has global matches for the merge-request terms, so
+// this test protects the segment merge path that keeps the standalone project
+// discovery action in the first page of results.
+func TestSearch_MultiIntentLongQueryOnMetaCatalog_ReturnsSegmentMatches(t *testing.T) {
+	routes := toolutil.CaptureMetaRoutes(func() {
+		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test-catalog", Version: "0.0.1"}, nil)
+		tools.RegisterAllMeta(server, nil, false)
+		tools.RegisterMCPMeta(server, nil, nil)
+	})
+	routes = AddStandaloneRoutes(routes, nil, StandaloneOptions{})
+	registry := NewRegistry(routes)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{
+		Query: "discover project from remote url merge request list current user open authored",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	assertSearchResultsContain(t, output.Results, "discover_project.resolve", "merge_request.list")
+}
+
 // TestSearch_QueryShapeMatrix_ReturnsExpectedActions verifies short, long,
 // typo-heavy, alias-based, and mixed queries against expected action IDs.
 func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {

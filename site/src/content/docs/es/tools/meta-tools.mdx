@@ -9,6 +9,8 @@ Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://gi
 
 Las meta-herramientas son el modo de operación predeterminado de GitLab MCP Server. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
 
+Para el modo de descubrimiento progresivo con menor consumo de tokens, consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/). El modo dinámico reutiliza el mismo catálogo de rutas de meta-herramientas detrás de `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`.
+
 ## ¿Por qué meta-herramientas?
 
 Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1011 en GitLab.com Enterprise/Premium), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
@@ -274,11 +276,13 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                                                                                                                |
-| -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `META_TOOLS`         | `true`         | Selector del catálogo: `true` para meta-herramientas, `false` para herramientas individuales, `dynamic` para la superficie dinámica de bajo consumo, o superficies experimentales `dynamic-2`/`dynamic-3`. |
-| `TOOL_SURFACE`       | —              | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`. Cuando se establece, sobrescribe `META_TOOLS`.                                                                |
-| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene solo `gitlab://workspace/roots` y omite recursos y prompts opcionales.                                                   |
-| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema siguen disponibles salvo que se habilite `CAPABILITY_SURFACE=minimal`.      |
-| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                                                     |
-| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                                                  |
+| Variable             | Predeterminado | Descripción                                                                                                                                                                                                                                |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `META_TOOLS`         | `true`         | Selector del catálogo: `true` para meta-herramientas, `false` para herramientas individuales, `dynamic` para la superficie dinámica de bajo consumo, `dynamic-3` para la superficie dinámica actual explícita, o `dynamic-2` experimental. |
+| `TOOL_SURFACE`       | —              | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`. Cuando se establece, sobrescribe `META_TOOLS`.                                                                                                |
+| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene solo `gitlab://workspace/roots` y omite recursos y prompts opcionales.                                                                                   |
+| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema siguen disponibles salvo que se habilite `CAPABILITY_SURFACE=minimal`.                                      |
+| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                                                                                     |
+| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                                                                                  |
+
+Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para la superficie de tres herramientas: buscar, describir y ejecutar.

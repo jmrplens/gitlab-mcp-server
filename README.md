@@ -224,10 +224,12 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. Experimental comparison surfaces: `dynamic-3` (explicit current mode) and `dynamic-2` (`gitlab_find_action` + `gitlab_execute_tool`). |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
+
+Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the search/describe/execute workflow, diagrams, and migration guidance.
 
 Meta-tool summary:
 
@@ -340,6 +342,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
 | [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
 | [Meta-Tools](docs/meta-tools.md) | 32/47/48 domain meta-tools with action dispatching |
+| [Dynamic Toolset](docs/dynamic-tools.md) | 3-tool low-token mode with hidden action registry, safety model, and examples |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |

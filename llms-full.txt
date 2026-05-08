@@ -1,6 +1,10 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.5.1 | up to 1011 tools | 32 meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise) | 46 resources | 38 prompts
+> Version 1.5.1 | up to 1011 tools | 32 meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise) | 3 dynamic tools | 46 resources | 38 prompts
+
+## Dynamic Toolset
+
+Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`. It exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the same hidden meta-action registry used by the default catalog. Models should search for candidate actions, describe selected actions for exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-2` remains a parked comparison surface with `gitlab_find_action` plus `gitlab_execute_tool`.
 
 ## Meta-Tools
 
@@ -11,8 +15,8 @@ operations under a single tool with an `action` parameter.
 
 **Access**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"approve_group","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_access/<action>.
+Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_access/<action>.
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
@@ -461,8 +465,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Admin**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"alert_metric_image_delete","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_admin/<action>.
+Use {"action":"alert_metric_image_delete","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_admin/<action>.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -1317,8 +1321,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Analyze**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"ci_config","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_analyze/<action>.
+Use {"action":"ci_config","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_analyze/<action>.
 
 LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
@@ -1444,8 +1448,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Branch**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_branch/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_branch/<action>.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
@@ -1569,8 +1573,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **CI Catalog**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"get","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_ci_catalog/<action>.
+Use {"action":"get","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_ci_catalog/<action>.
 
 Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `include:component`, or audit which Catalog resources a publisher group exposes.
@@ -1612,8 +1616,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **CI Variable**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_ci_variable/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_ci_variable/<action>.
 
 Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
 When to use: define / rotate / unmask / scope CI/CD variables at project, group, or instance level, both regular and secret (masked / masked_and_hidden), with environment scoping for per-env values.
@@ -1775,8 +1779,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Custom Emoji**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_custom_emoji/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_custom_emoji/<action>.
 
 Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: list, add, or remove the custom emoji available to a group's projects (e.g. company logos, team mascots) used as reactions on issues/MRs/notes.
@@ -1848,8 +1852,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Environment**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_environment/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_environment/<action>.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
@@ -2087,8 +2091,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Feature Flags**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"feature_flag_create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_feature_flags/<action>.
+Use {"action":"feature_flag_create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_feature_flags/<action>.
 
 Manage project feature flags and feature-flag user lists for gradual rollouts. Delete is destructive; setting active=false disables the flag but preserves history.
 When to use: define rollout strategies (percentage, user-targeted, environment-scoped) for a project's feature flags, and manage the user lists referenced by `gitlabUserList` strategies.
@@ -2206,8 +2210,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"archive","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_group/<action>.
+Use {"action":"archive","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_group/<action>.
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
@@ -3348,6 +3352,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.
 
+Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.
+
 After invocation, the tool elicits in order:
 - title (string, required) — issue title.
 - description (string, optional, multi-line, Markdown) — leave empty to skip.
@@ -3355,11 +3361,13 @@ After invocation, the tool elicits in order:
 - confidential (boolean, optional) — yes/no confirmation; defaults to public when declined.
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
+Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new issue; NON-idempotent — re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.
+
 When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.
 
-Returns: JSON with the created issue (id, issue_iid, web_url, title, state).
+Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid maps GitLab's iid field.
 
 See also: gitlab_issue.
 
@@ -3371,6 +3379,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.
 
+Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.
+
 After invocation, the tool elicits in order:
 - source_branch (string, required) — branch with the changes to merge.
 - target_branch (string, required) — branch to merge into (e.g. main, develop).
@@ -3381,11 +3391,13 @@ After invocation, the tool elicits in order:
 - squash (boolean, optional) — yes/no confirmation; default unset.
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
+Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422), so retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
+
 When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.
 
-Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state).
+Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid maps GitLab's iid field.
 
 See also: gitlab_merge_request, gitlab_branch.
 
@@ -3395,7 +3407,9 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Project Create**
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at required prompts or final confirmation aborts without creating the project.
+
+Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.
 
 After invocation, the tool elicits in order:
 - name (string, required) — project display name and (when path is omitted) URL slug.
@@ -3406,6 +3420,8 @@ After invocation, the tool elicits in order:
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
 When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.
+
+Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline aborts with no GitLab API call and no side effects, except at the optional initialize_with_readme prompt where decline/cancel continues with initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.
 
@@ -3420,6 +3436,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 **Interactive Release Create**
 
 Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.
+
+Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.
 
 After invocation, the tool elicits in order:
 - tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').
@@ -3443,8 +3461,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Issue**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_issue/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 When to use: issue lifecycle — create, update, close, move, comment, link, time-track, and manage Work Items (including Epics). NOT for: merge requests (use gitlab_merge_request), project settings (use gitlab_project), CI/CD (use gitlab_pipeline).
@@ -4039,8 +4057,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Job**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"artifacts","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_job/<action>.
+Use {"action":"artifacts","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_job/<action>.
 
 Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.
 When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
@@ -4288,8 +4306,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Request**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"approval_config","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_merge_request/<action>.
+Use {"action":"approval_config","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
 
 Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -4829,8 +4847,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Model Registry**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"download","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_model_registry/<action>.
+Use {"action":"download","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_model_registry/<action>.
 
 Download ML model package files from the GitLab Model Registry. Read-only — cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.
@@ -4865,8 +4883,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **MR Review**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"changes_get","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_mr_review/<action>.
+Use {"action":"changes_get","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_mr_review/<action>.
 
 Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
 When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
@@ -5107,8 +5125,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Package**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"delete","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_package/<action>.
+Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_package/<action>.
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
 When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
@@ -5361,8 +5379,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Pipeline**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"cancel","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_pipeline/<action>.
+Use {"action":"cancel","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -5687,8 +5705,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Project**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"approval_config_change","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_project/<action>.
+Use {"action":"approval_config_change","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_project/<action>.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -6814,8 +6832,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Release**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_release/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_release/<action>.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
@@ -6953,8 +6971,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Repository**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"archive","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_repository/<action>.
+Use {"action":"archive","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_repository/<action>.
 
 Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
 	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
@@ -7360,8 +7378,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Runner**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"controller_create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_runner/<action>.
+Use {"action":"controller_create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_runner/<action>.
 
 Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
 Valid actions: controller_create, controller_delete, controller_get, controller_list, controller_scope_add_instance, controller_scope_add_runner, controller_scope_list, controller_scope_remove_instance, controller_scope_remove_runner, controller_token_create, controller_token_get, controller_token_list, controller_token_revoke, controller_token_rotate, controller_update, delete_by_token, delete_registered, disable_project, enable_project, get, jobs, list, list_all, list_group, list_managers, list_project, register, remove, reset_group_reg_token, reset_instance_reg_token, reset_project_reg_token, reset_token, update, verify
@@ -7698,8 +7716,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Search**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"code","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_search/<action>.
+Use {"action":"code","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_search/<action>.
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -7812,8 +7830,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Snippet**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"content","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_snippet/<action>.
+Use {"action":"content","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_snippet/<action>.
 
 Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
 When to use: store/share standalone code or text outside a repo, comment on existing snippets, react with emoji on a snippet or snippet note, browse public snippets via explore.
@@ -8148,8 +8166,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Tag**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_tag/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_tag/<action>.
 
 Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
 When to use: create/list/delete tags, protect or unprotect tag patterns, verify a tag's GPG/X.509 signature.
@@ -8254,8 +8272,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Template**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"ci_yml_get","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_template/<action>.
+Use {"action":"ci_yml_get","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_template/<action>.
 
 Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration. Read-only; ci_lint may resolve `include:` directives that fetch remote URLs.
 When to use: discover available built-in templates, fetch a template body to commit into a project, validate a .gitlab-ci.yml before pushing, or list project scaffolds.
@@ -8389,8 +8407,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **User**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"activate","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_user/<action>.
+Use {"action":"activate","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_user/<action>.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
 When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).
@@ -9075,8 +9093,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Wiki**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_wiki/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_wiki/<action>.
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
 When to use: read, write, or delete wiki pages of a project; attach images or files referenced from wiki content.
@@ -9160,8 +9178,8 @@ These 16 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including 
 
 **Attestation**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"download","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_attestation/<action>.
+Use {"action":"download","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_attestation/<action>.
 
 List and download build attestations (SLSA provenance) for project artifacts.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9195,8 +9213,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Audit Event**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"get_group","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_audit_event/<action>.
+Use {"action":"get_group","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_audit_event/<action>.
 
 List and get GitLab audit events at instance, group, and project levels for compliance tracking.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9268,8 +9286,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Compliance Policy**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"get","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_compliance_policy/<action>.
+Use {"action":"get","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_compliance_policy/<action>.
 
 Get and update admin compliance policy settings (CSP namespace configuration).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9303,8 +9321,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Dependency**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"export_create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_dependency/<action>.
+Use {"action":"export_create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_dependency/<action>.
 
 List project dependencies and create/download SBOM exports (CycloneDX).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9356,8 +9374,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Dora Metrics**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"group","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_dora_metrics/<action>.
+Use {"action":"group","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_dora_metrics/<action>.
 
 Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9393,8 +9411,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Enterprise User**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"delete","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_enterprise_user/<action>.
+Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_enterprise_user/<action>.
 
 Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9448,8 +9466,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **External Status Check**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create_project","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_external_status_check/<action>.
+Use {"action":"create_project","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_external_status_check/<action>.
 
 Manage external status checks for MRs and projects. CRUD checks and set/retry status.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9539,8 +9557,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Geo**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_geo/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_geo/<action>.
 
 Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9626,8 +9644,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group Scim**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"delete","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_group_scim/<action>.
+Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_group_scim/<action>.
 
 Manage SCIM identities for GitLab group provisioning.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9680,8 +9698,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Member Role**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create_group","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_member_role/<action>.
+Use {"action":"create_group","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_member_role/<action>.
 
 Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9754,8 +9772,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Train**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"add","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_merge_train/<action>.
+Use {"action":"add","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_merge_train/<action>.
 
 Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9809,8 +9827,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Orbit**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"graph_status","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_orbit/<action>.
+Use {"action":"graph_status","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_orbit/<action>.
 
 Experimental GitLab.com-only Orbit Knowledge Graph operations. Read-only.
 When to use: inspect Orbit availability and graph indexing, discover the Orbit MCP tool/query schema, or execute a Knowledge Graph query on GitLab.com.
@@ -9875,8 +9893,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Project Alias**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"create","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_project_alias/<action>.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_project_alias/<action>.
 
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -9927,8 +9945,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Security Finding**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"list","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_security_finding/<action>.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_security_finding/<action>.
 
 List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9953,8 +9971,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Storage Move**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"get_group","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_storage_move/<action>.
+Use {"action":"get_group","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -10139,8 +10157,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Vulnerability**
 
-Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {"action":"confirm","params":{...}}
-For the params schema of any action, read the MCP resource gitlab://schema/meta/gitlab_vulnerability/<action>.
+Use {"action":"confirm","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_vulnerability/<action>.
 
 List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -15597,11 +15615,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
-
-**Parameters:**
-
-- `project_id` (string): Optional: pre-fill project ID or path for tools that need it
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at required prompts or final confirmation aborts without creating the project.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
