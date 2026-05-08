@@ -258,6 +258,8 @@ func TestLoad_CapabilitySurfaceInvalid(t *testing.T) {
 	}
 }
 
+// TestEffectiveCapabilitySurface verifies that empty capability settings resolve
+// to the full surface while explicit minimal settings are preserved.
 func TestEffectiveCapabilitySurface(t *testing.T) {
 	if got := EffectiveCapabilitySurface(""); got != CapabilitySurfaceFull {
 		t.Fatalf("EffectiveCapabilitySurface(empty) = %q, want %q", got, CapabilitySurfaceFull)

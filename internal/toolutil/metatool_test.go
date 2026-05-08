@@ -786,6 +786,8 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	}
 }
 
+// TestNormalizeActionAlias_DynamicCompatibilityAliases verifies dynamic-surface
+// compatibility aliases map to canonical meta-tool action IDs.
 func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 	routes := ActionMap{
 		"storage_move.schedule_project":      {},

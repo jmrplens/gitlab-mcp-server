@@ -12,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
+// allocations against the captured meta catalog plus standalone routes.
 func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 	registry := benchmarkRegistry(b)
 	ctx := context.Background()

@@ -87,6 +87,8 @@ func TestFormatListMarkdown_EmptyPackages(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_IncludesPreserveLinksHint verifies that package list
+// markdown links pipeline summaries and emits the preserve-links hint.
 func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 	out := ListOutput{
 		Packages: []ListItem{{
@@ -111,6 +113,8 @@ func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 	}
 }
 
+// TestPipelineSummary_Variants verifies package pipeline summaries for primary,
+// historical, linked, and empty pipeline data.
 func TestPipelineSummary_Variants(t *testing.T) {
 	tests := []struct {
 		name string

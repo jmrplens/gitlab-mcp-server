@@ -13,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestSearch_RanksMatchingActions verifies that Search prioritizes the most
+// specific destructive action when query terms match both the domain and action.
 func TestSearch_RanksMatchingActions(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -34,6 +36,8 @@ func TestSearch_RanksMatchingActions(t *testing.T) {
 	}
 }
 
+// TestSearch_RequiresQuery verifies that Search returns an MCP tool error when
+// the caller omits the query text.
 func TestSearch_RequiresQuery(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -46,6 +50,8 @@ func TestSearch_RequiresQuery(t *testing.T) {
 	}
 }
 
+// TestSearch_RanksAliasMatches verifies that human-friendly aliases such as
+// "webhook create" rank the canonical project hook action first.
 func TestSearch_RanksAliasMatches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -61,6 +67,8 @@ func TestSearch_RanksAliasMatches(t *testing.T) {
 	}
 }
 
+// TestSearch_UsesIntentSynonymsAndTags verifies that Search expands common
+// intent words and tags before ranking dynamic actions.
 func TestSearch_UsesIntentSynonymsAndTags(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -90,6 +98,8 @@ func TestSearch_UsesIntentSynonymsAndTags(t *testing.T) {
 	}
 }
 
+// TestSearch_ExactCanonicalIDBeatsBroadText verifies that an exact canonical
+// action ID outranks broader textual matches for the same domain.
 func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -105,6 +115,8 @@ func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 	}
 }
 
+// TestAddStandaloneRoutes_AddsDynamicActions verifies that standalone dynamic
+// routes are indexed alongside captured meta-tool routes.
 func TestAddStandaloneRoutes_AddsDynamicActions(t *testing.T) {
 	routes := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
 	registry := NewRegistry(routes)
@@ -125,6 +137,8 @@ func TestAddStandaloneRoutes_AddsDynamicActions(t *testing.T) {
 	}
 }
 
+// TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions verifies that standalone
+// route registration respects read-only mode and explicit tool exclusions.
 func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
 	routes := AddStandaloneRoutes(nil, nil, StandaloneOptions{
 		ReadOnly:     true,
@@ -140,6 +154,8 @@ func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
 	}
 }
 
+// TestDescribe_CanonicalizesStandaloneAlias verifies that Describe resolves a
+// standalone MCP tool name to its canonical dynamic action ID.
 func TestDescribe_CanonicalizesStandaloneAlias(t *testing.T) {
 	registry := NewRegistry(AddStandaloneRoutes(nil, nil, StandaloneOptions{}))
 
@@ -155,6 +171,8 @@ func TestDescribe_CanonicalizesStandaloneAlias(t *testing.T) {
 	}
 }
 
+// TestDescribe_ReturnsSchemaAndExample verifies that Describe returns action
+// metadata, destructive hints, input schema, and an executable example.
 func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -180,6 +198,8 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	}
 }
 
+// TestDescribe_MetaCatalogOmitsOutputSchema verifies that Describe keeps the
+// structured payload compact by omitting output schemas from meta catalog actions.
 func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 	routes := toolutil.CaptureMetaRoutes(func() {
 		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-schema-profile-test", Version: "0.0.1"}, nil)
@@ -253,6 +273,8 @@ func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 	}
 }
 
+// TestFind_ReturnsSchemaAndExecuteExample verifies that Find combines search
+// ranking with the input schema and execute example needed to call an action.
 func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -278,6 +300,8 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	}
 }
 
+// TestFind_RequiresQuery verifies that Find returns an MCP tool error and empty
+// output when the query is omitted.
 func TestFind_RequiresQuery(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -293,6 +317,8 @@ func TestFind_RequiresQuery(t *testing.T) {
 	}
 }
 
+// TestRegisterFindExecuteTools_ExposesTwoDynamicTools verifies that the dynamic
+// two-tool surface exposes only find and execute through an MCP session.
 func TestRegisterFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
 	RegisterFindExecuteTools(server, testRoutes(t))
@@ -324,6 +350,8 @@ func TestRegisterFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 	}
 }
 
+// TestDescribe_UnknownActionReturnsToolError verifies that Describe reports an
+// MCP tool error for action IDs that are not present in the registry.
 func TestDescribe_UnknownActionReturnsToolError(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -336,6 +364,8 @@ func TestDescribe_UnknownActionReturnsToolError(t *testing.T) {
 	}
 }
 
+// TestDescribe_CanonicalizesAlias verifies that Describe resolves compatibility
+// aliases to the canonical action ID before returning metadata.
 func TestDescribe_CanonicalizesAlias(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -351,6 +381,8 @@ func TestDescribe_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+// TestDescribe_CanonicalizesObservedModelAliases verifies aliases observed in
+// model output so dynamic execution remains tolerant of alternate naming.
 func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -403,6 +435,8 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 	}
 }
 
+// TestExecute_NormalizesCommonParameterAliases verifies that Execute rewrites
+// common parameter aliases before dispatching to the canonical handler.
 func TestExecute_NormalizesCommonParameterAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -425,6 +459,8 @@ func TestExecute_NormalizesCommonParameterAliases(t *testing.T) {
 	}
 }
 
+// TestExecute_DispatchesReadOnlyAction verifies that Execute forwards read-only
+// action parameters to the registered route handler and returns its output.
 func TestExecute_DispatchesReadOnlyAction(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -444,6 +480,8 @@ func TestExecute_DispatchesReadOnlyAction(t *testing.T) {
 	}
 }
 
+// TestExecute_CanonicalizesAlias verifies that Execute resolves a compatibility
+// alias before invoking the canonical action route.
 func TestExecute_CanonicalizesAlias(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -463,6 +501,8 @@ func TestExecute_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+// TestExecute_UnknownActionSuggestsCanonicalIDs verifies that unknown actions
+// return an MCP tool error with nearby canonical ID suggestions.
 func TestExecute_UnknownActionSuggestsCanonicalIDs(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -481,6 +521,8 @@ func TestExecute_UnknownActionSuggestsCanonicalIDs(t *testing.T) {
 	}
 }
 
+// TestExecute_RejectsAmbiguousAlias verifies that Execute refuses aliases that
+// map to multiple canonical actions and reports the possible targets.
 func TestExecute_RejectsAmbiguousAlias(t *testing.T) {
 	registry := newRegistry(testRoutes(t), []actionAlias{
 		{Alias: "danger.delete", Canonical: "project.delete"},
@@ -503,6 +545,8 @@ func TestExecute_RejectsAmbiguousAlias(t *testing.T) {
 	}
 }
 
+// TestDescribe_RejectsAmbiguousAlias verifies that Describe reports ambiguous
+// aliases instead of choosing one canonical action arbitrarily.
 func TestDescribe_RejectsAmbiguousAlias(t *testing.T) {
 	registry := newRegistry(testRoutes(t), []actionAlias{
 		{Alias: "danger.delete", Canonical: "project.delete"},
@@ -521,6 +565,8 @@ func TestDescribe_RejectsAmbiguousAlias(t *testing.T) {
 	}
 }
 
+// TestExecute_DestructiveActionRequiresConfirm verifies that destructive actions
+// are blocked until the caller explicitly sets confirm=true.
 func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -539,6 +585,8 @@ func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
 	}
 }
 
+// TestExecute_DestructiveActionExecutesWithConfirm verifies that destructive
+// actions dispatch normally once the caller provides explicit confirmation.
 func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -558,6 +606,8 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 	}
 }
 
+// TestRegisterTools_ExposesThreeDynamicTools verifies that the full dynamic
+// surface exposes search, describe, and execute through an MCP session.
 func TestRegisterTools_ExposesThreeDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
 	RegisterTools(server, testRoutes(t))
@@ -585,6 +635,8 @@ func TestRegisterTools_ExposesThreeDynamicTools(t *testing.T) {
 	}
 }
 
+// TestSearch_PartialMatchLongQuery verifies that incidental query terms do not
+// suppress otherwise relevant merge request matches.
 func TestSearch_PartialMatchLongQuery(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -608,6 +660,8 @@ func TestSearch_PartialMatchLongQuery(t *testing.T) {
 	}
 }
 
+// TestSearch_NaturalLLMQueriesReturnActions verifies natural-language queries
+// observed from LLMs still return the intended dynamic actions.
 func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
 	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
 
@@ -636,6 +690,8 @@ func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
 	}
 }
 
+// TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches verifies that a long
+// query containing multiple intents is segmented into actionable matches.
 func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
 
@@ -656,6 +712,8 @@ func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 	}
 }
 
+// TestSearch_QueryShapeMatrix_ReturnsExpectedActions verifies short, long,
+// typo-heavy, alias-based, and mixed queries against expected action IDs.
 func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
 
@@ -697,6 +755,8 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 	}
 }
 
+// TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet verifies that mixed
+// intent queries return the expected action set even when the limit is tight.
 func TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet(t *testing.T) {
 	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
 
@@ -736,6 +796,8 @@ func TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet(t *testing.T) {
 	}
 }
 
+// TestSearch_TypoQueryReturnsRelevantActions verifies that the fuzzy fallback
+// recovers relevant merge request actions from typo-heavy query terms.
 func TestSearch_TypoQueryReturnsRelevantActions(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -756,6 +818,8 @@ func TestSearch_TypoQueryReturnsRelevantActions(t *testing.T) {
 	}
 }
 
+// TestSearch_TypoQueryReturnsResultsOnMetaCatalog verifies that fuzzy matching
+// works against the real captured meta-tool catalog, not only test fixtures.
 func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
 	routes := toolutil.CaptureMetaRoutes(func() {
 		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test-catalog", Version: "0.0.1"}, nil)

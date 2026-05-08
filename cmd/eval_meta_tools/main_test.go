@@ -437,6 +437,8 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 	}
 }
 
+// TestNormalizeExpectedDynamicRoute_MapsStandaloneTools verifies that standalone
+// tool expectations are normalized to gitlab_execute_tool dynamic action IDs.
 func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
 	hiddenRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
 	routes := dynamicValidationRoutes(hiddenRoutes)
@@ -461,6 +463,8 @@ func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
 	}
 }
 
+// TestDynamicDiscoveryResult_UsesRuntimeIntentIndex verifies that dynamic search
+// evaluation uses the runtime intent index for natural-language action discovery.
 func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 	hiddenRoutes := map[string]toolutil.ActionMap{
 		"gitlab_merge_request": {
@@ -507,6 +511,8 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 	}
 }
 
+// TestDynamicDiscoveryResult_FindIncludesSchema verifies that gitlab_find_action
+// returns the schema and execute-tool target needed for the next model call.
 func TestDynamicDiscoveryResult_FindIncludesSchema(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		dynamicExecuteTool: {
@@ -548,6 +554,8 @@ func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
 	}
 }
 
+// TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom verifies that the
+// dynamic-3 surface receives extra calls for search and describe prelude steps.
 func TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom(t *testing.T) {
 	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceDynamic3); got != 20 {
 		t.Fatalf("taskToolCallLimitForSurface(4, dynamic-3) = %d, want 20", got)
@@ -557,6 +565,8 @@ func TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom(t *testing.T) {
 	}
 }
 
+// TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair verifies that the
+// dynamic-3 surface gets one additional repair attempt for discovery mistakes.
 func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic3); got != 2 {
 		t.Fatalf("repairAttemptLimitForSurface(dynamic-3) = %d, want 2", got)
@@ -650,6 +660,8 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	}
 }
 
+// TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes verifies that
+// dynamic-2 exposes only find and execute while preserving hidden execution routes.
 func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
 	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic2)
@@ -674,6 +686,8 @@ func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.
 	}
 }
 
+// TestNormalizeEvalToolSurface_AcceptsDynamicCandidates verifies that all dynamic
+// surface names accepted by configuration normalize to their canonical values.
 func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 	tests := map[string]string{
 		"dynamic":   config.ToolSurfaceDynamic,
@@ -693,6 +707,8 @@ func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 	}
 }
 
+// TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute verifies
+// that dynamic-3 prompts instruct models to search and describe before execution.
 func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testing.T) {
 	task := evalTask{ID: "MS-002", Prompt: "Investigate a pipeline failure for git remote `git@gitlab.example.com:group/project.git` and summarize the failing job."}
 
@@ -811,6 +827,8 @@ func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
 	}
 }
 
+// TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs verifies that
+// simulated mutating responses include resource IDs for follow-up evaluation steps.
 func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T) {
 	content := successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.badge_add"}, modelContentBlock{
 		Name: dynamicExecuteTool,
@@ -3384,6 +3402,8 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude verifies that dynamic-3
+// evaluation accepts a project search prelude before the required discovery action.
 func TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("search", dynamicExecuteTool, map[string]any{"action": "search.projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
@@ -3409,6 +3429,8 @@ func TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude(t *testing.T) {
 	}
 }
 
+// TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths verifies that
+// dynamic-3 first-pass scoring accepts supported prelude and fallback paths.
 func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing.T) {
 	t.Run("project search prelude", func(t *testing.T) {
 		result := taskResult{

@@ -820,6 +820,8 @@ func TestSearchOpts_InvalidSearchType(t *testing.T) {
 	}
 }
 
+// TestSearchHandlers_InvalidSearchType_ReturnValidationError verifies that every
+// search handler rejects unsupported search_type values before calling GitLab.
 func TestSearchHandlers_InvalidSearchType_ReturnValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("handler should not call GitLab API for invalid search_type: %s %s", r.Method, r.URL.Path)
@@ -1754,6 +1756,8 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 	}
 }
 
+// TestSearchInputSchema_UnsupportedTypePanics verifies that unsupported schema
+// shapes panic with search input schema context during registration.
 func TestSearchInputSchema_UnsupportedTypePanics(t *testing.T) {
 	defer func() {
 		recovered := recover()
@@ -1768,6 +1772,8 @@ func TestSearchInputSchema_UnsupportedTypePanics(t *testing.T) {
 	_ = searchInputSchema[unsupportedSearchSchemaInput]()
 }
 
+// TestSearchSchemaPanic_ErrorPanics verifies that searchSchemaPanic ignores nil
+// errors and panics with operation context for non-nil errors.
 func TestSearchSchemaPanic_ErrorPanics(t *testing.T) {
 	searchSchemaPanic("noop", nil)
 
