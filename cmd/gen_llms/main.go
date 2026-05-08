@@ -52,6 +52,7 @@ type llmsCatalog struct {
 	MetaBase                []*mcp.Tool
 	MetaEnterprise          []*mcp.Tool
 	MetaGitLabComEnterprise []*mcp.Tool
+	MetaRoutes              map[string]toolutil.ActionMap
 	Resources               []*mcp.Resource
 	ResourceTemplates       []*mcp.ResourceTemplate
 	Prompts                 []*mcp.Prompt
@@ -115,6 +116,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	metaCatalog, err := tools.BuildActionCatalog(gitLabComClient, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		return fmt.Errorf("build meta action catalog: %w", err)
+	}
 	promptList, err := listPrompts(client)
 	if err != nil {
 		return err
@@ -125,6 +130,7 @@ func run() error {
 		MetaBase:                metaBase,
 		MetaEnterprise:          metaEnterprise,
 		MetaGitLabComEnterprise: metaGitLabComEnterprise,
+		MetaRoutes:              metaCatalog.ActionMaps(),
 		Resources:               res,
 		ResourceTemplates:       resTpl,
 		Prompts:                 promptList,
@@ -222,10 +228,12 @@ func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 // listResources returns the static resources and resource templates advertised
 // by the MCP server, including the per-action meta-schema template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
+	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("build meta action catalog: %w", err)
+	}
+	metaRoutes := metaCatalog.ActionMaps()
 	session, cleanup, err := newSession(func(server *mcp.Server) {
-		metaRoutes := toolutil.CaptureMetaRoutes(func() {
-			tools.RegisterAllMeta(server, client, false)
-		})
 		resources.Register(server, client)
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
@@ -309,7 +317,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("\n")
 
 	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same hidden GitLab action registry. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.\n\n")
+	b.WriteString("Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.\n\n")
 
 	b.WriteString("## Resources\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
@@ -357,14 +365,12 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`. It exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the same hidden meta-action registry used by the default catalog. Models should search for candidate actions, describe selected actions for exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-2` remains a parked comparison surface with `gitlab_find_action` plus `gitlab_execute_tool`.\n\n")
+	b.WriteString("Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`. It exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the same canonical action catalog used by the default meta-tool catalog. Models should search for candidate actions, describe selected actions for exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-2` remains a parked comparison surface with `gitlab_find_action` plus `gitlab_execute_tool`.\n\n")
 
 	// --- Meta-tools (primary mode) ---
 	b.WriteString("## Meta-Tools\n\n")
 	b.WriteString("Meta-tools are the default mode (META_TOOLS=true). Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
-
-	allRoutes := toolutil.MetaRoutes()
 
 	for _, t := range catalog.MetaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
@@ -375,7 +381,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		b.WriteString("\n\n")
 		writeAnnotations(&b, t.Annotations)
 		b.WriteString("\n")
-		if routes, ok := allRoutes[t.Name]; ok {
+		if routes, ok := catalog.MetaRoutes[t.Name]; ok {
 			writeActionOutputSchemas(&b, t.Name, routes)
 		}
 	}
@@ -403,7 +409,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 			b.WriteString("\n\n")
 			writeAnnotations(&b, t.Annotations)
 			b.WriteString("\n")
-			if routes, ok := allRoutes[t.Name]; ok {
+			if routes, ok := catalog.MetaRoutes[t.Name]; ok {
 				writeActionOutputSchemas(&b, t.Name, routes)
 			}
 		}

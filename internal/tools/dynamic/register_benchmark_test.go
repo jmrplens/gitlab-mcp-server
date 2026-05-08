@@ -6,10 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
@@ -56,14 +53,11 @@ func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 func benchmarkRegistry(b *testing.B) *Registry {
 	b.Helper()
 
-	routes := toolutil.CaptureMetaRoutes(func() {
-		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-benchmark", Version: "0.0.1"}, nil)
-		tools.RegisterAllMeta(server, nil, false)
-		tools.RegisterMCPMeta(server, nil, nil)
-	})
-
-	routes = AddStandaloneRoutes(routes, nil, StandaloneOptions{})
-	registry := NewRegistry(routes)
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		b.Fatalf("BuildActionCatalog() error: %v", err)
+	}
+	registry := NewRegistryFromCatalog(AddStandaloneCatalog(catalog, nil, StandaloneOptions{}))
 	if len(registry.entries) == 0 {
 		b.Fatal("benchmark registry is empty")
 	}

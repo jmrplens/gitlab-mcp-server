@@ -45,7 +45,7 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 :::tip
 **El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
 
-Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo registro oculto de acciones de GitLab. Las meta-herramientas siguen siendo el modo predeterminado hoy, pero el modo dinámico es el candidato actual para un futuro predeterminado de bajo consumo. Usa `TOOL_SURFACE=dynamic-2` solo para el candidato A/B find/execute aparcado.
+Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. Las meta-herramientas siguen siendo el modo predeterminado hoy, pero el modo dinámico es el candidato actual para un futuro predeterminado de bajo consumo. Usa `TOOL_SURFACE=dynamic-2` solo para el candidato A/B find/execute aparcado.
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo buscar, describir y ejecutar.
 

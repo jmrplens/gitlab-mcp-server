@@ -8,7 +8,7 @@ import (
 )
 
 // TestRegistryDefensiveBranches covers small validation and fallback branches
-// in the dynamic registry dispatcher. These scenarios matter because the hidden
+// in the dynamic registry dispatcher. These scenarios matter because the catalog
 // action surface should return helpful tool errors for malformed calls instead
 // of leaking empty or ambiguous execution attempts.
 func TestRegistryDefensiveBranches(t *testing.T) {
@@ -265,11 +265,11 @@ func TestNormalizationExampleAndFormattingBranches(t *testing.T) {
 
 	t.Run("format empty outputs", func(t *testing.T) {
 		searchText := formatSearchOutput(SearchOutput{Query: "zzzz"})
-		if !strings.Contains(searchText, "No hidden actions matched") {
+		if !strings.Contains(searchText, "No catalog actions matched") {
 			t.Fatalf("formatSearchOutput(empty) = %q, want no-match message", searchText)
 		}
 		findText := formatFindOutput(FindOutput{Query: "zzzz"})
-		if !strings.Contains(findText, "No hidden actions matched") {
+		if !strings.Contains(findText, "No catalog actions matched") {
 			t.Fatalf("formatFindOutput(empty) = %q, want no-match message", findText)
 		}
 	})

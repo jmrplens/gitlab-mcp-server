@@ -50,12 +50,12 @@ Meta-tools remain the default today because they are the most broadly compatible
 | Mode                       | Tool Count | Best For                                                         |
 | -------------------------- | ---------- | ---------------------------------------------------------------- |
 | Meta-tools (`true`)        | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | LLMs with limited tool context windows                           |
-| Dynamic toolset (`dynamic`/`dynamic-3`) | 3 visible tools plus a hidden action registry | Low-token clients that can call search, describe, then execute actions |
-| Dynamic-2 candidate (`dynamic-2`) | 2 visible tools plus a hidden action registry | Experimental clients that can call find, then execute actions |
+| Dynamic toolset (`dynamic`/`dynamic-3`) | 3 visible tools plus the canonical action catalog | Low-token clients that can call search, describe, then execute actions |
+| Dynamic-2 candidate (`dynamic-2`) | 2 visible tools plus the canonical action catalog | Experimental clients that can call find, then execute actions |
 | Individual tools (`false`) | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from granular tool discovery                |
 
-The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It reuses the same
-underlying meta-tool routes and safety checks, but hides the full action catalog from the initial `tools/list` response.
+The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It consumes the same
+canonical action catalog as meta-tools, including typed schemas, destructive-action metadata, Markdown formatters, read-only filtering, safe-mode previews, and token-scope filtering. The difference is packaging: dynamic keeps the full catalog out of the initial `tools/list` response and reveals actions through search and describe calls.
 The experimental `dynamic-2` candidate exposes `gitlab_find_action` and `gitlab_execute_tool`; it combines search and schema lookup into one discovery call for A/B evaluation.
 Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources and prompts.
 
@@ -164,6 +164,10 @@ The base mode provides a ~53% reduction from the v1.0 baseline, with enterprise 
 - Client rendering overhead for tool palettes
 
 ### Implementation Pattern
+
+Meta-tools and the dynamic toolset are both built from the canonical action catalog in `internal/tools/action_catalog.go`.
+`RegisterAllMeta()` registers visible domain dispatchers from that catalog, while dynamic mode builds a catalog-backed search/describe/execute registry from the same action definitions.
+Developers define route metadata once through `ActionMap` and `ActionRoute`; both surfaces inherit the same parameter schemas, output schemas, destructive flags, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 

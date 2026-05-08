@@ -142,11 +142,11 @@ Con `META_TOOLS=false`, se exponen todas las herramientas individuales (p. ej., 
 
 ### Conjunto de herramientas dinámico
 
-Con `TOOL_SURFACE=dynamic`, el servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`. El catálogo completo de acciones sigue disponible mediante un registro oculto construido a partir de los mismos mapas de rutas de meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
+Con `TOOL_SURFACE=dynamic`, el servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`. El mismo catálogo de acciones canónico sigue disponible y se comparte con las meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
 
 ```mermaid
 flowchart TD
-    A[Mapas de rutas de meta-herramientas] --> B[Registro dinámico oculto]
+    A[Catálogo de acciones canónico] --> B[Registro dinámico]
     B --> C[gitlab_search_tools]
     B --> D[gitlab_describe_tools]
     B --> E[gitlab_execute_tool]

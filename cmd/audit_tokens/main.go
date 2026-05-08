@@ -28,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -78,18 +79,20 @@ func main() {
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
 
-	metaBaseRoutes := captureMetaRoutes(client, false)
-	metaEnterpriseRoutes := captureMetaRoutes(client, true)
-	dynamicBaseRoutes := dynamictools.AddStandaloneRoutes(toolutil.CloneMetaSchemaRoutes(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
-	dynamicEnterpriseRoutes := dynamictools.AddStandaloneRoutes(toolutil.CloneMetaSchemaRoutes(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
+	metaBaseRoutes := buildMetaActionMaps(client, false)
+	metaEnterpriseRoutes := buildMetaActionMaps(client, true)
+	dynamicBaseCatalog := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicEnterpriseCatalog := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
+	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
 
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
-	dynamic3BaseTools := listDynamicTools(dynamicBaseRoutes)
-	dynamic3EnterpriseTools := listDynamicTools(dynamicEnterpriseRoutes)
-	dynamic2BaseTools := listDynamic2Tools(dynamicBaseRoutes)
-	dynamic2EnterpriseTools := listDynamic2Tools(dynamicEnterpriseRoutes)
+	dynamic3BaseTools := listDynamicTools(dynamicBaseCatalog)
+	dynamic3EnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
+	dynamic2BaseTools := listDynamic2Tools(dynamicBaseCatalog)
+	dynamic2EnterpriseTools := listDynamic2Tools(dynamicEnterpriseCatalog)
 
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
@@ -122,7 +125,7 @@ func main() {
 	fmt.Println("## Mode Comparison")
 	fmt.Println()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "  Mode\tTools\tHidden actions\tTokens\tBytes\n")
+	fmt.Fprintf(tw, "  Mode\tTools\tCatalog actions\tTokens\tBytes\n")
 	fmt.Fprintf(tw, "  ────\t─────\t──────────────\t──────\t─────\n")
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t0\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), countActions(metaBaseRoutes), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
@@ -259,29 +262,30 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
-// hidden meta-tool routes and returns the advertised tool definitions.
-func listDynamicTools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
+// action routes and returns the advertised tool definitions.
+func listDynamicTools(catalog *actionregistry.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
-	dynamictools.RegisterTools(server, routes)
+	dynamictools.RegisterCatalogTools(server, catalog)
 	return listToolsFromServer(server)
 }
 
 // listDynamic2Tools registers the experimental find/execute dynamic public
-// toolset backed by hidden meta-tool routes and returns the advertised tools.
-func listDynamic2Tools(routes map[string]toolutil.ActionMap) []*mcp.Tool {
+// toolset backed by action routes and returns the advertised tools.
+func listDynamic2Tools(catalog *actionregistry.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
-	dynamictools.RegisterFindExecuteTools(server, routes)
+	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
 }
 
-// captureMetaRoutes builds the hidden action route catalog that backs both
+// buildMetaRoutes builds the action route catalog that backs both
 // meta-schema resources and the dynamic toolset.
-func captureMetaRoutes(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
-	return toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, client, enterprise)
-		tools.RegisterMCPMeta(server, client, nil)
-	})
+func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "build action catalog: %v\n", err)
+		os.Exit(1)
+	}
+	return catalog.ActionMaps()
 }
 
 // listToolsFromServer connects to server in-memory and returns the advertised
@@ -408,7 +412,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 	return totalBytes / bytesPerTok
 }
 
-// countActions returns the number of hidden actions in a route catalog.
+// countActions returns the number of actions in a route catalog.
 func countActions(routes map[string]toolutil.ActionMap) int {
 	total := 0
 	for _, actions := range routes {

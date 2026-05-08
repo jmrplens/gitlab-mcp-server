@@ -52,9 +52,9 @@ func TestDynamicToolSurface_ExposesSearchDescribeExecuteOnly(t *testing.T) {
 	if !slices.Equal(names, want) {
 		t.Fatalf("dynamic tool names = %v, want %v", names, want)
 	}
-	for _, hidden := range []string{"gitlab_project", "gitlab_repository", "gitlab_find_action"} {
-		if slices.Contains(names, hidden) {
-			t.Fatalf("dynamic surface exposed hidden or parked tool %q in %v", hidden, names)
+	for _, catalogTool := range []string{"gitlab_project", "gitlab_repository", "gitlab_find_action"} {
+		if slices.Contains(names, catalogTool) {
+			t.Fatalf("dynamic surface exposed catalog or parked tool %q in %v", catalogTool, names)
 		}
 	}
 }
@@ -66,7 +66,7 @@ func TestDynamicToolSurface_ExposesSearchDescribeExecuteOnly(t *testing.T) {
 // [sess.dynamic] to search, describe, and execute read-only actions. It covers
 // a project read, repository file read, standalone project discovery action,
 // natural multi-intent search, and the destructive-action confirmation guard.
-// The expected outcome is that dynamic mode can find and execute real hidden
+// The expected outcome is that dynamic mode can find and execute real catalog
 // actions without exposing the underlying meta-tool catalog directly.
 func TestDynamicToolSurface_SearchDescribeExecuteReadOnlyWorkflow(t *testing.T) {
 	t.Parallel()

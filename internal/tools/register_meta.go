@@ -177,6 +177,15 @@ import (
 // functionality. Interactive tools cannot be consolidated because they
 // require multi-round MCP elicitation/create exchanges with the client.
 func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise})
+	if err != nil {
+		panic(err)
+	}
+	RegisterMetaCatalog(server, catalog)
+	registerStandaloneUtilities(server, client)
+}
+
+func registerAllMetaGroups(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
 	// Core domain meta-tools (inline handlers — enterprise routes injected when enabled)
 	registerProjectMeta(server, client, enterprise)
 	registerBranchMeta(server, client)
@@ -233,7 +242,9 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	search.RegisterMeta(server, client)
 	runners.RegisterMeta(server, client)
 	samplingtools.RegisterMeta(server, client)
+}
 
+func registerStandaloneUtilities(server *mcp.Server, client *gitlabclient.Client) {
 	// Standalone utility tools (not consolidated into meta-tools).
 	// projectdiscovery: git-remote → project resolution helper.
 	// elicitationtools: 4 gitlab_interactive_* tools that drive multi-step MCP

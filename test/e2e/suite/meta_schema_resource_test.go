@@ -1,8 +1,7 @@
 //go:build e2e
 
-// meta_schema_resource_test.go validates that, after the full meta-tool
-// registry is wired into a server, the gitlab://schema/meta/* resources
-// expose the captured per-action InputSchemas for real meta-tools.
+// meta_schema_resource_test.go validates that the gitlab://schema/meta/*
+// resources expose the catalog per-action InputSchemas for real meta-tools.
 package suite
 
 import (
@@ -16,28 +15,29 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// metaSchemaResourceSession registers all meta-tools (which populates
-// toolutil.MetaRoutes) plus the meta-schema resources in a single MCP
-// server, then returns an in-memory client session. It pins mode=full so
-// per-action InputSchemas are captured with their real structured shape.
+// metaSchemaResourceSession registers catalog-backed meta-tools plus the
+// meta-schema resources in a single MCP server, then returns an in-memory
+// client session. It pins mode=full so per-action InputSchemas keep their
+// real structured shape.
 func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
 	t.Helper()
 	tools.SetMetaParamSchema("full")
 	t.Cleanup(func() { tools.SetMetaParamSchema("opaque") })
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	metaRoutes := toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, client, enterprise)
-	})
-	resources.RegisterMetaSchemaResources(server, metaRoutes)
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	tools.RegisterMetaCatalog(server, catalog)
+	resources.RegisterMetaSchemaResources(server, catalog.ActionMaps())
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
+		t.Fatalf("server connect: %v", connectErr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)

@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -154,6 +155,110 @@ func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
 	}
 }
 
+// TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper verifies that the
+// catalog-native standalone builder preserves the old route-map wrapper output.
+func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
+	routes := testRoutes(t)
+	fromRoutes := NewRegistry(AddStandaloneRoutes(routes, nil, StandaloneOptions{}))
+	fromCatalog := NewRegistryFromCatalog(AddStandaloneCatalog(actionregistry.FromActionMaps(routes), nil, StandaloneOptions{}))
+
+	for _, actionID := range []string{"project.list", "discover_project.resolve", "interactive.issue_create"} {
+		if _, ok := fromRoutes.resolveAction(actionID); !ok {
+			t.Fatalf("route wrapper registry missing %s", actionID)
+		}
+		if _, ok := fromCatalog.resolveAction(actionID); !ok {
+			t.Fatalf("catalog registry missing %s", actionID)
+		}
+	}
+}
+
+// TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions verifies
+// nil catalogs are supported and no empty interactive group is added.
+func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testing.T) {
+	catalog := AddStandaloneCatalog(nil, nil, StandaloneOptions{ExcludeTools: []string{
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create",
+	}})
+	registry := NewRegistryFromCatalog(catalog)
+
+	if _, ok := registry.resolveAction("discover_project.resolve"); !ok {
+		t.Fatal("discover_project.resolve missing")
+	}
+	if _, ok := registry.resolveAction("interactive.issue_create"); ok {
+		t.Fatal("interactive.issue_create present, want excluded")
+	}
+}
+
+// TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags verifies that dynamic
+// mode can consume registry-native action metadata without rebuilding it from
+// legacy route maps.
+func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
+	catalog := actionregistry.NewCatalog()
+	group := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_custom"})
+	group.SetAction(actionregistry.Action{
+		Name:    "inspect",
+		Aliases: []string{"custom.lookup"},
+		Tags:    []string{"bespoke"},
+		Route: toolutil.ActionRoute{
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"target": params["target"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"target"},
+				"properties": map[string]any{
+					"target": map[string]any{"type": "string"},
+				},
+			},
+		},
+	})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	registry := NewRegistryFromCatalog(catalog)
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "bespoke", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 1 || output.Results[0].ID != "custom.inspect" {
+		t.Fatalf("Search() output = %+v, want custom.inspect", output)
+	}
+
+	result, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "custom.lookup"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	if described.Count != 1 || described.Actions[0].ID != "custom.inspect" {
+		t.Fatalf("Describe() output = %+v, want custom.inspect", described)
+	}
+}
+
+// TestNewRegistryFromCatalog_NilCatalog verifies callers can pass a nil catalog
+// during transitional setup without panicking.
+func TestNewRegistryFromCatalog_NilCatalog(t *testing.T) {
+	registry := NewRegistryFromCatalog(nil)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "project", Limit: 3})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error empty result", result)
+	}
+	if output.Count != 0 {
+		t.Fatalf("Search() Count = %d, want 0", output.Count)
+	}
+}
+
 // TestDescribe_CanonicalizesStandaloneAlias verifies that Describe resolves a
 // standalone MCP tool name to its canonical dynamic action ID.
 func TestDescribe_CanonicalizesStandaloneAlias(t *testing.T) {
@@ -201,12 +306,7 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 // TestDescribe_MetaCatalogOmitsOutputSchema verifies that Describe keeps the
 // structured payload compact by omitting output schemas from meta catalog actions.
 func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
-	routes := toolutil.CaptureMetaRoutes(func() {
-		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-schema-profile-test", Version: "0.0.1"}, nil)
-		tools.RegisterAllMeta(server, nil, false)
-		tools.RegisterMCPMeta(server, nil, nil)
-	})
-	registry := NewRegistry(routes)
+	registry := realCatalogRegistry(t)
 
 	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Actions: []string{
 		"project.list",
@@ -319,9 +419,9 @@ func TestFind_RequiresQuery(t *testing.T) {
 
 // TestRegisterFindExecuteTools_ExposesTwoDynamicTools verifies that the dynamic
 // two-tool surface exposes only find and execute through an MCP session.
-func TestRegisterFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
+func TestRegisterCatalogFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterFindExecuteTools(server, testRoutes(t))
+	RegisterCatalogFindExecuteTools(server, actionregistry.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -608,9 +708,9 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 
 // TestRegisterTools_ExposesThreeDynamicTools verifies that the full dynamic
 // surface exposes search, describe, and execute through an MCP session.
-func TestRegisterTools_ExposesThreeDynamicTools(t *testing.T) {
+func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterTools(server, testRoutes(t))
+	RegisterCatalogTools(server, actionregistry.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -719,13 +819,7 @@ func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 // this test protects the segment merge path that keeps the standalone project
 // discovery action in the first page of results.
 func TestSearch_MultiIntentLongQueryOnMetaCatalog_ReturnsSegmentMatches(t *testing.T) {
-	routes := toolutil.CaptureMetaRoutes(func() {
-		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test-catalog", Version: "0.0.1"}, nil)
-		tools.RegisterAllMeta(server, nil, false)
-		tools.RegisterMCPMeta(server, nil, nil)
-	})
-	routes = AddStandaloneRoutes(routes, nil, StandaloneOptions{})
-	registry := NewRegistry(routes)
+	registry := realCatalogRegistry(t)
 
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{
 		Query: "discover project from remote url merge request list current user open authored",
@@ -849,14 +943,7 @@ func TestSearch_TypoQueryReturnsRelevantActions(t *testing.T) {
 // TestSearch_TypoQueryReturnsResultsOnMetaCatalog verifies that fuzzy matching
 // works against the real captured meta-tool catalog, not only test fixtures.
 func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
-	routes := toolutil.CaptureMetaRoutes(func() {
-		server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test-catalog", Version: "0.0.1"}, nil)
-		tools.RegisterAllMeta(server, nil, false)
-		tools.RegisterMCPMeta(server, nil, nil)
-	})
-	routes = AddStandaloneRoutes(routes, nil, StandaloneOptions{})
-
-	registry := NewRegistry(routes)
+	registry := realCatalogRegistry(t)
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merje requesy", Limit: 5})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -878,6 +965,16 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	}
 	t.Fatalf("DescribeOutput missing action %q: %+v", id, output.Actions)
 	return ActionDescription{}
+}
+
+func realCatalogRegistry(t *testing.T) *Registry {
+	t.Helper()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	catalog = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	return NewRegistryFromCatalog(catalog)
 }
 
 func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...string) {

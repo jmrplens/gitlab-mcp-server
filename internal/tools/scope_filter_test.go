@@ -85,6 +85,37 @@ func TestRemoveScopeFilteredTools_EmptyScopes(t *testing.T) {
 	}
 }
 
+// TestFilterScopeFilteredCatalog_MissingAdminMode verifies that catalog-level
+// scope filtering removes the same admin-mode groups without mutating the source.
+func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if _, ok := catalog.Group("gitlab_admin"); !ok {
+		t.Fatal("source catalog missing gitlab_admin")
+	}
+
+	filtered := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+	if _, ok := filtered.Group("gitlab_admin"); ok {
+		t.Fatal("filtered catalog still contains gitlab_admin")
+	}
+	if _, ok := filtered.Group("gitlab_project"); !ok {
+		t.Fatal("filtered catalog removed ungated gitlab_project")
+	}
+	if _, ok := catalog.Group("gitlab_admin"); !ok {
+		t.Fatal("source catalog was mutated")
+	}
+
+	unfiltered := FilterScopeFilteredCatalog(catalog, nil)
+	if unfiltered == catalog {
+		t.Fatal("nil token scopes should return a cloned catalog")
+	}
+	if unfiltered.CountGroups() != catalog.CountGroups() {
+		t.Fatalf("nil-scope group count = %d, want %d", unfiltered.CountGroups(), catalog.CountGroups())
+	}
+}
+
 // TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.
 func TestAllScopesPresent_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {

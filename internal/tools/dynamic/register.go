@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -31,12 +32,12 @@ type SearchInput struct {
 	Limit int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
 }
 
-// SearchResult is one matching hidden GitLab action.
+// SearchResult is one matching GitLab catalog action.
 type SearchResult struct {
 	ID             string   `json:"id" jsonschema:"Canonical action ID to pass to gitlab_describe_tools or gitlab_execute_tool."`
-	Tool           string   `json:"tool" jsonschema:"Underlying hidden meta-tool name."`
+	Tool           string   `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string   `json:"domain" jsonschema:"Canonical action domain."`
-	Action         string   `json:"action" jsonschema:"Underlying action name inside the hidden meta-tool."`
+	Action         string   `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string   `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool     `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
 	RequiredParams []string `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the action input schema."`
@@ -47,7 +48,7 @@ type SearchResult struct {
 type SearchOutput struct {
 	Query   string         `json:"query" jsonschema:"Original search query."`
 	Count   int            `json:"count" jsonschema:"Number of returned matches."`
-	Results []SearchResult `json:"results" jsonschema:"Matching hidden GitLab actions."`
+	Results []SearchResult `json:"results" jsonschema:"Matching GitLab catalog actions."`
 }
 
 // DescribeInput is the input for gitlab_describe_tools.
@@ -62,12 +63,12 @@ type ActionExample struct {
 	Arguments map[string]any `json:"arguments" jsonschema:"Example arguments for gitlab_execute_tool."`
 }
 
-// ActionDescription describes one hidden GitLab action.
+// ActionDescription describes one GitLab catalog action.
 type ActionDescription struct {
 	ID             string         `json:"id" jsonschema:"Canonical action ID."`
-	Tool           string         `json:"tool" jsonschema:"Underlying hidden meta-tool name."`
+	Tool           string         `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string         `json:"domain" jsonschema:"Canonical action domain."`
-	Action         string         `json:"action" jsonschema:"Underlying action name inside the hidden meta-tool."`
+	Action         string         `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
@@ -88,12 +89,12 @@ type FindInput struct {
 	Limit int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
 }
 
-// FindResult is a matching hidden action with schema details and an execute example.
+// FindResult is a matching catalog action with schema details and an execute example.
 type FindResult struct {
 	ID             string         `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
-	Tool           string         `json:"tool" jsonschema:"Underlying hidden meta-tool name."`
+	Tool           string         `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string         `json:"domain" jsonschema:"Canonical action domain."`
-	Action         string         `json:"action" jsonschema:"Underlying action name inside the hidden meta-tool."`
+	Action         string         `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
@@ -107,7 +108,7 @@ type FindResult struct {
 type FindOutput struct {
 	Query   string       `json:"query" jsonschema:"Original search query."`
 	Count   int          `json:"count" jsonschema:"Number of returned matches."`
-	Results []FindResult `json:"results" jsonschema:"Matching hidden GitLab actions with schemas and execute examples."`
+	Results []FindResult `json:"results" jsonschema:"Matching GitLab catalog actions with schemas and execute examples."`
 }
 
 // ExecuteInput is the input for gitlab_execute_tool.
@@ -139,7 +140,7 @@ type actionEntry struct {
 
 type toolHandler func(context.Context, *mcp.CallToolRequest, toolutil.MetaToolInput) (*mcp.CallToolResult, any, error)
 
-// Registry holds a deterministic hidden action index and dispatch handlers.
+// Registry holds a deterministic action index and dispatch handlers.
 type Registry struct {
 	entries          []actionEntry
 	byID             map[string]actionEntry
@@ -148,17 +149,19 @@ type Registry struct {
 	handlers         map[string]toolHandler
 }
 
-// RegisterTools registers the dynamic search, describe, and execute tools.
-func RegisterTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
-	registry := NewRegistry(routes)
+// RegisterCatalogTools registers the dynamic search, describe, and execute
+// tools from the canonical action catalog.
+func RegisterCatalogTools(server *mcp.Server, catalog *actionregistry.Catalog) {
+	registry := NewRegistryFromCatalog(catalog)
 	addSearchTool(server, registry)
 	addDescribeTool(server, registry)
 	addExecuteTool(server, registry)
 }
 
-// RegisterFindExecuteTools registers the experimental two-tool dynamic catalog.
-func RegisterFindExecuteTools(server *mcp.Server, routes map[string]toolutil.ActionMap) {
-	registry := NewRegistry(routes)
+// RegisterCatalogFindExecuteTools registers the experimental two-tool dynamic
+// catalog from the canonical action catalog.
+func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actionregistry.Catalog) {
+	registry := NewRegistryFromCatalog(catalog)
 	addFindTool(server, registry)
 	addExecuteTool(server, registry)
 }
@@ -167,7 +170,7 @@ func addSearchTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         searchToolName,
 		Title:        "GitLab Search Tools",
-		Description:  "Search the hidden GitLab action registry for the exact canonical action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Then pass the returned canonical domain.action ID to gitlab_describe_tools or gitlab_execute_tool. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
+		Description:  "Search the canonical GitLab action catalog for the exact action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Then pass the returned canonical domain.action ID to gitlab_describe_tools or gitlab_execute_tool. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Search Tools"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -178,7 +181,7 @@ func addDescribeTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        describeToolName,
 		Title:       "GitLab Describe Tools",
-		Description: "Describe one or more hidden GitLab actions by canonical action ID and return the exact params schema, required params, safety metadata, and an execute example. Use this before gitlab_execute_tool whenever params are not already exact. Rely on the returned schema and example for param names. Do NOT invent alias params or unsupported params.",
+		Description: "Describe one or more GitLab catalog actions by canonical action ID and return the exact params schema, required params, safety metadata, and an execute example. Use this before gitlab_execute_tool whenever params are not already exact. Rely on the returned schema and example for param names. Do NOT invent alias params or unsupported params.",
 		Annotations: annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Describe Tools"),
 		Icons:       toolutil.IconConfig,
 	}, registry.Describe)
@@ -188,7 +191,7 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         findToolName,
 		Title:        "GitLab Find Action",
-		Description:  "Find hidden GitLab actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known—do NOT invent action IDs.",
+		Description:  "Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known; do NOT invent action IDs.",
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Find Action"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -199,7 +202,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one hidden GitLab action by canonical action ID (e.g. domain.action). For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
+		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: toolutil.BoolPtr(true),
@@ -211,11 +214,23 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
 func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
-	return newRegistry(routes, actionAliases())
+	return NewRegistryFromCatalog(actionregistry.FromActionMaps(routes))
 }
 
 func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *Registry {
-	routes = toolutil.CloneMetaSchemaRoutes(routes)
+	return newRegistryFromCatalog(actionregistry.FromActionMaps(routes), aliases)
+}
+
+// NewRegistryFromCatalog builds a deterministic dynamic action index from the
+// canonical action catalog.
+func NewRegistryFromCatalog(catalog *actionregistry.Catalog) *Registry {
+	return newRegistryFromCatalog(catalog, actionAliases())
+}
+
+func newRegistryFromCatalog(catalog *actionregistry.Catalog, aliases []actionAlias) *Registry {
+	if catalog == nil {
+		catalog = actionregistry.NewCatalog()
+	}
 	registry := &Registry{
 		byID:             make(map[string]actionEntry),
 		aliases:          make(map[string]string),
@@ -224,37 +239,26 @@ func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *R
 	}
 	aliasTargets := make(map[string][]string)
 
-	toolNames := make([]string, 0, len(routes))
-	for tool := range routes {
-		toolNames = append(toolNames, tool)
-	}
-	sort.Strings(toolNames)
+	for _, group := range catalog.Groups() {
+		actions := group.ActionMap()
+		registry.handlers[group.ToolName] = toolutil.MakeMetaHandler(group.ToolName, actions, toolutil.MarkdownForResult)
 
-	for _, tool := range toolNames {
-		actions := routes[tool]
-		registry.handlers[tool] = toolutil.MakeMetaHandler(tool, actions, toolutil.MarkdownForResult)
-
-		actionNames := make([]string, 0, len(actions))
-		for action := range actions {
-			actionNames = append(actionNames, action)
-		}
-		sort.Strings(actionNames)
-
-		for _, action := range actionNames {
-			route := actions[action]
-			domain := domainFromTool(tool)
-			id := domain + "." + action
-			entryAliases := aliasesForCanonicalAction(id, aliases)
-			tags := actionTags(id, domain, action, route.InputSchema)
-			searchText := buildSearchText(id, tool, domain, action, entryAliases, tags, route.InputSchema)
+		for _, action := range group.ActionsInOrder() {
+			route := action.Route
+			domain := action.Domain
+			id := string(action.ID)
+			entryAliases := dedupeStrings(append(action.Aliases, aliasesForCanonicalAction(id, aliases)...))
+			tags := dedupeStrings(append(action.Tags, actionTags(id, domain, action.Name, route.InputSchema)...))
+			schemaURI := action.SchemaURI
+			searchText := buildSearchText(id, group.ToolName, domain, action.Name, entryAliases, tags, route.InputSchema)
 			entry := actionEntry{
 				ID:             id,
-				Tool:           tool,
+				Tool:           group.ToolName,
 				Domain:         domain,
-				Action:         action,
+				Action:         action.Name,
 				Aliases:        entryAliases,
 				Tags:           tags,
-				SchemaURI:      toolutil.MetaSchemaURI(tool, action),
+				SchemaURI:      schemaURI,
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
 				SearchText:     searchText,
@@ -285,7 +289,7 @@ func (r *Registry) indexAliases(aliasTargets map[string][]string) {
 	}
 }
 
-// Search finds hidden GitLab actions by lexical matching over action metadata.
+// Search finds GitLab catalog actions by lexical matching over action metadata.
 func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
@@ -313,7 +317,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 	return toolutil.ToolResultAnnotated(formatSearchOutput(output), toolutil.ContentList), output, nil
 }
 
-// Describe returns schemas and execution metadata for hidden GitLab actions.
+// Describe returns schemas and execution metadata for GitLab catalog actions.
 func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input DescribeInput) (*mcp.CallToolResult, DescribeOutput, error) {
 	ids := normalizeDescribeIDs(input)
 	if len(ids) == 0 {
@@ -333,7 +337,7 @@ func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input Des
 	return toolutil.ToolResultAnnotated(formatDescribeOutput(output), toolutil.ContentDetail), output, nil
 }
 
-// Find searches hidden GitLab actions and includes exact schemas for matches.
+// Find searches GitLab catalog actions and includes exact schemas for matches.
 func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInput) (*mcp.CallToolResult, FindOutput, error) {
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
@@ -363,7 +367,7 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 	return toolutil.ToolResultAnnotated(formatFindOutput(output), toolutil.ContentDetail), output, nil
 }
 
-// Execute dispatches one hidden action through the existing meta-tool handler.
+// Execute dispatches one catalog action through the existing meta-tool handler.
 func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, any, error) {
 	id := strings.ToLower(strings.TrimSpace(input.Action))
 	if id == "" {
@@ -397,10 +401,6 @@ func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnno
 	annotation := *base
 	annotation.Title = title
 	return &annotation
-}
-
-func domainFromTool(tool string) string {
-	return strings.TrimPrefix(tool, "gitlab_")
 }
 
 func buildSearchText(id, tool, domain, action string, aliases, tags []string, schema map[string]any) string {
@@ -1079,7 +1079,7 @@ func formatSearchOutput(output SearchOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## GitLab Action Search\n\n")
 	if output.Count == 0 {
-		fmt.Fprintf(&b, "No hidden actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
+		fmt.Fprintf(&b, "No catalog actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
@@ -1116,7 +1116,7 @@ func formatFindOutput(output FindOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## GitLab Action Finder\n\n")
 	if output.Count == 0 {
-		fmt.Fprintf(&b, "No hidden actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
+		fmt.Fprintf(&b, "No catalog actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)

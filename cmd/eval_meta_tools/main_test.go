@@ -440,8 +440,8 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 // TestNormalizeExpectedDynamicRoute_MapsStandaloneTools verifies that standalone
 // tool expectations are normalized to gitlab_execute_tool dynamic action IDs.
 func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
-	hiddenRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
-	routes := dynamicValidationRoutes(hiddenRoutes)
+	catalogRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	routes := dynamicValidationRoutes(catalogRoutes)
 
 	tests := []struct {
 		tool       string
@@ -466,7 +466,7 @@ func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
 // TestDynamicDiscoveryResult_UsesRuntimeIntentIndex verifies that dynamic search
 // evaluation uses the runtime intent index for natural-language action discovery.
 func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
-	hiddenRoutes := map[string]toolutil.ActionMap{
+	catalogRoutes := map[string]toolutil.ActionMap{
 		"gitlab_merge_request": {
 			"list": {InputSchema: map[string]any{
 				"type": "object",
@@ -478,8 +478,8 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 			}},
 		},
 	}
-	hiddenRoutes = dynamictools.AddStandaloneRoutes(hiddenRoutes, nil, dynamictools.StandaloneOptions{})
-	routes := dynamicValidationRoutes(hiddenRoutes)
+	catalogRoutes = dynamictools.AddStandaloneRoutes(catalogRoutes, nil, dynamictools.StandaloneOptions{})
+	routes := dynamicValidationRoutes(catalogRoutes)
 
 	tests := []struct {
 		query string
@@ -634,7 +634,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 }
 
 // TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes verifies dynamic
-// mode advertises only the low-token public tools while retaining hidden routes
+// mode advertises only the low-token public tools while retaining catalog routes
 // for validation and execution.
 func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
@@ -661,7 +661,7 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 }
 
 // TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes verifies that
-// dynamic-2 exposes only find and execute while preserving hidden execution routes.
+// dynamic-2 exposes only find and execute while preserving catalog execution routes.
 func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
 	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic2)

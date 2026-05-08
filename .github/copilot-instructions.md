@@ -85,7 +85,8 @@ gitlab-mcp-server/
 - Register tools via `mcp.AddTool()` with descriptive names
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
-- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over a hidden registry built from meta-tool routes. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. Keep dynamic-2 parked unless explicitly requested.
+- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. Keep dynamic-2 parked unless explicitly requested.
+- When adding GitLab actions, register route metadata once through `internal/tools/register_meta.go` or delegated domain `RegisterMeta` route maps using typed `ActionRoute` constructors. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and audits all consume the canonical action catalog built from those definitions.
 
 ### GitLab Integration
 

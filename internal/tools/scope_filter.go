@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 )
 
 // MetaToolScopes maps meta-tool names to the PAT scopes required for that
@@ -77,6 +79,36 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 	)
 
 	return len(toRemove)
+}
+
+// FilterScopeFilteredCatalog removes catalog groups whose required scopes are
+// not satisfied by the detected token scopes.
+func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) *actionregistry.Catalog {
+	if catalog == nil {
+		return nil
+	}
+	if tokenScopes == nil {
+		return catalog.Clone()
+	}
+
+	scopeSet := make(map[string]struct{}, len(tokenScopes))
+	for _, s := range tokenScopes {
+		scopeSet[s] = struct{}{}
+	}
+
+	filtered := actionregistry.NewCatalog()
+	for _, group := range catalog.Groups() {
+		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {
+			slog.Debug("catalog group requires missing PAT scope",
+				"tool", group.ToolName,
+				"required", required,
+				"available", tokenScopes,
+			)
+			continue
+		}
+		_ = filtered.AddGroup(group)
+	}
+	return filtered
 }
 
 // allScopesPresent checks if all required scopes exist in the set.

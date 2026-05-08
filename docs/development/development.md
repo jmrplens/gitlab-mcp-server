@@ -348,9 +348,12 @@ With the modular sub-package architecture (ADR-0004):
 5. **Create markdown formatters**: `Format*Markdown()` functions in the sub-package
 6. **Wire in orchestration**:
    - Add to `internal/tools/register.go` (call `{domain}.RegisterTools()`)
-   - Add to `internal/tools/register_meta.go` (call `{domain}.RegisterMeta()`)
+   - Add to `internal/tools/register_meta.go` (call `{domain}.RegisterMeta()` or add the action to the relevant domain route map)
    - Add markdown dispatch in `internal/tools/markdown.go`
 7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
+
+Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
+When adding a normal GitLab operation, define the route once with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Avoid adding dynamic-only copies of ordinary GitLab actions.
 
 ### Example: Adding a tools sub-package
 

@@ -29,7 +29,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same hidden GitLab action registry
+- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -224,7 +224,7 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the hidden meta-tool action registry. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
@@ -342,7 +342,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
 | [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
 | [Meta-Tools](docs/meta-tools.md) | 32/47/48 domain meta-tools with action dispatching |
-| [Dynamic Toolset](docs/dynamic-tools.md) | 3-tool low-token mode with hidden action registry, safety model, and examples |
+| [Dynamic Toolset](docs/dynamic-tools.md) | 3-tool low-token mode with canonical action catalog, safety model, and examples |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |

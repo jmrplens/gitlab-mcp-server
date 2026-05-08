@@ -1,0 +1,536 @@
+// Package actionregistry provides the canonical GitLab action catalog used by
+// higher-level MCP tool surfaces.
+package actionregistry
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionID is the stable dynamic identifier for one GitLab action.
+type ActionID string
+
+// Action describes one executable GitLab action in the canonical catalog.
+type Action struct {
+	ID        ActionID
+	ToolName  string
+	Domain    string
+	Name      string
+	Route     toolutil.ActionRoute
+	SchemaURI string
+	Aliases   []string
+	Tags      []string
+	ReadOnly  bool
+}
+
+// GroupOptions contains metadata for creating a catalog group.
+type GroupOptions struct {
+	ToolName     string
+	Description  string
+	Icons        []mcp.Icon
+	ReadOnly     bool
+	FormatResult toolutil.FormatResultFunc
+}
+
+// FilterOptions describes catalog-level filtering inputs.
+type FilterOptions struct {
+	ExcludeTools     []string
+	ReadOnlyOnly     bool
+	AllowedToolNames []string
+}
+
+// Group describes all actions exposed through one logical meta-tool group.
+type Group struct {
+	ToolName     string
+	Description  string
+	Icons        []mcp.Icon
+	ReadOnly     bool
+	FormatResult toolutil.FormatResultFunc
+	Actions      map[string]Action
+	ActionOrder  []string
+}
+
+// Catalog stores deterministic groups and action lookup indexes.
+type Catalog struct {
+	groups  map[string]Group
+	actions map[ActionID]Action
+}
+
+// NewCatalog creates an empty action catalog.
+func NewCatalog() *Catalog {
+	return &Catalog{
+		groups:  make(map[string]Group),
+		actions: make(map[ActionID]Action),
+	}
+}
+
+// FromActionMaps converts legacy route maps into a canonical catalog.
+func FromActionMaps(routes map[string]toolutil.ActionMap) *Catalog {
+	catalog := NewCatalog()
+	toolNames := make([]string, 0, len(routes))
+	for toolName := range routes {
+		toolNames = append(toolNames, toolName)
+	}
+	sort.Strings(toolNames)
+	for _, toolName := range toolNames {
+		actions := routes[toolName]
+		group := NewGroup(GroupOptions{ToolName: toolName})
+		actionNames := make([]string, 0, len(actions))
+		for actionName := range actions {
+			actionNames = append(actionNames, actionName)
+		}
+		sort.Strings(actionNames)
+		for _, actionName := range actionNames {
+			group.SetAction(Action{Name: actionName, Route: actions[actionName]})
+		}
+		_ = catalog.AddGroup(group)
+	}
+	return catalog
+}
+
+// ToActionMaps returns legacy route maps for compatibility with existing
+// schema resources, audits, and registration paths.
+func ToActionMaps(catalog *Catalog) map[string]toolutil.ActionMap {
+	if catalog == nil {
+		return nil
+	}
+	return catalog.ActionMaps()
+}
+
+// NewGroup creates an action group with initialized maps.
+func NewGroup(opts GroupOptions) Group {
+	return Group{
+		ToolName:     strings.TrimSpace(opts.ToolName),
+		Description:  opts.Description,
+		Icons:        cloneIcons(opts.Icons),
+		ReadOnly:     opts.ReadOnly,
+		FormatResult: opts.FormatResult,
+		Actions:      make(map[string]Action),
+	}
+}
+
+// SetAction inserts or replaces an action in the group.
+func (g *Group) SetAction(action Action) {
+	if g.Actions == nil {
+		g.Actions = make(map[string]Action)
+	}
+	actionName := strings.TrimSpace(action.Name)
+	if actionName == "" {
+		return
+	}
+	if !slices.Contains(g.ActionOrder, actionName) {
+		g.ActionOrder = append(g.ActionOrder, actionName)
+	}
+	g.Actions[actionName] = action
+}
+
+// ActionsInOrder returns group actions in deterministic action-name order.
+func (g *Group) ActionsInOrder() []Action {
+	order := append([]string(nil), g.ActionOrder...)
+	if len(order) == 0 {
+		order = make([]string, 0, len(g.Actions))
+		for actionName := range g.Actions {
+			order = append(order, actionName)
+		}
+	}
+	sort.Strings(order)
+	actions := make([]Action, 0, len(order))
+	seen := make(map[string]struct{}, len(order))
+	for _, actionName := range order {
+		if _, ok := seen[actionName]; ok {
+			continue
+		}
+		seen[actionName] = struct{}{}
+		action, ok := g.Actions[actionName]
+		if !ok {
+			continue
+		}
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+// ActionMap returns a legacy route map for this group.
+func (g *Group) ActionMap() toolutil.ActionMap {
+	routes := make(toolutil.ActionMap, len(g.Actions))
+	for _, action := range g.ActionsInOrder() {
+		routes[action.Name] = action.Route
+	}
+	return toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{g.ToolName: routes})[g.ToolName]
+}
+
+// AddGroup adds a complete group to the catalog.
+func (c *Catalog) AddGroup(group Group) error {
+	if c == nil {
+		return errors.New("action registry catalog is nil")
+	}
+	if c.groups == nil {
+		c.groups = make(map[string]Group)
+	}
+	if c.actions == nil {
+		c.actions = make(map[ActionID]Action)
+	}
+	normalized, err := normalizeGroup(group)
+	if err != nil {
+		return err
+	}
+	if _, exists := c.groups[normalized.ToolName]; exists {
+		return fmt.Errorf("duplicate action group %q", normalized.ToolName)
+	}
+	seenIDs := make(map[ActionID]struct{}, len(normalized.Actions))
+	for _, action := range normalized.ActionsInOrder() {
+		if _, exists := seenIDs[action.ID]; exists {
+			return fmt.Errorf("duplicate action id %q", action.ID)
+		}
+		seenIDs[action.ID] = struct{}{}
+		if _, exists := c.actions[action.ID]; exists {
+			return fmt.Errorf("duplicate action id %q", action.ID)
+		}
+	}
+	c.groups[normalized.ToolName] = normalized
+	for _, action := range normalized.ActionsInOrder() {
+		c.actions[action.ID] = action
+	}
+	return nil
+}
+
+// AddAction adds one action to an existing or newly-created group.
+func (c *Catalog) AddAction(toolName string, action Action) error {
+	if c == nil {
+		return errors.New("action registry catalog is nil")
+	}
+	toolName = strings.TrimSpace(toolName)
+	if toolName == "" {
+		return errors.New("tool name is required")
+	}
+	next := c.Clone()
+	if next == nil {
+		next = NewCatalog()
+	}
+	group, ok := next.groups[toolName]
+	if !ok {
+		group = NewGroup(GroupOptions{ToolName: toolName})
+	}
+	group.SetAction(action)
+	if ok {
+		delete(next.groups, toolName)
+		for id, existing := range next.actions {
+			if existing.ToolName == toolName {
+				delete(next.actions, id)
+			}
+		}
+	}
+	if err := next.AddGroup(group); err != nil {
+		return err
+	}
+	c.groups = next.groups
+	c.actions = next.actions
+	return nil
+}
+
+// Group returns a defensive copy of one group by tool name.
+func (c *Catalog) Group(toolName string) (Group, bool) {
+	if c == nil {
+		return Group{}, false
+	}
+	group, ok := c.groups[toolName]
+	if !ok {
+		return Group{}, false
+	}
+	return cloneGroup(group), true
+}
+
+// Action returns a defensive copy of one action by canonical ID.
+func (c *Catalog) Action(id ActionID) (Action, bool) {
+	if c == nil {
+		return Action{}, false
+	}
+	action, ok := c.actions[id]
+	if !ok {
+		return Action{}, false
+	}
+	return cloneAction(action), true
+}
+
+// Groups returns all groups sorted by tool name.
+func (c *Catalog) Groups() []Group {
+	if c == nil {
+		return nil
+	}
+	names := make([]string, 0, len(c.groups))
+	for name := range c.groups {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	groups := make([]Group, 0, len(names))
+	for _, name := range names {
+		groups = append(groups, cloneGroup(c.groups[name]))
+	}
+	return groups
+}
+
+// Actions returns all actions sorted by canonical ID.
+func (c *Catalog) Actions() []Action {
+	if c == nil {
+		return nil
+	}
+	ids := make([]string, 0, len(c.actions))
+	for id := range c.actions {
+		ids = append(ids, string(id))
+	}
+	sort.Strings(ids)
+	actions := make([]Action, 0, len(ids))
+	for _, id := range ids {
+		actions = append(actions, cloneAction(c.actions[ActionID(id)]))
+	}
+	return actions
+}
+
+// ActionMaps returns a defensive legacy route snapshot keyed by tool and action.
+func (c *Catalog) ActionMaps() map[string]toolutil.ActionMap {
+	if c == nil {
+		return nil
+	}
+	routes := make(map[string]toolutil.ActionMap, len(c.groups))
+	for _, group := range c.Groups() {
+		routes[group.ToolName] = group.ActionMap()
+	}
+	return toolutil.CloneMetaSchemaRoutes(routes)
+}
+
+// CountGroups returns the number of groups in the catalog.
+func (c *Catalog) CountGroups() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.groups)
+}
+
+// CountActions returns the number of actions in the catalog.
+func (c *Catalog) CountActions() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.actions)
+}
+
+// Clone returns a defensive deep copy of the catalog.
+func (c *Catalog) Clone() *Catalog {
+	if c == nil {
+		return nil
+	}
+	clone := NewCatalog()
+	for _, group := range c.Groups() {
+		_ = clone.AddGroup(group)
+	}
+	return clone
+}
+
+// Validate verifies that the catalog has a consistent, executable action index.
+func (c *Catalog) Validate() error {
+	if c == nil {
+		return errors.New("action registry catalog is nil")
+	}
+	seenAliases := make(map[string]ActionID)
+	for _, group := range c.Groups() {
+		if strings.TrimSpace(group.ToolName) == "" {
+			return errors.New("tool name is required")
+		}
+		for _, action := range group.ActionsInOrder() {
+			if strings.TrimSpace(action.Name) == "" {
+				return fmt.Errorf("action name is required for tool %q", group.ToolName)
+			}
+			if action.Route.Handler == nil {
+				return fmt.Errorf("action %q has nil handler", action.ID)
+			}
+			if action.Route.InputSchema == nil {
+				return fmt.Errorf("action %q has nil input schema", action.ID)
+			}
+			if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
+				return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
+			}
+			for _, alias := range action.Aliases {
+				alias = strings.TrimSpace(strings.ToLower(alias))
+				if alias == "" {
+					continue
+				}
+				if existing, ok := seenAliases[alias]; ok && existing != action.ID {
+					return fmt.Errorf("alias %q maps to both %q and %q", alias, existing, action.ID)
+				}
+				seenAliases[alias] = action.ID
+			}
+		}
+	}
+	return nil
+}
+
+// FilterExcludedTools returns a cloned catalog without excluded tool groups.
+func (c *Catalog) FilterExcludedTools(excludeTools []string) *Catalog {
+	if c == nil {
+		return nil
+	}
+	if len(excludeTools) == 0 {
+		return c.Clone()
+	}
+	excluded := make(map[string]struct{}, len(excludeTools))
+	for _, toolName := range excludeTools {
+		excluded[toolName] = struct{}{}
+	}
+	filtered := NewCatalog()
+	for _, group := range c.Groups() {
+		if _, ok := excluded[group.ToolName]; ok {
+			continue
+		}
+		_ = filtered.AddGroup(group)
+	}
+	return filtered
+}
+
+// FilterReadOnlyGroups returns a cloned catalog containing only read-only groups.
+func (c *Catalog) FilterReadOnlyGroups() *Catalog {
+	if c == nil {
+		return nil
+	}
+	filtered := NewCatalog()
+	for _, group := range c.Groups() {
+		if !group.ReadOnly {
+			continue
+		}
+		_ = filtered.AddGroup(group)
+	}
+	return filtered
+}
+
+// FilterAllowedToolNames returns a cloned catalog with only explicitly allowed tools.
+func (c *Catalog) FilterAllowedToolNames(toolNames []string) *Catalog {
+	if c == nil {
+		return nil
+	}
+	if len(toolNames) == 0 {
+		return c.Clone()
+	}
+	allowed := make(map[string]struct{}, len(toolNames))
+	for _, toolName := range toolNames {
+		allowed[toolName] = struct{}{}
+	}
+	filtered := NewCatalog()
+	for _, group := range c.Groups() {
+		if _, ok := allowed[group.ToolName]; !ok {
+			continue
+		}
+		_ = filtered.AddGroup(group)
+	}
+	return filtered
+}
+
+// Filter applies all catalog-level filters in a deterministic order.
+func (c *Catalog) Filter(opts FilterOptions) *Catalog {
+	if c == nil {
+		return nil
+	}
+	filtered := c.FilterExcludedTools(opts.ExcludeTools)
+	if opts.ReadOnlyOnly {
+		filtered = filtered.FilterReadOnlyGroups()
+	}
+	if len(opts.AllowedToolNames) > 0 {
+		filtered = filtered.FilterAllowedToolNames(opts.AllowedToolNames)
+	}
+	return filtered
+}
+
+// DomainFromToolName returns the canonical dynamic domain for a meta-tool name.
+func DomainFromToolName(toolName string) string {
+	return strings.TrimPrefix(toolName, "gitlab_")
+}
+
+func normalizeGroup(group Group) (Group, error) {
+	toolName := strings.TrimSpace(group.ToolName)
+	if toolName == "" {
+		return Group{}, errors.New("tool name is required")
+	}
+	normalized := NewGroup(GroupOptions{
+		ToolName:     toolName,
+		Description:  group.Description,
+		Icons:        group.Icons,
+		ReadOnly:     group.ReadOnly,
+		FormatResult: group.FormatResult,
+	})
+	for _, action := range group.ActionsInOrder() {
+		normalizedAction, err := normalizeAction(toolName, action)
+		if err != nil {
+			return Group{}, err
+		}
+		normalized.SetAction(normalizedAction)
+	}
+	return normalized, nil
+}
+
+func normalizeAction(toolName string, action Action) (Action, error) {
+	action.Name = strings.TrimSpace(action.Name)
+	if action.Name == "" {
+		return Action{}, fmt.Errorf("action name is required for tool %q", toolName)
+	}
+	action.ToolName = strings.TrimSpace(action.ToolName)
+	if action.ToolName == "" {
+		action.ToolName = toolName
+	}
+	if action.ToolName != toolName {
+		return Action{}, fmt.Errorf("action %q belongs to tool %q, want %q", action.Name, action.ToolName, toolName)
+	}
+	action.Domain = strings.TrimSpace(action.Domain)
+	if action.Domain == "" {
+		action.Domain = DomainFromToolName(action.ToolName)
+	}
+	if action.ID == "" {
+		action.ID = ActionID(action.Domain + "." + action.Name)
+	}
+	if action.SchemaURI == "" {
+		action.SchemaURI = toolutil.MetaSchemaURI(action.ToolName, action.Name)
+	}
+	action.Aliases = cloneStrings(action.Aliases)
+	action.Tags = cloneStrings(action.Tags)
+	return cloneAction(action), nil
+}
+
+func cloneGroup(group Group) Group {
+	cloned := Group{
+		ToolName:     group.ToolName,
+		Description:  group.Description,
+		Icons:        cloneIcons(group.Icons),
+		ReadOnly:     group.ReadOnly,
+		FormatResult: group.FormatResult,
+		Actions:      make(map[string]Action, len(group.Actions)),
+		ActionOrder:  cloneStrings(group.ActionOrder),
+	}
+	for name, action := range group.Actions {
+		cloned.Actions[name] = cloneAction(action)
+	}
+	return cloned
+}
+
+func cloneAction(action Action) Action {
+	route := action.Route
+	if route.InputSchema != nil || route.OutputSchema != nil {
+		routes := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: route}})
+		route = routes[action.ToolName][action.Name]
+	}
+	action.Route = route
+	action.Aliases = cloneStrings(action.Aliases)
+	action.Tags = cloneStrings(action.Tags)
+	return action
+}
+
+func cloneIcons(icons []mcp.Icon) []mcp.Icon {
+	return append([]mcp.Icon(nil), icons...)
+}
+
+func cloneStrings(values []string) []string {
+	return append([]string(nil), values...)
+}

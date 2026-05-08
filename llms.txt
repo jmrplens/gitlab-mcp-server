@@ -68,7 +68,7 @@ tool with an "action" parameter. Key meta-tools:
 
 ## Dynamic Toolset
 
-Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same hidden GitLab action registry. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.
+Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.
 
 ## Resources
 

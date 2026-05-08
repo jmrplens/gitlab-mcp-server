@@ -12,6 +12,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -45,7 +46,7 @@ func TestCountResources_IncludesMetaSchema(t *testing.T) {
 }
 
 // TestListDynamicTools_ExposesThreeTools verifies audit metrics count the
-// dynamic public surface independently from hidden action volume.
+// dynamic public surface independently from catalog action volume.
 func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -53,15 +54,15 @@ func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
 		},
 	}
 
-	dynamicTools := listDynamicTools(routes)
+	dynamicTools := listDynamicTools(actionregistry.FromActionMaps(routes))
 	if len(dynamicTools) != 3 {
 		t.Fatalf("listDynamicTools() count = %d, want 3", len(dynamicTools))
 	}
 }
 
-// TestCountActionRoutes_CountsHiddenActions verifies hidden route counting is
+// TestCountActionRoutes_CountsCatalogActions verifies catalog route counting is
 // independent from MCP tool advertisement.
-func TestCountActionRoutes_CountsHiddenActions(t *testing.T) {
+func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {"get": {}, "list": {}},
 		"gitlab_issue":   {"create": {}},

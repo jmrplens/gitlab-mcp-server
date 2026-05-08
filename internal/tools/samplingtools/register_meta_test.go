@@ -139,14 +139,11 @@ func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
 // TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas verifies that every
 // registered gitlab_analyze route declares an output schema.
 func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
-	toolutil.ClearMetaRoutes()
-	t.Cleanup(toolutil.ClearMetaRoutes)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	routeSnapshot := toolutil.CaptureMetaRoutes(func() {
-		RegisterMeta(server, nil)
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, nil)
 	})
 
-	routes := routeSnapshot["gitlab_analyze"]
+	routes := metaDefinitionRoutes(t, definitions, "gitlab_analyze")
 	if len(routes) == 0 {
 		t.Fatal("gitlab_analyze routes were not registered")
 	}
@@ -160,12 +157,8 @@ func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 // TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent verifies that a
 // sampling capability failure returns an error result without structured output.
 func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
-	toolutil.ClearMetaRoutes()
-	t.Cleanup(toolutil.ClearMetaRoutes)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	toolutil.CaptureMetaRoutes(func() {
-		RegisterMeta(server, nil)
-	})
+	RegisterMeta(server, nil)
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, st, nil); err != nil {
@@ -197,6 +190,17 @@ func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
 	if result.StructuredContent != nil {
 		t.Fatalf("StructuredContent = %#v, want nil for IsError result", result.StructuredContent)
 	}
+}
+
+func metaDefinitionRoutes(t *testing.T, definitions []toolutil.MetaToolDefinition, name string) toolutil.ActionMap {
+	t.Helper()
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return definition.Routes
+		}
+	}
+	t.Fatalf("missing %s meta definition", name)
+	return nil
 }
 
 // TestMetaMarkdownForResult_SamplingUnsupported verifies that metaMarkdownForResult renders a user-facing message when the sampling capability is unavailable.

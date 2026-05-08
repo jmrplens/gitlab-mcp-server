@@ -1734,16 +1734,13 @@ func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
 // TestRegisterMeta_SearchTypeActionSchemaEnum verifies that gitlab_search
 // action schemas expose the same search_type enum as the individual tools.
 func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
-	toolutil.ClearMetaRoutes()
-	defer toolutil.ClearMetaRoutes()
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	routes := toolutil.CaptureMetaRoutes(func() {
-		RegisterMeta(server, client)
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, client)
 	})
+	routes := map[string]toolutil.ActionMap{"gitlab_search": searchMetaRoutesFromDefinitions(t, definitions)}
 
 	for _, action := range []string{"code", "merge_requests", "issues", "commits", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
 		t.Run(action, func(t *testing.T) {
@@ -1754,6 +1751,17 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 			requireSearchTypeEnum(t, schema)
 		})
 	}
+}
+
+func searchMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+	t.Helper()
+	for _, definition := range definitions {
+		if definition.Name == "gitlab_search" {
+			return definition.Routes
+		}
+	}
+	t.Fatal("missing gitlab_search meta definition")
+	return nil
 }
 
 // TestSearchInputSchema_UnsupportedTypePanics verifies that unsupported schema

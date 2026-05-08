@@ -488,7 +488,7 @@ Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automá
 :::tip
 Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) para la referencia completa.
 
-Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo registro oculto de acciones de GitLab. `TOOL_SURFACE=dynamic-2` está disponible como candidato experimental A/B find/execute.
+Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. `TOOL_SURFACE=dynamic-2` está disponible como candidato experimental A/B find/execute.
 
 Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y omitir recursos y prompts opcionales cuando necesites el contexto MCP inicial más pequeño.
 :::

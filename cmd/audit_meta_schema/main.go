@@ -1,8 +1,8 @@
 // Command audit_meta_schema reports the size impact of each
 // META_PARAM_SCHEMA mode on the meta-tool catalog.
 //
-// It registers all base + enterprise meta-tools on an in-memory MCP server,
-// captures the per-action route maps, and computes
+// It builds all base + enterprise meta-tool routes from the canonical action
+// catalog, lists the in-memory MCP server schema, and computes
 // three candidate schema sizes per tool:
 //
 //   - opaque:  current production schema (action enum + params:any).
@@ -57,11 +57,14 @@ func run() error {
 		return fmt.Errorf("client: %w", err)
 	}
 
-	// Register both base and enterprise meta-tools and capture every route map.
+	// Register both base and enterprise meta-tools and build every route map from the catalog.
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
-	routes := toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, client, true)
-	})
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		return fmt.Errorf("build meta action catalog: %w", err)
+	}
+	routes := catalog.ActionMaps()
+	tools.RegisterMetaCatalog(server, catalog)
 
 	// Connect once so we can retrieve the published InputSchema (the
 	// "opaque" baseline) via tools/list. The schema we send equals the

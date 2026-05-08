@@ -59,6 +59,16 @@ type ActionRoute struct {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
+// MetaToolDefinition describes one action-dispatched meta-tool registration.
+type MetaToolDefinition struct {
+	Name         string
+	Description  string
+	Routes       ActionMap
+	Icons        []mcp.Icon
+	ReadOnly     bool
+	FormatResult FormatResultFunc
+}
+
 //nolint:gosec // Alias keys and values are MCP action route names, not credentials.
 var commonActionAliases = map[string]string{
 	"badge.add":                "project.badge_add",
@@ -150,75 +160,69 @@ func (e *ParamValidationError) Unwrap() error {
 	return e.Err
 }
 
-// Meta-tool route registry state supports both the global audit view and the
-// per-server capture used when registering meta-schema resources in HTTP mode.
+// Meta-tool definition capture lets the canonical catalog collect meta-tool
+// metadata without constructing an MCP server.
 var (
-	metaRoutesMu      sync.Mutex
-	metaRoutesMap     = map[string]ActionMap{}
-	metaRouteCapture  map[string]ActionMap
-	metaRouteCaptureM sync.Mutex
+	metaToolDefinitionMu          sync.Mutex
+	metaToolDefinitionCapture     []MetaToolDefinition
+	metaToolDefinitionCaptureLock sync.Mutex
 )
 
-// RegisterRoutes records a meta-tool's action routes for external consumers
-// (gen_llms, audit_output) to inspect per-action OutputSchema.
-func RegisterRoutes(toolName string, routes ActionMap) {
-	metaRoutesMu.Lock()
-	metaRoutesMap[toolName] = routes
-	if metaRouteCapture != nil {
-		metaRouteCapture[toolName] = routes
-	}
-	metaRoutesMu.Unlock()
-}
+// CaptureMetaToolDefinitions runs register and returns the meta-tool
+// definitions registered during that call without requiring an MCP server.
+func CaptureMetaToolDefinitions(register func()) []MetaToolDefinition {
+	metaToolDefinitionCaptureLock.Lock()
+	defer metaToolDefinitionCaptureLock.Unlock()
 
-// MetaRoutes returns a snapshot of all registered meta-tool route maps.
-func MetaRoutes() map[string]ActionMap {
-	metaRoutesMu.Lock()
-	defer metaRoutesMu.Unlock()
-	return cloneMetaRoutes(metaRoutesMap)
-}
-
-// CaptureMetaRoutes runs register and returns only the meta-tool routes
-// registered during that call. The global registry is still populated for
-// audit tools, but callers that build per-server resources should prefer the
-// returned snapshot so concurrent HTTP server instances do not share schema
-// state accidentally.
-func CaptureMetaRoutes(register func()) map[string]ActionMap {
-	metaRouteCaptureM.Lock()
-	defer metaRouteCaptureM.Unlock()
-
-	metaRoutesMu.Lock()
-	metaRouteCapture = map[string]ActionMap{}
-	metaRoutesMu.Unlock()
+	metaToolDefinitionMu.Lock()
+	metaToolDefinitionCapture = []MetaToolDefinition{}
+	metaToolDefinitionMu.Unlock()
 
 	defer func() {
-		metaRoutesMu.Lock()
-		metaRouteCapture = nil
-		metaRoutesMu.Unlock()
+		metaToolDefinitionMu.Lock()
+		metaToolDefinitionCapture = nil
+		metaToolDefinitionMu.Unlock()
 	}()
 
 	register()
 
-	metaRoutesMu.Lock()
-	defer metaRoutesMu.Unlock()
-	return cloneMetaRoutes(metaRouteCapture)
+	metaToolDefinitionMu.Lock()
+	defer metaToolDefinitionMu.Unlock()
+	return cloneMetaToolDefinitions(metaToolDefinitionCapture)
 }
 
-// ClearMetaRoutes resets the registry (useful for tests).
-func ClearMetaRoutes() {
-	metaRoutesMu.Lock()
-	metaRoutesMap = map[string]ActionMap{}
-	metaRoutesMu.Unlock()
-}
-
-// cloneMetaRoutes creates a shallow copy of every action map so callers can
-// inspect registered routes without racing later registration work.
-func cloneMetaRoutes(routes map[string]ActionMap) map[string]ActionMap {
-	out := make(map[string]ActionMap, len(routes))
-	for tool, actions := range routes {
-		actionCopy := make(ActionMap, len(actions))
-		maps.Copy(actionCopy, actions)
-		out[tool] = actionCopy
+func captureMetaToolDefinition(def MetaToolDefinition) bool {
+	metaToolDefinitionMu.Lock()
+	defer metaToolDefinitionMu.Unlock()
+	if metaToolDefinitionCapture == nil {
+		return false
 	}
+	metaToolDefinitionCapture = append(metaToolDefinitionCapture, cloneMetaToolDefinition(def))
+	return true
+}
+
+func cloneMetaToolDefinitions(defs []MetaToolDefinition) []MetaToolDefinition {
+	out := make([]MetaToolDefinition, 0, len(defs))
+	for _, def := range defs {
+		out = append(out, cloneMetaToolDefinition(def))
+	}
+	return out
+}
+
+func cloneMetaToolDefinition(def MetaToolDefinition) MetaToolDefinition {
+	return MetaToolDefinition{
+		Name:         def.Name,
+		Description:  def.Description,
+		Routes:       cloneActionMap(def.Routes),
+		Icons:        append([]mcp.Icon(nil), def.Icons...),
+		ReadOnly:     def.ReadOnly,
+		FormatResult: def.FormatResult,
+	}
+}
+
+func cloneActionMap(routes ActionMap) ActionMap {
+	out := make(ActionMap, len(routes))
+	maps.Copy(out, routes)
 	return out
 }
 
@@ -1473,6 +1477,15 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // annotations. Use it for meta-tools that may include mutating or destructive
 // actions; if any route is destructive, the tool receives DestructiveHint=true.
 func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	if captureMetaToolDefinition(MetaToolDefinition{
+		Name:         name,
+		Description:  desc,
+		Routes:       routes,
+		Icons:        icons,
+		FormatResult: formatResult,
+	}) && server == nil {
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
@@ -1487,6 +1500,16 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 // AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
 // are all read-only list/get/search-style operations.
 func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	if captureMetaToolDefinition(MetaToolDefinition{
+		Name:         name,
+		Description:  desc,
+		Routes:       routes,
+		Icons:        icons,
+		ReadOnly:     true,
+		FormatResult: formatResult,
+	}) && server == nil {
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
@@ -1507,7 +1530,6 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 // Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-	RegisterRoutes(toolName, routes)
 	if formatResult == nil {
 		formatResult = defaultFormatResult
 	}

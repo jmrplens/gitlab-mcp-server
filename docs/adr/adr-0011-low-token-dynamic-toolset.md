@@ -38,7 +38,7 @@ directly exposed tool surface and model-controlled discovery, not a larger upfro
 Introduce a new low-token dynamic toolset mode as the primary candidate for further token reduction. The mode will expose
 three plain MCP tools:
 
-- `gitlab_search_tools`: search the hidden GitLab action registry.
+- `gitlab_search_tools`: search the canonical GitLab action catalog.
 - `gitlab_describe_tools`: return exact schemas, examples, safety metadata, and output summaries for selected actions.
 - `gitlab_execute_tool`: execute one selected action by canonical `domain.action` ID with strict runtime validation.
 
@@ -100,8 +100,9 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **IMP-001**: Add the dynamic toolset behind a non-default configuration value such as `META_TOOLS=dynamic` or a new
   explicit flag/env var, while preserving existing boolean behavior.
-- **IMP-002**: Build the hidden action registry from production-visible route snapshots after read-only, safe-mode,
-  enterprise, GitLab.com, exclude-tools, and token-scope filtering.
+- **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
+  enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
+  MCP server.
 - **IMP-003**: Use canonical `domain.action` IDs and keep aliases searchable but non-canonical.
 - **IMP-004**: Use `toolutil.LookupMetaActionSchema` or equivalent deep-cloned schema lookup for describe output and
   runtime validation.

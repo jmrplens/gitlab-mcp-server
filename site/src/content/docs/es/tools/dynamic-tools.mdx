@@ -21,18 +21,19 @@ Las meta-herramientas siguen siendo el modo predeterminado hoy porque son la sup
 
 Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1011 operaciones individuales, e incluso el catálogo predeterminado de meta-herramientas anuncia entre 32 y 48 herramientas de dominio.
 
-El modo dinámico mueve ese catálogo detrás de un registro oculto. El modelo descubre solo lo que necesita para la tarea actual.
+El modo dinámico expone ese catálogo canónico mediante tres herramientas visibles. El modelo descubre solo lo que necesita para la tarea actual.
 
 ```mermaid
 flowchart LR
     A[tools/list] --> B[3 herramientas dinámicas públicas]
-    B --> C[Buscar en registro oculto]
+    B --> C[Buscar en catálogo canónico]
     C --> D[Describir acciones elegidas]
     D --> E[Ejecutar una acción canónica]
     E --> F[GitLab REST v4 o GraphQL]
 ```
 
 Esto suele añadir una o dos llamadas de descubrimiento por tarea, pero mantiene muy pequeño el contexto inicial de herramientas MCP.
+El catálogo se comparte con las meta-herramientas, así que el modo dinámico reutiliza los mismos schemas, protecciones de acciones destructivas, filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token y formato de resultados.
 
 ## Activar el modo dinámico
 
@@ -172,7 +173,7 @@ Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar accione
 | Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                                     |
 | --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
 | Qué aparece en `tools/list` | 32 a 48 herramientas de dominio                             | 3 herramientas públicas de descubrimiento y ejecución                 |
-| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Busca en el registro oculto y después describe la acción              |
+| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Busca en el catálogo canónico y después describe la acción            |
 | Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_describe_tools`                                               |
 | Mejor uso actual            | Compatibilidad predeterminada                               | Clientes con pocos tokens y preparación para el futuro predeterminado |
 | Vuelta atrás                | Ya es el modo predeterminado                                | Quita `TOOL_SURFACE` o usa `TOOL_SURFACE=meta`                        |

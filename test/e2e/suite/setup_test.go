@@ -34,7 +34,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -209,21 +208,19 @@ func TestMain(m *testing.M) {
 	}
 
 	// Create a dynamic MCP server/client pair with the low-token search,
-	// describe, and execute surface backed by the hidden meta-tool catalog.
+	// describe, and execute surface backed by the canonical action catalog.
 	dynamicServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-dynamic",
 		Version: "test",
 	}, nil)
-	dynamicHiddenServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-dynamic-hidden",
-		Version: "test",
-	}, nil)
-	dynamicRoutes := toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(dynamicHiddenServer, glClient, enterprise)
-		tools.RegisterMCPMeta(dynamicHiddenServer, glClient, nil)
-	})
-	dynamicRoutes = dynamictools.AddStandaloneRoutes(dynamicRoutes, glClient, dynamictools.StandaloneOptions{})
-	dynamictools.RegisterTools(dynamicServer, dynamicRoutes)
+	dynamicCatalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+	if err != nil {
+		serverCancel()
+		metaServerCancel()
+		log.Fatalf("e2e: build dynamic action catalog: %v", err)
+	}
+	dynamicCatalog = dynamictools.AddStandaloneCatalog(dynamicCatalog, glClient, dynamictools.StandaloneOptions{})
+	dynamictools.RegisterCatalogTools(dynamicServer, dynamicCatalog)
 
 	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()
 

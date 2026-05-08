@@ -61,6 +61,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
@@ -620,24 +621,25 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 	switch toolSurface {
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
-		metaSchemaRoutes = dynamictools.AddStandaloneRoutes(metaSchemaRoutes, client, dynamictools.StandaloneOptions{
-			ReadOnly:     cfg.ReadOnly,
-			ExcludeTools: cfg.ExcludeTools,
-		})
-		dynamictools.RegisterTools(server, metaSchemaRoutes)
+		actionCatalog := buildDynamicActionCatalog(client, cfg, updater)
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		dynamictools.RegisterCatalogTools(server, actionCatalog)
 	case config.ToolSurfaceDynamic2:
-		metaSchemaRoutes = captureDynamicMetaRoutes(client, cfg, updater)
-		metaSchemaRoutes = dynamictools.AddStandaloneRoutes(metaSchemaRoutes, client, dynamictools.StandaloneOptions{
-			ReadOnly:     cfg.ReadOnly,
-			ExcludeTools: cfg.ExcludeTools,
-		})
-		dynamictools.RegisterFindExecuteTools(server, metaSchemaRoutes)
+		actionCatalog := buildDynamicActionCatalog(client, cfg, updater)
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 	case config.ToolSurfaceMeta:
-		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
-			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
-			gitlabtools.RegisterMCPMeta(server, client, updater)
+		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+			Enterprise: cfg.Enterprise,
+			IncludeMCP: true,
+			Updater:    updater,
 		})
+		if catalogErr != nil {
+			slog.Warn("failed to build meta action catalog", "error", catalogErr)
+			actionCatalog = actionregistry.NewCatalog()
+		}
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
 	default:
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
@@ -669,7 +671,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 	switch toolSurface {
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
-		slog.Info("registered dynamic toolset", "tools", toolCount, "hidden_meta_tools", len(metaSchemaRoutes), "hidden_actions", countHiddenActions(metaSchemaRoutes))
+		slog.Info("registered dynamic toolset", "tools", toolCount, "catalog_groups", len(metaSchemaRoutes), "catalog_actions", countCatalogActions(metaSchemaRoutes))
 	case config.ToolSurfaceMeta:
 		slog.Info("registered meta-tools", "tools", toolCount)
 	default:
@@ -1373,7 +1375,7 @@ func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, er
 	return result.Tools, nil
 }
 
-// visibleMetaSchemaRoutes filters captured meta-tool route maps to the tools
+// visibleMetaSchemaRoutes filters catalog-derived route maps to the tools
 // still visible after read-only or exclude-tools registration filters run.
 func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.ActionMap) (map[string]toolutil.ActionMap, error) {
 	registeredTools, err := listRegisteredToolsForInspection(server, "meta-schema-filter")
@@ -1395,36 +1397,28 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 	return visibleRoutes, nil
 }
 
-// captureDynamicMetaRoutes builds the hidden action registry from the same
-// meta-tool route snapshot that production meta mode would expose after
-// configured tool-level filters. Safe mode is applied to the public execute
-// tool later, so it does not remove hidden routes here.
-func captureDynamicMetaRoutes(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) map[string]toolutil.ActionMap {
-	hidden := mcp.NewServer(&mcp.Implementation{Name: "gitlab-hidden-meta", Version: version}, nil)
-	routes := toolutil.CaptureMetaRoutes(func() {
-		gitlabtools.RegisterAllMeta(hidden, client, cfg.Enterprise)
-		gitlabtools.RegisterMCPMeta(hidden, client, updater)
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) *actionregistry.Catalog {
+	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+		Enterprise: cfg.Enterprise,
+		IncludeMCP: true,
+		Updater:    updater,
 	})
-
-	if len(cfg.ExcludeTools) > 0 {
-		_ = removeExcludedTools(hidden, cfg.ExcludeTools)
-	}
-	if cfg.TokenScopes != nil {
-		_ = gitlabtools.RemoveScopeFilteredTools(hidden, cfg.TokenScopes)
-	}
-	if cfg.ReadOnly {
-		_ = removeNonReadOnlyTools(hidden)
-	}
-
-	visibleRoutes, err := visibleMetaSchemaRoutes(hidden, routes)
 	if err != nil {
-		slog.Warn("failed to filter dynamic hidden routes to visible meta-tools", "error", err)
-		return routes
+		slog.Warn("failed to build dynamic action catalog", "error", err)
+		catalog = actionregistry.NewCatalog()
 	}
-	return visibleRoutes
+	catalog = catalog.FilterExcludedTools(cfg.ExcludeTools)
+	catalog = gitlabtools.FilterScopeFilteredCatalog(catalog, cfg.TokenScopes)
+	if cfg.ReadOnly {
+		catalog = catalog.FilterReadOnlyGroups()
+	}
+	return dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{
+		ReadOnly:     cfg.ReadOnly,
+		ExcludeTools: cfg.ExcludeTools,
+	})
 }
 
-func countHiddenActions(routes map[string]toolutil.ActionMap) int {
+func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 	total := 0
 	for _, actions := range routes {
 		total += len(actions)

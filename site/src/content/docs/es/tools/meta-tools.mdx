@@ -286,3 +286,5 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 | `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                                                                                  |
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para la superficie de tres herramientas: buscar, describir y ejecutar.
+
+Las meta-herramientas y el modo dinámico consumen el mismo catálogo de acciones canónico. Las meta-herramientas lo exponen como dispatchers por dominio con un parámetro `action`; el modo dinámico lo expone mediante herramientas de búsqueda, descripción y ejecución. Por eso ambos modos comparten los mismos schemas, protecciones de acciones destructivas, filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token y formato de resultados.

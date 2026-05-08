@@ -102,7 +102,7 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 | `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
 | `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
 | `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
-| `dynamic` | Default three-tool dynamic surface over the hidden action registry | Parallel when each test owns created resources and uses search/describe/execute rather than direct meta-tool calls |
+| `dynamic` | Default three-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses search/describe/execute rather than direct meta-tool calls |
 | `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
 | `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |
 

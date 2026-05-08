@@ -1,6 +1,6 @@
 # Dynamic Toolset
 
-The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It exposes a tiny public MCP surface and keeps the full GitLab action catalog in a hidden registry that the model discovers progressively.
+The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It exposes a tiny public MCP surface and lets the model discover the canonical GitLab action catalog progressively.
 
 > **Diataxis type**: Guide + Reference
 > **Audience**: Users, operators, and developers evaluating low-token MCP deployments
@@ -26,7 +26,7 @@ Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes
 
 | Tool | Purpose |
 | --- | --- |
-| `gitlab_search_tools` | Search the hidden action registry using natural language, canonical action IDs, domains, verbs, aliases, and fuzzy matching |
+| `gitlab_search_tools` | Search the canonical action catalog using natural language, canonical action IDs, domains, verbs, aliases, and fuzzy matching |
 | `gitlab_describe_tools` | Return exact input schemas, examples, safety metadata, and output summaries for selected action IDs |
 | `gitlab_execute_tool` | Execute one selected action by canonical `domain.action` ID with runtime validation and safety checks |
 
@@ -184,16 +184,16 @@ For safer deployments:
 
 ## Architecture
 
-Dynamic mode is a progressive-disclosure layer over the existing meta-tool registry. It does not duplicate GitLab handlers.
+Dynamic mode is a progressive-disclosure layer over the canonical action catalog. It does not duplicate GitLab handlers.
 
 ```mermaid
 flowchart TD
-    subgraph Startup
-        A[Register meta-tool routes]
-        B[Capture ActionMap routes]
-        C[Add standalone routes]
-        D[Build hidden dynamic registry]
-    end
+  subgraph Startup
+    A[Build canonical action catalog]
+    B[Apply policy filters]
+    C[Add standalone dynamic actions]
+    D[Build dynamic action registry]
+  end
 
     subgraph Public MCP Surface
         E[gitlab_search_tools]
@@ -215,7 +215,7 @@ flowchart TD
     G --> H --> I --> J --> K
 ```
 
-The hidden registry is built after policy decisions such as enterprise catalog selection, GitLab.com-only routing, read-only mode, safe mode, excluded tools, and token-scope filtering. That means dynamic search only advertises actions that the current server instance can route.
+The canonical action catalog is filtered after policy decisions such as enterprise catalog selection, GitLab.com-only routing, read-only mode, safe mode, excluded tools, and token-scope filtering. That means dynamic search only advertises actions that the current server instance can route.
 
 ### Search Ranking
 
@@ -250,13 +250,22 @@ Implementation entry points:
 
 | File | Responsibility |
 | --- | --- |
-| `internal/tools/dynamic/register.go` | Public dynamic tools, hidden registry, search, describe, find, and execute logic |
-| `internal/tools/dynamic/standalone.go` | Adds standalone actions such as project discovery and interactive creation flows to the hidden registry |
-| `internal/tools/register_meta.go` | Source of the domain meta-tool route maps captured for dynamic mode |
+| `internal/tools/actionregistry/registry.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
+| `internal/tools/action_catalog.go` | Builds the canonical catalog from meta-tool definitions without constructing an MCP server |
+| `internal/tools/meta_catalog.go` | Registers visible meta-tools from the canonical catalog |
+| `internal/tools/dynamic/register.go` | Public dynamic tools, catalog-backed registry, search, describe, find, and execute logic |
+| `internal/tools/dynamic/standalone.go` | Adds standalone actions such as project discovery and interactive creation flows to the canonical action catalog |
+| `internal/tools/register_meta.go` | Source of the domain meta-tool definitions used to build the canonical action catalog |
 | `internal/toolutil/metatool.go` | Shared `ActionMap`, `ActionRoute`, route classification, schema capture, and execution wrappers |
 | `cmd/server/main.go` | Selects `TOOL_SURFACE` and registers meta, individual, dynamic, or comparison surfaces |
 | `cmd/eval_meta_tools` | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks |
 | `test/e2e/suite/dynamic_test.go` | E2E coverage for the default dynamic three-tool surface |
+
+### Registering New Actions
+
+Add or change GitLab actions in the domain route definitions that feed `internal/tools/register_meta.go`, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and schema resources can expose `gitlab://schema/meta/{tool}/{action}`.
+
+Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions. Keep `dynamic-2` as an evaluation-only comparison surface unless the project explicitly decides otherwise.
 
 When adding or changing GitLab actions, keep these rules in sync:
 
