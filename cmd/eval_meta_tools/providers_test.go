@@ -259,6 +259,17 @@ func TestGoogleProviderCallOnce_ResponseBranches(t *testing.T) {
 			if retry != tc.wantRetry {
 				t.Fatalf("retry = %v, want %v", retry, tc.wantRetry)
 			}
+			var providerErr *modelProviderCallError
+			if !errors.As(err, &providerErr) || providerErr.Trace == nil {
+				t.Fatalf("error = %v, want provider trace", err)
+			}
+			rawBody := string(providerErr.Trace.ResponseBody)
+			if rawBody == "" {
+				rawBody = providerErr.Trace.ResponseBodyText
+			}
+			if providerErr.Trace.ResponseStatus != http.StatusOK || !strings.Contains(rawBody, strings.TrimSpace(tc.body)) {
+				t.Fatalf("provider trace = %+v, want raw error body", providerErr.Trace)
+			}
 		})
 	}
 }
@@ -302,7 +313,7 @@ func TestDoModelRequest_ContextCancellationIsNotRetryable(t *testing.T) {
 		t.Fatalf("NewRequestWithContext() error = %v", err)
 	}
 
-	_, retry, err := doModelRequest(client, req, "test")
+	_, _, retry, err := doModelRequest(client, req, "test")
 	if err == nil {
 		t.Fatal("doModelRequest() error = nil, want cancellation error")
 	}
@@ -361,6 +372,175 @@ func TestOpenAIProviderCallOnce_BuildsRequestAndParsesToolCall(t *testing.T) {
 	if response.Usage.InputTokens != 3 || response.Usage.OutputTokens != 4 {
 		t.Fatalf("usage = %+v, want 3/4", response.Usage)
 	}
+	if response.ProviderTrace == nil {
+		t.Fatal("provider trace = nil, want raw exchange")
+	}
+	if response.ProviderTrace.Provider != providerQwen || response.ProviderTrace.ResponseStatus != http.StatusOK {
+		t.Fatalf("provider trace = %+v, want qwen 200", response.ProviderTrace)
+	}
+	if !strings.Contains(string(response.ProviderTrace.RequestBody), `"enable_thinking":false`) {
+		t.Fatalf("request trace = %s, want enable_thinking false", response.ProviderTrace.RequestBody)
+	}
+	if !strings.Contains(string(response.ProviderTrace.ResponseBody), `"tool_calls"`) {
+		t.Fatalf("response trace = %s, want raw tool_calls", response.ProviderTrace.ResponseBody)
+	}
+}
+
+// TestOpenAITools_HardensExecuteSchema verifies OpenAI-compatible function
+// calling receives the complete dynamic executor envelope schema.
+func TestOpenAITools_HardensExecuteSchema(t *testing.T) {
+	tools := openAITools([]modelTool{
+		{
+			Name:        dynamicExecuteTool,
+			Description: "Execute",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"action":  map[string]any{"type": "string"},
+					"params":  map[string]any{"type": "object"},
+					"confirm": map[string]any{"type": "boolean"},
+				},
+				"required": []any{"action"},
+			},
+		},
+	})
+
+	if len(tools) != 1 {
+		t.Fatalf("tools = %#v, want one tool", tools)
+	}
+	if tools[0].Function.Strict != nil {
+		t.Fatalf("strict = %#v, want nil for dynamic execute schema with flexible params", tools[0].Function.Strict)
+	}
+	schema, ok := tools[0].Function.Parameters.(map[string]any)
+	if !ok {
+		t.Fatalf("parameters = %T, want map schema", tools[0].Function.Parameters)
+	}
+	if schema["additionalProperties"] != false {
+		t.Fatalf("additionalProperties = %#v, want false", schema["additionalProperties"])
+	}
+	required := requiredStringSet(schema["required"])
+	if !required["action"] || !required["params"] {
+		t.Fatalf("required = %#v, want action and params", schema["required"])
+	}
+	if required["confirm"] {
+		t.Fatalf("required = %#v, confirm must remain optional", schema["required"])
+	}
+	properties := schema["properties"].(map[string]any)
+	paramsSchema := properties["params"].(map[string]any)
+	if paramsSchema["additionalProperties"] != true {
+		t.Fatalf("params additionalProperties = %#v, want true for dynamic action params", paramsSchema["additionalProperties"])
+	}
+	paramProperties := paramsSchema["properties"].(map[string]any)
+	for _, want := range []string{"project_id", "trigger_id", "schedule_id", "file_path", "ref"} {
+		if _, hasProperty := paramProperties[want]; !hasProperty {
+			t.Fatalf("params properties missing %s: %#v", want, paramProperties)
+		}
+	}
+}
+
+// TestOpenAITools_QwenKeepsStrictDisabled verifies Qwen receives the hardened
+// execute schema without OpenAI-specific strict metadata.
+func TestOpenAITools_QwenKeepsStrictDisabled(t *testing.T) {
+	tools := openAITools([]modelTool{{Name: dynamicExecuteTool, InputSchema: map[string]any{"type": "object"}}})
+
+	if len(tools) != 1 {
+		t.Fatalf("tools = %#v, want one tool", tools)
+	}
+	if tools[0].Function.Strict != nil {
+		t.Fatalf("strict = %#v, want nil for Qwen", tools[0].Function.Strict)
+	}
+	schema := tools[0].Function.Parameters.(map[string]any)
+	if required := requiredStringSet(schema["required"]); !required["action"] || !required["params"] {
+		t.Fatalf("required = %#v, want action and params", schema["required"])
+	}
+}
+
+// TestOpenAITools_DoesNotMutateNonExecuteSchemas verifies hardening is limited
+// to gitlab_execute_tool.
+func TestOpenAITools_DoesNotMutateNonExecuteSchemas(t *testing.T) {
+	inputSchema := map[string]any{"type": "object", "required": []any{"query"}}
+	tools := openAITools([]modelTool{{Name: "gitlab_search_tools", InputSchema: inputSchema}})
+
+	if tools[0].Function.Strict != nil {
+		t.Fatalf("strict = %#v, want nil for search tool", tools[0].Function.Strict)
+	}
+	if _, ok := tools[0].Function.Parameters.(map[string]any)["additionalProperties"]; ok {
+		t.Fatalf("parameters = %#v, non-execute schema should not be hardened", tools[0].Function.Parameters)
+	}
+	if strings.Join(requiredNamesFromAny(tools[0].Function.Parameters.(map[string]any)["required"]), ",") != "query" {
+		t.Fatalf("parameters = %#v, required params changed", tools[0].Function.Parameters)
+	}
+}
+
+// TestProviderCallOnce_HTTPErrorTraceIncludesRequestAndRawResponse verifies
+// provider failures keep enough HTTP context for trace artifact debugging.
+func TestProviderCallOnce_HTTPErrorTraceIncludesRequestAndRawResponse(t *testing.T) {
+	const responseText = "temporary upstream outage"
+	tests := []struct {
+		name         string
+		provider     modelProvider
+		request      modelProviderRequest
+		wantProvider string
+	}{
+		{name: "anthropic", provider: anthropicProvider{}, request: modelProviderRequest{Model: "claude", MaxTokens: 16}, wantProvider: "anthropic"},
+		{name: "openai", provider: openAIProvider{endpoint: "https://openai.example/chat", name: providerOpenAI, maxTokenField: "max_completion_tokens"}, request: modelProviderRequest{Model: "gpt", MaxTokens: 16}, wantProvider: providerOpenAI},
+		{name: "google", provider: googleProvider{}, request: modelProviderRequest{Model: "gemini", MaxTokens: 16}, wantProvider: "google"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(responseText)), Header: make(http.Header)}, nil
+			})}
+
+			_, retry, err := tt.provider.callOnce(context.Background(), client, "secret-key", tt.request)
+			if err == nil {
+				t.Fatal("callOnce() error = nil, want provider error")
+			}
+			if !retry {
+				t.Fatal("retry = false, want true for 503")
+			}
+			var providerErr *modelProviderCallError
+			if !errors.As(err, &providerErr) || providerErr.Trace == nil {
+				t.Fatalf("error = %v, want provider trace", err)
+			}
+			if providerErr.Trace.Provider != tt.wantProvider || providerErr.Trace.Method != http.MethodPost {
+				t.Fatalf("trace = %+v, want provider %s POST", providerErr.Trace, tt.wantProvider)
+			}
+			if providerErr.Trace.ResponseStatus != http.StatusServiceUnavailable || providerErr.Trace.ResponseBodyText != responseText {
+				t.Fatalf("trace = %+v, want raw non-JSON 503 response", providerErr.Trace)
+			}
+			if len(providerErr.Trace.RequestBody) == 0 {
+				t.Fatal("request trace is empty, want serialized provider request")
+			}
+			if !strings.Contains(string(providerErr.Trace.RequestBody), tt.request.Model) && !strings.Contains(providerErr.Trace.Endpoint, tt.request.Model) {
+				t.Fatalf("trace request = %s endpoint = %s, want model name", providerErr.Trace.RequestBody, providerErr.Trace.Endpoint)
+			}
+		})
+	}
+}
+
+func requiredStringSet(raw any) map[string]bool {
+	out := map[string]bool{}
+	for _, name := range requiredNamesFromAny(raw) {
+		out[name] = true
+	}
+	return out
+}
+
+func requiredNamesFromAny(raw any) []string {
+	var names []string
+	switch values := raw.(type) {
+	case []any:
+		for _, value := range values {
+			if name, ok := value.(string); ok {
+				names = append(names, name)
+			}
+		}
+	case []string:
+		names = append(names, values...)
+	}
+	return names
 }
 
 // TestOpenAIProviderCallOnce_ResponseErrors verifies OpenAI-compatible error
@@ -579,7 +759,7 @@ func TestDoModelRequest_ErrorBranches(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewRequestWithContext() error = %v", err)
 			}
-			_, retry, gotErr := doModelRequest(client, req, "test")
+			_, _, retry, gotErr := doModelRequest(client, req, "test")
 			if gotErr == nil {
 				t.Fatal("doModelRequest() error = nil, want error")
 			}

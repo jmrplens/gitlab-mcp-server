@@ -109,6 +109,9 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	if input.Title == "" {
 		return Output{}, toolutil.ErrFieldRequired("title")
 	}
+	if err := validateCreateSnippetContent(input.FileName, input.ContentBody, input.Files); err != nil {
+		return Output{}, err
+	}
 	opts := &gl.CreateProjectSnippetOptions{
 		Title: new(input.Title),
 	}

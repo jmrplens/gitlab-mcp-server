@@ -47742,7 +47742,7 @@
       "additionalProperties": false,
       "properties": {
         "artifact_path": {
-          "description": "Path to the artifact file within the archive",
+          "description": "Path to the artifact file within the archive,required",
           "type": "string"
         },
         "job_id": {
@@ -47811,11 +47811,11 @@
       "additionalProperties": false,
       "properties": {
         "artifact_path": {
-          "description": "Path to the artifact file within the archive",
+          "description": "Path to the artifact file within the archive,required",
           "type": "string"
         },
         "job": {
-          "description": "Job name",
+          "description": "Job name,required",
           "type": "string"
         },
         "project_id": {
@@ -47823,7 +47823,7 @@
           "type": "string"
         },
         "ref_name": {
-          "description": "Branch or tag name",
+          "description": "Branch or tag name,required",
           "type": "string"
         }
       },
@@ -88909,6 +88909,19 @@
     "description": "Create a new snippet in a GitLab project. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_project_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "file_name",
+            "content"
+          ]
+        },
+        {
+          "required": [
+            "files"
+          ]
+        }
+      ],
       "properties": {
         "content": {
           "description": "Content (single-file, deprecated in favor of files)",
@@ -88942,6 +88955,7 @@
             ],
             "type": "object"
           },
+          "minItems": 1,
           "type": [
             "null",
             "array"
@@ -104964,6 +104978,19 @@
     "description": "Create a new personal snippet. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "file_name",
+            "content"
+          ]
+        },
+        {
+          "required": [
+            "files"
+          ]
+        }
+      ],
       "properties": {
         "content": {
           "description": "Snippet content (single-file, deprecated in favor of files)",
@@ -104997,6 +105024,7 @@
             ],
             "type": "object"
           },
+          "minItems": 1,
           "type": [
             "null",
             "array"

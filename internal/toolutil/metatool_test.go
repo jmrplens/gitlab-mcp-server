@@ -381,6 +381,31 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			params: map[string]any{"branch": "main"},
 			want:   map[string]any{"branch_name": "main"},
 		},
+		"feature_flag_name to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"feature_flag_name": "eval-flag"},
+			want:   map[string]any{"name": "eval-flag"},
+		},
+		"emoji_name to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"emoji_name": "eyes"},
+			want:   map[string]any{"name": "eyes"},
+		},
+		"award to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"award": "thumbsup"},
+			want:   map[string]any{"name": "thumbsup"},
+		},
+		"time_estimate to duration": {
+			schema: map[string]any{"properties": map[string]any{"duration": map[string]any{"type": "string"}}},
+			params: map[string]any{"time_estimate": "1h"},
+			want:   map[string]any{"duration": "1h"},
+		},
+		"alias is preserved when schema accepts alias": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}, "emoji_name": map[string]any{"type": "string"}}},
+			params: map[string]any{"emoji_name": "eyes"},
+			want:   map[string]any{"emoji_name": "eyes"},
+		},
 	}
 
 	for name, tc := range tests {
@@ -810,6 +835,19 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"ci_variable.group_create":           {},
 		"access.deploy_key_add":              {},
 		"release.link_create":                {},
+		"feature_flags.ff_user_list_create":  {},
+		"feature_flags.ff_user_list_delete":  {},
+		"issue.create":                       {},
+		"server.health_check":                {},
+		"job.download_single_artifact":       {},
+		"issue.link_create":                  {},
+		"repository.tree":                    {},
+		"repository.file_get":                {},
+		"pipeline.schedule_create_variable":  {},
+		"project.badge_edit":                 {},
+		"merge_request.spent_time_reset":     {},
+		"issue.note_create":                  {},
+		"interactive.issue_create":           {},
 	}
 
 	tests := map[string]string{
@@ -839,11 +877,29 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
 		"merge_request.time_estimate":               "merge_request.time_estimate_set",
 		"merge_request.time_spent_add":              "merge_request.spent_time_add",
+		"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
+		"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
+		"gitlab_issue.create":                       "issue.create",
+		"gitlab_server.health_check":                "server.health_check",
+		"job.artifact_download":                     "job.download_single_artifact",
+		"issue.link":                                "issue.link_create",
+		"repository_tree":                           "repository.tree",
+		"repository_file.get":                       "repository.file_get",
+		"repository_file.read":                      "repository.file_get",
+		"pipeline.schedule_variable_create":         "pipeline.schedule_create_variable",
+		"project.badge_update":                      "project.badge_edit",
+		"merge_request.time_spent_reset":            "merge_request.spent_time_reset",
+		"generic_package.list":                      "package.list",
+		"issue_note.create":                         "issue.note_create",
+		"gitlab_interactive_issue.create":           "interactive.issue_create",
 	}
 	for alias, want := range tests {
 		if got := NormalizeActionAlias(alias, routes); got != want {
 			t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
 		}
+	}
+	if got := NormalizeActionAlias("repository_file.read", ActionMap{}); got != "repository_file.read" {
+		t.Fatalf("NormalizeActionAlias without canonical route = %q, want unchanged", got)
 	}
 }
 

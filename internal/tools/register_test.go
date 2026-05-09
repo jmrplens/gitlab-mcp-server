@@ -1976,7 +1976,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
 		"unshare": true, "disable_project": true, "import_from_file": true,
 		"cancel_github": true, "rotate": true, "mirror_force_push": true,
-		"db_migration_mark": true, "terraform_state_unlock": true,
+		"db_migration_mark": true, "terraform_state_unlock": true, "archive": true,
 	}
 
 	var failures int

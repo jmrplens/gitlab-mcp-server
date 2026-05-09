@@ -283,7 +283,7 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"fork":                     routeAction(client, projects.Fork),
 		"star":                     routeAction(client, projects.Star),
 		"unstar":                   routeAction(client, projects.Unstar),
-		"archive":                  routeAction(client, projects.Archive),
+		"archive":                  destructiveAction(client, projects.Archive),
 		"unarchive":                routeAction(client, projects.Unarchive),
 		"transfer":                 routeAction(client, projects.Transfer),
 		"list_forks":               routeAction(client, projects.ListForks),
@@ -2561,20 +2561,25 @@ See also: gitlab_release (release asset links), gitlab_project`, routes, tooluti
 // discussion_update_note, discussion_delete_note, note_list, note_get, note_create,
 // note_update, and note_delete.
 func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
+	createRoute := routeAction(client, snippets.Create)
+	createRoute.InputSchema = snippets.CreateInputSchemaMap()
+	projectCreateRoute := routeAction(client, snippets.ProjectCreate)
+	projectCreateRoute.InputSchema = snippets.ProjectCreateInputSchemaMap()
+
 	routes := actionMap{
 		"list":                      routeAction(client, snippets.List),
 		"list_all":                  routeAction(client, snippets.ListAll),
 		"get":                       routeAction(client, snippets.Get),
 		"content":                   routeAction(client, snippets.Content),
 		"file_content":              routeAction(client, snippets.FileContent),
-		"create":                    routeAction(client, snippets.Create),
+		"create":                    createRoute,
 		"update":                    routeAction(client, snippets.Update),
 		"delete":                    destructiveVoidAction(client, snippets.Delete),
 		"explore":                   routeAction(client, snippets.Explore),
 		"project_list":              routeAction(client, snippets.ProjectList),
 		"project_get":               routeAction(client, snippets.ProjectGet),
 		"project_content":           routeAction(client, snippets.ProjectContent),
-		"project_create":            routeAction(client, snippets.ProjectCreate),
+		"project_create":            projectCreateRoute,
 		"project_update":            routeAction(client, snippets.ProjectUpdate),
 		"project_delete":            destructiveVoidAction(client, snippets.ProjectDelete),
 		"discussion_list":           routeAction(client, snippetdiscussions.List),

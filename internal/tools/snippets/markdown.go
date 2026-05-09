@@ -43,7 +43,7 @@ func FormatMarkdown(out Output) string {
 	if out.ProjectID != 0 {
 		hints = append(hints,
 			"For project snippets, use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
-			"Use action 'project_update' with files[] to modify project snippet content; put file_path only inside files[], never as top-level params.file_path",
+			"Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path",
 			"Use action 'project_delete' to remove this project snippet",
 		)
 	} else {

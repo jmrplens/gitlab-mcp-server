@@ -188,9 +188,10 @@ func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := Create(context.Background(), client, CreateInput{
-		Title:      "Test Snippet",
-		FileName:   "test.go",
-		Visibility: "private",
+		Title:       "Test Snippet",
+		FileName:    "test.go",
+		ContentBody: "package main",
+		Visibility:  "private",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -206,6 +207,15 @@ func TestCreate_MissingTitle(t *testing.T) {
 	_, err := Create(context.Background(), client, CreateInput{})
 	if err == nil || !strings.Contains(err.Error(), "title is required") {
 		t.Fatalf("expected title required error, got %v", err)
+	}
+}
+
+// TestCreate_MissingContent verifies the behavior of create missing content.
+func TestCreate_MissingContent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Create(context.Background(), client, CreateInput{Title: "Test Snippet", FileName: "test.go"})
+	if err == nil || !strings.Contains(err.Error(), "content is required") {
+		t.Fatalf("expected content required error, got %v", err)
 	}
 }
 

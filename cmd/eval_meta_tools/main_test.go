@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -238,6 +239,30 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	}
 }
 
+// TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities verifies dynamic interactive tasks stay eligible because the evaluator advertises elicitation.
+func TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"issue.create":             {},
+			"interactive.issue_create": {},
+			"project.get":              {},
+		},
+	}
+	tasks := []evalTask{
+		{ID: "create", ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create"},
+		{ID: "interactive", ExpectedTool: dynamicExecuteTool, ExpectedAction: "interactive.issue_create"},
+		{ID: "workflow", Steps: []evalStep{
+			{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.get"},
+			{ExpectedTool: dynamicExecuteTool, ExpectedAction: "interactive.issue_create"},
+		}},
+	}
+
+	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	if got := taskIDs(filtered); got != "create,interactive,workflow" {
+		t.Fatalf("filtered IDs = %q, want create,interactive,workflow", got)
+	}
+}
+
 // TestFilterTasksByPartition verifies the behavior of filter tasks by partition.
 func TestFilterTasksByPartition(t *testing.T) {
 	tasks := []evalTask{
@@ -281,6 +306,24 @@ func TestFilterTasksByPartition(t *testing.T) {
 	}
 	if _, unknownErr := filterTasksByPartition(tasks, "unknown"); unknownErr == nil {
 		t.Fatal("filterTasksByPartition(unknown) error = nil, want error")
+	}
+}
+
+// TestOrderSharedFixtureDestructiveLast verifies full fixture runs keep shared
+// project and artifact resources intact until dependent tasks have executed.
+func TestOrderSharedFixtureDestructiveLast(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "MT-055", ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.archive"},
+		{ID: "MT-060", ExpectedTool: dynamicExecuteTool, ExpectedAction: "mr_review.discussion_create"},
+		{ID: "MT-024", ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.delete_artifacts"},
+		{ID: "MT-065", ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.download_single_artifact"},
+		{ID: "MT-064", ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.play"},
+	}
+
+	ordered := orderSharedFixtureDestructiveLast(tasks)
+
+	if got := taskIDs(ordered); got != "MT-060,MT-065,MT-064,MT-024,MT-055" {
+		t.Fatalf("ordered IDs = %q, want MT-060,MT-065,MT-064,MT-024,MT-055", got)
 	}
 }
 
@@ -571,6 +614,9 @@ func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic3); got != 2 {
 		t.Fatalf("repairAttemptLimitForSurface(dynamic-3) = %d, want 2", got)
 	}
+	if got := repairAttemptLimitForTask(config.ToolSurfaceDynamic3, 7); got != 7 {
+		t.Fatalf("repairAttemptLimitForTask(dynamic-3, 7) = %d, want 7", got)
+	}
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic2); got != 1 {
 		t.Fatalf("repairAttemptLimitForSurface(dynamic-2) = %d, want 1", got)
 	}
@@ -716,7 +762,9 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	for _, want := range []string{
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first.",
 		"If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool.",
-		"Do not guess or invent alias action IDs such as merge_request.accept, issue.notes, or pipeline.jobs.",
+		"Canonical action IDs use domain.action without the gitlab_ tool prefix",
+		"params is always required, even when empty",
+		"runner.delete_registered when the prompt gives numeric runner_id",
 	} {
 		if !strings.Contains(system, want) {
 			t.Fatalf("systemPromptForTask() = %q, want dynamic-3 guidance containing %q", system, want)
@@ -728,10 +776,235 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool.",
 		"If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool.",
 		"params limited to the described input schema",
+		"Always include top-level params",
+		"Canonical action IDs do not include gitlab_ prefixes",
+		"Never send confirm:false",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPromptForSurface() = %q, want dynamic-3 override containing %q", prompt, want)
 		}
+	}
+}
+
+// TestDynamicTaskPrompt_IncludesProviderConfusionGuidance verifies task-level
+// prompts give exact ordering hints for workflows confused by model providers.
+func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
+	tests := []struct {
+		name string
+		task evalTask
+		want []string
+	}{
+		{
+			name: "failed pipeline investigation workflow",
+			task: evalTask{ID: "MS-002", Prompt: "Investigate failed pipeline `339` for project `my-org/tools/gitlab-mcp-server` and remote URL `http://localhost:8929/my-org/tools/gitlab-mcp-server.git`: resolve the project, inspect the pipeline, list failed jobs, fetch job `677` trace, then call the pipeline failure analyzer for pipeline `339`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.list", RequiredParams: []string{"project_id", "pipeline_id"}},
+			}},
+			want: []string{`"remote_url":"http://localhost:8929/my-org/tools/gitlab-mcp-server.git"`, "discover_project.resolve, pipeline.get, job.list, job.trace, analyze.pipeline_failure", "Inspecting one known pipeline ID means pipeline.get", "do not substitute pipeline.list"},
+		},
+		{
+			name: "settings broadcast workflow",
+			task: evalTask{ID: "MS-009", Prompt: "Read current instance settings, create a broadcast message, then delete it.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.settings_get"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.broadcast_message_create"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.broadcast_message_delete"},
+			}},
+			want: []string{"admin.settings_get, admin.broadcast_message_create, admin.broadcast_message_delete", "not list or create broadcast messages"},
+		},
+		{
+			name: "release cleanup workflow",
+			task: evalTask{ID: "MS-004", Prompt: "Verify a tag and release, list release asset links, delete release and tag.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "tag.get"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.get"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.link_list"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.delete"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "tag.delete"},
+			}},
+			want: []string{"tag.get, release.get, release.link_list, release.delete, tag.delete", "Start with tag.get"},
+		},
+		{
+			name: "release notes workflow",
+			task: evalTask{ID: "MS-012", Prompt: "List releases, compare refs, then generate release notes.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.list"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.compare"},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "analyze.release_notes"},
+			}},
+			want: []string{"release.list, repository.compare, analyze.release_notes", "same from/to refs"},
+		},
+		{
+			name: "feature flag user list workflow",
+			task: evalTask{ID: "MS-029", Prompt: "Exercise feature flag and user-list lifecycle in project `my-org/tools/gitlab-mcp-server`: create feature flag user list `eval-feature-list` with user IDs `u1,u2`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "feature_flags.ff_user_list_create", RequiredParams: []string{"project_id", "name", "user_xids"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "feature_flags.ff_user_list_get", RequiredParams: []string{"project_id", "user_list_iid"}},
+			}},
+			want: []string{"Dynamic first-step exact call", `"name":"eval-feature-list"`, `"user_xids":"u1,u2"`, "Every step needs params.project_id", "Use the returned iid as params.user_list_iid", "After ff_user_list_update, create the feature flag next", "never feature_flag_name", "never include user_list_iid unless you are calling an ff_user_list_* action"},
+		},
+		{
+			name: "issue time tracking workflow",
+			task: evalTask{ID: "MS-032", Prompt: "Exercise issue time tracking in project `my-org/tools/gitlab-mcp-server`: create issue `eval-time-issue`, set estimate `2h`, add spent time `30m`, reset spent time, reset the estimate, then delete the issue.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.time_estimate_set", RequiredParams: []string{"project_id", "issue_iid", "duration"}},
+			}},
+			want: []string{"issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete", "Set the estimate before adding spent time", "reset spent time before resetting the estimate"},
+		},
+		{
+			name: "issue link workflow",
+			task: evalTask{ID: "MS-016", Prompt: "Exercise issue link CRUD in project `my-org/tools/gitlab-mcp-server`: create source issue `eval-link-source`, create target issue `eval-link-target`, link source to target as `relates_to`, list source issue links, delete the returned issue link, then delete both issues.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.link_list", RequiredParams: []string{"project_id", "issue_iid"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.link_delete", RequiredParams: []string{"project_id", "issue_iid", "issue_link_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{"issue.link_create, not issue.link", "issue.link_delete", "top-level confirm:true on gitlab_execute_tool", "params.issue_iid set to the source issue IID"},
+		},
+		{
+			name: "merge request award workflow",
+			task: evalTask{ID: "MS-033", Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.time_estimate_set", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.spent_time_add", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
+			}},
+			want: []string{"merge_request.emoji_mr_list before deleting", `"merge_request_iid":1`, `"duration":"1h"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			for _, want := range tt.want {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("taskPromptForSurface() = %q, want guidance containing %q", prompt, want)
+				}
+			}
+		})
+	}
+}
+
+// TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes verifies
+// single-step dynamic tasks with provider params-shape misses get exact calls.
+func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
+	tests := []struct {
+		name string
+		task evalTask
+		want []string
+	}{
+		{
+			name: "repository file get",
+			task: evalTask{ID: "MT-029", Prompt: "Get file `README.md` from branch `main` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
+			}},
+			want: []string{`"action":"repository.file_get"`, `"file_path":"README.md"`, `"ref":"main"`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+		},
+		{
+			name: "repository file create",
+			task: evalTask{ID: "MT-030", Prompt: "Create file `tmp/eval.txt` with content `evaluation file` and commit_message `Create evaluation file` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.file_create", RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"}},
+			}},
+			want: []string{`"action":"repository.file_create"`, `"file_path":"tmp/eval.txt"`, `"branch":"feature/eval"`, `"content":"evaluation file"`, `"commit_message":"Create evaluation file"`},
+		},
+		{
+			name: "single artifact download",
+			task: evalTask{ID: "MT-065", Prompt: "Download artifact `coverage/report.xml` from job `361` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.download_single_artifact", RequiredParams: []string{"project_id", "job_id", "artifact_path"}},
+			}},
+			want: []string{`"action":"job.download_single_artifact"`, `"artifact_path":"coverage/report.xml"`, `"job_id":361`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+		},
+		{
+			name: "runner remove",
+			task: evalTask{ID: "MT-047", Prompt: "Remove runner ID `21`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"runner.remove"`, `"confirm":true`, `"runner_id":21`, "include top-level confirm:true on gitlab_execute_tool"},
+		},
+		{
+			name: "pipeline schedule delete",
+			task: evalTask{ID: "MT-103", Prompt: "Delete pipeline schedule ID `46` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_delete", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"pipeline.schedule_delete"`, `"confirm":true`, `"params":{"project_id":"my-org/tools/gitlab-mcp-server","schedule_id":46}`, "include top-level confirm:true on gitlab_execute_tool", "only action and confirm is invalid"},
+		},
+		{
+			name: "user block",
+			task: evalTask{ID: "MT-104", Prompt: "Block user ID `55`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "user.block", RequiredParams: []string{"user_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"user.block"`, `"confirm":true`, `"user_id":55`, "include top-level confirm:true on gitlab_execute_tool"},
+		},
+		{
+			name: "pipeline trigger delete",
+			task: evalTask{ID: "MT-102", Prompt: "Delete pipeline trigger token ID `53` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.trigger_delete", RequiredParams: []string{"project_id", "trigger_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"pipeline.trigger_delete"`, `"confirm":true`, `"params":{"project_id":"my-org/tools/gitlab-mcp-server","trigger_id":53}`, "only action and confirm is invalid"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			if strings.Contains(prompt, "confirm:true in params") {
+				t.Fatalf("taskPromptForSurface() = %q, dynamic prompt must not tell models to put confirm in params", prompt)
+			}
+			exactIndex := strings.Index(prompt, tt.want[0])
+			taskIndex := strings.Index(prompt, "Task "+tt.task.ID)
+			overrideIndex := strings.Index(prompt, "Dynamic mode override:")
+			if exactIndex < 0 {
+				t.Fatalf("taskPromptForSurface() = %q, want exact call containing %q", prompt, tt.want[0])
+			}
+			if taskIndex >= 0 && exactIndex > taskIndex {
+				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before task prose", prompt)
+			}
+			if overrideIndex >= 0 && exactIndex > overrideIndex {
+				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before dynamic override", prompt)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("taskPromptForSurface() = %q, want exact call containing %q", prompt, want)
+				}
+			}
+		})
+	}
+}
+
+// TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation verifies dynamic
+// file CRUD guidance extracts the repository file path instead of the project path.
+func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T) {
+	task := evalTask{ID: "MS-017", Prompt: "Exercise repository file CRUD in project `my-org/tools/gitlab-mcp-server`: create file `tmp/eval-crud.txt` on branch `feature/eval`, read it, update its content, then delete it from the same branch.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.file_create", RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"}},
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	for _, want := range []string{
+		`"action":"repository.file_create"`,
+		`"file_path":"tmp/eval-crud.txt"`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		`"branch":"feature/eval"`,
+		`"content":"Initial content for repository file CRUD"`,
+		`"commit_message":"Evaluation create tmp/eval-crud.txt"`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPromptForSurface() = %q, want repository file CRUD guidance containing %q", prompt, want)
+		}
+	}
+	if strings.Contains(prompt, `"file_path":"my-org/tools/gitlab-mcp-server"`) {
+		t.Fatalf("taskPromptForSurface() = %q, file_path must not use project path", prompt)
+	}
+}
+
+// TestCanExecuteInvalidToolCallSkipsWrongDynamicReadOnlyAction verifies dynamic
+// workflows receive exact repair guidance when the model substitutes a read-only action.
+func TestCanExecuteInvalidToolCallSkipsWrongDynamicReadOnlyAction(t *testing.T) {
+	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}
+	validation := validationResult{ToolMatches: true, ActionMatches: false, Action: "pipeline.list", RequiredPresent: false, DestructiveSafe: true, Message: "expected action pipeline.get, got pipeline.list; missing required params.pipeline_id"}
+	toolUse := modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "pipeline.list", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {"pipeline.list": toolutil.ActionRoute{}}}
+
+	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
+		t.Fatal("canExecuteInvalidToolCall() = true, want wrong dynamic read-only action to receive exact repair guidance")
 	}
 }
 
@@ -1085,9 +1358,13 @@ func TestValidateStepCallWithRoutes_AcceptsActionAlias(t *testing.T) {
 // TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies that ValidationRepairMessage handles the includes action envelope and project hint scenario correctly.
 func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}
-	message := validationRepairMessage(step, validationResult{Message: "missing required params.project_id"})
+	task := evalTask{Prompt: "Fetch project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.project_id"}, nil)
 	if !strings.Contains(message, `"action":"project.get"`) || !strings.Contains(message, "project_id") {
 		t.Fatalf("message = %q, want action envelope example", message)
+	}
+	if !strings.Contains(message, `"project_id":"my-org/tools/gitlab-mcp-server"`) {
+		t.Fatalf("message = %q, want concrete project_id value", message)
 	}
 	if !strings.Contains(message, "previous tool result") || !strings.Contains(message, "params.project_id") {
 		t.Fatalf("message = %q, want previous-result project_id hint", message)
@@ -1097,9 +1374,62 @@ func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing
 // TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm verifies that ValidationRepairMessage handles the destructive envelope includes confirm scenario correctly.
 func TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true}
-	message := validationRepairMessage(step, validationResult{Message: "destructive task requires params.confirm=true"})
+	task := evalTask{Prompt: "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "destructive task requires params.confirm=true"}, nil)
 	if !strings.Contains(message, `"confirm":true`) {
 		t.Fatalf("message = %q, want confirm inside retry envelope", message)
+	}
+}
+
+// TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint verifies
+// dynamic repair feedback steers models back to the current scenario step.
+func TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.settings_get"}
+	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "step 1: expected action admin.settings_get, got admin.broadcast_message_list", Action: "admin.broadcast_message_list"}, nil)
+	for _, want := range []string{
+		`"action":"admin.settings_get"`,
+		`"params":{}`,
+		"without gitlab_ prefixes",
+		"not the current scenario step",
+		"do not skip ahead",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
+	}
+}
+
+// TestValidationRepairMessage_UnknownParamsDropsCarriedFields verifies repair
+// feedback tells models to remove fields copied from previous workflow steps.
+func TestValidationRepairMessage_UnknownParamsDropsCarriedFields(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "feature_flags.feature_flag_create", RequiredParams: []string{"project_id", "name", "version"}}
+	task := evalTask{Prompt: "Create feature flag `eval_flag` in project `my-org/tools/gitlab-mcp-server` version `new_version_flag`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "unknown params for gitlab_execute_tool/feature_flags.feature_flag_create: user_list_iid"}, nil)
+	for _, want := range []string{
+		`"action":"feature_flags.feature_flag_create"`,
+		"Remove every unknown param",
+		"do not carry IDs from a previous action",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
+	}
+}
+
+// TestValidationRepairMessage_PreservesAttemptedRequiredParams verifies repair
+// examples keep IDs the model already copied from a prior tool result.
+func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.trigger_get", RequiredParams: []string{"project_id", "trigger_id"}}
+	task := evalTask{Prompt: "Fetch pipeline trigger using the returned trigger ID in project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.project_id"}, map[string]any{
+		"action": "pipeline.trigger_get",
+		"params": map[string]any{"trigger_id": 67},
+	})
+
+	for _, want := range []string{`"action":"pipeline.trigger_get"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"trigger_id":67`} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
 	}
 }
 
@@ -1549,6 +1879,36 @@ func TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters(t *testing.T) {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want runner filter guidance containing %q", prompt, want)
 		}
+	}
+}
+
+// TestFixtureSetupToolEnvelope_UsesDynamicExecuteTool verifies dynamic fixture setup uses the visible executor.
+func TestFixtureSetupToolEnvelope_UsesDynamicExecuteTool(t *testing.T) {
+	params := map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}
+
+	toolName, arguments := fixtureSetupToolEnvelope(config.ToolSurfaceDynamic, "gitlab", "branch.create", params)
+
+	if toolName != dynamicExecuteTool {
+		t.Fatalf("toolName = %q, want %q", toolName, dynamicExecuteTool)
+	}
+	gotParams, ok := arguments["params"].(map[string]any)
+	if arguments["action"] != "branch.create" || !ok || gotParams["project_id"] != params["project_id"] {
+		t.Fatalf("arguments = %#v, want dynamic action envelope", arguments)
+	}
+}
+
+// TestFixtureSetupToolEnvelope_KeepsMetaDispatcher verifies meta fixture setup keeps the dispatcher envelope.
+func TestFixtureSetupToolEnvelope_KeepsMetaDispatcher(t *testing.T) {
+	params := map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}
+
+	toolName, arguments := fixtureSetupToolEnvelope(config.ToolSurfaceMeta, "gitlab", "branch.create", params)
+
+	if toolName != "gitlab" {
+		t.Fatalf("toolName = %q, want gitlab", toolName)
+	}
+	gotParams, ok := arguments["params"].(map[string]any)
+	if arguments["action"] != "branch.create" || !ok || gotParams["project_id"] != params["project_id"] {
+		t.Fatalf("arguments = %#v, want meta action envelope", arguments)
 	}
 }
 
@@ -3210,7 +3570,7 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
-	err = callFixtureSetupTool(t.Context(), session, "branch.create", map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"})
+	err = callFixtureSetupTool(t.Context(), session, config.ToolSurfaceMeta, "branch.create", map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"})
 	if err != nil {
 		t.Fatalf("callFixtureSetupTool() error = %v", err)
 	}
@@ -3256,6 +3616,55 @@ func TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer(t *testing.T) {
 	}
 	if got := toolResultContent(result); !strings.Contains(got, "eval-meta-tools-sampling-mock") {
 		t.Fatalf("sampling result = %q, want evaluator sampling model", got)
+	}
+}
+
+// TestEvalElicitationHandler_AdvertisesElicitationToMCPServer verifies that the evaluator client can drive interactive tools.
+func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "elicitation-probe", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "elicitation_probe", Description: "elicitation probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+		params := req.Session.InitializeParams()
+		if params == nil || params.Capabilities.Elicitation == nil {
+			return nil, nil, errors.New("elicitation capability not advertised")
+		}
+		result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{
+			Message: "probe",
+			RequestedSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"title":     map[string]any{"type": "string"},
+					"confirmed": map[string]any{"type": "boolean"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		if result.Action != "accept" || result.Content["confirmed"] != true {
+			return nil, nil, fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(result.Content["title"])}}}, nil, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "elicitation-probe-client", Version: "0"}, &mcp.ClientOptions{
+		ElicitationHandler: evalElicitationHandler,
+	})
+	session, err := mcpClient.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "elicitation_probe", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if got := toolResultContent(result); !strings.Contains(got, "Evaluation elicitation test") {
+		t.Fatalf("elicitation result = %q, want evaluator title", got)
 	}
 }
 
@@ -3484,6 +3893,16 @@ func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 			t.Fatalf("trace events = %+v, want kind %s", result.Trace.Events, kind)
 		}
 	}
+	assistantEvent, ok := traceEventByKind(result.Trace, "assistant_message")
+	if !ok || assistantEvent.Provider == nil {
+		t.Fatalf("trace events = %+v, want assistant provider exchange", result.Trace.Events)
+	}
+	if !strings.Contains(string(assistantEvent.Provider.RequestBody), `"system"`) {
+		t.Fatalf("provider request = %s, want raw system prompt payload", assistantEvent.Provider.RequestBody)
+	}
+	if !strings.Contains(string(assistantEvent.Provider.ResponseBody), `"tool_use"`) {
+		t.Fatalf("provider response = %s, want raw model response", assistantEvent.Provider.ResponseBody)
+	}
 }
 
 // TestEvaluateTask_RepairsUnknownSchemaParam verifies that EvaluateTask handles the repairs unknown schema param scenario correctly.
@@ -3517,6 +3936,16 @@ func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T)
 	}
 	if !traceContainsToolResult(result.Trace, "MCP missing params.project_id") {
 		t.Fatalf("trace events = %+v, want real MCP error content", result.Trace.Events)
+	}
+	toolResultEvent, ok := traceEventByKind(result.Trace, "tool_result")
+	if !ok || toolResultEvent.MCP == nil {
+		t.Fatalf("trace events = %+v, want MCP exchange on tool result", result.Trace.Events)
+	}
+	if toolResultEvent.MCP.Request.Name != "gitlab_project" || !toolResultEvent.MCP.IsError {
+		t.Fatalf("MCP exchange = %+v, want gitlab_project error", toolResultEvent.MCP)
+	}
+	if !strings.Contains(string(toolResultEvent.MCP.Response), "MCP missing params.project_id") {
+		t.Fatalf("MCP response = %s, want complete tool result", toolResultEvent.MCP.Response)
 	}
 }
 
@@ -3566,6 +3995,40 @@ func TestCanExecuteInvalidToolCallSkipsUnknownParams(t *testing.T) {
 
 	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
 		t.Fatal("canExecuteInvalidToolCall() = true, want unknown params to receive exact repair guidance instead of MCP execution")
+	}
+}
+
+// TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls verifies malformed
+// dynamic envelopes receive evaluator repair feedback instead of repeated MCP
+// schema errors.
+func TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls(t *testing.T) {
+	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {"issue.create": toolutil.ActionRoute{}}}
+
+	tests := []struct {
+		name       string
+		validation validationResult
+		toolUse    modelContentBlock
+	}{
+		{
+			name:       "missing top-level params",
+			validation: validationResult{ToolMatches: true, ActionMatches: true, Action: "issue.create", RequiredPresent: false, DestructiveSafe: true, Message: `validating "arguments": validating root: required: missing properties: ["params"]`},
+			toolUse:    modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "issue.create"}},
+		},
+		{
+			name:       "missing nested required param",
+			validation: validationResult{ToolMatches: true, ActionMatches: true, Action: "issue.create", RequiredPresent: false, DestructiveSafe: true, Message: "missing required params.title"},
+			toolUse:    modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "issue.create", "params": map[string]any{"project_id": 1}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if runner.canExecuteInvalidToolCall(step, tt.validation, tt.toolUse, routes) {
+				t.Fatal("canExecuteInvalidToolCall() = true, want incomplete dynamic call to receive exact repair guidance")
+			}
+		})
 	}
 }
 
@@ -4238,6 +4701,16 @@ func traceHasKind(trace taskTrace, kind string) bool {
 		}
 	}
 	return false
+}
+
+// traceEventByKind returns the first trace event with the requested kind.
+func traceEventByKind(trace taskTrace, kind string) (traceEvent, bool) {
+	for _, event := range trace.Events {
+		if event.Kind == kind {
+			return event, true
+		}
+	}
+	return traceEvent{}, false
 }
 
 // traceContainsToolResult is an internal helper for the main package.

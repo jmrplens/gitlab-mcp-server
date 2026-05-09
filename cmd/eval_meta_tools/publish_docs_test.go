@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 // TestReadPublishReport_ParsesSingleModelReport verifies that ReadPublishReport handles the parses single model report scenario correctly.
@@ -22,6 +24,9 @@ func TestReadPublishReport_ParsesSingleModelReport(t *testing.T) {
 	row := report.Rows[0]
 	if row.Model != "openai:gpt-5.4-nano" || row.Preset != presetDockerRead || row.Backend != backendGitLab || row.ToolExecution != "mcp" {
 		t.Fatalf("row metadata = %+v", row)
+	}
+	if report.ToolSurface != config.ToolSurfaceMeta {
+		t.Fatalf("tool surface = %q, want meta", report.ToolSurface)
 	}
 	if row.Attempts != 2 || row.ExpectedOps != 3 || row.ModelRequests != 3 || row.ToolCalls != 3 {
 		t.Fatalf("row counts = %+v, want attempts=2 expected=3 requests=3 tools=3", row)
@@ -201,10 +206,10 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	}
 	resultsPath := filepath.Join(tmp, "model-results.md")
 	readmePath := filepath.Join(tmp, "README.md")
-	if err := os.WriteFile(resultsPath, []byte("# Results\n\n"+modelEvalResultsStart+"\n"+modelEvalResultsEnd+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(resultsPath, []byte("# Results\n\n"+modelEvalMetaResultsStart+"\n"+modelEvalMetaResultsEnd+"\n\n"+modelEvalDynamic3ResultsStart+"\nexisting dynamic\n"+modelEvalDynamic3ResultsEnd+"\n"), 0o600); err != nil {
 		t.Fatalf("write results doc: %v", err)
 	}
-	if err := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalSummaryStart+"\n"+modelEvalSummaryEnd+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalMetaSummaryStart+"\n"+modelEvalMetaSummaryEnd+"\n\n"+modelEvalDynamic3SummaryStart+"\nexisting dynamic summary\n"+modelEvalDynamic3SummaryEnd+"\n"), 0o600); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
 
@@ -229,6 +234,9 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if strings.Contains(string(results), "Source reports") || strings.Contains(string(results), reportPath) {
 		t.Fatalf("results doc leaked local report paths: %s", results)
 	}
+	if !strings.Contains(string(results), "existing dynamic") {
+		t.Fatalf("results doc did not preserve dynamic section: %s", results)
+	}
 	readme, err := os.ReadFile(readmePath)
 	if err != nil {
 		t.Fatalf("read readme: %v", err)
@@ -236,17 +244,82 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if !strings.Contains(string(readme), "| OpenAI | `gpt-5.4-nano` | OK | 100.0% | No repairs | 100.0% final across 41 ops |") {
 		t.Fatalf("readme = %s", readme)
 	}
+	if !strings.Contains(string(readme), "existing dynamic summary") {
+		t.Fatalf("readme did not preserve dynamic summary section: %s", readme)
+	}
 
 	opts.CheckDocs = true
 	opts.PublishDocs = false
 	if publishErr := publishEvaluationDocs(opts); publishErr != nil {
 		t.Fatalf("publishEvaluationDocs(check) error = %v", publishErr)
 	}
-	if writeErr := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalSummaryStart+"\nstale\n"+modelEvalSummaryEnd+"\n"), 0o600); writeErr != nil {
+	if writeErr := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalMetaSummaryStart+"\nstale\n"+modelEvalMetaSummaryEnd+"\n\n"+modelEvalDynamic3SummaryStart+"\nexisting dynamic summary\n"+modelEvalDynamic3SummaryEnd+"\n"), 0o600); writeErr != nil {
 		t.Fatalf("write stale readme: %v", writeErr)
 	}
 	if checkErr := publishEvaluationDocs(opts); checkErr == nil || !strings.Contains(checkErr.Error(), "not up to date") {
 		t.Fatalf("publishEvaluationDocs(stale check) error = %v, want not up to date", checkErr)
+	}
+}
+
+// TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection verifies that
+// dynamic reports update only the dynamic3 blocks while preserving meta-tool data.
+func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T) {
+	tmp := t.TempDir()
+	reportPath := filepath.Join(tmp, "dynamic-report.md")
+	if err := os.WriteFile(reportPath, []byte(dynamicSingleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 40)), 0o600); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+	resultsPath := filepath.Join(tmp, "model-results.md")
+	readmePath := filepath.Join(tmp, "README.md")
+	resultsDoc := "# Results\n\n" +
+		modelEvalMetaResultsStart + "\nexisting meta results\n" + modelEvalMetaResultsEnd + "\n\n" +
+		modelEvalDynamic3ResultsStart + "\n" + modelEvalDynamic3ResultsEnd + "\n"
+	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
+		t.Fatalf("write results doc: %v", err)
+	}
+	readmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\nexisting meta summary\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+
+	opts := options{
+		PublishDocs:    true,
+		PublishFrom:    stringList{reportPath},
+		PublishResults: resultsPath,
+		PublishReadme:  readmePath,
+		PublishLabel:   "2026-05-09 Dynamic OpenAI Docker full run",
+		PublishMode:    publishModeReplaceCurrent,
+	}
+	if err := publishEvaluationDocs(opts); err != nil {
+		t.Fatalf("publishEvaluationDocs(dynamic) error = %v", err)
+	}
+	results, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("read results: %v", err)
+	}
+	if !strings.Contains(string(results), "existing meta results") {
+		t.Fatalf("dynamic publish did not preserve meta results: %s", results)
+	}
+	if !strings.Contains(string(results), "### 2026-05-09 Dynamic OpenAI Docker full run") || !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read` | Docker GitLab via MCP | 40 | 41 | 41 | 41 |") {
+		t.Fatalf("dynamic results section was not updated: %s", results)
+	}
+	readme, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("read readme: %v", err)
+	}
+	if !strings.Contains(string(readme), "existing meta summary") {
+		t.Fatalf("dynamic publish did not preserve meta summary: %s", readme)
+	}
+	if !strings.Contains(string(readme), "Current published result: **2026-05-09 Dynamic OpenAI Docker full run**.") {
+		t.Fatalf("dynamic readme summary was not updated: %s", readme)
+	}
+
+	opts.CheckDocs = true
+	opts.PublishDocs = false
+	if checkErr := publishEvaluationDocs(opts); checkErr != nil {
+		t.Fatalf("publishEvaluationDocs(dynamic check) error = %v", checkErr)
 	}
 }
 
@@ -275,6 +348,9 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 
 	if got := dockerLiveStatus(publishModelSummary{DockerBacked: false}); got != "Not Docker-backed" {
 		t.Fatalf("dockerLiveStatus(non-docker) = %q", got)
+	}
+	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic2}); got != publishSectionDynamic3 {
+		t.Fatalf("publishSectionForReport(dynamic-2) = %q, want dynamic3", got)
 	}
 	if got := dockerBackendLabel(publishRow{}); got != "-" {
 		t.Fatalf("dockerBackendLabel(empty) = %q", got)
@@ -569,6 +645,7 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 		"Git commit: `8c696a2`\n" +
 		"Mode: model tool-calling\n" +
 		"Model: `" + model + "`\n" +
+		"Tool surface: `meta`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
@@ -597,12 +674,18 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 		rows.String()
 }
 
+// dynamicSingleModelPublishReport is an internal helper for the main package.
+func dynamicSingleModelPublishReport(model, preset string, attempts int) string {
+	return strings.Replace(singleModelPublishReport(model, preset, attempts), "Tool surface: `meta`\n", "Tool surface: `dynamic`\n", 1)
+}
+
 // multiModelPublishReport is an internal helper for the main package.
 func multiModelPublishReport() string {
 	return "# Meta-Tool Model Evaluation\n\n" +
 		"Date: 2026-05-05T18:00:00Z\n" +
 		"Mode: model tool-calling\n" +
 		"Model: `anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview`\n" +
+		"Tool surface: `meta`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `docker-read`\n" +
 		"Tool execution: `mcp`\n" +

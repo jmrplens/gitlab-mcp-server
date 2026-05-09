@@ -481,6 +481,23 @@ func TestDescribe_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+// TestRequiredParams_IncludesPreferredAlternative verifies that schemas using
+// anyOf still produce a useful example branch for search and describe output.
+func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id", "title"},
+		"anyOf": []any{
+			map[string]any{"required": []any{"file_name", "content"}},
+			map[string]any{"required": []any{"files"}},
+		},
+	}
+
+	got := strings.Join(requiredParams(schema), ",")
+	if got != "content,file_name,project_id,title" {
+		t.Fatalf("requiredParams() = %q", got)
+	}
+}
+
 // TestDescribe_CanonicalizesObservedModelAliases verifies aliases observed in
 // model output so dynamic execution remains tolerant of alternate naming.
 func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
@@ -532,6 +549,100 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 				t.Fatalf("Describe() output = %+v, want %s", output, want)
 			}
 		})
+	}
+}
+
+// TestDescribe_CanonicalizesProviderSpecificAliases verifies alternate action
+// IDs observed in provider output against the real action catalog.
+func TestDescribe_CanonicalizesProviderSpecificAliases(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := map[string]string{
+		"feature_flag_user_list.create":     "feature_flags.ff_user_list_create",
+		"feature_flag_user_list.delete":     "feature_flags.ff_user_list_delete",
+		"gitlab_issue.create":               "issue.create",
+		"gitlab_server.health_check":        "server.health_check",
+		"job.artifact_download":             "job.download_single_artifact",
+		"issue.link":                        "issue.link_create",
+		"repository_tree":                   "repository.tree",
+		"repository_file.get":               "repository.file_get",
+		"repository_file.read":              "repository.file_get",
+		"pipeline.schedule_variable_create": "pipeline.schedule_create_variable",
+		"project.badge_update":              "project.badge_edit",
+		"merge_request.time_spent_reset":    "merge_request.spent_time_reset",
+		"generic_package.list":              "package.list",
+		"issue_note.create":                 "issue.note_create",
+		"gitlab_interactive_issue.create":   "interactive.issue_create",
+	}
+
+	for alias, want := range tests {
+		t.Run(alias, func(t *testing.T) {
+			result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: alias})
+			if err != nil {
+				t.Fatalf("Describe() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Describe() result = %+v, want non-error", result)
+			}
+			if output.Count != 1 || output.Actions[0].ID != want {
+				t.Fatalf("Describe() output = %+v, want %s", output, want)
+			}
+		})
+	}
+}
+
+// TestDescribe_IncludesDisambiguationUsage verifies high-confusion actions carry
+// usage notes that distinguish adjacent GitLab APIs.
+func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := map[string]string{
+		"admin.settings_get":            "current instance/application settings",
+		"job.download_single_artifact":  "one artifact file path",
+		"package.list":                  "package registry packages",
+		"runner.remove":                 "numeric runner_id",
+		"repository.compare":            "params.from and params.to",
+		"analyze.release_notes":         "after requested release/compare",
+		"package.registry_list_project": "container registry image repositories",
+	}
+
+	for actionID, wantSubstring := range tests {
+		t.Run(actionID, func(t *testing.T) {
+			result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: actionID})
+			if err != nil {
+				t.Fatalf("Describe() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Describe() result = %+v, want non-error", result)
+			}
+			description := actionDescriptionByID(t, output, actionID)
+			if !strings.Contains(description.Usage, wantSubstring) {
+				t.Fatalf("usage = %q, want substring %q", description.Usage, wantSubstring)
+			}
+		})
+	}
+}
+
+// TestDescribe_JobSingleArtifactRequiresArtifactPath verifies the dynamic
+// schema exposes all values needed to download one artifact file.
+func TestDescribe_JobSingleArtifactRequiresArtifactPath(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "job.download_single_artifact"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	description := actionDescriptionByID(t, output, "job.download_single_artifact")
+	for _, required := range []string{"artifact_path", "job_id", "project_id"} {
+		if !slices.Contains(description.RequiredParams, required) {
+			t.Fatalf("required params = %v, want %s", description.RequiredParams, required)
+		}
+	}
+	if params, ok := description.Example.Arguments["params"].(map[string]any); !ok || params["artifact_path"] == nil {
+		t.Fatalf("example arguments = %#v, want artifact_path in params", description.Example.Arguments)
 	}
 }
 
@@ -598,6 +709,65 @@ func TestExecute_CanonicalizesAlias(t *testing.T) {
 	}
 	if data["action"] != "repository.file_get" {
 		t.Fatalf("action = %v, want repository.file_get", data["action"])
+	}
+}
+
+// TestExecute_NormalizesActionScopedParameterAliases verifies dynamic execute
+// accepts ambiguous model aliases only for actions where the schema is clear.
+func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	tests := []struct {
+		name   string
+		input  ExecuteInput
+		assert func(t *testing.T, output any)
+	}{
+		{
+			name:  "job status to scope",
+			input: ExecuteInput{Action: "job.list", Params: map[string]any{"project_id": 123, "pipeline_id": 456, "status": "failed"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["scope"] != "failed" {
+					t.Fatalf("output = %#v, want scope failed", output)
+				}
+			},
+		},
+		{
+			name:  "repository branch to ref",
+			input: ExecuteInput{Action: "repository.file_get", Params: map[string]any{"project_id": 123, "file_path": "README.md", "branch": "main"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["ref"] != "main" {
+					t.Fatalf("output = %#v, want ref main", output)
+				}
+			},
+		},
+		{
+			name:  "project member role to numeric access level",
+			input: ExecuteInput{Action: "project.member_add", Params: map[string]any{"project_id": 123, "user_id": 5, "access_level": "Reporter"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["access_level"] != 20 {
+					t.Fatalf("output = %#v, want access_level 20", output)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Execute(t.Context(), nil, tt.input)
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Execute() result = %+v, want non-error", result)
+			}
+			tt.assert(t, output)
+		})
 	}
 }
 
@@ -733,6 +903,11 @@ func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	if len(tools.Tools) != 3 {
 		t.Fatalf("tool count = %d, want 3", len(tools.Tools))
 	}
+	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_tool")
+	if !slices.Contains(schemaRequired(executeSchema), "params") {
+		t.Fatalf("gitlab_execute_tool required = %v, want params", schemaRequired(executeSchema))
+	}
+	assertSchemaHasProperties(t, executeSchema, "action", "params", "confirm")
 }
 
 // TestSearch_PartialMatchLongQuery verifies that incidental query terms do not
@@ -861,6 +1036,40 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 		{name: "group audit events alias", query: "group audit events", want: []string{"audit_event.list_group"}},
 		{name: "mixed webhook and repository", query: "webhook create repository file read", limit: 10, want: []string{"project.hook_add", "repository.file_get"}},
 		{name: "mixed deploy key and package", query: "deploy key create package delete", limit: 10, want: []string{"access.deploy_key_add", "package.delete"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: tt.limit})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want...)
+		})
+	}
+}
+
+// TestSearch_ProviderConfusionQueries_ReturnExpectedActions locks in the
+// production catalog ranking for phrases that confused evaluated models.
+func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name  string
+		query string
+		limit int
+		want  []string
+	}{
+		{name: "single artifact by numeric job", query: "download coverage/report.xml single artifact file from numeric job id", want: []string{"job.download_single_artifact"}},
+		{name: "current instance settings", query: "read current instance settings before creating broadcast message", want: []string{"admin.settings_get"}},
+		{name: "release cleanup first steps", query: "verify tag release asset links before deleting release and tag", limit: 8, want: []string{"tag.get", "release.get", "release.link_list"}},
+		{name: "compare refs before release notes", query: "list releases compare refs from v1.0.0 to main then generate release notes", limit: 8, want: []string{"release.list", "repository.compare", "analyze.release_notes"}},
+		{name: "generic package list", query: "list package registry packages", want: []string{"package.list"}},
+		{name: "runner removal by id", query: "remove runner by numeric runner_id", want: []string{"runner.remove"}},
+		{name: "issue time tracking sequence", query: "issue time tracking set estimate add spent time reset spent time reset estimate", limit: 8, want: []string{"issue.time_estimate_set", "issue.spent_time_add", "issue.spent_time_reset", "issue.time_estimate_reset"}},
 	}
 
 	for _, tt := range tests {
@@ -1022,6 +1231,42 @@ func schemaProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
+func schemaRequired(schema map[string]any) []string {
+	var required []string
+	switch values := schema["required"].(type) {
+	case []any:
+		for _, value := range values {
+			if name, ok := value.(string); ok {
+				required = append(required, name)
+			}
+		}
+	case []string:
+		required = append(required, values...)
+	}
+	slices.Sort(required)
+	return required
+}
+
+func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[string]any {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		data, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s input schema: %v", name, err)
+		}
+		var schema map[string]any
+		if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+			t.Fatalf("unmarshal %s input schema: %v", name, unmarshalErr)
+		}
+		return schema
+	}
+	t.Fatalf("tool %s not listed", name)
+	return nil
+}
+
 func sortedPropertyNames(properties map[string]any) []string {
 	names := make([]string, 0, len(properties))
 	for name := range properties {
@@ -1066,8 +1311,31 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 			"member_edit": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"member": "edited"}, nil
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"member": "edited", "access_level": params["access_level"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "user_id", "access_level"},
+					"properties": map[string]any{
+						"project_id":   map[string]any{"type": "integer"},
+						"user_id":      map[string]any{"type": "integer"},
+						"access_level": map[string]any{"type": "integer"},
+					},
+				},
+			},
+			"member_add": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"member": "added", "access_level": params["access_level"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "user_id", "access_level"},
+					"properties": map[string]any{
+						"project_id":   map[string]any{"type": "integer"},
+						"user_id":      map[string]any{"type": "integer"},
+						"access_level": map[string]any{"type": "integer"},
+					},
 				},
 			},
 			"member_delete": {
@@ -1180,7 +1448,7 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 		"gitlab_repository": {
 			"file_get": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"action": "repository.file_get", "file_path": params["file_path"]}, nil
+					return map[string]any{"action": "repository.file_get", "file_path": params["file_path"], "ref": params["ref"]}, nil
 				},
 				InputSchema: map[string]any{
 					"type":     "object",
@@ -1278,8 +1546,16 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 		},
 		"gitlab_job": {
 			"list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"jobs": true}, nil
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"jobs": true, "scope": params["scope"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"pipeline_id": map[string]any{"type": "integer"},
+						"scope":       map[string]any{"type": "string"},
+					},
 				},
 			},
 			"token_scope_list_inbound": {

@@ -190,6 +190,7 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("marshal anthropic request: %w", err)
 	}
+	trace := newModelProviderTrace("anthropic", http.MethodPost, anthropicAPI, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPI, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new anthropic request: %w", err)
@@ -199,16 +200,18 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	req.Header.Set("anthropic-version", anthropicVersion)
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 
-	respBody, retry, err := doModelRequest(client, req, "anthropic")
+	respBody, status, retry, err := doModelRequest(client, req, "anthropic")
+	trace.setResponse(status, respBody)
 	if err != nil {
-		return modelResponse{}, retry, err
+		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
 	var out modelResponse
 	if decodeErr := json.Unmarshal(respBody, &out); decodeErr != nil {
-		return modelResponse{}, false, fmt.Errorf("decode anthropic response: %w", decodeErr)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("decode anthropic response: %w", decodeErr), trace)
 	}
+	out.ProviderTrace = trace
 	if out.Error != nil {
-		return modelResponse{}, false, fmt.Errorf("anthropic error %s: %s", out.Error.Type, out.Error.Message)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("anthropic error %s: %s", out.Error.Type, out.Error.Message), trace)
 	}
 	return out, false, nil
 }
@@ -244,6 +247,7 @@ type openAIFunction struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Parameters  any    `json:"parameters"`
+	Strict      *bool  `json:"strict,omitempty"`
 }
 
 // openAIMessage holds data for main operations.
@@ -304,6 +308,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("marshal %s request: %w", p.name, err)
 	}
+	trace := newModelProviderTrace(p.name, http.MethodPost, p.endpoint, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new %s request: %w", p.name, err)
@@ -311,23 +316,24 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	respBody, retry, err := doModelRequest(client, req, p.name)
+	respBody, status, retry, err := doModelRequest(client, req, p.name)
+	trace.setResponse(status, respBody)
 	if err != nil {
-		return modelResponse{}, retry, err
+		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
 	var decoded openAIResponse
 	if decodeErr := json.Unmarshal(respBody, &decoded); decodeErr != nil {
-		return modelResponse{}, false, fmt.Errorf("decode %s response: %w", p.name, decodeErr)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("decode %s response: %w", p.name, decodeErr), trace)
 	}
 	if decoded.Error != nil {
-		return modelResponse{}, false, fmt.Errorf("%s error %s: %s", p.name, decoded.Error.Type, decoded.Error.Message)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("%s error %s: %s", p.name, decoded.Error.Type, decoded.Error.Message), trace)
 	}
 	if len(decoded.Choices) == 0 {
-		return modelResponse{}, false, fmt.Errorf("%s response contained no choices", p.name)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("%s response contained no choices", p.name), trace)
 	}
 	blocks, err := openAIToolUseBlocks(decoded.Choices[0].Message)
 	if err != nil {
-		return modelResponse{}, true, err
+		return modelResponse{}, true, withProviderTrace(err, trace)
 	}
 	return modelResponse{
 		Content: blocks,
@@ -335,6 +341,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 			InputTokens:  decoded.Usage.PromptTokens,
 			OutputTokens: decoded.Usage.CompletionTokens,
 		},
+		ProviderTrace: trace,
 	}, false, nil
 }
 
@@ -342,9 +349,129 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 func openAITools(tools []modelTool) []openAITool {
 	out := make([]openAITool, 0, len(tools))
 	for _, tool := range tools {
-		out = append(out, openAITool{Type: "function", Function: openAIFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
+		function := openAIFunction{Name: tool.Name, Description: tool.Description, Parameters: openAIToolSchema(tool)}
+		out = append(out, openAITool{Type: "function", Function: function})
 	}
 	return out
+}
+
+func openAIToolSchema(tool modelTool) any {
+	schema, ok := tool.InputSchema.(map[string]any)
+	if !ok || tool.Name != dynamicExecuteTool {
+		return tool.InputSchema
+	}
+	updated := cloneOpenAISchema(schema)
+	updated["required"] = requiredWithNames(updated["required"], "action", "params")
+	updated["additionalProperties"] = false
+	addOpenAIExecuteParamHints(updated)
+	return updated
+}
+
+func cloneOpenAISchema(schema map[string]any) map[string]any {
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return map[string]any{}
+	}
+	var cloned map[string]any
+	if unmarshalErr := json.Unmarshal(data, &cloned); unmarshalErr != nil {
+		return map[string]any{}
+	}
+	return cloned
+}
+
+func addOpenAIExecuteParamHints(schema map[string]any) {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		properties = map[string]any{}
+		schema["properties"] = properties
+	}
+	paramsSchema, ok := properties["params"].(map[string]any)
+	if !ok {
+		paramsSchema = map[string]any{"type": "object"}
+		properties["params"] = paramsSchema
+	}
+	paramsSchema["type"] = "object"
+	paramsSchema["additionalProperties"] = true
+	paramProperties, ok := paramsSchema["properties"].(map[string]any)
+	if !ok {
+		paramProperties = map[string]any{}
+		paramsSchema["properties"] = paramProperties
+	}
+	for name, paramSchema := range openAICommonExecuteParams() {
+		if _, exists := paramProperties[name]; !exists {
+			paramProperties[name] = paramSchema
+		}
+	}
+}
+
+func openAICommonExecuteParams() map[string]any {
+	stringParam := map[string]any{"type": "string"}
+	integerParam := map[string]any{"type": "integer"}
+	booleanParam := map[string]any{"type": "boolean"}
+	return map[string]any{
+		"project_id":              stringParam,
+		"group_id":                stringParam,
+		"full_path":               stringParam,
+		"file_path":               stringParam,
+		"branch":                  stringParam,
+		"branch_name":             stringParam,
+		"ref":                     stringParam,
+		"content":                 stringParam,
+		"commit_message":          stringParam,
+		"tag_name":                stringParam,
+		"name":                    stringParam,
+		"key":                     stringParam,
+		"value":                   stringParam,
+		"environment_scope":       stringParam,
+		"slug":                    stringParam,
+		"duration":                stringParam,
+		"scope":                   stringParam,
+		"artifact_path":           stringParam,
+		"commit_sha":              stringParam,
+		"discussion_id":           stringParam,
+		"runner_id":               integerParam,
+		"job_id":                  integerParam,
+		"pipeline_id":             integerParam,
+		"trigger_id":              integerParam,
+		"schedule_id":             integerParam,
+		"user_id":                 integerParam,
+		"issue_iid":               integerParam,
+		"merge_request_iid":       integerParam,
+		"award_id":                integerParam,
+		"deploy_key_id":           integerParam,
+		"deploy_token_id":         integerParam,
+		"package_id":              integerParam,
+		"note_id":                 integerParam,
+		"enable_ssl_verification": booleanParam,
+	}
+}
+
+func requiredWithNames(raw any, names ...string) []string {
+	seen := map[string]bool{}
+	var required []string
+	appendName := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		required = append(required, name)
+	}
+	switch values := raw.(type) {
+	case []any:
+		for _, value := range values {
+			if name, ok := value.(string); ok {
+				appendName(name)
+			}
+		}
+	case []string:
+		for _, name := range values {
+			appendName(name)
+		}
+	}
+	for _, name := range names {
+		appendName(name)
+	}
+	return required
 }
 
 // openAIMessages is an internal helper for the main package.
@@ -590,6 +717,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 		return modelResponse{}, false, fmt.Errorf("marshal google request: %w", err)
 	}
 	endpoint := geminiAPIBase + url.PathEscape(request.Model) + ":generateContent"
+	trace := newModelProviderTrace("google", http.MethodPost, endpoint, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new google request: %w", err)
@@ -597,23 +725,24 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set(headerGoogleAuth, apiKey)
 
-	respBody, retry, err := doModelRequest(client, req, "google")
+	respBody, status, retry, err := doModelRequest(client, req, "google")
+	trace.setResponse(status, respBody)
 	if err != nil {
-		return modelResponse{}, retry, err
+		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
 	var decoded googleResponse
 	if decodeErr := json.Unmarshal(respBody, &decoded); decodeErr != nil {
-		return modelResponse{}, false, fmt.Errorf("decode google response: %w", decodeErr)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("decode google response: %w", decodeErr), trace)
 	}
 	if decoded.Error != nil {
-		return modelResponse{}, false, fmt.Errorf("google error %s: %s", decoded.Error.Status, decoded.Error.Message)
+		return modelResponse{}, false, withProviderTrace(fmt.Errorf("google error %s: %s", decoded.Error.Status, decoded.Error.Message), trace)
 	}
 	if len(decoded.Candidates) == 0 {
-		return modelResponse{}, true, googleEmptyResponseError(decoded, "no candidates")
+		return modelResponse{}, true, withProviderTrace(googleEmptyResponseError(decoded, "no candidates"), trace)
 	}
 	blocks := googleContentBlocks(decoded.Candidates[0].Content)
 	if len(blocks) == 0 && decoded.UsageMetadata.CandidatesTokenCount == 0 {
-		return modelResponse{}, true, googleEmptyResponseError(decoded, "no tool calls or output tokens")
+		return modelResponse{}, true, withProviderTrace(googleEmptyResponseError(decoded, "no tool calls or output tokens"), trace)
 	}
 	return modelResponse{
 		Content: blocks,
@@ -621,6 +750,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 			InputTokens:  decoded.UsageMetadata.PromptTokenCount,
 			OutputTokens: decoded.UsageMetadata.CandidatesTokenCount,
 		},
+		ProviderTrace: trace,
 	}, false, nil
 }
 
@@ -813,25 +943,59 @@ func sanitizeGoogleSchemaType(value any) any {
 }
 
 // doModelRequest is an internal helper for the main package.
-func doModelRequest(client *http.Client, req *http.Request, provider string) (body []byte, retry bool, err error) {
+func doModelRequest(client *http.Client, req *http.Request, provider string) (body []byte, status int, retry bool, err error) {
 	resp, err := client.Do(req) // #nosec G704 -- provider URLs come from explicit evaluator configuration, not model-generated input.
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || req.Context().Err() != nil {
-			return nil, false, fmt.Errorf("%s request: %w", provider, err)
+			return nil, 0, false, fmt.Errorf("%s request: %w", provider, err)
 		}
-		return nil, true, fmt.Errorf("%s request: %w", provider, err)
+		return nil, 0, true, fmt.Errorf("%s request: %w", provider, err)
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return nil, true, fmt.Errorf("read %s response: %w", provider, err)
+		return nil, resp.StatusCode, true, fmt.Errorf("read %s response: %w", provider, err)
 	}
 	if len(respBody) > maxResponseBytes {
-		return nil, false, fmt.Errorf("%s response exceeded %d bytes", provider, maxResponseBytes)
+		return respBody, resp.StatusCode, false, fmt.Errorf("%s response exceeded %d bytes", provider, maxResponseBytes)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		retry = resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return nil, retry, fmt.Errorf("%s status %d: %s", provider, resp.StatusCode, redactResponse(respBody))
+		return respBody, resp.StatusCode, retry, fmt.Errorf("%s status %d: %s", provider, resp.StatusCode, redactResponse(respBody))
 	}
-	return respBody, false, nil
+	return respBody, resp.StatusCode, false, nil
+}
+
+// newModelProviderTrace records a provider request body without request headers.
+func newModelProviderTrace(provider, method, endpoint string, requestBody []byte) *modelProviderTrace {
+	trace := &modelProviderTrace{Provider: provider, Method: method, Endpoint: endpoint}
+	if len(bytes.TrimSpace(requestBody)) > 0 {
+		trace.RequestBody = append(json.RawMessage(nil), requestBody...)
+	}
+	return trace
+}
+
+// setResponse records the provider response body in JSON form when possible.
+func (t *modelProviderTrace) setResponse(status int, body []byte) {
+	if t == nil {
+		return
+	}
+	t.ResponseStatus = status
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return
+	}
+	if json.Valid(trimmed) {
+		t.ResponseBody = append(json.RawMessage(nil), trimmed...)
+		return
+	}
+	t.ResponseBodyText = string(body)
+}
+
+// withProviderTrace attaches provider exchange details to an error.
+func withProviderTrace(err error, trace *modelProviderTrace) error {
+	if err == nil || trace == nil {
+		return err
+	}
+	return &modelProviderCallError{err: err, Trace: trace}
 }

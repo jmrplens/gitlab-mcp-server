@@ -154,8 +154,10 @@ func TestProjectCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
-		ProjectID: toolutil.StringOrInt("10"),
-		Title:     "Test Snippet",
+		ProjectID:   toolutil.StringOrInt("10"),
+		Title:       "Test Snippet",
+		FileName:    "test.go",
+		ContentBody: "package main",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -176,6 +178,20 @@ func TestProjectCreate_MissingParams(t *testing.T) {
 	_, err = ProjectCreate(context.Background(), client, ProjectCreateInput{ProjectID: toolutil.StringOrInt("10")})
 	if err == nil || !strings.Contains(err.Error(), "title is required") {
 		t.Fatalf("expected title required error, got %v", err)
+	}
+}
+
+// TestProjectCreate_MissingContent verifies that project create validates file
+// content before calling GitLab.
+func TestProjectCreate_MissingContent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+		ProjectID: toolutil.StringOrInt("10"),
+		Title:     "Test Snippet",
+		FileName:  "test.go",
+	})
+	if err == nil || !strings.Contains(err.Error(), "content is required") {
+		t.Fatalf("expected content required error, got %v", err)
 	}
 }
 
@@ -375,7 +391,7 @@ func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
-	_, err := Create(context.Background(), client, CreateInput{Title: "t"})
+	_, err := Create(context.Background(), client, CreateInput{Title: "t", FileName: "f.txt", ContentBody: "hello"})
 	if err == nil {
 		t.Fatal(errExpected)
 	}
@@ -547,7 +563,7 @@ func TestProjectCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
-	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{ProjectID: "42", Title: "t"})
+	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{ProjectID: "42", Title: "t", FileName: "f.txt", ContentBody: "hello"})
 	if err == nil {
 		t.Fatal(errExpected)
 	}
@@ -833,14 +849,14 @@ func TestMCPRoundTrip_AllSnippetTools(t *testing.T) {
 		{"gitlab_snippet_get", map[string]any{"snippet_id": float64(1)}},
 		{"gitlab_snippet_content", map[string]any{"snippet_id": float64(1)}},
 		{"gitlab_snippet_file_content", map[string]any{"snippet_id": float64(1), "ref": "main", "file_name": "f"}},
-		{"gitlab_snippet_create", map[string]any{"title": "t"}},
+		{"gitlab_snippet_create", map[string]any{"title": "t", "file_name": "f.txt", "content": "hello"}},
 		{"gitlab_snippet_update", map[string]any{"snippet_id": float64(1), "title": "t"}},
 		{"gitlab_snippet_delete", map[string]any{"snippet_id": float64(1)}},
 		{"gitlab_snippet_explore", map[string]any{}},
 		{"gitlab_project_snippet_list", map[string]any{"project_id": "42"}},
 		{"gitlab_project_snippet_get", map[string]any{"project_id": "42", "snippet_id": float64(1)}},
 		{"gitlab_project_snippet_content", map[string]any{"project_id": "42", "snippet_id": float64(1)}},
-		{"gitlab_project_snippet_create", map[string]any{"project_id": "42", "title": "t"}},
+		{"gitlab_project_snippet_create", map[string]any{"project_id": "42", "title": "t", "file_name": "f.txt", "content": "hello"}},
 		{"gitlab_project_snippet_update", map[string]any{"project_id": "42", "snippet_id": float64(1), "title": "t"}},
 		{"gitlab_project_snippet_delete", map[string]any{"project_id": "42", "snippet_id": float64(1)}},
 	}

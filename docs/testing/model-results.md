@@ -1,11 +1,13 @@
 # AI Model Evaluation Results
 
-This document publishes only the current model-evaluation result selected with
-`cmd/eval_meta_tools --publish-docs`. Raw reports and traces are not committed.
+This document publishes the current model-evaluation results selected with
+`cmd/eval_meta_tools --publish-docs`. Meta-tools and Dynamic 3-tool results are
+kept in separate managed sections so publishing one surface does not replace the
+other. Raw reports and traces are not committed.
 
-## Current Result
+## Meta-Tools Result
 
-<!-- START MODEL EVAL RESULTS -->
+<!-- START MODEL EVAL META RESULTS -->
 ### 2026-05-05 Full Docker Economy Run
 
 | Model | Preset | Backend | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation | Repair success | Destructive safety | Final task success | Cost/tokens | Commit / branch / date |
@@ -24,4 +26,20 @@ This document publishes only the current model-evaluation result selected with
 | **Aggregate** | **all selected** | - | **419** | **804** | **809** | **809** | **100.0%** | **100.0%** | **99.8%** | **60.0% (3/5)** | **100.0%** | **100.0%** | - | - |
 
 Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
-<!-- END MODEL EVAL RESULTS -->
+<!-- END MODEL EVAL META RESULTS -->
+
+## Dynamic 3-Tool Result
+
+<!-- START MODEL EVAL DYNAMIC3 RESULTS -->
+### Dynamic 3-tool all-provider Docker run 2026-05-09
+
+| Model | Preset | Backend | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation | Repair success | Destructive safety | Final task success | Cost/tokens | Commit / branch / date |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| `anthropic:claude-haiku-4-5-20251001` | `-` | Docker GitLab via MCP | 128 | 256 | 301 | 301 | 100.0% | 100.0% | 100.0% | 44.4% (4/9) | 100.0% | 100.0% | in 886412 / out 27952 | 65fcba4c047d / feature/dynamic-toolset-low-token / 2026-05-09T16:15:48Z |
+| `google:gemini-3.1-flash-lite-preview` | `-` | Docker GitLab via MCP | 128 | 256 | 292 | 292 | 100.0% | 100.0% | 100.0% | 8.3% (1/12) | 100.0% | 100.0% | in 1122539 / out 16543 | 65fcba4c047d / feature/dynamic-toolset-low-token / 2026-05-09T16:15:48Z |
+| `openai:gpt-5.4-nano` | `-` | Docker GitLab via MCP | 128 | 256 | 337 | 337 | 100.0% | 100.0% | 100.0% | 44.4% (12/27) | 100.0% | 100.0% | in 983746 / out 15300 | 65fcba4c047d / feature/dynamic-toolset-low-token / 2026-05-09T16:15:48Z |
+| `qwen:qwen3.6-flash` | `-` | Docker GitLab via MCP | 128 | 256 | 467 | 467 | 100.0% | 100.0% | 100.0% | 25.0% (1/4) | 100.0% | 100.0% | in 1830194 / out 23919 | 65fcba4c047d / feature/dynamic-toolset-low-token / 2026-05-09T16:15:48Z |
+| **Aggregate** | **all selected** | - | **512** | **1024** | **1397** | **1397** | **100.0%** | **100.0%** | **100.0%** | **34.6% (18/52)** | **100.0%** | **100.0%** | - | - |
+
+Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
+<!-- END MODEL EVAL DYNAMIC3 RESULTS -->

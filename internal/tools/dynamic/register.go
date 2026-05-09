@@ -41,6 +41,7 @@ type SearchResult struct {
 	SchemaURI      string   `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool     `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
 	RequiredParams []string `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the action input schema."`
+	Usage          string   `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	Score          int      `json:"score" jsonschema:"Lexical relevance score for the query."`
 }
 
@@ -72,6 +73,7 @@ type ActionDescription struct {
 	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	Usage          string         `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	InputSchema    map[string]any `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
 	OutputSchema   map[string]any `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
 	Example        ActionExample  `json:"example" jsonschema:"Example gitlab_execute_tool call."`
@@ -98,6 +100,7 @@ type FindResult struct {
 	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	Usage          string         `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	Score          int            `json:"score" jsonschema:"Lexical relevance score for the query."`
 	InputSchema    map[string]any `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
 	OutputSchema   map[string]any `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
@@ -114,7 +117,7 @@ type FindOutput struct {
 // ExecuteInput is the input for gitlab_execute_tool.
 type ExecuteInput struct {
 	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_search_tools, gitlab_describe_tools, or gitlab_find_action, such as project.list."`
-	Params  map[string]any `json:"params,omitempty" jsonschema:"Action-specific parameters validated by the selected action schema."`
+	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
 	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set true to explicitly confirm destructive actions."`
 }
 
@@ -202,7 +205,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
+		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: toolutil.BoolPtr(true),
@@ -309,6 +312,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 			SchemaURI:      entry.SchemaURI,
 			Destructive:    entry.Destructive,
 			RequiredParams: append([]string(nil), entry.RequiredParams...),
+			Usage:          usageHintForEntry(entry),
 			Score:          match.score,
 		})
 	}
@@ -356,6 +360,7 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 			SchemaURI:      description.SchemaURI,
 			Destructive:    description.Destructive,
 			RequiredParams: append([]string(nil), description.RequiredParams...),
+			Usage:          description.Usage,
 			Score:          match.score,
 			InputSchema:    description.InputSchema,
 			OutputSchema:   description.OutputSchema,
@@ -383,6 +388,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		params = map[string]any{}
 	}
 	params = toolutil.NormalizeParamAliasesForSchema(params, entry.Route.InputSchema)
+	params = normalizeActionScopedParams(entry.ID, params, entry.Route.InputSchema)
 	if input.Confirm {
 		params["confirm"] = true
 	}
@@ -392,6 +398,83 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 
 	handler := r.handlers[entry.Tool]
 	return handler(ctx, req, toolutil.MetaToolInput{Action: entry.Action, Params: params})
+}
+
+func normalizeActionScopedParams(actionID string, params, schema map[string]any) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := actionSchemaProperties(schema)
+	if len(fields) == 0 {
+		return params
+	}
+	out := params
+	cloned := false
+	clone := func() map[string]any {
+		if !cloned {
+			out = maps.Clone(params)
+			cloned = true
+		}
+		return out
+	}
+	accepts := func(name string) bool {
+		_, ok := fields[name]
+		return ok
+	}
+	switch actionID {
+	case "job.list":
+		if value, ok := out["status"]; ok && accepts("scope") && !accepts("status") {
+			if _, hasScope := out["scope"]; !hasScope {
+				updated := clone()
+				updated["scope"] = value
+				delete(updated, "status")
+			}
+		}
+	case "repository.file_get":
+		if value, ok := out["branch"]; ok && accepts("ref") && !accepts("branch") {
+			if _, hasRef := out["ref"]; !hasRef {
+				updated := clone()
+				updated["ref"] = value
+				delete(updated, "branch")
+			}
+		}
+	case "project.member_add", "project.member_edit":
+		if value, ok := out["access_level"]; ok && accepts("access_level") {
+			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
+				clone()["access_level"] = accessLevel
+			}
+		}
+	}
+	return out
+}
+
+func actionSchemaProperties(schema map[string]any) map[string]any {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return properties
+}
+
+func gitlabAccessLevelValue(value any) (int, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return 0, false
+	}
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "guest":
+		return 10, true
+	case "reporter":
+		return 20, true
+	case "developer":
+		return 30, true
+	case "maintainer":
+		return 40, true
+	case "owner":
+		return 50, true
+	default:
+		return 0, false
+	}
 }
 
 func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnnotations {
@@ -406,6 +489,9 @@ func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnno
 func buildSearchText(id, tool, domain, action string, aliases, tags []string, schema map[string]any) string {
 	parts := []string{id, strings.ReplaceAll(id, ".", " "), tool, domain, strings.ReplaceAll(domain, "_", " "), action, strings.ReplaceAll(action, "_", " ")}
 	for _, alias := range aliases {
+		if hideAliasFromSearchText(alias) {
+			continue
+		}
 		parts = append(parts, alias, strings.ReplaceAll(alias, ".", " "), strings.ReplaceAll(alias, "_", " "))
 	}
 	parts = append(parts, tags...)
@@ -416,6 +502,10 @@ func buildSearchText(id, tool, domain, action string, aliases, tags []string, sc
 		}
 	}
 	return strings.ToLower(strings.Join(parts, " "))
+}
+
+func hideAliasFromSearchText(alias string) bool {
+	return alias == "repository_tree"
 }
 
 type searchTerm struct {
@@ -478,6 +568,7 @@ func searchSynonyms() map[string][]string {
 		"approve":    {"approval", "review", "feedback"},
 		"approved":   {"approval", "review", "approved"},
 		"artifact":   {"job", "download"},
+		"archive":    {"artifacts", "download"},
 		"assigned":   {"assignee", "assignee_username", "assignee_id", "list"},
 		"assignee":   {"assigned", "assign", "delegate", "list"},
 		"author":     {"creator", "created_by", "owner", "list"},
@@ -485,7 +576,7 @@ func searchSynonyms() map[string][]string {
 		"ci":         {"pipeline", "job", "variable", "lint"},
 		"closed":     {"close", "list", "filter"},
 		"comment":    {"note", "discussion", "reply"},
-		"current":    {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username"},
+		"current":    {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
 		"deploy":     {"deployment", "environment", "key"},
 		"deployment": {"deploy", "environment"},
 		"details":    {"get"},
@@ -497,7 +588,7 @@ func searchSynonyms() map[string][]string {
 		"info":       {"get"},
 		"label":      {"tag", "category", "list"},
 		"merged":     {"merge", "integrated", "list"},
-		"metadata":   {"get", "details"},
+		"metadata":   {"get", "details", "settings"},
 		"me":         {"author", "author_username", "assignee", "assignee_username", "current_user", "self", "list"},
 		"milestone":  {"sprint", "release", "deadline", "list"},
 		"mine":       {"my", "owned", "owner", "author", "list"},
@@ -507,7 +598,8 @@ func searchSynonyms() map[string][]string {
 		"open":       {"active", "unresolved", "status_open", "list"},
 		"owned":      {"my", "personal", "mine", "owner", "list"},
 		"pending":    {"list", "filter", "todo"},
-		"read":       {"get", "file", "content"},
+		"read":       {"get", "file", "content", "settings"},
+		"refs":       {"ref", "branch", "tag", "compare"},
 		"review":     {"approval", "feedback", "assessment"},
 		"repo":       {"repository", "file", "tree", "branch", "tag"},
 		"secret":     {"variable", "ci_variable", "token", "password"},
@@ -516,7 +608,7 @@ func searchSynonyms() map[string][]string {
 		"unresolved": {"open", "active", "list"},
 		"user":       {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 		"users":      {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
-		"verify":     {"get"},
+		"verify":     {"get", "exists"},
 		"webhook":    {"hook"},
 		"webhooks":   {"hook"},
 		"yaml":       {"ci", "lint", "template"},
@@ -530,7 +622,7 @@ func verbSynonyms() map[string][]string {
 		"cancel":    {"stop"},
 		"close":     {"update", "state_event", "closed"},
 		"disable":   {"delete", "remove", "stop"},
-		"download":  {"artifact", "trace", "raw", "content"},
+		"download":  {"artifact", "trace", "raw", "content", "single"},
 		"destroy":   {"delete", "remove"},
 		"enable":    {"add", "create", "register"},
 		"lock":      {"protect"},
@@ -575,8 +667,73 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		add("env", "deployment")
 	case domain == "job":
 		add("ci job", "pipeline job")
+		switch action {
+		case "download_single_artifact":
+			add("single artifact", "single file artifact", "artifact path", "artifact_path", "numeric job id", "job_id", "coverage report", "coverage/report.xml")
+		case "artifacts":
+			add("whole artifact archive", "archive by job id", "job_id")
+		case "download_artifacts":
+			add("whole artifact archive", "archive by ref", "ref_name", "job name")
+		case "download_single_artifact_by_ref":
+			add("single artifact", "single file artifact", "artifact_path", "ref_name", "job name")
+		}
 	case domain == "pipeline":
 		add("ci pipeline")
+	case domain == "admin":
+		switch action {
+		case "settings_get":
+			add("instance settings", "application settings", "current instance settings", "read settings", "settings get")
+		case "broadcast_message_list":
+			add("broadcast messages", "existing broadcast messages", "message list")
+		case "broadcast_message_create":
+			add("create broadcast message", "maintenance banner", "broadcast banner")
+		case "broadcast_message_delete":
+			add("delete broadcast message", "remove maintenance banner")
+		}
+	case domain == "tag":
+		if action == "get" {
+			add("verify tag", "tag exists", "tag lookup", "release cleanup first step")
+		}
+	case domain == "release":
+		switch action {
+		case "get":
+			add("verify release", "release exists", "release by tag", "tag_name")
+		case "link_list":
+			add("release asset links", "list release links", "asset link list", "tag_name")
+		case "delete":
+			add("delete release", "remove release", "preserve tag")
+		case "list":
+			add("list releases", "release inventory")
+		}
+	case domain == "repository" && action == "compare":
+		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to")
+	case domain == "analyze" && action == "release_notes":
+		add("release notes", "generate release notes", "from ref", "to ref", "from", "to")
+	case domain == "package":
+		switch action {
+		case "list":
+			add("generic packages", "package registry packages", "list packages")
+		case "registry_list_project":
+			add("container registry", "container images", "image repositories")
+		}
+	case domain == "runner":
+		switch action {
+		case "remove":
+			add("remove runner", "delete runner by id", "runner_id")
+		case "delete_registered":
+			add("delete runner by token", "runner authentication token")
+		}
+	case domain == "issue":
+		switch action {
+		case "time_estimate_set":
+			add("issue time tracking", "set estimate", "time estimate", "estimate", "2h")
+		case "spent_time_add":
+			add("issue time tracking", "add spent time", "spent time", "30m", "summary")
+		case "spent_time_reset":
+			add("issue time tracking", "reset spent time", "clear spent time")
+		case "time_estimate_reset":
+			add("issue time tracking", "reset estimate", "clear estimate")
+		}
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
 		add("protected environment", "environment protection")
 	case strings.Contains(id, "member_role"):
@@ -704,9 +861,48 @@ func describeEntry(entry actionEntry) ActionDescription {
 		SchemaURI:      entry.SchemaURI,
 		Destructive:    entry.Destructive,
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
+		Usage:          usageHintForEntry(entry),
 		InputSchema:    inputSchema,
 		Example:        exampleFor(entry, inputSchema),
 	}
+}
+
+func usageHintForEntry(entry actionEntry) string {
+	switch entry.ID {
+	case "job.download_single_artifact":
+		return "Use for one artifact file path from a known numeric job_id, for example coverage/report.xml; do not use job.artifacts or job.download_artifacts for this case."
+	case "job.artifacts":
+		return "Downloads the whole artifact archive for a known numeric job_id; use job.download_single_artifact when one artifact_path is requested."
+	case "job.download_artifacts":
+		return "Downloads the whole artifact archive by ref_name and job name; do not use with numeric job_id."
+	case "job.download_single_artifact_by_ref":
+		return "Downloads one artifact file by ref_name and job name; use job.download_single_artifact when the prompt gives numeric job_id."
+	case "admin.settings_get":
+		return "Use for current instance/application settings; broadcast_message_list only lists existing broadcast messages."
+	case "admin.broadcast_message_list":
+		return "Lists existing broadcast messages only; it does not read current instance settings."
+	case "admin.broadcast_message_create":
+		return "Creates a broadcast message after any requested settings read; message text goes in params.message."
+	case "tag.get":
+		return "Use to verify that a tag exists before release cleanup or tag deletion workflows."
+	case "release.get":
+		return "Use to verify a release for a tag after tag.get when the workflow asks to verify both."
+	case "release.link_list":
+		return "Lists asset links for an existing release tag; it is not a release existence check."
+	case "repository.compare":
+		return "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff."
+	case "analyze.release_notes":
+		return "Generates release notes with params.project_id, params.from, and params.to; call after requested release/compare prerequisite steps."
+	case "package.list":
+		return "Lists GitLab package registry packages; use package.registry_list_project only for container registry image repositories."
+	case "package.registry_list_project":
+		return "Lists container registry image repositories, not generic package registry packages."
+	case "runner.remove":
+		return "Removes a runner by numeric runner_id; runner.delete_registered is for deleting by runner authentication token."
+	case "runner.delete_registered":
+		return "Deletes a registered runner by authentication token; use runner.remove when the prompt gives numeric runner_id."
+	}
+	return ""
 }
 
 func (r *Registry) resolveAction(id string) (actionEntry, bool) {
@@ -832,11 +1028,18 @@ func actionAliases() []actionAlias {
 		{Alias: "feature_flag.list", Canonical: "feature_flags.feature_flag_list"},
 		{Alias: "geo.node_list", Canonical: "geo.list"},
 		{Alias: "gitlab_server.health_check", Canonical: "server.health_check"},
+		{Alias: "feature_flag_user_list.create", Canonical: "feature_flags.ff_user_list_create"},
+		{Alias: "feature_flag_user_list.delete", Canonical: "feature_flags.ff_user_list_delete"},
+		{Alias: "feature_flag_user_list.get", Canonical: "feature_flags.ff_user_list_get"},
+		{Alias: "feature_flag_user_list.list", Canonical: "feature_flags.ff_user_list_list"},
+		{Alias: "feature_flag_user_list.update", Canonical: "feature_flags.ff_user_list_update"},
+		{Alias: "gitlab_issue.create", Canonical: "issue.create"},
+		{Alias: "gitlab_issue.delete", Canonical: "issue.delete"},
 		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},
 		{Alias: "group.ldap_link_delete", Canonical: "group.ldap_link_delete_for_provider"},
 		{Alias: "issue.notes", Canonical: "issue.note_list"},
 		{Alias: "issue.notes.list", Canonical: "issue.note_list"},
-		{Alias: "job.download_single_artifact", Canonical: "job.artifact_download"},
+		{Alias: "job.artifact_download", Canonical: "job.download_single_artifact"},
 		{Alias: "pipeline.jobs", Canonical: "job.list"},
 		{Alias: "merge_train.list", Canonical: "merge_train.list_project"},
 		{Alias: "merge_request.accept", Canonical: "merge_request.merge"},
@@ -869,9 +1072,17 @@ func actionAliases() []actionAlias {
 		{Alias: "project_member.update", Canonical: "project.member_edit"},
 		{Alias: "project_access_token.create", Canonical: "access.token_project_create"},
 		{Alias: "project_access_token.revoke", Canonical: "access.token_project_revoke"},
+		{Alias: "repository_tree", Canonical: "repository.tree"},
 		{Alias: "repository_file.create", Canonical: "repository.file_create"},
 		{Alias: "repository_file.delete", Canonical: "repository.file_delete"},
 		{Alias: "repository_file.get", Canonical: "repository.file_get"},
+		{Alias: "repository_file.read", Canonical: "repository.file_get"},
+		{Alias: "issue.link", Canonical: "issue.link_create"},
+		{Alias: "pipeline.schedule_variable_create", Canonical: "pipeline.schedule_create_variable"},
+		{Alias: "project.badge_update", Canonical: "project.badge_edit"},
+		{Alias: "merge_request.time_spent_reset", Canonical: "merge_request.spent_time_reset"},
+		{Alias: "generic_package.list", Canonical: "package.list"},
+		{Alias: "issue_note.create", Canonical: "issue.note_create"},
 		{Alias: "release.create_link", Canonical: "release.link_create"},
 		{Alias: "release.asset_link.create", Canonical: "release.link_create"},
 		{Alias: "release.generate_notes", Canonical: "analyze.release_notes"},
@@ -882,6 +1093,7 @@ func actionAliases() []actionAlias {
 		{Alias: "gitlab_discover_project", Canonical: "discover_project.resolve"},
 		{Alias: "interactive_issue.create", Canonical: "interactive.issue_create"},
 		{Alias: "interactive_issue_create", Canonical: "interactive.issue_create"},
+		{Alias: "gitlab_interactive_issue.create", Canonical: "interactive.issue_create"},
 		{Alias: "gitlab_interactive_issue_create", Canonical: "interactive.issue_create"},
 		{Alias: "gitlab_interactive_mr_create", Canonical: "interactive.mr_create"},
 		{Alias: "gitlab_interactive_project_create", Canonical: "interactive.project_create"},
@@ -962,11 +1174,15 @@ func requiredParams(schema map[string]any) []string {
 	if schema == nil {
 		return nil
 	}
-	raw, ok := schema["required"]
-	if !ok {
-		return nil
-	}
 	var names []string
+	names = appendRequiredParamNames(names, schema["required"])
+	names = appendPreferredAlternativeRequiredParams(names, schema)
+	names = dedupeStrings(names)
+	sort.Strings(names)
+	return names
+}
+
+func appendRequiredParamNames(names []string, raw any) []string {
 	switch values := raw.(type) {
 	case []any:
 		for _, value := range values {
@@ -977,7 +1193,21 @@ func requiredParams(schema map[string]any) []string {
 	case []string:
 		names = append(names, values...)
 	}
-	sort.Strings(names)
+	return names
+}
+
+func appendPreferredAlternativeRequiredParams(names []string, schema map[string]any) []string {
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		alternatives, ok := schema[keyword].([]any)
+		if !ok || len(alternatives) == 0 {
+			continue
+		}
+		alternative, ok := alternatives[0].(map[string]any)
+		if !ok {
+			continue
+		}
+		return appendRequiredParamNames(names, alternative["required"])
+	}
 	return names
 }
 

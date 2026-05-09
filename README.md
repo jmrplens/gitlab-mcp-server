@@ -30,7 +30,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 - **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
 - **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current reviewed result is published in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
@@ -317,7 +317,7 @@ The evaluator measures whether each model chooses the correct meta-tool and
 action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
-<!-- START MODEL EVAL SUMMARY -->
+<!-- START MODEL EVAL META SUMMARY -->
 Current published result: **2026-05-05 Full Docker Economy Run**.
 
 | Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
@@ -328,7 +328,20 @@ Current published result: **2026-05-05 Full Docker Economy Run**.
 | Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 84 ops |
 
 The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
-<!-- END MODEL EVAL SUMMARY -->
+<!-- END MODEL EVAL META SUMMARY -->
+
+<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->
+Current published result: **Dynamic 3-tool all-provider Docker run 2026-05-09**.
+
+| Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
+| --- | --- | --- | ---: | ---: | --- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 44.4% (4/9) | 100.0% final across 256 ops |
+| Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 8.3% (1/12) | 100.0% final across 256 ops |
+| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 44.4% (12/27) | 100.0% final across 256 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | 25.0% (1/4) | 100.0% final across 256 ops |
+
+The published model-evaluation set covers 512 task attempts and 1024 expected MCP operations. Across the selected reports, models emitted 1397 tool calls over 1397 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->
 
 ## Documentation
 

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 const (
@@ -19,10 +21,21 @@ const (
 	publishModeAppend         = "append"
 	publishModeReplaceCurrent = "replace-current"
 
-	modelEvalSummaryStart = "<!-- START MODEL EVAL SUMMARY -->"
-	modelEvalSummaryEnd   = "<!-- END MODEL EVAL SUMMARY -->"
-	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
-	modelEvalResultsEnd   = "<!-- END MODEL EVAL RESULTS -->"
+	modelEvalMetaSummaryStart     = "<!-- START MODEL EVAL META SUMMARY -->"
+	modelEvalMetaSummaryEnd       = "<!-- END MODEL EVAL META SUMMARY -->"
+	modelEvalDynamic3SummaryStart = "<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->"
+	modelEvalDynamic3SummaryEnd   = "<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->"
+	modelEvalMetaResultsStart     = "<!-- START MODEL EVAL META RESULTS -->"
+	modelEvalMetaResultsEnd       = "<!-- END MODEL EVAL META RESULTS -->"
+	modelEvalDynamic3ResultsStart = "<!-- START MODEL EVAL DYNAMIC3 RESULTS -->"
+	modelEvalDynamic3ResultsEnd   = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
+	modelEvalSummaryStart         = "<!-- START MODEL EVAL SUMMARY -->"
+	modelEvalSummaryEnd           = "<!-- END MODEL EVAL SUMMARY -->"
+	modelEvalResultsStart         = "<!-- START MODEL EVAL RESULTS -->"
+	modelEvalResultsEnd           = "<!-- END MODEL EVAL RESULTS -->"
+
+	publishSectionMeta     = "meta"
+	publishSectionDynamic3 = "dynamic3"
 
 	usageModelRequests    = "Model requests"
 	usageToolCallsEmitted = "Tool calls emitted"
@@ -45,6 +58,7 @@ type publishReport struct {
 	Date                   string
 	Mode                   string
 	Model                  string
+	ToolSurface            string
 	Backend                string
 	Preset                 string
 	ToolExecution          string
@@ -115,6 +129,15 @@ type publishModelSummary struct {
 	DockerBacked    bool
 }
 
+// publishDocSection identifies one independently managed publication section.
+type publishDocSection struct {
+	Key                string
+	ResultsStartMarker string
+	ResultsEndMarker   string
+	SummaryStartMarker string
+	SummaryEndMarker   string
+}
+
 // publishEvaluationDocs is an internal helper for the main package.
 func publishEvaluationDocs(opts options) error {
 	if len(opts.PublishFrom) == 0 {
@@ -133,22 +156,106 @@ func publishEvaluationDocs(opts options) error {
 		return validateErr
 	}
 
-	resultsBlock := buildModelResultsBlock(label, reports)
-	summaryBlock := buildReadmeSummaryBlock(label, reports)
+	sections := publishDocSectionsForReports(reports)
 	if opts.CheckDocs {
-		if checkErr := checkManagedDoc(opts.PublishResults, modelEvalResultsStart, modelEvalResultsEnd, resultsBlock, opts.PublishMode, label); checkErr != nil {
-			return checkErr
+		for _, section := range sections {
+			sectionReports := filterPublishReportsBySection(reports, section.Key)
+			sectionLabel := publishSectionLabel(label, section.Key)
+			resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
+			summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
+			if checkErr := checkManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); checkErr != nil {
+				return checkErr
+			}
+			if checkErr := checkManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); checkErr != nil {
+				return checkErr
+			}
 		}
-		return checkManagedDoc(opts.PublishReadme, modelEvalSummaryStart, modelEvalSummaryEnd, summaryBlock, publishModeReplaceCurrent, label)
+		return nil
 	}
-	if updateErr := updateManagedDoc(opts.PublishResults, modelEvalResultsStart, modelEvalResultsEnd, resultsBlock, opts.PublishMode, label); updateErr != nil {
-		return updateErr
-	}
-	if updateErr := updateManagedDoc(opts.PublishReadme, modelEvalSummaryStart, modelEvalSummaryEnd, summaryBlock, publishModeReplaceCurrent, label); updateErr != nil {
-		return updateErr
+	for _, section := range sections {
+		sectionReports := filterPublishReportsBySection(reports, section.Key)
+		sectionLabel := publishSectionLabel(label, section.Key)
+		resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
+		summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
+		if updateErr := updateManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); updateErr != nil {
+			return updateErr
+		}
+		if updateErr := updateManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); updateErr != nil {
+			return updateErr
+		}
 	}
 	fmt.Printf("published evaluation docs: %s, %s\n", opts.PublishResults, opts.PublishReadme)
 	return nil
+}
+
+// publishDocSectionsForReports returns the managed sections touched by reports.
+func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
+	keys := map[string]bool{}
+	for _, report := range reports {
+		keys[publishSectionForReport(report)] = true
+	}
+	sections := make([]publishDocSection, 0, len(keys))
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic3} {
+		if keys[key] {
+			sections = append(sections, publishDocSectionForKey(key))
+		}
+	}
+	return sections
+}
+
+// filterPublishReportsBySection keeps reports for one managed section.
+func filterPublishReportsBySection(reports []publishReport, sectionKey string) []publishReport {
+	filtered := make([]publishReport, 0, len(reports))
+	for _, report := range reports {
+		if publishSectionForReport(report) == sectionKey {
+			filtered = append(filtered, report)
+		}
+	}
+	return filtered
+}
+
+// publishSectionForReport maps a report tool surface to its publication section.
+func publishSectionForReport(report publishReport) string {
+	surface := strings.ToLower(strings.TrimSpace(report.ToolSurface))
+	switch surface {
+	case "", config.ToolSurfaceMeta:
+		return publishSectionMeta
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+		return publishSectionDynamic3
+	default:
+		return publishSectionMeta
+	}
+}
+
+// publishDocSectionForKey returns marker pairs for a publication section.
+func publishDocSectionForKey(sectionKey string) publishDocSection {
+	switch sectionKey {
+	case publishSectionDynamic3:
+		return publishDocSection{
+			Key:                publishSectionDynamic3,
+			ResultsStartMarker: modelEvalDynamic3ResultsStart,
+			ResultsEndMarker:   modelEvalDynamic3ResultsEnd,
+			SummaryStartMarker: modelEvalDynamic3SummaryStart,
+			SummaryEndMarker:   modelEvalDynamic3SummaryEnd,
+		}
+	default:
+		return publishDocSection{
+			Key:                publishSectionMeta,
+			ResultsStartMarker: modelEvalMetaResultsStart,
+			ResultsEndMarker:   modelEvalMetaResultsEnd,
+			SummaryStartMarker: modelEvalMetaSummaryStart,
+			SummaryEndMarker:   modelEvalMetaSummaryEnd,
+		}
+	}
+}
+
+// publishSectionLabel returns the snapshot heading used within a managed section.
+func publishSectionLabel(label, _ string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		trimmed = strings.TrimSpace(publishSnapshotLabel("", nil))
+	}
+	return trimmed
 }
 
 // readPublishReports parses one or more local evaluation reports.
@@ -183,6 +290,7 @@ func readPublishReport(path string) (publishReport, error) {
 		Date:                   input.Date,
 		Mode:                   input.Mode,
 		Model:                  input.Model,
+		ToolSurface:            input.ToolSurface,
 		Backend:                input.Backend,
 		Preset:                 input.Preset,
 		ToolExecution:          input.ToolExecution,

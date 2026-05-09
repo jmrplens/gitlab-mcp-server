@@ -21,6 +21,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		IssueDeleteIID:         13,
 		MergeRequestIID:        14,
 		MergeRequestMergeIID:   15,
+		MergeRequestAwardIID:   25,
 		PipelineID:             16,
 		PipelineIID:            17,
 		FailedJobID:            18,
@@ -31,6 +32,8 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		MergeRequestThreadID:   "thread-123",
 		PipelineScheduleID:     23,
 		PipelineSchedulePlayID: 24,
+		CleanupReleaseTag:      "v0.0.0-eval-delete",
+		ReleaseSummaryTag:      "v0.0.0-eval-summary",
 	}
 	tasks := []evalTask{
 		{ID: "MT-013", Prompt: "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`."},
@@ -45,6 +48,9 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MT-061", Prompt: "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7`."},
 		{ID: taskPipelineScheduleID, Prompt: "Delete pipeline schedule ID `12`."},
 		{ID: taskPipelineScheduleID, Prompt: "play pipeline schedule ID `12`."},
+		{ID: "MS-004", Prompt: "Clean up release `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`."},
+		{ID: "MS-012", Prompt: "Compare refs `main` and `v0.0.0-eval-ms` in project `my-org/tools/gitlab-mcp-server`."},
+		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -65,6 +71,44 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[9].Prompt, "merge_request_iid `14`")
 	assertContains(t, got[10].Prompt, "pipeline schedule ID `23`")
 	assertContains(t, got[11].Prompt, "pipeline schedule ID `24`")
+	assertContains(t, got[12].Prompt, "release `v0.0.0-eval-delete`")
+	assertContains(t, got[13].Prompt, "`v0.0.0-eval-summary`")
+	assertContains(t, got[14].Prompt, "MR `25`")
+}
+
+// TestFilterTasksByLiveFixtureState_SkipsMissingJobResources verifies that missing Docker job fixtures do not become model failures.
+func TestFilterTasksByLiveFixtureState_SkipsMissingJobResources(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "MT-022"},
+		{ID: "MT-064"},
+		{ID: "MT-065"},
+		{ID: "MS-008"},
+		{ID: "MT-003"},
+	}
+	state := &liveFixtureState{ManualJobID: 19, RunnerID: 20}
+
+	filtered := filterTasksByLiveFixtureState(tasks, state)
+
+	if got := taskIDs(filtered); got != "MT-064,MT-003" {
+		t.Fatalf("filtered IDs = %q, want MT-064,MT-003", got)
+	}
+}
+
+// TestFilterTasksByLiveFixtureState_KeepsSeededJobResources verifies seeded Docker jobs keep dependent tasks eligible.
+func TestFilterTasksByLiveFixtureState_KeepsSeededJobResources(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "MT-022"},
+		{ID: "MT-064"},
+		{ID: "MT-065"},
+		{ID: "MS-008"},
+	}
+	state := &liveFixtureState{FailedJobID: 18, ManualJobID: 19, RunnerID: 20}
+
+	filtered := filterTasksByLiveFixtureState(tasks, state)
+
+	if got := taskIDs(filtered); got != "MT-022,MT-064,MT-065,MS-008" {
+		t.Fatalf("filtered IDs = %q, want all job-dependent tasks", got)
+	}
 }
 
 // TestFixtureCI_IsValidYAMLShape verifies that FixtureCI handles the is valid y a m l shape scenario correctly.

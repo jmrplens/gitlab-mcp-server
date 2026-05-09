@@ -2,15 +2,74 @@ package snippets
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+func snippetCreateInputSchema[T any]() *jsonschema.Schema {
+	schema, err := jsonschema.For[T](nil)
+	if err != nil {
+		panic(fmt.Sprintf("snippet create input schema: %v", err))
+	}
+	addSnippetCreateFileRequirement(schema)
+	return schema
+}
+
+func snippetCreateInputSchemaMap[T any]() map[string]any {
+	data, err := json.Marshal(snippetCreateInputSchema[T]())
+	if err != nil {
+		panic(fmt.Sprintf("marshal snippet create input schema: %v", err))
+	}
+	var schema map[string]any
+	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+		panic(fmt.Sprintf("unmarshal snippet create input schema: %v", unmarshalErr))
+	}
+	return schema
+}
+
+// CreateInputSchemaMap returns the input schema for personal snippet creation.
+func CreateInputSchemaMap() map[string]any {
+	return snippetCreateInputSchemaMap[CreateInput]()
+}
+
+// ProjectCreateInputSchemaMap returns the input schema for project snippet creation.
+func ProjectCreateInputSchemaMap() map[string]any {
+	return snippetCreateInputSchemaMap[ProjectCreateInput]()
+}
+
+func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
+	if schema == nil {
+		return
+	}
+	if files := schema.Properties["files"]; files != nil {
+		minItems := 1
+		files.MinItems = &minItems
+	}
+	schema.AnyOf = []*jsonschema.Schema{
+		{Required: []string{"file_name", "content"}},
+		{Required: []string{"files"}},
+	}
+}
+
+func snippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Create)
+	route.InputSchema = CreateInputSchemaMap()
+	return route
+}
+
+func projectSnippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, ProjectCreate)
+	route.InputSchema = ProjectCreateInputSchemaMap()
+	return route
+}
 
 // RegisterTools registers all snippet MCP tools (personal + project).
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
@@ -101,6 +160,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Create a new personal snippet. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_snippet_get.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconSnippet,
+		InputSchema: snippetCreateInputSchema[CreateInput](),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Create(ctx, client, input)
@@ -208,6 +268,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Create a new snippet in a GitLab project. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_project_snippet_get.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconSnippet,
+		InputSchema: snippetCreateInputSchema[ProjectCreateInput](),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectCreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := ProjectCreate(ctx, client, input)
@@ -258,7 +319,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"get":          toolutil.RouteAction(client, Get),
 		"content":      toolutil.RouteAction(client, Content),
 		"file_content": toolutil.RouteAction(client, FileContent),
-		"create":       toolutil.RouteAction(client, Create),
+		"create":       snippetCreateRoute(client),
 		"update":       toolutil.RouteAction(client, Update),
 		"delete":       toolutil.DestructiveVoidAction(client, Delete),
 		"explore":      toolutil.RouteAction(client, Explore),
@@ -289,7 +350,7 @@ Actions:
 		"list":    toolutil.RouteAction(client, ProjectList),
 		"get":     toolutil.RouteAction(client, ProjectGet),
 		"content": toolutil.RouteAction(client, ProjectContent),
-		"create":  toolutil.RouteAction(client, ProjectCreate),
+		"create":  projectSnippetCreateRoute(client),
 		"update":  toolutil.RouteAction(client, ProjectUpdate),
 		"delete":  toolutil.DestructiveVoidAction(client, ProjectDelete),
 	}
