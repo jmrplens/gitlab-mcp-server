@@ -323,6 +323,51 @@ func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T
 	}
 }
 
+// TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts verifies that
+// full dynamic runs without a report-level preset are still published as
+// preset-scoped rows when trace artifacts are available.
+func TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts(t *testing.T) {
+	tmp := t.TempDir()
+	traceDir := filepath.Join(tmp, "traces")
+	if err := os.MkdirAll(traceDir, 0o700); err != nil {
+		t.Fatalf("mkdir traces: %v", err)
+	}
+	tracePath := filepath.Join(traceDir, "traces.jsonl")
+	if err := os.WriteFile(tracePath, []byte(fullRunTraceJSONL()), 0o600); err != nil {
+		t.Fatalf("write traces: %v", err)
+	}
+	reportPath := filepath.Join(tmp, "dynamic-report.md")
+	if err := os.WriteFile(reportPath, []byte(dynamicFullRunPublishReportNoPreset()), 0o600); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+
+	report, err := readPublishReport(reportPath)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	if len(report.Rows) != 3 {
+		t.Fatalf("rows = %d, want 3 preset rows", len(report.Rows))
+	}
+	rows := map[string]publishRow{}
+	for _, row := range report.Rows {
+		rows[row.Preset] = row
+	}
+	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe} {
+		if rows[preset].Attempts != 1 {
+			t.Fatalf("row[%s] = %+v, want one attempt", preset, rows[preset])
+		}
+	}
+	if rows[presetDockerMutatingSafe].ModelRequests != 2 || rows[presetDockerMutatingSafe].ToolCalls != 2 {
+		t.Fatalf("mutating row counts = %+v, want requests/tools 2", rows[presetDockerMutatingSafe])
+	}
+	if rows[presetDockerMutatingSafe].CostTokens != "in 15 / out 4" {
+		t.Fatalf("mutating cost/tokens = %q", rows[presetDockerMutatingSafe].CostTokens)
+	}
+	if rows[presetDockerDestructiveSafe].DestructiveSafety != 100 {
+		t.Fatalf("destructive safety = %.1f, want 100", rows[presetDockerDestructiveSafe].DestructiveSafety)
+	}
+}
+
 // TestPublishFormattingHelpers_CoverBranchLabels verifies small formatting and
 // classification helpers used by the generated README and results blocks.
 func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
@@ -721,4 +766,40 @@ func multiModelPublishReport() string {
 		"| `anthropic:claude-haiku-4-5-20251001` | 1 | MT-002 | `gitlab_project` / `list` | `gitlab_project` / `list` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
 		"| `google:gemini-3.1-flash-lite-preview` | 1 | MT-001 | `gitlab_project` / `get` | `gitlab_project` / `get` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
 		"| `google:gemini-3.1-flash-lite-preview` | 1 | MT-002 | `gitlab_project` / `list` | `gitlab_project` / `list` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
+}
+
+func dynamicFullRunPublishReportNoPreset() string {
+	return "# Meta-Tool Model Evaluation\n\n" +
+		"Date: 2026-05-09T18:00:00Z\n" +
+		"Mode: model tool-calling\n" +
+		"Model: `openai:gpt-5.4-nano`\n" +
+		"Tool surface: `dynamic`\n" +
+		"Backend: `gitlab`\n" +
+		"Tool execution: `mcp`\n" +
+		"Catalog tools: 3\n" +
+		"Runs: 1\n" +
+		"Task attempts: 3\n\n" +
+		"Trace artifacts: `traces`\n\n" +
+		"## Metrics\n\n" +
+		"| Metric | Value |\n| --- | ---: |\n" +
+		"| Tool-selection accuracy | 100.0% |\n" +
+		"| Action-selection accuracy | 100.0% |\n" +
+		"| First-call validation pass rate | 100.0% |\n" +
+		"| Repair success rate | 100.0% |\n" +
+		"| Destructive safety | 100.0% |\n" +
+		"| Final task success proxy | 100.0% |\n" +
+		"\n## Task Results\n\n" +
+		"| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n" +
+		"| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n" +
+		"| 1 | MT-001 | `gitlab_execute_tool` / `user.current` | `gitlab_execute_tool` / `user.current` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
+		"| 1 | MT-010 | `gitlab_execute_tool` / `issue.create` | `gitlab_execute_tool` / `issue.create` | 1/1 | No | Yes | - | Yes | 2 | 2 | - |\n" +
+		"| 1 | MT-008 | `gitlab_execute_tool` / `group.delete` | `gitlab_execute_tool` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
+}
+
+func fullRunTraceJSONL() string {
+	return strings.Join([]string{
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-010","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"issue.create"}],"events":[{"usage":{"input_tokens":15,"output_tokens":4}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"issue.create","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":2,"tool_calls":2}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-008","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"group.delete","destructive":true}],"events":[{"usage":{"input_tokens":11,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"group.delete","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+	}, "\n") + "\n"
 }

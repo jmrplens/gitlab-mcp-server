@@ -197,7 +197,7 @@ Keep reports, traces, snapshots, and fixture state under `dist/evaluation/meta-t
 
 Model-backed trace JSON records the normalized prompt flow plus provider HTTP request/response bodies and MCP `CallTool` request/response payloads. Provider authentication headers are not serialized; raw trace artifacts remain local and should not be published or committed.
 
-`--publish-docs` is intentionally separate from normal runs. It consumes only reviewed Markdown reports selected with `--publish-from`, never raw trace JSON, and refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
+`--publish-docs` is intentionally separate from normal runs. It consumes reviewed Markdown reports selected with `--publish-from`; full GitLab-backed MCP reports without an explicit preset also read their local `Trace artifacts` JSONL to split the published table by preset and special partitions. It refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
 
 Docker live reports include a failure-triage section that separates MCP implementation bugs, GitLab CE limitations, model route-selection misses, model parameter-shape misses, fixture setup failures, transient GitLab 5xx responses, timeout/resource exhaustion, destructive safety failures, and not-found results.
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -104,6 +106,16 @@ type publishTaskStats struct {
 	RepairSuccesses int
 }
 
+// publishTaskMetrics holds count-based metrics for one publish row.
+type publishTaskMetrics struct {
+	ToolOK           int
+	ActionOK         int
+	FirstPassOK      int
+	FinalSuccessOK   int
+	DestructiveTotal int
+	DestructiveOK    int
+}
+
 // publishModelMetrics holds data for main operations.
 type publishModelMetrics struct {
 	Attempts          int
@@ -113,6 +125,14 @@ type publishModelMetrics struct {
 	RepairSuccess     float64
 	DestructiveSafety float64
 	FinalSuccess      float64
+}
+
+// publishTraceAccumulator aggregates one model/preset slice from trace JSONL.
+type publishTraceAccumulator struct {
+	Stats        publishTaskStats
+	Metrics      publishTaskMetrics
+	InputTokens  int
+	OutputTokens int
 }
 
 // publishModelSummary holds data for main operations.
@@ -299,7 +319,11 @@ func readPublishReport(path string) (publishReport, error) {
 		Diagnostics:            input.Diagnostics,
 		UnresolvedHarnessNoise: reportMentionsHarnessNoise(content),
 	}
-	report.Rows = publishRowsForReport(report, input, content)
+	rows, rowsErr := publishRowsForReport(report, input, content)
+	if rowsErr != nil {
+		return publishReport{}, rowsErr
+	}
+	report.Rows = rows
 	if len(report.Rows) == 0 {
 		return publishReport{}, fmt.Errorf("publish input %s has no task result rows", path)
 	}
@@ -307,7 +331,14 @@ func readPublishReport(path string) (publishReport, error) {
 }
 
 // publishRowsForReport is an internal helper for the main package.
-func publishRowsForReport(report publishReport, input comparisonInput, content string) []publishRow {
+func publishRowsForReport(report publishReport, input comparisonInput, content string) ([]publishRow, error) {
+	if shouldSplitPublishReportByPreset(report) {
+		rows, splitErr := publishRowsByPresetFromTraces(report, content)
+		if splitErr != nil {
+			return nil, splitErr
+		}
+		return rows, nil
+	}
 	taskStats := publishTaskStatsByModel(content, report.Model)
 	modelMetrics := publishMetricsByModel(content)
 	modelUsage := publishUsageByModel(content)
@@ -315,7 +346,7 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		model := report.Model
 		stats := publishSingleTaskStats(taskStats, model, input.TaskAttempts)
 		usage := publishSingleUsage(input.Usage, stats)
-		return []publishRow{newPublishRow(report, model, stats, metricsFromComparison(input), usage)}
+		return []publishRow{newPublishRow(report, model, stats, metricsFromComparison(input), usage)}, nil
 	}
 
 	models := sortedStringKeys(modelMetrics)
@@ -331,7 +362,204 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		}
 		rows = append(rows, newPublishRow(report, model, stats, modelMetrics[model], usage))
 	}
-	return rows
+	return rows, nil
+}
+
+func shouldSplitPublishReportByPreset(report publishReport) bool {
+	if strings.TrimSpace(report.Preset) != "" {
+		return false
+	}
+	return report.Backend == backendGitLab && report.ToolExecution == "mcp"
+}
+
+func publishRowsByPresetFromTraces(report publishReport, content string) ([]publishRow, error) {
+	tracePath := publishTraceJSONLPath(report.Path, content)
+	if tracePath == "" {
+		return nil, fmt.Errorf("publish input %s has no preset and no trace artifacts; publish full runs with trace artifacts or publish separate preset reports", report.Path)
+	}
+	tasks, err := parseTasksFile(publishTasksPath())
+	if err != nil {
+		return nil, fmt.Errorf("read publish task presets: %w", err)
+	}
+	tasksByID := make(map[string]evalTask, len(tasks))
+	for _, task := range tasks {
+		tasksByID[task.ID] = task
+	}
+	file, err := os.Open(tracePath) // #nosec G304 -- trace path comes from an explicit developer-selected evaluation report.
+	if err != nil {
+		return nil, fmt.Errorf("read publish trace artifacts %s: %w", tracePath, err)
+	}
+	defer file.Close()
+
+	accumulators := map[string]*publishTraceAccumulator{}
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), maxResponseBytes)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var trace taskTrace
+		if decodeErr := json.Unmarshal([]byte(line), &trace); decodeErr != nil {
+			return nil, fmt.Errorf("decode publish trace %s: %w", tracePath, decodeErr)
+		}
+		model := cleanReportValue(trace.Model)
+		if model == "" {
+			model = report.Model
+		}
+		task, ok := tasksByID[trace.TaskID]
+		if !ok {
+			return nil, fmt.Errorf("publish trace %s references unknown task %s", tracePath, trace.TaskID)
+		}
+		preset := publishPresetForTask(task)
+		key := model + "\x00" + preset
+		acc := accumulators[key]
+		if acc == nil {
+			acc = &publishTraceAccumulator{}
+			accumulators[key] = acc
+		}
+		acc.addTrace(trace, task, report.ToolSurface)
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		return nil, fmt.Errorf("scan publish trace artifacts %s: %w", tracePath, scanErr)
+	}
+	rows := make([]publishRow, 0, len(accumulators))
+	for key, acc := range accumulators {
+		model, preset, _ := strings.Cut(key, "\x00")
+		rows = append(rows, newPublishRow(report, model, acc.Stats, acc.metrics(), acc.usage()))
+		rows[len(rows)-1].Preset = preset
+	}
+	return rows, nil
+}
+
+func publishTasksPath() string {
+	if _, err := os.Stat(defaultTasksPath); err == nil {
+		return defaultTasksPath
+	}
+	packageRelative := filepath.Join("testdata", filepath.Base(defaultTasksPath))
+	if _, err := os.Stat(packageRelative); err == nil {
+		return packageRelative
+	}
+	return defaultTasksPath
+}
+
+func (a *publishTraceAccumulator) addTrace(trace taskTrace, task evalTask, toolSurface string) {
+	a.Stats.Attempts++
+	expectedSteps := trace.Summary.ExpectedSteps
+	if expectedSteps == 0 {
+		expectedSteps = len(trace.Expected)
+	}
+	a.Stats.ExpectedOps += expectedSteps
+	a.Stats.ModelRequests += trace.Summary.ModelCalls
+	a.Stats.ToolCalls += trace.Summary.ToolCalls
+	if trace.Summary.RepairAttempted {
+		a.Stats.RepairAttempts++
+		if trace.Summary.RepairSuccess {
+			a.Stats.RepairSuccesses++
+		}
+	}
+	toolOK, actionOK, firstPassOK := publishEffectiveTraceOutcome(trace, toolSurface)
+	if toolOK {
+		a.Metrics.ToolOK++
+	}
+	if actionOK {
+		a.Metrics.ActionOK++
+	}
+	if firstPassOK {
+		a.Metrics.FirstPassOK++
+	}
+	if trace.Summary.FinalSuccess {
+		a.Metrics.FinalSuccessOK++
+	}
+	if taskHasDestructiveStep(task) {
+		a.Metrics.DestructiveTotal++
+		if trace.Summary.DestructiveSafe {
+			a.Metrics.DestructiveOK++
+		}
+	}
+	for _, event := range trace.Events {
+		if event.Usage == nil {
+			continue
+		}
+		a.InputTokens += event.Usage.InputTokens
+		a.OutputTokens += event.Usage.OutputTokens
+	}
+}
+
+func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, actionOK, firstPassOK bool) {
+	if len(trace.Expected) == 0 {
+		return false, false, false
+	}
+	first := trace.Expected[0]
+	toolOK = trace.Summary.FirstTool == first.Tool
+	actionOK = trace.Summary.FirstAction == first.Action
+	firstPassOK = trace.Summary.FirstPass
+	if !trace.Summary.FinalSuccess || !isDynamicThreeToolEvalSurface(toolSurface) || !toolOK {
+		return toolOK, actionOK, firstPassOK
+	}
+	if first.Action == "discover_project.resolve" && trace.Summary.FirstAction == "search.projects" {
+		return true, true, true
+	}
+	if len(trace.Expected) < 2 {
+		return toolOK, actionOK, firstPassOK
+	}
+	if first.Simulation != "sampling_unsupported_continue" && first.Simulation != "elicitation_unsupported_continue" {
+		return toolOK, actionOK, firstPassOK
+	}
+	if trace.Summary.FirstAction == trace.Expected[1].Action {
+		return true, true, true
+	}
+	return toolOK, actionOK, firstPassOK
+}
+
+func (a *publishTraceAccumulator) metrics() publishModelMetrics {
+	return publishModelMetrics{
+		Attempts:          a.Stats.Attempts,
+		ToolSelection:     percent(a.Metrics.ToolOK, a.Stats.Attempts),
+		ActionSelection:   percent(a.Metrics.ActionOK, a.Stats.Attempts),
+		FirstPass:         percent(a.Metrics.FirstPassOK, a.Stats.Attempts),
+		RepairSuccess:     percent(a.Stats.RepairSuccesses, a.Stats.RepairAttempts),
+		DestructiveSafety: percent(a.Metrics.DestructiveOK, a.Metrics.DestructiveTotal),
+		FinalSuccess:      percent(a.Metrics.FinalSuccessOK, a.Stats.Attempts),
+	}
+}
+
+func (a *publishTraceAccumulator) usage() map[string]string {
+	return map[string]string{
+		usageModelRequests:    strconv.Itoa(a.Stats.ModelRequests),
+		usageToolCallsEmitted: strconv.Itoa(a.Stats.ToolCalls),
+		usageInputTokens:      strconv.Itoa(a.InputTokens),
+		usageOutputTokens:     strconv.Itoa(a.OutputTokens),
+	}
+}
+
+func publishPresetForTask(task evalTask) string {
+	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetSchemaEnterprise} {
+		if taskMatchesPreset(task, preset) {
+			return preset
+		}
+	}
+	for _, partition := range []string{partitionErrorRecovery, partitionCapabilityFallback} {
+		if taskMatchesPartition(task, partition) {
+			return partition
+		}
+	}
+	return "other"
+}
+
+func publishTraceJSONLPath(reportPath, content string) string {
+	traceDir := firstMetadataValue(content, "Trace artifacts")
+	if traceDir == "" {
+		return ""
+	}
+	tracePath := filepath.Join(traceDir, "traces.jsonl")
+	if filepath.IsAbs(tracePath) {
+		return tracePath
+	}
+	if _, err := os.Stat(tracePath); err == nil {
+		return tracePath
+	}
+	return filepath.Join(filepath.Dir(reportPath), tracePath)
 }
 
 // publishSingleTaskStats is an internal helper for the main package.
@@ -688,8 +916,12 @@ func presetRank(preset string) int {
 		return 2
 	case presetDockerDestructiveSafe:
 		return 3
-	case presetSchemaEnterprise:
+	case partitionErrorRecovery:
 		return 4
+	case partitionCapabilityFallback:
+		return 5
+	case presetSchemaEnterprise:
+		return 6
 	default:
 		return 99
 	}
