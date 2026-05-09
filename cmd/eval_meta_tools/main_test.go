@@ -1355,6 +1355,34 @@ func TestValidateStepCallWithRoutes_AcceptsActionAlias(t *testing.T) {
 	}
 }
 
+// TestValidateStepCallWithRoutes_AcceptsDynamicActionScopedAliases verifies
+// that dynamic eval validation uses the same action-scoped param compatibility
+// as the runtime dynamic executor.
+func TestValidateStepCallWithRoutes_AcceptsDynamicActionScopedAliases(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "group.group_label_update", RequiredParams: []string{"group_id", "label_id"}}
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"group.group_label_update": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"group_id": map[string]any{"type": "string"},
+					"label_id": map[string]any{"type": "integer"},
+					"new_name": map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+
+	result := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{
+		"action": "group.group_label_update",
+		"params": map[string]any{"group_id": "my-org", "label_id": 35, "name": "next-label"},
+	}, routes)
+
+	if !result.Valid {
+		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
+	}
+}
+
 // TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies that ValidationRepairMessage handles the includes action envelope and project hint scenario correctly.
 func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}

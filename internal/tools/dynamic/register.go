@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -388,7 +389,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		params = map[string]any{}
 	}
 	params = toolutil.NormalizeParamAliasesForSchema(params, entry.Route.InputSchema)
-	params = normalizeActionScopedParams(entry.ID, params, entry.Route.InputSchema)
+	params = NormalizeActionScopedParams(entry.ID, params, entry.Route.InputSchema)
 	if input.Confirm {
 		params["confirm"] = true
 	}
@@ -400,14 +401,13 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	return handler(ctx, req, toolutil.MetaToolInput{Action: entry.Action, Params: params})
 }
 
-func normalizeActionScopedParams(actionID string, params, schema map[string]any) map[string]any {
+// NormalizeActionScopedParams applies compatibility aliases that are safe only
+// for a specific dynamic catalog action.
+func NormalizeActionScopedParams(actionID string, params, schema map[string]any) map[string]any {
 	if len(params) == 0 {
 		return params
 	}
 	fields := actionSchemaProperties(schema)
-	if len(fields) == 0 {
-		return params
-	}
 	out := params
 	cloned := false
 	clone := func() map[string]any {
@@ -438,14 +438,70 @@ func normalizeActionScopedParams(actionID string, params, schema map[string]any)
 				delete(updated, "branch")
 			}
 		}
+	case "issue.link_create":
+		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
+			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
+				updated := clone()
+				updated["target_issue_iid"] = value
+				delete(updated, "linked_issue_iid")
+			}
+		}
+		if value, ok := out["project_id"]; ok && accepts("target_project_id") {
+			if _, hasTargetProjectID := out["target_project_id"]; !hasTargetProjectID {
+				clone()["target_project_id"] = value
+			}
+		}
+	case "issue.update":
+		if value, ok := out["state_event"]; ok && accepts("state_event") {
+			if stateEvent, converted := issueStateEventValue(value); converted {
+				clone()["state_event"] = stateEvent
+			}
+		}
+	case "branch.protect":
+		for _, name := range []string{"push_access_level", "merge_access_level"} {
+			if value, ok := out[name]; ok && accepts(name) {
+				if accessLevel, converted := gitlabAccessLevelValue(value); converted {
+					clone()[name] = accessLevel
+				}
+			}
+		}
+	case "group.group_label_update":
+		if value, ok := out["name"]; ok {
+			if _, hasNewName := out["new_name"]; !hasNewName {
+				updated := clone()
+				updated["new_name"] = value
+				delete(updated, "name")
+			}
+		}
 	case "project.member_add", "project.member_edit":
 		if value, ok := out["access_level"]; ok && accepts("access_level") {
 			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 				clone()["access_level"] = accessLevel
 			}
 		}
+	case "runner.update":
+		if value, ok := out["paused"]; ok && accepts("paused") {
+			if paused, converted := boolStringValue(value); converted {
+				clone()["paused"] = paused
+			}
+		}
 	}
 	return out
+}
+
+func issueStateEventValue(value any) (string, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "close", "closed":
+		return "close", true
+	case "reopen", "open", "opened":
+		return "reopen", true
+	default:
+		return "", false
+	}
 }
 
 func actionSchemaProperties(schema map[string]any) map[string]any {
@@ -457,11 +513,32 @@ func actionSchemaProperties(schema map[string]any) map[string]any {
 }
 
 func gitlabAccessLevelValue(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return validGitLabAccessLevel(typed)
+	case int64:
+		return validGitLabAccessLevel(int(typed))
+	case float64:
+		accessLevel := int(typed)
+		if typed == float64(accessLevel) {
+			return validGitLabAccessLevel(accessLevel)
+		}
+		return 0, false
+	}
 	text, ok := value.(string)
 	if !ok {
 		return 0, false
 	}
-	switch strings.ToLower(strings.TrimSpace(text)) {
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if accessLevel, err := strconv.Atoi(normalized); err == nil {
+		switch accessLevel {
+		case 10, 20, 30, 40, 50:
+			return accessLevel, true
+		default:
+			return 0, false
+		}
+	}
+	switch normalized {
 	case "guest":
 		return 10, true
 	case "reporter":
@@ -475,6 +552,27 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func validGitLabAccessLevel(accessLevel int) (int, bool) {
+	switch accessLevel {
+	case 10, 20, 30, 40, 50:
+		return accessLevel, true
+	default:
+		return 0, false
+	}
+}
+
+func boolStringValue(value any) (parsed, ok bool) {
+	text, ok := value.(string)
+	if !ok {
+		return false, false
+	}
+	parsed, err := strconv.ParseBool(strings.TrimSpace(text))
+	if err != nil {
+		return false, false
+	}
+	return parsed, true
 }
 
 func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnnotations {
@@ -1023,6 +1121,8 @@ func actionAliases() []actionAlias {
 		{Alias: "deploy_token.delete", Canonical: "access.deploy_token_delete_project"},
 		{Alias: "deploy_token.get", Canonical: "access.deploy_token_get_project"},
 		{Alias: "deploy_token.list", Canonical: "access.deploy_token_list_project"},
+		{Alias: "branch.protected_list", Canonical: "branch.get_protected"},
+		{Alias: "branch.update_protection", Canonical: "branch.update_protected"},
 		{Alias: "enterprise_user.group_list", Canonical: "enterprise_user.list"},
 		{Alias: "external_status_check.list_project_checks", Canonical: "external_status_check.list_project"},
 		{Alias: "feature_flag.list", Canonical: "feature_flags.feature_flag_list"},
@@ -1033,10 +1133,14 @@ func actionAliases() []actionAlias {
 		{Alias: "feature_flag_user_list.get", Canonical: "feature_flags.ff_user_list_get"},
 		{Alias: "feature_flag_user_list.list", Canonical: "feature_flags.ff_user_list_list"},
 		{Alias: "feature_flag_user_list.update", Canonical: "feature_flags.ff_user_list_update"},
+		{Alias: "feature_flags.feature_flag_user_lists_list", Canonical: "feature_flags.ff_user_list_list"},
 		{Alias: "gitlab_issue.create", Canonical: "issue.create"},
 		{Alias: "gitlab_issue.delete", Canonical: "issue.delete"},
 		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},
 		{Alias: "group.ldap_link_delete", Canonical: "group.ldap_link_delete_for_provider"},
+		{Alias: "issue.note.create", Canonical: "issue.note_create"},
+		{Alias: "issue_note.get", Canonical: "issue.note_get"},
+		{Alias: "issue_note.list", Canonical: "issue.note_list"},
 		{Alias: "issue.notes", Canonical: "issue.note_list"},
 		{Alias: "issue.notes.list", Canonical: "issue.note_list"},
 		{Alias: "job.artifact_download", Canonical: "job.download_single_artifact"},
@@ -1044,6 +1148,7 @@ func actionAliases() []actionAlias {
 		{Alias: "merge_train.list", Canonical: "merge_train.list_project"},
 		{Alias: "merge_request.accept", Canonical: "merge_request.merge"},
 		{Alias: "merge_request.changes", Canonical: "mr_review.changes_get"},
+		{Alias: "merge_request.emoji_mr_award_create", Canonical: "merge_request.emoji_mr_create"},
 		{Alias: "merge_request_note.create", Canonical: "mr_review.note_create"},
 		{Alias: "merge_request_note.delete", Canonical: "mr_review.note_delete"},
 		{Alias: "merge_request_note.get", Canonical: "mr_review.note_get"},
@@ -1077,14 +1182,17 @@ func actionAliases() []actionAlias {
 		{Alias: "repository_file.delete", Canonical: "repository.file_delete"},
 		{Alias: "repository_file.get", Canonical: "repository.file_get"},
 		{Alias: "repository_file.read", Canonical: "repository.file_get"},
+		{Alias: "repository_files.get_raw_file", Canonical: "repository.file_raw"},
 		{Alias: "issue.link", Canonical: "issue.link_create"},
 		{Alias: "pipeline.schedule_variable_create", Canonical: "pipeline.schedule_create_variable"},
+		{Alias: "pipeline.schedule_variable_update", Canonical: "pipeline.schedule_edit_variable"},
 		{Alias: "project.badge_update", Canonical: "project.badge_edit"},
 		{Alias: "merge_request.time_spent_reset", Canonical: "merge_request.spent_time_reset"},
 		{Alias: "generic_package.list", Canonical: "package.list"},
 		{Alias: "issue_note.create", Canonical: "issue.note_create"},
 		{Alias: "release.create_link", Canonical: "release.link_create"},
 		{Alias: "release.asset_link.create", Canonical: "release.link_create"},
+		{Alias: "release_link.link_list", Canonical: "release.link_list"},
 		{Alias: "release.generate_notes", Canonical: "analyze.release_notes"},
 		{Alias: "package.list_project", Canonical: "package.list"},
 		{Alias: "variable.create", Canonical: "ci_variable.create"},
@@ -1099,6 +1207,7 @@ func actionAliases() []actionAlias {
 		{Alias: "gitlab_interactive_project_create", Canonical: "interactive.project_create"},
 		{Alias: "gitlab_interactive_release_create", Canonical: "interactive.release_create"},
 		{Alias: "runner.delete", Canonical: "runner.remove"},
+		{Alias: "wiki.show", Canonical: "wiki.get"},
 		{Alias: "webhook.add", Canonical: "project.hook_add"},
 		{Alias: "webhook.create", Canonical: "project.hook_add"},
 		{Alias: "webhook.delete", Canonical: "project.hook_delete"},

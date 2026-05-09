@@ -18,10 +18,10 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,498 |
-| Unit test functions | 9,251 |
+| Total test functions | 9,500 |
+| Unit test functions | 9,253 |
 | E2E test functions | 247 |
-| cmd test functions | 391 |
+| cmd test functions | 393 |
 | Test files (internal/) | 405 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 109 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,513 | 89.6% |
+| `TestFunc_Scenario` (2-part) | 8,515 | 89.6% |
 | `TestFunc` (no underscore) | 707 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 278 | 2.9% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (165) | 7,084 | 313 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
-| cmd packages | 391 | 13 | server entry point and developer command utilities |
-| **Total** | **9,498** | **527** |  |
+| cmd packages | 393 | 13 | server entry point and developer command utilities |
+| **Total** | **9,500** | **527** |  |
 
 ### Core Packages
 
@@ -148,7 +148,7 @@
 | deploytokens | 65 | 2 | 100.0% | 10 |
 | dockerfiletemplates | 14 | 1 | 100.0% | 2 |
 | dorametrics | 9 | 2 | 100.0% | 2 |
-| dynamic | 54 | 4 | 98.6% | 4 |
+| dynamic | 54 | 4 | 97.1% | 4 |
 | elicitationtools | 56 | 2 | 98.2% | 4 |
 | enterpriseusers | 33 | 3 | 100.0% | 4 |
 | environments | 47 | 2 | 100.0% | 6 |
@@ -291,7 +291,7 @@
 | cmd/audit_metrics | 14.2% |
 | cmd/audit_output | 23.4% |
 | cmd/audit_tokens | 18.5% |
-| cmd/eval_meta_tools | 57.0% |
+| cmd/eval_meta_tools | 57.2% |
 | cmd/gen_llms | 6.8% |
 | cmd/gen_readme | 14.7% |
 | cmd/gen_testing_docs | 20.7% |
@@ -360,7 +360,7 @@
 | deploytokens | 100.0% |
 | dockerfiletemplates | 100.0% |
 | dorametrics | 100.0% |
-| dynamic | 98.6% |
+| dynamic | 97.1% |
 | elicitationtools | 98.2% |
 | enterpriseusers | 100.0% |
 | environments | 100.0% |
@@ -498,7 +498,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (23.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_meta_tools** (57.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_meta_tools** (57.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (78.9%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.

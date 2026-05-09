@@ -520,6 +520,8 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"release.generate_notes":                    "analyze.release_notes",
 		"deploy_token.create":                       "access.deploy_token_create_project",
 		"deploy_key.create":                         "access.deploy_key_add",
+		"branch.protected_list":                     "branch.get_protected",
+		"branch.update_protection":                  "branch.update_protected",
 		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
 		"merge_request.time_estimate":               "merge_request.time_estimate_set",
 		"merge_request.time_spent_add":              "merge_request.spent_time_add",
@@ -558,21 +560,30 @@ func TestDescribe_CanonicalizesProviderSpecificAliases(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
 	tests := map[string]string{
-		"feature_flag_user_list.create":     "feature_flags.ff_user_list_create",
-		"feature_flag_user_list.delete":     "feature_flags.ff_user_list_delete",
-		"gitlab_issue.create":               "issue.create",
-		"gitlab_server.health_check":        "server.health_check",
-		"job.artifact_download":             "job.download_single_artifact",
-		"issue.link":                        "issue.link_create",
-		"repository_tree":                   "repository.tree",
-		"repository_file.get":               "repository.file_get",
-		"repository_file.read":              "repository.file_get",
-		"pipeline.schedule_variable_create": "pipeline.schedule_create_variable",
-		"project.badge_update":              "project.badge_edit",
-		"merge_request.time_spent_reset":    "merge_request.spent_time_reset",
-		"generic_package.list":              "package.list",
-		"issue_note.create":                 "issue.note_create",
-		"gitlab_interactive_issue.create":   "interactive.issue_create",
+		"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
+		"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
+		"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
+		"gitlab_issue.create":                        "issue.create",
+		"gitlab_server.health_check":                 "server.health_check",
+		"job.artifact_download":                      "job.download_single_artifact",
+		"issue.link":                                 "issue.link_create",
+		"issue.note.create":                          "issue.note_create",
+		"issue_note.get":                             "issue.note_get",
+		"issue_note.list":                            "issue.note_list",
+		"repository_tree":                            "repository.tree",
+		"repository_file.get":                        "repository.file_get",
+		"repository_file.read":                       "repository.file_get",
+		"repository_files.get_raw_file":              "repository.file_raw",
+		"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
+		"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
+		"project.badge_update":                       "project.badge_edit",
+		"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
+		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
+		"generic_package.list":                       "package.list",
+		"issue_note.create":                          "issue.note_create",
+		"release_link.link_list":                     "release.link_list",
+		"wiki.show":                                  "wiki.get",
+		"gitlab_interactive_issue.create":            "interactive.issue_create",
 	}
 
 	for alias, want := range tests {
@@ -752,6 +763,81 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				data := output.(map[string]any)
 				if data["access_level"] != 20 {
 					t.Fatalf("output = %#v, want access_level 20", output)
+				}
+			},
+		},
+		{
+			name:  "project member numeric string access level",
+			input: ExecuteInput{Action: "project.member_edit", Params: map[string]any{"project_id": 123, "user_id": 5, "access_level": "30"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["access_level"] != 30 {
+					t.Fatalf("output = %#v, want access_level 30", output)
+				}
+			},
+		},
+		{
+			name:  "issue link aliases same project target",
+			input: ExecuteInput{Action: "issue.link_create", Params: map[string]any{"project_id": 123, "issue_iid": 1, "linked_issue_iid": 2}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["target_issue_iid"] != 2 || data["target_project_id"] != 123 {
+					t.Fatalf("output = %#v, want target_issue_iid 2 and target_project_id 123", output)
+				}
+			},
+		},
+		{
+			name:  "issue update closed state event",
+			input: ExecuteInput{Action: "issue.update", Params: map[string]any{"project_id": 123, "issue_iid": 1, "state_event": "closed"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["state_event"] != "close" {
+					t.Fatalf("output = %#v, want state_event close", output)
+				}
+			},
+		},
+		{
+			name: "branch protect role access levels",
+			input: ExecuteInput{Action: "branch.protect", Params: map[string]any{
+				"project_id":         123,
+				"branch_name":        "main",
+				"push_access_level":  "maintainer",
+				"merge_access_level": "maintainer",
+				"allow_force_push":   false,
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["push_access_level"] != 40 || data["merge_access_level"] != 40 {
+					t.Fatalf("output = %#v, want access levels 40", output)
+				}
+			},
+		},
+		{
+			name:  "group label update name alias",
+			input: ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["new_name"] != "next-label" {
+					t.Fatalf("output = %#v, want new_name next-label", output)
+				}
+				if _, ok := data["name"]; ok {
+					t.Fatalf("output = %#v, want name alias removed", output)
+				}
+			},
+		},
+		{
+			name:  "runner paused string to bool",
+			input: ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["paused"] != true {
+					t.Fatalf("output = %#v, want paused true", output)
 				}
 			},
 		},
@@ -1409,6 +1495,21 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"notes": true}, nil
 				},
 			},
+			"link_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "issue_iid", "target_project_id", "target_issue_iid"},
+					"properties": map[string]any{
+						"project_id":        map[string]any{"type": "integer"},
+						"issue_iid":         map[string]any{"type": "integer"},
+						"target_project_id": map[string]any{"type": "integer"},
+						"target_issue_iid":  map[string]any{"type": "integer"},
+					},
+				},
+			},
 			"update": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
 					return map[string]any{"state_event": params["state_event"]}, nil
@@ -1445,6 +1546,54 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 		},
+		"gitlab_branch": {
+			"get_protected": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"branch_name": params["branch_name"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "branch_name"},
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"branch_name": map[string]any{"type": "string"},
+					},
+				},
+			},
+			"protect": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{
+						"push_access_level":  params["push_access_level"],
+						"merge_access_level": params["merge_access_level"],
+					}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "branch_name"},
+					"properties": map[string]any{
+						"project_id":         map[string]any{"type": "integer"},
+						"branch_name":        map[string]any{"type": "string"},
+						"push_access_level":  map[string]any{"type": "integer"},
+						"merge_access_level": map[string]any{"type": "integer"},
+						"allow_force_push":   map[string]any{"type": "boolean"},
+					},
+				},
+			},
+			"update_protected": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"allow_force_push": params["allow_force_push"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "branch_name"},
+					"properties": map[string]any{
+						"project_id":       map[string]any{"type": "integer"},
+						"branch_name":      map[string]any{"type": "string"},
+						"allow_force_push": map[string]any{"type": "boolean"},
+					},
+				},
+			},
+		},
 		"gitlab_repository": {
 			"file_get": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
@@ -1478,7 +1627,27 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 		},
+		"gitlab_runner": {
+			"update": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"paused": params["paused"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"runner_id", "paused"},
+					"properties": map[string]any{
+						"runner_id": map[string]any{"type": "integer"},
+						"paused":    map[string]any{"type": "boolean"},
+					},
+				},
+			},
+		},
 		"gitlab_group": {
+			"group_label_update": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+			},
 			"ldap_link_delete_for_provider": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"deleted": true}, nil

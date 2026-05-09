@@ -4545,7 +4545,7 @@ func dynamicSystemPrompt(toolSurface string) string {
 	if isDynamicTwoToolEvalSurface(toolSurface) {
 		return `You are evaluating GitLab MCP dynamic-2 tool mode. Use only the provided tools: gitlab_find_action and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 	}
-	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first. If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool. Canonical action IDs use domain.action without the gitlab_ tool prefix: use server.health_check, issue.create, feature_flags.ff_user_list_create, and admin.settings_get, not gitlab_server.health_check, gitlab_issue.create, feature_flag_user_list.create, or admin.broadcast_message_list for current settings. Do not guess or invent alias action IDs such as merge_request.accept, issue.notes, pipeline.jobs, or runner.delete_registered when the prompt gives numeric runner_id. For examples like merging a merge request, resolving a git remote URL to a project, listing issue notes, listing jobs for a pipeline, downloading one artifact_path from numeric job_id, or reading current instance settings, search first and then describe before executing unless the exact canonical ID and exact required params are already known. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}; params is always required, even when empty. Use only the parameter names shown by gitlab_describe_tools. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first. If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool. Do not call gitlab_describe_tools just to reconfirm an exact required call already supplied in the prompt. Canonical action IDs use domain.action without the gitlab_ tool prefix: use server.health_check, issue.create, feature_flags.ff_user_list_create, and admin.settings_get, not gitlab_server.health_check, gitlab_issue.create, feature_flag_user_list.create, or admin.broadcast_message_list for current settings. Do not guess or invent alias action IDs such as merge_request.accept, issue.notes, pipeline.jobs, or runner.delete_registered when the prompt gives numeric runner_id. For examples like merging a merge request, resolving a git remote URL to a project, listing issue notes, listing jobs for a pipeline, downloading one artifact_path from numeric job_id, or reading current instance settings, search first and then describe before executing unless the exact canonical ID and exact required params are already known. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}; params is always required, even when empty. Use only the parameter names shown by gitlab_describe_tools. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Never use angle-bracket placeholder values such as <project_id>; use concrete values from the task. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -4561,7 +4561,7 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	if isDynamicTwoToolEvalSurface(toolSurface) {
 		return joinDynamicPrompt(exactPreamble, prompt, "Dynamic-2 mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. Use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
 	}
-	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool. If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the described input schema. Always include top-level params, using params:{} only for actions with no parameters. Canonical action IDs do not include gitlab_ prefixes. Never send confirm:false; omit confirm unless the action is destructive. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool. If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool. When an exact required call is present above, execute it directly without an extra describe call. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the described input schema, or to the supplied input object when an exact required call is present. Always include top-level params, using params:{} only for actions with no parameters. Canonical action IDs do not include gitlab_ prefixes. Never use angle-bracket placeholder values. Never send confirm:false; omit confirm unless the action is destructive. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
 }
 
 func joinDynamicPrompt(preamble, prompt, override string) string {
@@ -5054,7 +5054,7 @@ var stringExampleParamMarkers = map[string][]string{
 	"commit_sha":         {"on commit "},
 	"discussion_id":      {"discussion_id ", "from discussion "},
 	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
-	"key":                {"variable "},
+	"key":                {"public key ", "variable "},
 	"value":              {"value "},
 	"title":              {"titled "},
 	"user_xids":          {"user IDs ", "user_xids "},
@@ -5088,6 +5088,30 @@ func exampleParamValue(param, prompt string) any {
 	case "scope":
 		if strings.Contains(lowerPrompt, promptPhraseFailedJobs) {
 			return "failed"
+		}
+	case "scopes":
+		if strings.Contains(lowerPrompt, "read_api") {
+			return []string{"read_api"}
+		}
+		if strings.Contains(lowerPrompt, "read_repository") {
+			return []string{"read_repository"}
+		}
+	case "access_level":
+		if strings.Contains(lowerPrompt, "reporter") {
+			return 20
+		}
+		if strings.Contains(lowerPrompt, "developer") {
+			return 30
+		}
+		if strings.Contains(lowerPrompt, "maintainer") {
+			return 40
+		}
+	case "paused":
+		if strings.Contains(lowerPrompt, "paused=true") {
+			return true
+		}
+		if strings.Contains(lowerPrompt, "paused=false") {
+			return false
 		}
 	case "project_id":
 		if value, ok := exampleProjectIDValue(prompt); ok {
@@ -5123,8 +5147,22 @@ func fallbackExampleParamValue(param string) any {
 	switch param {
 	case "id", "attestation_iid", "event_id", "external_status_check_id", "check_id", "csp_namespace_id", "export_id", "issue_iid", "merge_request_iid", "pipeline_id", "job_id", "runner_id", "schedule_id", "trigger_id", "user_id", "award_id", "deploy_key_id", "deploy_token_id", "token_id", "epic_iid", "child_iid", "note_id":
 		return 123
-	case "confirm", "resolved":
+	case "confirm", "resolved", "paused":
 		return true
+	case "access_level":
+		return 30
+	case "cron":
+		return "0 2 * * 1"
+	case "ref", "content_ref":
+		return "main"
+	case "link_url":
+		return "https://example.com/eval-crud-badge"
+	case "image_url":
+		return "https://example.com/eval-crud-badge.svg"
+	case "scopes":
+		return []string{"read_api"}
+	case "key":
+		return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq4vQEiXKlQSp6jT+AOHzGznV6ToZBap9i1dulyV8EX eval@example.com"
 	default:
 		return fmt.Sprintf("<%s>", param)
 	}
@@ -5256,7 +5294,11 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 	route, ok := routes[step.ExpectedTool][step.ExpectedAction]
 	if step.ExpectedAction != "" && toolName == step.ExpectedTool && ok && route.InputSchema != nil {
 		if params, paramsOK := input["params"].(map[string]any); paramsOK {
-			input = cloneToolInputWithParams(input, toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema))
+			normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
+			if step.ExpectedTool == dynamicExecuteTool {
+				normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
+			}
+			input = cloneToolInputWithParams(input, normalizedParams)
 		}
 	}
 	result := validateStepCall(step, toolName, input)
