@@ -963,6 +963,40 @@ func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
 	}
 }
 
+// TestCreateServer_DynamicThreeToolSurface verifies the explicit current
+// three-tool dynamic selector remains equivalent to TOOL_SURFACE=dynamic.
+func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3}, nil)
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_search_tools":   false,
+		"gitlab_describe_tools": false,
+		"gitlab_execute_tool":   false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic-3 tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic-3 tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic-3 surface should expose catalog action schema resources: %v", err)
+	}
+}
+
 // TestCreateServer_MinimalCapabilitySurface verifies the explicit low-token
 // capability surface keeps workspace roots while omitting optional schema,
 // workflow, static data resources, and prompts.
@@ -1852,6 +1886,7 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
 		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "search"},
 		{name: "dynamic-2", toolSurface: config.ToolSurfaceDynamic2, query: "find"},
+		{name: "dynamic-3", toolSurface: config.ToolSurfaceDynamic3, query: "search"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

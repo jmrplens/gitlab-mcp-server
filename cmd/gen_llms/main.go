@@ -280,7 +280,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("# gitlab-mcp-server\n\n")
 	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.\n\n")
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
-	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d meta-tools (%d self-managed enterprise, %d on GitLab.com Enterprise),\n",
+	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
 	fmt.Fprintf(&b, "an optional 3-tool dynamic search/describe/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
 		resourceCount, len(catalog.Prompts))
@@ -361,7 +361,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
-	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d meta-tools (%d self-managed enterprise, %d GitLab.com Enterprise) | 3 dynamic tools | %d resources | %d prompts\n\n",
+	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | 3 dynamic tools | %d resources | %d prompts\n\n",
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Dynamic Toolset\n\n")
