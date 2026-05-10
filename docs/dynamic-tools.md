@@ -97,13 +97,13 @@ sequenceDiagram
     LLM-->>User: Human-readable result
 ```
 
-The three dynamic tools return normal MCP tool results. Each response includes Markdown text for human-readable clients and structured content for models that inspect JSON payloads directly. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
+The three dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
 
 ## MCP Response Shapes
 
 ### `gitlab_search_tools`
 
-Search returns a ranked shortlist of catalog actions. The Markdown response is a compact table with action IDs, destructive flags, and required params. The structured response uses this shape:
+Search returns a ranked shortlist of catalog actions. The Markdown response is a compact table with action IDs, destructive flags, and required params. The `structuredContent` payload uses this shape:
 
 ```json
 {
@@ -129,7 +129,7 @@ An empty query returns `isError: true` with example search terms. A query with n
 
 ### `gitlab_describe_tools`
 
-Describe hydrates one or more canonical action IDs. It accepts either `action` or `actions`, trims duplicates, resolves unambiguous aliases, and rejects unknown or ambiguous IDs with repair guidance. The response includes the exact action-specific input schema and an executable example:
+Describe hydrates one or more canonical action IDs. It accepts either `action` or `actions`, trims duplicates, resolves unambiguous aliases, and rejects unknown or ambiguous IDs with repair guidance. The `structuredContent` payload includes the exact action-specific input schema and an executable example:
 
 ```json
 {
@@ -164,7 +164,7 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
 }
 ```
 
-`output_schema` is included when the underlying action route provides one. The Markdown response mirrors the same details and embeds the compact JSON input schema for clients that display only text content.
+`output_schema` is included when the underlying action route provides one. The Markdown response includes the core metadata and embeds the compact JSON input schema for clients that display only text content.
 
 ### `gitlab_execute_tool`
 

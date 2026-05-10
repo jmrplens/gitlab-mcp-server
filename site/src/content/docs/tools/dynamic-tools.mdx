@@ -4,7 +4,7 @@ description: Low-token search, describe, and execute mode for large GitLab MCP c
 ---
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) in the repository.
+This page is the user-facing overview. For the authoritative field-level contract and implementation notes, see [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) in the repository.
 :::
 
 The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only three public tools:
@@ -104,7 +104,7 @@ sequenceDiagram
     AI-->>User: Formatted answer
 ```
 
-Each dynamic tool returns a normal MCP tool result: Markdown for clients that render text and structured content for models that inspect JSON. `gitlab_execute_tool` does not use a special GitLab path. It dispatches to the same underlying action handler used by meta-tools, so schemas, policy checks, safe-mode previews, destructive confirmations, and result formatting stay consistent.
+Each dynamic tool returns a normal MCP tool result: Markdown in `content`, JSON data in `structuredContent`, and `isError` on the result envelope when the server returns repair guidance. `gitlab_execute_tool` does not use a special GitLab path. It dispatches to the same underlying action handler used by meta-tools, so schemas, policy checks, safe-mode previews, destructive confirmations, and result formatting stay consistent.
 
 ## What each call returns
 
@@ -183,13 +183,13 @@ The assistant should execute the canonical action ID returned by search or descr
 
 Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should use the message as feedback and retry the right step.
 
-| Failure                       | Recovery                                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| Search query is empty         | Retry search with a domain, resource, verb, and useful filters                                |
-| Search is too broad           | Add terms like `project`, `merge request`, `issue`, `pipeline`, `authored by me`, or `opened` |
-| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message                        |
-| Params are rejected           | Describe the action and rebuild `params` from `input_schema`                                  |
-| Destructive action is blocked | Ask the user for explicit approval before retrying with `confirm: true`                       |
+| Failure                       | Recovery                                                                |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Search query is empty         | Retry search with a domain, resource, verb, and useful filters          |
+| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message  |
+| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                      |
+| Params are rejected           | Describe the action and rebuild `params` from `input_schema`            |
+| Destructive action is blocked | Ask the user for explicit approval before retrying with `confirm: true` |
 
 ## Destructive actions stay protected
 

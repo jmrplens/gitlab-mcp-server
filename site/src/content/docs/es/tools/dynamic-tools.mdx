@@ -4,7 +4,7 @@ description: Modo de búsqueda, descripción y ejecución con bajo consumo de to
 ---
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) en el repositorio.
+Esta página es la guía de usuario. Para el contrato autoritativo a nivel de campos y las notas de implementación, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) en el repositorio.
 :::
 
 El conjunto de herramientas dinámico es el modo de bajo consumo de tokens de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab, pero muestra a tu cliente de IA solo tres herramientas públicas:
@@ -104,7 +104,7 @@ sequenceDiagram
     AI-->>User: Respuesta formateada
 ```
 
-Cada herramienta dinámica devuelve un resultado MCP normal: Markdown para clientes que muestran texto y contenido estructurado para modelos que inspeccionan JSON. `gitlab_execute_tool` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, las confirmaciones destructivas y el formato de resultados siguen siendo coherentes.
+Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `content`, datos JSON en `structuredContent` e `isError` en el envoltorio del resultado cuando el servidor devuelve una guía de reparación. `gitlab_execute_tool` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, las confirmaciones destructivas y el formato de resultados siguen siendo coherentes.
 
 ## Qué devuelve cada llamada
 
@@ -183,13 +183,13 @@ El asistente debe ejecutar el ID de acción canónico devuelto por búsqueda o d
 
 El modo dinámico está diseñado para poder repararse. Si una llamada devuelve `isError: true`, el asistente debe usar el mensaje como feedback y repetir el paso correcto.
 
-| Fallo                                  | Recuperación                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles                               |
-| La búsqueda es demasiado amplia        | Añadir términos como `project`, `merge request`, `issue`, `pipeline`, `authored by me` u `opened` |
-| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error                        |
-| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`                                   |
-| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true`                     |
+| Fallo                                  | Recuperación                                                                  |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles           |
+| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error    |
+| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados y describirlo                  |
+| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`               |
+| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` |
 
 ## Las acciones destructivas siguen protegidas
 
