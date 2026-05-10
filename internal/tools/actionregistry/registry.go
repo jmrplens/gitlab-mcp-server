@@ -80,7 +80,10 @@ func NewCatalog() *Catalog {
 
 // FromActionMaps converts legacy route maps into a canonical catalog.
 func FromActionMaps(routes map[string]toolutil.ActionMap) *Catalog {
-	catalog, _ := FromActionMapsWithError(routes)
+	catalog, err := FromActionMapsWithError(routes)
+	if err != nil {
+		panic(fmt.Errorf("FromActionMaps: %w", err))
+	}
 	return catalog
 }
 

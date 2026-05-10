@@ -687,7 +687,7 @@ func run() error {
 	if err := writeCoverageReportIfRequested(opts, results, routes); err != nil {
 		return err
 	}
-	return writeTraceArtifacts(opts.TraceDir, results)
+	return writeTraceArtifacts(opts.TraceDir, results, opts.TraceProviderBodies)
 }
 
 // parseFlags is an internal helper for the main package.
@@ -3933,11 +3933,15 @@ func acceptsDynamicPreludeCall(toolSurface string, step evalStep, validation val
 	case strings.HasSuffix(step.ExpectedAction, "_get") && strings.HasSuffix(validation.Action, "_list"):
 		expectedListAction := strings.TrimSuffix(step.ExpectedAction, "_get") + "_list"
 		return validation.Action == expectedListAction
-	case hasParam(step.RequiredParams, "project_id") && (validation.Action == actionProjectList || validation.Action == actionProjectGet || validation.Action == actionSearchProjects):
+	case hasParam(step.RequiredParams, "project_id") && isProjectLookupAction(validation.Action) && !isProjectLookupAction(step.ExpectedAction):
 		return true
 	default:
 		return false
 	}
+}
+
+func isProjectLookupAction(action string) bool {
+	return action == actionProjectList || action == actionProjectGet || action == actionSearchProjects
 }
 
 // successfulSimulatedToolContent is an internal helper for the main package.
@@ -6508,7 +6512,7 @@ func failureDiagnosticCategory(notes []string) string {
 }
 
 // writeTraceArtifacts is an internal helper for the main package.
-func writeTraceArtifacts(dir string, results []taskResult) error {
+func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies bool) error {
 	if dir == "" {
 		return nil
 	}
@@ -6519,7 +6523,11 @@ func writeTraceArtifacts(dir string, results []taskResult) error {
 	var index strings.Builder
 	var jsonl strings.Builder
 	fmt.Fprintf(&index, "# Meta-Tool Evaluation Traces\n\n")
-	fmt.Fprintf(&index, "Each JSON file records the exact task prompt, expected route sequence, provider HTTP request/response bodies, assistant tool calls, MCP CallTool request/response payloads, simulated tool results, validation messages, and final summary for one model-backed evaluation attempt. Provider authentication headers are not serialized. `traces.jsonl` contains the same records as one JSON object per line for batch analysis.\n\n")
+	providerTraceDescription := "provider HTTP exchange metadata"
+	if traceProviderBodies {
+		providerTraceDescription = "provider HTTP request/response bodies"
+	}
+	fmt.Fprintf(&index, "Each JSON file records the exact task prompt, expected route sequence, %s, assistant tool calls, MCP CallTool request/response payloads, simulated tool results, validation messages, and final summary for one model-backed evaluation attempt. Provider authentication headers are not serialized. Raw provider bodies are included only when `--trace-provider-bodies` is set. `traces.jsonl` contains the same records as one JSON object per line for batch analysis.\n\n", providerTraceDescription)
 	fmt.Fprintf(&index, "| Model | Run | Task | Final success | First pass | Trace file |\n")
 	fmt.Fprintf(&index, "| --- | ---: | --- | --- | --- | --- |\n")
 

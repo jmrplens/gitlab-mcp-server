@@ -32,13 +32,13 @@ Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals e
 
 **Default configuration**: with `TOOL_SURFACE` unset, `META_TOOLS` unset or `true`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses **base meta-tools**. That means 33 visible tools, 855 reachable actions, and no Enterprise/Premium-only catalog.
 
-| Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens | Context used (200K) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Individual tools (Enterprise/Premium catalog) | 1006 | 1006 | 532,774 | 17,622 | 550,396 | 275.2% |
-| Meta-tools (base catalog + MCP helpers, **default**) | 33 | 855 | 57,018 | 18,198 | 75,216 | 37.6% |
-| Meta-tools (Enterprise/Premium catalog + MCP helpers) | 48 | 1010 | 71,837 | 18,198 | 90,035 | 45.0% |
-| Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 855 / 1010 | 2,029 | 18,198 | 20,227 | 10.1% |
-| Dynamic-3 + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 3 | 855 / 1010 | 2,029 | 184 | 2,213 | 1.1% |
+| Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Individual tools (Enterprise/Premium catalog) | 1006 | 1006 | 532,774 | 17,622 | 550,396 |
+| Meta-tools (base catalog + MCP helpers, **default**) | 33 | 855 | 57,018 | 18,198 | 75,216 |
+| Meta-tools (Enterprise/Premium catalog + MCP helpers) | 48 | 1010 | 71,837 | 18,198 | 90,035 |
+| Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 855 / 1010 | 2,029 | 18,198 | 20,227 |
+| Dynamic-3 + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 3 | 855 / 1010 | 2,029 | 184 | 2,213 |
 
 Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 850 / 1005 while the comparable reachable-action count is 855 / 1010. `dynamic` and `dynamic-3` expose the same current three-tool search/describe/execute surface. The experimental `dynamic-2` comparison surface uses two visible tools and measures about **19,521 tokens** with full capabilities or **1,507 tokens** with `CAPABILITY_SURFACE=minimal`.
 

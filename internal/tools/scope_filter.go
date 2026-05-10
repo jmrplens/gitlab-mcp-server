@@ -80,7 +80,9 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 }
 
 // FilterScopeFilteredCatalog removes catalog groups whose required scopes are
-// not satisfied by the detected token scopes.
+// not satisfied by the detected token scopes. It returns a non-nil error when
+// rebuilding the filtered catalog fails, which means callers could not safely
+// evaluate the scope filter and should propagate the failure.
 func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) (*actionregistry.Catalog, error) {
 	if catalog == nil {
 		return actionregistry.NewCatalog(), nil

@@ -4294,7 +4294,7 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 		Summary:      traceSummary{FinalSuccess: true, FirstPass: true, CompletedSteps: 1, ExpectedSteps: 1},
 	}
 	dir := t.TempDir()
-	if err := writeTraceArtifacts(dir, []taskResult{{Trace: trace}}); err != nil {
+	if err := writeTraceArtifacts(dir, []taskResult{{Trace: trace}}, false); err != nil {
 		t.Fatalf("writeTraceArtifacts() error = %v", err)
 	}
 
@@ -4306,6 +4306,14 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 		if !strings.Contains(string(data), "MT-002") {
 			t.Fatalf("%s = %s, want task ID", name, data)
 		}
+	}
+
+	index, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatalf("read index.md: %v", err)
+	}
+	if strings.Contains(string(index), "provider HTTP request/response bodies") {
+		t.Fatalf("index.md = %s, should not promise raw provider bodies when traceProviderBodies=false", index)
 	}
 }
 

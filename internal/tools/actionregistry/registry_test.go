@@ -66,6 +66,18 @@ func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestFromActionMaps_InvalidToolName_Panics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("FromActionMaps() did not panic for invalid route map")
+		}
+	}()
+
+	_ = FromActionMaps(map[string]toolutil.ActionMap{
+		"": {"get": testRoute(false)},
+	})
+}
+
 func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	group := Group{ToolName: "gitlab_project"}
 	group.SetAction(Action{})

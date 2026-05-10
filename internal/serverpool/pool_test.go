@@ -547,6 +547,12 @@ func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
 	if !strings.Contains(err.Error(), factoryErr.Error()) {
 		t.Fatalf("GetOrCreate() error = %q, want factory error", err)
 	}
+	if pool.Size() != 0 {
+		t.Fatalf("pool.Size() = %d, want 0 after factory error", pool.Size())
+	}
+	if stats := pool.Stats(); stats.CurrentSize != 0 {
+		t.Fatalf("pool.Stats().CurrentSize = %d, want 0 after factory error", stats.CurrentSize)
+	}
 }
 
 // TestEvictByKey verifies that evictByKey removes the specified entry

@@ -130,9 +130,9 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	labels := parseCSVLabels(labelsStr)
 
 	var confidential *bool
-	confidentialConfirmed, err := ec.Confirm(ctx, "Should this issue be confidential?")
-	if err == nil {
-		confidential = &confidentialConfirmed
+	confidential, err = confirmOptionalBool(ctx, ec, "Should this issue be confidential?", "confidentiality")
+	if err != nil {
+		return issues.Output{}, err
 	}
 
 	tracker.Step(ctx, 3, 4, "Confirming issue creation...")
@@ -264,19 +264,30 @@ func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	var removeSource *bool
-	var removeConfirmed bool
-	if removeConfirmed, err = ec.Confirm(ctx, "Remove source branch after merge?"); err == nil {
-		removeSource = &removeConfirmed
+	removeSource, err := confirmOptionalBool(ctx, ec, "Remove source branch after merge?", "source branch removal")
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	var squash *bool
-	var squashConfirmed bool
-	if squashConfirmed, err = ec.Confirm(ctx, "Squash commits on merge?"); err == nil {
-		squash = &squashConfirmed
+	squash, err := confirmOptionalBool(ctx, ec, "Squash commits on merge?", "squash option")
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	return labels, removeSource, squash, nil
+}
+
+// confirmOptionalBool returns nil when the user declines an optional boolean
+// prompt and returns an error when the user cancels the flow.
+func confirmOptionalBool(ctx context.Context, ec elicitation.Client, prompt, field string) (*bool, error) {
+	confirmed, err := ec.Confirm(ctx, prompt)
+	if err == nil {
+		return &confirmed, nil
+	}
+	if errors.Is(err, elicitation.ErrDeclined) {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("collecting %s: %w", field, err)
 }
 
 // mrSummaryParams groups the parameters for building an MR confirmation summary.
@@ -411,14 +422,11 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		return projects.Output{}, fmt.Errorf("collecting visibility: %w", err)
 	}
 
-	initReadme, err := ec.Confirm(ctx, "Initialize the repository with a README file?")
+	initReadmeChoice, err := confirmOptionalBool(ctx, ec, "Initialize the repository with a README file?", "README initialization")
 	if err != nil {
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			initReadme = false
-		} else {
-			return projects.Output{}, fmt.Errorf("collecting README initialization: %w", err)
-		}
+		return projects.Output{}, err
 	}
+	initReadme := initReadmeChoice != nil && *initReadmeChoice
 
 	defaultBranch, err := ec.PromptText(ctx, "Enter the default branch name (or leave empty for 'main')", "default_branch")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
