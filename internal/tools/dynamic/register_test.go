@@ -324,9 +324,28 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	}
 }
 
-// TestDescribe_MetaCatalogOmitsOutputSchema verifies that Describe keeps the
-// structured payload compact by omitting output schemas from meta catalog actions.
-func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
+// TestDescribe_IncludesOutputSchema verifies that dynamic descriptions expose
+// the action result schema when the backing catalog route has one.
+func TestDescribe_IncludesOutputSchema(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "project.get"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	description := output.Actions[0]
+	properties := schemaProperties(description.OutputSchema)
+	if _, ok := properties["project_id"]; !ok {
+		t.Fatalf("OutputSchema properties = %v, want project_id", properties)
+	}
+}
+
+// TestDescribe_MetaCatalogSchemas verifies that Describe returns input schemas
+// and includes output schemas when route metadata provides them.
+func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
 	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Actions: []string{
@@ -348,8 +367,8 @@ func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal(DescribeOutput) error = %v", err)
 	}
-	if strings.Contains(string(structured), "output_schema") {
-		t.Fatalf("DescribeOutput JSON contains output_schema: %s", structured)
+	if !strings.Contains(string(structured), "output_schema") {
+		t.Fatalf("DescribeOutput JSON missing output_schema: %s", structured)
 	}
 	markdown := textContent(result)
 	for _, notWant := range []string{"input_schema", "output_schema", "properties"} {
@@ -360,8 +379,8 @@ func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 
 	projectList := actionDescriptionByID(t, output, "project.list")
 	assertSchemaHasProperties(t, projectList.InputSchema, "search", "owned", "per_page")
-	if projectList.OutputSchema != nil {
-		t.Fatalf("project.list OutputSchema = %v, want nil", projectList.OutputSchema)
+	if projectList.OutputSchema == nil {
+		t.Fatal("project.list OutputSchema is nil")
 	}
 	if len(projectList.RequiredParams) != 0 {
 		t.Fatalf("project.list RequiredParams = %v, want none", projectList.RequiredParams)
@@ -369,8 +388,8 @@ func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 
 	mergeRequestList := actionDescriptionByID(t, output, "merge_request.list")
 	assertSchemaHasProperties(t, mergeRequestList.InputSchema, "project_id", "state", "author_username", "scope")
-	if mergeRequestList.OutputSchema != nil {
-		t.Fatalf("merge_request.list OutputSchema = %v, want nil", mergeRequestList.OutputSchema)
+	if mergeRequestList.OutputSchema == nil {
+		t.Fatal("merge_request.list OutputSchema is nil")
 	}
 	if !slices.Contains(mergeRequestList.RequiredParams, "project_id") {
 		t.Fatalf("merge_request.list RequiredParams = %v, want project_id", mergeRequestList.RequiredParams)
@@ -383,14 +402,14 @@ func TestDescribe_MetaCatalogOmitsOutputSchema(t *testing.T) {
 	if len(schemaProperties(currentUserStatus.InputSchema)) != 0 {
 		t.Fatalf("user.current_user_status input properties = %v, want none", schemaProperties(currentUserStatus.InputSchema))
 	}
-	if currentUserStatus.OutputSchema != nil {
-		t.Fatalf("user.current_user_status OutputSchema = %v, want nil", currentUserStatus.OutputSchema)
+	if currentUserStatus.OutputSchema == nil {
+		t.Fatal("user.current_user_status OutputSchema is nil")
 	}
 
 	userList := actionDescriptionByID(t, output, "user.list")
 	assertSchemaHasProperties(t, userList.InputSchema, "search", "username", "per_page")
-	if userList.OutputSchema != nil {
-		t.Fatalf("user.list OutputSchema = %v, want nil", userList.OutputSchema)
+	if userList.OutputSchema == nil {
+		t.Fatal("user.list OutputSchema is nil")
 	}
 }
 
@@ -414,7 +433,7 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 		t.Fatalf("found result = %+v, want destructive action with schema", found)
 	}
 	if found.OutputSchema != nil {
-		t.Fatalf("found OutputSchema = %v, want nil", found.OutputSchema)
+		t.Fatalf("found OutputSchema = %v, want nil for route without output schema", found.OutputSchema)
 	}
 	if found.Example.Tool != "gitlab_execute_tool" || found.Example.Arguments["confirm"] != true {
 		t.Fatalf("example = %+v, want execute example with confirm", found.Example)
@@ -720,6 +739,42 @@ func TestExecute_DispatchesReadOnlyAction(t *testing.T) {
 	}
 	if data["owned"] != true {
 		t.Fatalf("owned = %v, want true", data["owned"])
+	}
+}
+
+// TestExecute_UsesCatalogFormatter verifies that dynamic execution preserves
+// the formatter attached to the backing catalog group.
+func TestExecute_UsesCatalogFormatter(t *testing.T) {
+	catalog := actionregistry.NewCatalog()
+	group := actionregistry.NewGroup(actionregistry.GroupOptions{
+		ToolName: "gitlab_custom",
+		FormatResult: func(any) *mcp.CallToolResult {
+			return toolutil.ToolResultAnnotated("custom formatted result", toolutil.ContentDetail)
+		},
+	})
+	group.SetAction(actionregistry.Action{
+		Name: "get",
+		Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]any{"ok": true}, nil
+		}),
+	})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	registry := NewRegistryFromCatalog(catalog)
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "custom.get", Params: map[string]any{}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Execute() result = %+v, want non-error", result)
+	}
+	if text := textContent(result); text != "custom formatted result" {
+		t.Fatalf("Execute() text = %q, want custom formatter output", text)
+	}
+	if data, ok := output.(map[string]any); !ok || data["ok"] != true {
+		t.Fatalf("Execute() output = %#v, want route output", output)
 	}
 }
 
@@ -1413,6 +1468,12 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				InputSchema: map[string]any{
 					"type":     "object",
 					"required": []any{"project_id"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+					},
+				},
+				OutputSchema: map[string]any{
+					"type": "object",
 					"properties": map[string]any{
 						"project_id": map[string]any{"type": "integer"},
 					},

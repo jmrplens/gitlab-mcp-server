@@ -51,6 +51,7 @@ type modelProviderRequest struct {
 	System      string
 	Tools       []modelTool
 	Messages    []modelMessage
+	TraceBodies bool
 }
 
 // modelProvider defines the contract for model provider operations.
@@ -191,7 +192,7 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	trace := newModelProviderTrace("anthropic", http.MethodPost, anthropicAPI, body)
+	trace := newModelProviderTrace("anthropic", http.MethodPost, anthropicAPI, body, request.TraceBodies)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPI, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new anthropic request: %w", err)
@@ -202,7 +203,7 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 
 	respBody, status, retry, err := doModelRequest(client, req, "anthropic")
-	trace.setResponse(status, respBody)
+	trace.setResponse(status, respBody, request.TraceBodies)
 	if err != nil {
 		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
@@ -309,7 +310,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("marshal %s request: %w", p.name, err)
 	}
-	trace := newModelProviderTrace(p.name, http.MethodPost, p.endpoint, body)
+	trace := newModelProviderTrace(p.name, http.MethodPost, p.endpoint, body, request.TraceBodies)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new %s request: %w", p.name, err)
@@ -318,7 +319,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	respBody, status, retry, err := doModelRequest(client, req, p.name)
-	trace.setResponse(status, respBody)
+	trace.setResponse(status, respBody, request.TraceBodies)
 	if err != nil {
 		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
@@ -746,7 +747,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 		return modelResponse{}, false, fmt.Errorf("marshal google request: %w", err)
 	}
 	endpoint := geminiAPIBase + url.PathEscape(request.Model) + ":generateContent"
-	trace := newModelProviderTrace("google", http.MethodPost, endpoint, body)
+	trace := newModelProviderTrace("google", http.MethodPost, endpoint, body, request.TraceBodies)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new google request: %w", err)
@@ -755,7 +756,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	req.Header.Set(headerGoogleAuth, apiKey)
 
 	respBody, status, retry, err := doModelRequest(client, req, "google")
-	trace.setResponse(status, respBody)
+	trace.setResponse(status, respBody, request.TraceBodies)
 	if err != nil {
 		return modelResponse{}, retry, withProviderTrace(err, trace)
 	}
@@ -995,21 +996,26 @@ func doModelRequest(client *http.Client, req *http.Request, provider string) (bo
 	return respBody, resp.StatusCode, false, nil
 }
 
-// newModelProviderTrace records a provider request body without request headers.
-func newModelProviderTrace(provider, method, endpoint string, requestBody []byte) *modelProviderTrace {
+// newModelProviderTrace records provider metadata and optionally captures raw
+// request bodies for explicit debugging sessions.
+func newModelProviderTrace(provider, method, endpoint string, requestBody []byte, includeBody bool) *modelProviderTrace {
 	trace := &modelProviderTrace{Provider: provider, Method: method, Endpoint: endpoint}
-	if len(bytes.TrimSpace(requestBody)) > 0 {
+	if includeBody && len(bytes.TrimSpace(requestBody)) > 0 {
 		trace.RequestBody = append(json.RawMessage(nil), requestBody...)
 	}
 	return trace
 }
 
-// setResponse records the provider response body in JSON form when possible.
-func (t *modelProviderTrace) setResponse(status int, body []byte) {
+// setResponse records provider status and optionally captures raw response
+// bodies for explicit debugging sessions.
+func (t *modelProviderTrace) setResponse(status int, body []byte, includeBody bool) {
 	if t == nil {
 		return
 	}
 	t.ResponseStatus = status
+	if !includeBody {
+		return
+	}
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 {
 		return

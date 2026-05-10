@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -138,20 +139,29 @@ func pathWithinAllowedImportDirs(canonicalPath string) bool {
 }
 
 func allowedImportArchiveDirs() []string {
-	dirs := []string{}
-	if cwd, err := os.Getwd(); err == nil {
-		dirs = append(dirs, cwd)
+	type importDirEntry struct {
+		path       string
+		configured bool
 	}
-	dirs = append(dirs, os.TempDir())
+	dirs := []importDirEntry{}
+	if cwd, err := os.Getwd(); err == nil {
+		dirs = append(dirs, importDirEntry{path: cwd})
+	}
+	dirs = append(dirs, importDirEntry{path: os.TempDir()})
 	if configured := os.Getenv(ImportArchiveAllowlistEnv); configured != "" {
-		dirs = append(dirs, filepath.SplitList(configured)...)
+		for _, dir := range filepath.SplitList(configured) {
+			dirs = append(dirs, importDirEntry{path: dir, configured: true})
+		}
 	}
 
 	allowed := make([]string, 0, len(dirs))
 	seen := make(map[string]struct{}, len(dirs))
 	for _, dir := range dirs {
-		canonicalDir, err := canonicalDirPath(dir)
+		canonicalDir, err := canonicalDirPath(dir.path)
 		if err != nil {
+			if dir.configured {
+				slog.Warn("skipping invalid import archive allowlist directory", "env", ImportArchiveAllowlistEnv, "path", dir.path, "error", err)
+			}
 			continue
 		}
 		if _, ok := seen[canonicalDir]; ok {

@@ -182,7 +182,13 @@ func main() {
 	}
 
 	if toolSearch != "" {
-		runToolSearch(toolSearch, hcfg.metaTools, hcfg.enterprise)
+		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+		if surfaceErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", surfaceErr)
+			exitProcess(1)
+			return
+		}
+		runToolSearch(toolSearch, toolSurface, hcfg.enterprise)
 		return
 	}
 
@@ -1191,27 +1197,30 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		Arguments   []serverCardPromptArgument `json:"arguments,omitempty"`
 	}
 
-	promptsResult, err := session.ListPrompts(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list prompts: %w", err)
-	}
-	cardPrompts := make([]serverCardPrompt, 0, len(promptsResult.Prompts))
-	for _, p := range promptsResult.Prompts {
-		args := make([]serverCardPromptArgument, 0, len(p.Arguments))
-		for _, a := range p.Arguments {
-			args = append(args, serverCardPromptArgument{
-				Name:        a.Name,
-				Title:       a.Title,
-				Description: a.Description,
-				Required:    a.Required,
+	cardPrompts := []serverCardPrompt{}
+	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
+		promptsResult, promptsErr := session.ListPrompts(ctx, nil)
+		if promptsErr != nil {
+			return nil, fmt.Errorf("list prompts: %w", promptsErr)
+		}
+		cardPrompts = make([]serverCardPrompt, 0, len(promptsResult.Prompts))
+		for _, p := range promptsResult.Prompts {
+			args := make([]serverCardPromptArgument, 0, len(p.Arguments))
+			for _, a := range p.Arguments {
+				args = append(args, serverCardPromptArgument{
+					Name:        a.Name,
+					Title:       a.Title,
+					Description: a.Description,
+					Required:    a.Required,
+				})
+			}
+			cardPrompts = append(cardPrompts, serverCardPrompt{
+				Name:        p.Name,
+				Title:       p.Title,
+				Description: p.Description,
+				Arguments:   args,
 			})
 		}
-		cardPrompts = append(cardPrompts, serverCardPrompt{
-			Name:        p.Name,
-			Title:       p.Title,
-			Description: p.Description,
-			Arguments:   args,
-		})
 	}
 
 	card := map[string]any{
@@ -1414,8 +1423,7 @@ func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerCo
 		Updater:    updater,
 	})
 	if err != nil {
-		slog.Warn("failed to build dynamic action catalog", "error", err)
-		catalog = actionregistry.NewCatalog()
+		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
 	filtered, filterErr := filterActionCatalog(catalog, cfg)
 	if filterErr != nil {
@@ -1547,8 +1555,8 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 // runToolSearch creates an in-memory MCP server, lists all tools, and
 // prints those matching every space-separated search term (AND logic,
 // case-insensitive match on name + description). Then it exits.
-func runToolSearch(query string, metaTools, enterprise bool) {
-	if err := toolSearchRunner(query, metaTools, enterprise); err != nil {
+func runToolSearch(query, toolSurface string, enterprise bool) {
+	if err := toolSearchRunner(query, toolSurface, enterprise); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		exitProcess(1)
 	}
@@ -1564,7 +1572,7 @@ var (
 // doToolSearch builds the selected MCP tool catalog, searches tool names and
 // descriptions with case-insensitive AND matching, and prints matching tool
 // names with the first description line.
-func doToolSearch(query string, metaTools, enterprise bool) error {
+func doToolSearch(query, toolSurface string, enterprise bool) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
 		return nil
@@ -1572,12 +1580,27 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
 
-	if metaTools {
+	switch config.EffectiveToolSurface(true, toolSurface) {
+	case config.ToolSurfaceMeta:
 		if err := gitlabtools.RegisterAllMeta(server, nil, enterprise); err != nil {
 			return err
 		}
-	} else {
+	case config.ToolSurfaceIndividual:
 		gitlabtools.RegisterAll(server, nil, enterprise)
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
+		catalog, err := buildToolSearchCatalog(enterprise)
+		if err != nil {
+			return err
+		}
+		dynamictools.RegisterCatalogTools(server, catalog)
+	case config.ToolSurfaceDynamic2:
+		catalog, err := buildToolSearchCatalog(enterprise)
+		if err != nil {
+			return err
+		}
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	default:
+		return fmt.Errorf("unsupported tool surface for search: %q", toolSurface)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -1632,6 +1655,21 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 		fmt.Printf("%-45s %s\n", t.Name, desc)
 	}
 	return nil
+}
+
+func buildToolSearchCatalog(enterprise bool) (*actionregistry.Catalog, error) {
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
+		Enterprise: enterprise,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build action catalog: %w", err)
+	}
+	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(catalog, nil, dynamictools.StandaloneOptions{})
+	if standaloneErr != nil {
+		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
+	}
+	return withStandalone, nil
 }
 
 // setupAutoUpdateRedaction wraps the current global slog handler with a

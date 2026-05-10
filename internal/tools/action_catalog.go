@@ -34,6 +34,9 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 			return nil, fmt.Errorf("add MCP action group: %w", err)
 		}
 	}
+	if err := catalog.Validate(); err != nil {
+		return nil, fmt.Errorf("validate action catalog: %w", err)
+	}
 	return catalog, nil
 }
 

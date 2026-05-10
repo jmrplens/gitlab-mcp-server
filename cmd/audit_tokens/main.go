@@ -379,34 +379,39 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		fmt.Fprintf(os.Stderr, "client connect (resources): %v\n", err)
 		os.Exit(1)
 	}
-	defer session.Close()
+	fatalWithSession := func(format string, args ...any) {
+		_ = session.Close()
+		fmt.Fprintf(os.Stderr, format, args...)
+		os.Exit(1)
+	}
 
 	totalBytes := 0
 
 	res, err := session.ListResources(ctx, nil)
-	if err == nil {
-		for _, r := range res.Resources {
-			b, mErr := json.Marshal(r)
-			if mErr != nil {
-				fmt.Fprintf(os.Stderr, "marshal resource %s: %v\n", r.Name, mErr)
-				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-			}
-			totalBytes += len(b)
+	if err != nil {
+		fatalWithSession("list resources: %v\n", err)
+	}
+	for _, r := range res.Resources {
+		b, mErr := json.Marshal(r)
+		if mErr != nil {
+			fatalWithSession("marshal resource %s: %v\n", r.Name, mErr)
 		}
+		totalBytes += len(b)
 	}
 
 	tpl, err := session.ListResourceTemplates(ctx, nil)
-	if err == nil {
-		for _, t := range tpl.ResourceTemplates {
-			b, mErr := json.Marshal(t)
-			if mErr != nil {
-				fmt.Fprintf(os.Stderr, "marshal template %s: %v\n", t.Name, mErr)
-				os.Exit(1)
-			}
-			totalBytes += len(b)
+	if err != nil {
+		fatalWithSession("list resource templates: %v\n", err)
+	}
+	for _, t := range tpl.ResourceTemplates {
+		b, mErr := json.Marshal(t)
+		if mErr != nil {
+			fatalWithSession("marshal template %s: %v\n", t.Name, mErr)
 		}
+		totalBytes += len(b)
 	}
 
+	_ = session.Close()
 	return totalBytes / bytesPerTok
 }
 

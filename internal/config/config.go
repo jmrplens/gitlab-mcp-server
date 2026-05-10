@@ -203,7 +203,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY value: %w", err)
 	}
 
-	toolSurface, metaTools, err := parseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	toolSurface, metaTools, err := ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
 	if err != nil {
 		return nil, err
 	}
@@ -456,10 +456,6 @@ func EffectiveCapabilitySurface(capabilitySurface string) string {
 // ParseToolSurface resolves the explicit TOOL_SURFACE value and legacy
 // META_TOOLS value into a canonical tool surface and compatible MetaTools bool.
 func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, metaTools bool, err error) {
-	return parseToolSurface(toolSurfaceValue, metaToolsValue)
-}
-
-func parseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, metaTools bool, err error) {
 	if strings.TrimSpace(toolSurfaceValue) != "" {
 		resolvedMode, parseErr := parseToolSurfaceValue(toolSurfaceValue, "TOOL_SURFACE")
 		if parseErr != nil {

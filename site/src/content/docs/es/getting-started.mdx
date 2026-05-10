@@ -88,18 +88,18 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 El host debe proporcionar estas variables antes de habilitar el plugin:
 
-| Variable                 | Obligatoria | Descripción                                                                                                   |
-| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas |
-| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                           |
-| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                   |
-| `META_TOOLS`             | No          | Selector del catálogo: `true`, `false`, `dynamic`, `dynamic-2` o `dynamic-3` (por defecto `true`)             |
-| `TOOL_SURFACE`           | No          | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                   |
-| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                          |
-| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                     |
-| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                      |
-| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                             |
-| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                         |
+| Variable                 | Obligatoria | Descripción                                                                                                             |
+| ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas           |
+| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                                     |
+| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                             |
+| `META_TOOLS`             | No          | Selector booleano heredado: `true` para meta-herramientas o `false` para herramientas individuales (por defecto `true`) |
+| `TOOL_SURFACE`           | No          | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                             |
+| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                                    |
+| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                               |
+| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                                |
+| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                                       |
+| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                                   |
 
 `TOOL_SURFACE` tiene precedencia sobre `META_TOOLS` cuando ambos están definidos. Usa `TOOL_SURFACE` en configuraciones nuevas: `meta` es el catálogo consolidado por defecto, `individual` expone cada herramienta por separado, `dynamic` y `dynamic-3` seleccionan la superficie actual de bajo consumo con tres herramientas, y `dynamic-2` selecciona la comparación experimental find/execute. `META_TOOLS` sigue funcionando para configuraciones heredadas (`true` equivale a `meta`, `false` equivale a `individual`), pero se recomienda tratarlo como obsoleto frente al selector explícito.
 

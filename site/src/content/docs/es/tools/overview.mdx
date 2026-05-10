@@ -32,7 +32,7 @@ En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se c
 
 ### Conjunto de herramientas dinámico
 
-El modo dinámico (`TOOL_SURFACE=dynamic`) es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`) es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR
@@ -122,7 +122,7 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 | `gitlab_resolve_project` | Resolución de URLs remotas Git a IDs de proyecto GitLab                | resolve                                          |
 
 :::note
-Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en ambos modos cuando la autoactualización está habilitada.
+Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en los modos meta e individual cuando la autoactualización está habilitada. El modo dinámico expone las mismas acciones de actualización mediante el catálogo canónico de acciones.
 :::
 
 ## Herramientas solo Enterprise

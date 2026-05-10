@@ -1017,21 +1017,22 @@ func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
 	}
-	wantTools := map[string]bool{
-		"gitlab_search_tools":   false,
-		"gitlab_describe_tools": false,
+	wantTools := map[string]struct{}{
+		"gitlab_search_tools":   {},
+		"gitlab_describe_tools": {},
 	}
+	gotTools := make(map[string]struct{}, len(toolsResult))
 	for _, tool := range toolsResult {
-		if tool.Name == "gitlab_execute_tool" {
-			t.Fatal("read-only dynamic surface should remove gitlab_execute_tool")
-		}
-		if _, ok := wantTools[tool.Name]; ok {
-			wantTools[tool.Name] = true
+		gotTools[tool.Name] = struct{}{}
+	}
+	for name := range gotTools {
+		if _, ok := wantTools[name]; !ok {
+			t.Fatalf("read-only dynamic surface tool %q is registered; want only discovery tools", name)
 		}
 	}
-	for name, found := range wantTools {
-		if !found {
-			t.Fatalf("read-only dynamic surface should keep discovery tool %q", name)
+	for name := range wantTools {
+		if _, found := gotTools[name]; !found {
+			t.Fatalf("read-only dynamic surface missing discovery tool %q", name)
 		}
 	}
 }
@@ -1839,15 +1840,18 @@ func TestLogIgnoredRequestOptions(t *testing.T) {
 	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{IgnoredOptions: []string{"GITLAB_URL"}})
 }
 
-// TestDoToolSearch_MetaAndIndividualModes verifies tool search can inspect
-// both reduced meta-tool mode and the full individual-tool catalog.
-func TestDoToolSearch_MetaAndIndividualModes(t *testing.T) {
+// TestDoToolSearch_HonorsToolSurface verifies tool search can inspect each
+// selectable tool surface instead of always searching the legacy meta setting.
+func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 	tests := []struct {
-		name      string
-		metaTools bool
+		name        string
+		toolSurface string
+		query       string
 	}{
-		{name: "meta", metaTools: true},
-		{name: "individual", metaTools: false},
+		{name: "meta", toolSurface: config.ToolSurfaceMeta, query: "project"},
+		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
+		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "search"},
+		{name: "dynamic-2", toolSurface: config.ToolSurfaceDynamic2, query: "find"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1859,7 +1863,7 @@ func TestDoToolSearch_MetaAndIndividualModes(t *testing.T) {
 			os.Stdout = w
 			t.Cleanup(func() { os.Stdout = oldStdout })
 
-			if searchErr := doToolSearch("project", tt.metaTools, false); searchErr != nil {
+			if searchErr := doToolSearch(tt.query, tt.toolSurface, false); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
 			_ = w.Close()
@@ -1886,7 +1890,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_ string, _ bool, _ bool) error {
+	toolSearchRunner = func(_ string, _ string, _ bool) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }
@@ -1919,7 +1923,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 		}
 	}()
 
-	runToolSearch("project", true, false)
+	runToolSearch("project", config.ToolSurfaceMeta, false)
 }
 
 // TestParseLogLevel verifies that LOG_LEVEL values map to correct slog levels.
@@ -3062,6 +3066,46 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 	const minIndividualTools = 700
 	if len(toolsRaw) < minIndividualTools {
 		t.Errorf("individual mode tools count = %d, want at least %d", len(toolsRaw), minIndividualTools)
+	}
+}
+
+// TestBuildServerCard_MinimalCapabilitySurface verifies that server-card
+// generation returns a reduced catalog instead of failing when prompts are not
+// registered.
+func TestBuildServerCard_MinimalCapabilitySurface(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:         "",
+		SkipTLSVerify:     true,
+		MetaTools:         true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON: %v", unmarshalErr)
+	}
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) != 3 {
+		t.Fatalf("card tools = %d, want 3 dynamic tools", len(toolsRaw))
+	}
+	resourcesRaw, resourcesOK := card["resources"].([]any)
+	if !resourcesOK || len(resourcesRaw) == 0 {
+		t.Fatal("card resources array missing or empty")
+	}
+	promptsRaw, promptsOK := card["prompts"].([]any)
+	if !promptsOK {
+		t.Fatal("card prompts array missing")
+	}
+	if len(promptsRaw) != 0 {
+		t.Fatalf("card prompts = %d, want 0 for minimal capability surface", len(promptsRaw))
 	}
 }
 

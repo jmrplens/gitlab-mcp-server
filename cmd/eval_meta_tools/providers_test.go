@@ -252,7 +252,7 @@ func TestGoogleProviderCallOnce_ResponseBranches(t *testing.T) {
 			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header)}, nil
 			})}
-			_, retry, err := googleProvider{}.callOnce(context.Background(), client, "key", modelProviderRequest{Model: "gemini", MaxTokens: 8})
+			_, retry, err := googleProvider{}.callOnce(context.Background(), client, "key", modelProviderRequest{Model: "gemini", MaxTokens: 8, TraceBodies: true})
 			if err == nil {
 				t.Fatal("callOnce() error = nil, want error")
 			}
@@ -354,11 +354,12 @@ func TestOpenAIProviderCallOnce_BuildsRequestAndParsesToolCall(t *testing.T) {
 	})}
 
 	response, retry, err := openAIProvider{endpoint: "https://qwen.example/chat", name: providerQwen, maxTokenField: "max_tokens", disableThinking: true}.callOnce(context.Background(), client, "secret-key", modelProviderRequest{
-		Model:     "qwen-max",
-		MaxTokens: 32,
-		System:    "system",
-		Tools:     []modelTool{{Name: "gitlab_project", Description: "Project", InputSchema: map[string]any{"type": "object"}}},
-		Messages:  []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "hello"}}}},
+		Model:       "qwen-max",
+		MaxTokens:   32,
+		System:      "system",
+		Tools:       []modelTool{{Name: "gitlab_project", Description: "Project", InputSchema: map[string]any{"type": "object"}}},
+		Messages:    []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "hello"}}}},
+		TraceBodies: true,
 	})
 	if err != nil {
 		t.Fatalf("callOnce() error = %v", err)
@@ -482,9 +483,9 @@ func TestProviderCallOnce_HTTPErrorTraceIncludesRequestAndRawResponse(t *testing
 		request      modelProviderRequest
 		wantProvider string
 	}{
-		{name: "anthropic", provider: anthropicProvider{}, request: modelProviderRequest{Model: "claude", MaxTokens: 16}, wantProvider: "anthropic"},
-		{name: "openai", provider: openAIProvider{endpoint: "https://openai.example/chat", name: providerOpenAI, maxTokenField: "max_completion_tokens"}, request: modelProviderRequest{Model: "gpt", MaxTokens: 16}, wantProvider: providerOpenAI},
-		{name: "google", provider: googleProvider{}, request: modelProviderRequest{Model: "gemini", MaxTokens: 16}, wantProvider: "google"},
+		{name: "anthropic", provider: anthropicProvider{}, request: modelProviderRequest{Model: "claude", MaxTokens: 16, TraceBodies: true}, wantProvider: "anthropic"},
+		{name: "openai", provider: openAIProvider{endpoint: "https://openai.example/chat", name: providerOpenAI, maxTokenField: "max_completion_tokens"}, request: modelProviderRequest{Model: "gpt", MaxTokens: 16, TraceBodies: true}, wantProvider: providerOpenAI},
+		{name: "google", provider: googleProvider{}, request: modelProviderRequest{Model: "gemini", MaxTokens: 16, TraceBodies: true}, wantProvider: "google"},
 	}
 
 	for _, tt := range tests {
@@ -517,6 +518,34 @@ func TestProviderCallOnce_HTTPErrorTraceIncludesRequestAndRawResponse(t *testing
 				t.Fatalf("trace request = %s endpoint = %s, want model name", providerErr.Trace.RequestBody, providerErr.Trace.Endpoint)
 			}
 		})
+	}
+}
+
+// TestProviderCallOnce_DefaultTraceOmitsRawBodies verifies trace artifacts keep
+// provider metadata by default without storing prompt or tool-call payloads.
+func TestProviderCallOnce_DefaultTraceOmitsRawBodies(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader("temporary upstream outage")), Header: make(http.Header)}, nil
+	})}
+
+	_, _, err := (openAIProvider{endpoint: "https://openai.example/chat", name: providerOpenAI, maxTokenField: "max_completion_tokens"}).callOnce(context.Background(), client, "secret-key", modelProviderRequest{
+		Model:     "gpt",
+		MaxTokens: 16,
+		Messages:  []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "sensitive prompt"}}}},
+	})
+	if err == nil {
+		t.Fatal("callOnce() error = nil, want provider error")
+	}
+	var providerErr *modelProviderCallError
+	if !errors.As(err, &providerErr) || providerErr.Trace == nil {
+		t.Fatalf("error = %v, want provider trace", err)
+	}
+	trace := providerErr.Trace
+	if trace.ResponseStatus != http.StatusServiceUnavailable {
+		t.Fatalf("response status = %d, want 503", trace.ResponseStatus)
+	}
+	if len(trace.RequestBody) != 0 || len(trace.ResponseBody) != 0 || trace.ResponseBodyText != "" {
+		t.Fatalf("trace bodies = request %q response %q text %q, want omitted", trace.RequestBody, trace.ResponseBody, trace.ResponseBodyText)
 	}
 }
 

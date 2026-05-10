@@ -10520,7 +10520,7 @@ Create a new remote push mirror for a GitLab project. This push-mirror endpoint 
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `only_protected_branches` (): Mirror only protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for p...
+- `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -11447,7 +11447,7 @@ Create an impersonation token for a GitLab user (admin only). Requires user ID, 
 
 - `expires_at` (string): Token expiration date (YYYY-MM-DD)
 - `name` (string) (required): Name of the impersonation token
-- `scopes` () (required): Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/cr...
+- `scopes` () (required): Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy)
 - `user_id` (integer) (required): GitLab user ID
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -11568,7 +11568,7 @@ Create a new CI/CD secure file. Provide either file_path (absolute path to a loc
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded file content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Absolute path to a local file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or cont...
+- `file_path` (string): Absolute path to a local file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `name` (string) (required): Name for the secure file
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -11980,7 +11980,7 @@ Delete (disable) a project integration by slug. Supports the same slugs as get, 
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, ext...
+- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -12505,7 +12505,7 @@ Resolve a full git remote URL to a GitLab project and return its project_id and 
 
 **Parameters:**
 
-- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the comple...
+- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path; project paths are already valid project_id values.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13638,7 +13638,7 @@ Get details of a specific project integration by slug (e.g. jira, slack, discord
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, ext...
+- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15504,7 +15504,7 @@ Import a group from an export archive file. Requires a local .tar.gz archive pat
 
 **Parameters:**
 
-- `file` (string) (required): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP...
+- `file` (string) (required): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected
 - `name` (string) (required): Name for the imported group
 - `parent_id` (): ID of the parent group to import into
 - `path` (string) (required): URL path for the imported group
@@ -15518,7 +15518,7 @@ Import a project from an export archive file. Accepts either base64-encoded cont
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP...
+- `file_path` (string): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided.
 - `name` (string): Name for the imported project
 - `namespace` (string): Namespace to import the project into (user or group path)
 - `overwrite` (): If true, overwrite an existing project with the same path
@@ -16688,7 +16688,7 @@ List CI/CD Catalog resources. Search the catalog of reusable CI/CD components. S
 - `last` (): Number of items from the end (backward pagination)
 - `scope` (string): Filter scope: ALL (default) or NAMESPACED
 - `search` (string): Search resources by name or description
-- `sort` (string): Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_D...
+- `sort` (string): Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -17211,7 +17211,7 @@ List dependencies for a GitLab project. Supports filtering by package manager. R
 
 **Parameters:**
 
-- `package_manager` (string): Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setupt...
+- `package_manager` (string): Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setuptools)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -17366,7 +17366,7 @@ List security report findings for a pipeline (requires Ultimate/Premium). Replac
 - `last` (): Number of items from the end (backward pagination)
 - `pipeline_iid` (string) (required): Pipeline IID within the project
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
-- `report_type` (): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZ...
+- `report_type` (): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
 - `scanner` (): Filter by scanner external IDs
 - `severity` (): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
 
@@ -17466,7 +17466,7 @@ List contribution events for a specific GitLab user. Returns events with action 
 
 **Parameters:**
 
-- `action` (string): Filter by action type: created | updated | closed | reopened | pushed | commented | merged | joined | left | destroyed |...
+- `action` (string): Filter by action type: created | updated | closed | reopened | pushed | commented | merged | joined | left | destroyed | expired | approved
 - `after` (string): Only events after this date (YYYY-MM-DD)
 - `before` (string): Only events before this date (YYYY-MM-DD)
 - `page` (integer): Page number for pagination
@@ -17508,7 +17508,7 @@ List project vulnerabilities (requires Ultimate/Premium). Supports filtering by 
 - `has_resolution` (): Filter by whether a resolution exists
 - `last` (): Number of items from the end (backward pagination)
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
-- `report_type` (): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZ...
+- `report_type` (): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
 - `scanner` (): Filter by scanner external IDs
 - `severity` (): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
 - `sort` (string): Sort order: severity_desc, severity_asc, detected_desc, detected_asc
@@ -17854,7 +17854,7 @@ Create a new merge request in a GitLab project. Requires source and target branc
 - `reviewer_ids` (): User IDs to add as reviewers
 - `source_branch` (string) (required): Source branch name
 - `squash` (): Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults
-- `target_branch` (string) (required): Target branch name. If not specified by the user use the project default branch from gitlab_project_get (do NOT assume m...
+- `target_branch` (string) (required): Target branch name. If not specified by the user use the project default branch from gitlab_project_get (do NOT assume main)
 - `target_project_id` (integer): Target project ID (for cross-project/fork MRs)
 - `title` (string) (required): Merge request title
 
@@ -18975,7 +18975,7 @@ Upload a single file to the GitLab Generic Package Registry. Provide either file
 
 - `content_base64` (string): Base64-encoded file content. Only one should be provided.
 - `file_name` (string) (required): Name of the file within the package
-- `file_path` (string): Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided...
+- `file_path` (string): Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -18992,7 +18992,7 @@ Upload a file to the Generic Package Registry and create a release asset link po
 - `content_base64` (string): Base64-encoded file content. Alternative to file_path.
 - `file_name` (string) (required): Name of the file within the package
 - `file_path` (string): Absolute path to a local file. Alternative to content_base64.
-- `link_name` (string): Display name of the release link. Defaults to file_name if omitted. MUST be the exact filename — never add descriptive s...
+- `link_name` (string): Display name of the release link. Defaults to file_name if omitted. MUST be the exact filename — never add descriptive suffixes.
 - `link_type` (string): Type of the release link: package, runbook, image, or other. Defaults to package.
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)
@@ -19272,7 +19272,7 @@ List pipelines for a GitLab project. Supports filtering by status (success, fail
 - `sha` (string): Filter by commit SHA
 - `sort` (string): Sort direction (asc, desc)
 - `source` (string): Filter by source (push, web, trigger, schedule, api, external, pipeline, chat, merge_request_event)
-- `status` (string): Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual...
+- `status` (string): Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled)
 - `updated_after` (string): Return pipelines updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)
 - `username` (string): Filter by username that triggered the pipeline
@@ -19886,7 +19886,7 @@ Delete a GitLab project. On instances with delayed deletion enabled, the project
 **Parameters:**
 
 - `full_path` (string): Full path of the project to confirm permanent removal (required when permanently_remove is true)
-- `permanently_remove` (boolean): If true, immediately and permanently delete the project bypassing delayed deletion. Requires admin permissions on some G...
+- `permanently_remove` (boolean): If true, immediately and permanently delete the project bypassing delayed deletion. Requires admin permissions on some GitLab instances.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -20168,7 +20168,7 @@ Trigger a test event for a project webhook. Sends a sample payload for the speci
 
 **Parameters:**
 
-- `event` (string) (required): Event type to trigger (push_events, issues_events, merge_requests_events, tag_push_events, note_events, job_events, pipe...
+- `event` (string) (required): Event type to trigger (push_events, issues_events, merge_requests_events, tag_push_events, note_events, job_events, pipeline_events, wiki_page_events, releases_events, emoji_events)
 - `hook_id` (integer) (required): Webhook ID to test
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -20453,7 +20453,7 @@ Configure or update pull mirroring for a project. Set the mirror URL, authentica
 
 **Parameters:**
 
-- `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry...
+- `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
 - `enabled` (): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
@@ -20461,7 +20461,7 @@ Configure or update pull mirroring for a project. Set the mirror URL, authentica
 - `mirror_trigger_builds` (): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (): Only mirror protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string): Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires aut...
+- `url` (string): Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -20698,7 +20698,7 @@ Upload a file to a GitLab project's markdown uploads area. Provide either file_p
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded file content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Absolute path to a local file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-...
+- `file_path` (string): Absolute path to a local file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.
 - `filename` (string) (required): Name of the file to upload (e.g. screenshot.png)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -20711,7 +20711,7 @@ Upload or replace the avatar image for a project. Provide either file_path (abso
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded image content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to b...
+- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.
 - `filename` (string) (required): Avatar filename (e.g. avatar.png)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -23089,7 +23089,7 @@ Update application settings. Requires admin access. Pass settings as key-value m
 
 **Parameters:**
 
-- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_v...
+- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size).
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -23157,7 +23157,7 @@ Upload a metric image for a GitLab alert. Provide either file_path (absolute pat
 
 - `alert_iid` (integer) (required): Alert IID
 - `content_base64` (string): Base64-encoded image content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64. Only one of file_path o...
+- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `filename` (string) (required): Image filename
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `url` () (required): URL to link the metric image to

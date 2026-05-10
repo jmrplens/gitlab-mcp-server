@@ -425,7 +425,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 | --- | --- | --- |
 | Fixed GitLab URL | `--gitlab-url` | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL` |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
-| Tool surface | `--meta-tools`, `--tool-surface` | Same tool-surface catalog mode for all clients (`meta`/`individual`/`dynamic`/`dynamic-2`/`dynamic-3`); scope and CE/EE filtering still happen per server entry |
+| Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`/`dynamic-2`/`dynamic-3`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
 | Upload limits | Compile-time defaults | Max file size |
 
 The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.

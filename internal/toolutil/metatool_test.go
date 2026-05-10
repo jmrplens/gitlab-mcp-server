@@ -376,6 +376,11 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			params: map[string]any{"id": 99},
 			want:   map[string]any{"group_id": "99"},
 		},
+		"ambiguous id is preserved": {
+			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}, "group_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "42"},
+			want:   map[string]any{"id": "42"},
+		},
 		"branch to branch_name": {
 			schema: map[string]any{"properties": map[string]any{"branch_name": map[string]any{"type": "string"}}},
 			params: map[string]any{"branch": "main"},
@@ -894,9 +899,11 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"gitlab_interactive_issue.create":           "interactive.issue_create",
 	}
 	for alias, want := range tests {
-		if got := NormalizeActionAlias(alias, routes); got != want {
-			t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
-		}
+		t.Run(alias, func(t *testing.T) {
+			if got := NormalizeActionAlias(alias, routes); got != want {
+				t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
+			}
+		})
 	}
 	if got := NormalizeActionAlias("repository_file.read", ActionMap{}); got != "repository_file.read" {
 		t.Fatalf("NormalizeActionAlias without canonical route = %q, want unchanged", got)
@@ -1741,6 +1748,39 @@ func TestCaptureMetaToolDefinitions_InactiveAllowsServerRegistration(t *testing.
 	if tool.Name != "gitlab_capture_normal" {
 		t.Fatalf("registered tool name = %q", tool.Name)
 	}
+}
+
+// TestCaptureMetaToolDefinitions_IgnoresNonNilServer verifies capture mode is
+// reserved for nil-server catalog registration and does not duplicate normal
+// MCP server registrations into the captured metadata slice.
+func TestCaptureMetaToolDefinitions_IgnoresNonNilServer(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+
+	defs := CaptureMetaToolDefinitions(func() {
+		AddReadOnlyMetaTool(server, "gitlab_capture_normal_server", "Capture normal server.", routes, nil, nil)
+	})
+
+	if len(defs) != 0 {
+		t.Fatalf("captured definitions = %d, want 0 for non-nil server registration", len(defs))
+	}
+	tool := findTool(t, listToolsViaClient(t, server), "gitlab_capture_normal_server")
+	if tool.Name != "gitlab_capture_normal_server" {
+		t.Fatalf("registered tool name = %q", tool.Name)
+	}
+}
+
+// TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic verifies nil-server
+// registration remains a no-op when no capture session is active.
+func TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic(t *testing.T) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+
+	AddMetaTool(nil, "gitlab_capture_noop", "Capture noop.", routes, nil, nil)
+	AddReadOnlyMetaTool(nil, "gitlab_capture_readonly_noop", "Capture readonly noop.", routes, nil, nil)
 }
 
 // TestAddMetaTool_RegistersSharedMetadata verifies the shared registration

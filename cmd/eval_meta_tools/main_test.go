@@ -717,6 +717,9 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
 		t.Fatal("dynamic validation routes missing project.get")
 	}
+	if _, ok := routes[dynamicExecuteTool]["discover_project.resolve"]; !ok {
+		t.Fatal("dynamic validation routes missing discover_project.resolve")
+	}
 	if _, ok := routes["gitlab"]; ok {
 		t.Fatal("dynamic validation routes unexpectedly exposed gitlab dispatcher")
 	}
@@ -771,6 +774,9 @@ func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.
 	}
 	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
 		t.Fatal("dynamic-2 validation routes missing project.get")
+	}
+	if _, ok := routes[dynamicExecuteTool]["discover_project.resolve"]; !ok {
+		t.Fatal("dynamic-2 validation routes missing discover_project.resolve")
 	}
 	if _, ok := routes["gitlab"]; ok {
 		t.Fatal("dynamic-2 validation routes unexpectedly exposed gitlab dispatcher")
@@ -4774,7 +4780,7 @@ func newScriptedRunner(t *testing.T, responses ...modelResponse) *modelRunner {
 			t.Fatalf("used %d scripted responses, want %d", index, len(responses))
 		}
 	})
-	return &modelRunner{apiKey: "test-key", model: "test-model", maxTokens: 256, client: client}
+	return &modelRunner{apiKey: "test-key", model: "test-model", maxTokens: 256, client: client, traceBodies: true}
 }
 
 // newProjectGetSession is an internal helper for the main package.

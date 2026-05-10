@@ -180,33 +180,24 @@ func publishEvaluationDocs(opts options) error {
 		return validateErr
 	}
 
-	sections := publishDocSectionsForReports(reports)
+	applyManagedDoc := updateManagedDoc
 	if opts.CheckDocs {
-		for _, section := range sections {
-			sectionReports := filterPublishReportsBySection(reports, section.Key)
-			sectionLabel := publishSectionLabel(label)
-			resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
-			summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
-			if checkErr := checkManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); checkErr != nil {
-				return checkErr
-			}
-			if checkErr := checkManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); checkErr != nil {
-				return checkErr
-			}
-		}
-		return nil
+		applyManagedDoc = checkManagedDoc
 	}
-	for _, section := range sections {
+	for _, section := range publishDocSectionsForReports(reports) {
 		sectionReports := filterPublishReportsBySection(reports, section.Key)
 		sectionLabel := publishSectionLabel(label)
 		resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
 		summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
-		if updateErr := updateManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); updateErr != nil {
-			return updateErr
+		if applyErr := applyManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); applyErr != nil {
+			return applyErr
 		}
-		if updateErr := updateManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); updateErr != nil {
-			return updateErr
+		if applyErr := applyManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); applyErr != nil {
+			return applyErr
 		}
+	}
+	if opts.CheckDocs {
+		return nil
 	}
 	fmt.Printf("published evaluation docs: %s, %s\n", opts.PublishResults, opts.PublishReadme)
 	return nil

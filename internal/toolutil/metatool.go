@@ -213,14 +213,13 @@ func CaptureMetaToolDefinitions(register func()) []MetaToolDefinition {
 	return cloneMetaToolDefinitions(metaToolDefinitionCapture)
 }
 
-func captureMetaToolDefinition(def MetaToolDefinition) bool {
+func captureMetaToolDefinition(def MetaToolDefinition) {
 	metaToolDefinitionMu.Lock()
 	defer metaToolDefinitionMu.Unlock()
 	if metaToolDefinitionCapture == nil {
-		return false
+		return
 	}
 	metaToolDefinitionCapture = append(metaToolDefinitionCapture, cloneMetaToolDefinition(def))
-	return true
 }
 
 func cloneMetaToolDefinitions(defs []MetaToolDefinition) []MetaToolDefinition {
@@ -458,10 +457,6 @@ var commonParamAliases = []struct {
 	{Alias: "project_id", Canonical: "project_path"},
 	{Alias: "group_path", Canonical: "group_id"},
 	{Alias: "group_id", Canonical: "group_path"},
-	{Alias: "id", Canonical: "project_id"},
-	{Alias: "id", Canonical: "group_id"},
-	{Alias: "id", Canonical: "snippet_id"},
-	{Alias: "id", Canonical: "runner_id"},
 	{Alias: "link", Canonical: "link_url"},
 	{Alias: "image", Canonical: "image_url"},
 	{Alias: "content", Canonical: "body"},
@@ -490,6 +485,33 @@ var commonParamAliases = []struct {
 	{Alias: "award", Canonical: "name"},
 	{Alias: "time_estimate", Canonical: "duration"},
 	{Alias: "name", Canonical: "environment"},
+}
+
+var idAliasCanonicals = []string{"project_id", "group_id", "snippet_id", "runner_id"}
+
+func normalizeIDAlias(params map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasID := params["id"]
+	if !hasID || accepts("id") {
+		return
+	}
+	canonical := ""
+	for _, candidate := range idAliasCanonicals {
+		if !accepts(candidate) {
+			continue
+		}
+		if canonical != "" {
+			return
+		}
+		canonical = candidate
+	}
+	if canonical == "" {
+		return
+	}
+	updated := clone()
+	if _, hasCanonical := params[canonical]; !hasCanonical {
+		updated[canonical] = value
+	}
+	delete(updated, "id")
 }
 
 // normalizeParamAliases accepts common LLM-generated parameter aliases only
@@ -534,6 +556,7 @@ func normalizeParamAliases(params map[string]any, target reflect.Type) map[strin
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
+	normalizeIDAlias(out, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {
@@ -635,6 +658,7 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
+	normalizeIDAlias(out, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {
@@ -1524,13 +1548,14 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // annotations. Use it for meta-tools that may include mutating or destructive
 // actions; if any route is destructive, the tool receives DestructiveHint=true.
 func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
-	if captureMetaToolDefinition(MetaToolDefinition{
-		Name:         name,
-		Description:  desc,
-		Routes:       routes,
-		Icons:        icons,
-		FormatResult: formatResult,
-	}) && server == nil {
+	if server == nil {
+		captureMetaToolDefinition(MetaToolDefinition{
+			Name:         name,
+			Description:  desc,
+			Routes:       routes,
+			Icons:        icons,
+			FormatResult: formatResult,
+		})
 		return
 	}
 	mcp.AddTool(server, &mcp.Tool{
@@ -1547,14 +1572,15 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 // AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
 // are all read-only list/get/search-style operations.
 func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
-	if captureMetaToolDefinition(MetaToolDefinition{
-		Name:         name,
-		Description:  desc,
-		Routes:       routes,
-		Icons:        icons,
-		ReadOnly:     true,
-		FormatResult: formatResult,
-	}) && server == nil {
+	if server == nil {
+		captureMetaToolDefinition(MetaToolDefinition{
+			Name:         name,
+			Description:  desc,
+			Routes:       routes,
+			Icons:        icons,
+			ReadOnly:     true,
+			FormatResult: formatResult,
+		})
 		return
 	}
 	mcp.AddTool(server, &mcp.Tool{

@@ -221,6 +221,7 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 	}{
 		{value: "DYNAMIC", want: ToolSurfaceDynamic},
 		{value: " dynamic ", want: ToolSurfaceDynamic},
+		{value: "low-token", want: ToolSurfaceDynamic},
 		{value: ToolSurfaceDynamic2, want: ToolSurfaceDynamic2},
 		{value: ToolSurfaceDynamic3, want: ToolSurfaceDynamic3},
 	}

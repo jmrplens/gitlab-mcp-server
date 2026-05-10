@@ -112,52 +112,53 @@ var evalElicitationReleaseTag atomic.Value
 
 // options holds data for main operations.
 type options struct {
-	TasksPath         string
-	Output            string
-	TraceDir          string
-	Model             string
-	Models            string
-	ToolsFile         string
-	CompareReports    stringList
-	PublishFrom       stringList
-	PublishResults    string
-	PublishReadme     string
-	PublishLabel      string
-	PublishMode       string
-	Preset            string
-	Partition         string
-	ToolSurface       string
-	CoverageReport    string
-	Backend           string
-	GitLabEnv         string
-	MCPCommand        string
-	MCPArgs           stringList
-	MCPEnv            string
-	Fixtures          string
-	OnlyIDs           string
-	MaxTasks          int
-	Repeat            int
-	MaxTokens         int
-	Retries           int
-	RetryWait         time.Duration
-	Pause             time.Duration
-	Pricing           pricingOptions
-	DryRun            bool
-	PublishDocs       bool
-	CheckDocs         bool
-	PublishAllowNoise bool
-	MCPSmoke          bool
-	Execute           bool
-	AllowLive         bool
-	PrepareFixtures   bool
-	FixturesOnly      bool
-	UseFixtures       bool
-	SkipDestructive   bool
-	OnlyDestructive   bool
-	SkipMutating      bool
-	OnlyMutating      bool
-	SkipUnavailable   bool
-	explicitFlags     map[string]bool
+	TasksPath           string
+	Output              string
+	TraceDir            string
+	Model               string
+	Models              string
+	ToolsFile           string
+	CompareReports      stringList
+	PublishFrom         stringList
+	PublishResults      string
+	PublishReadme       string
+	PublishLabel        string
+	PublishMode         string
+	Preset              string
+	Partition           string
+	ToolSurface         string
+	CoverageReport      string
+	Backend             string
+	GitLabEnv           string
+	MCPCommand          string
+	MCPArgs             stringList
+	MCPEnv              string
+	Fixtures            string
+	OnlyIDs             string
+	MaxTasks            int
+	Repeat              int
+	MaxTokens           int
+	Retries             int
+	RetryWait           time.Duration
+	Pause               time.Duration
+	Pricing             pricingOptions
+	DryRun              bool
+	PublishDocs         bool
+	CheckDocs           bool
+	PublishAllowNoise   bool
+	MCPSmoke            bool
+	Execute             bool
+	AllowLive           bool
+	PrepareFixtures     bool
+	FixturesOnly        bool
+	UseFixtures         bool
+	SkipDestructive     bool
+	OnlyDestructive     bool
+	SkipMutating        bool
+	OnlyMutating        bool
+	SkipUnavailable     bool
+	TraceProviderBodies bool
+	explicitFlags       map[string]bool
 }
 
 // stringList holds data for main operations.
@@ -647,6 +648,7 @@ func run() error {
 			retryWait:   opts.RetryWait,
 			client:      &http.Client{Timeout: 60 * time.Second},
 			mcpSession:  mcpSession,
+			traceBodies: opts.TraceProviderBodies,
 		}
 		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
 			if opts.Execute && opts.UseFixtures {
@@ -739,6 +741,7 @@ func parseFlags() options {
 	flag.BoolVar(&opts.SkipMutating, "skip-mutating", false, "Skip tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.OnlyMutating, "only-mutating", false, "Run only tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.SkipUnavailable, flagSkipUnavailable, false, "Skip tasks whose expected routes or live fixtures are unavailable")
+	flag.BoolVar(&opts.TraceProviderBodies, "trace-provider-bodies", false, "Include raw model provider request and response bodies in trace artifacts")
 	flag.Parse()
 	opts.explicitFlags = map[string]bool{}
 	flag.Visit(func(f *flag.Flag) {
@@ -3647,6 +3650,7 @@ type modelRunner struct {
 	retryWait   time.Duration
 	client      *http.Client
 	mcpSession  *mcp.ClientSession
+	traceBodies bool
 }
 
 // evaluateTask performs the evaluate task operation on *modelRunner.
@@ -4353,6 +4357,7 @@ func (r *modelRunner) call(ctx context.Context, systemPrompt string, catalog []m
 		System:      systemPrompt,
 		Tools:       catalog,
 		Messages:    messages,
+		TraceBodies: r.traceBodies,
 	}
 	var lastErr error
 	for attempt := 0; attempt <= r.retries; attempt++ {

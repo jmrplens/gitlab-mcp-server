@@ -251,7 +251,11 @@ func newRegistryFromCatalog(catalog *actionregistry.Catalog, aliases []actionAli
 
 	for _, group := range catalog.Groups() {
 		actions := group.ActionMap()
-		registry.handlers[group.ToolName] = toolutil.MakeMetaHandler(group.ToolName, actions, toolutil.MarkdownForResult)
+		formatResult := group.FormatResult
+		if formatResult == nil {
+			formatResult = toolutil.MarkdownForResult
+		}
+		registry.handlers[group.ToolName] = toolutil.MakeMetaHandler(group.ToolName, actions, formatResult)
 
 		for _, action := range group.ActionsInOrder() {
 			route := action.Route
@@ -332,7 +336,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input DescribeInput) (*mcp.CallToolResult, DescribeOutput, error) {
 	ids := normalizeDescribeIDs(input)
 	if len(ids) == 0 {
-		return toolutil.ErrorResult("gitlab_describe_tools: provide action or actions with canonical IDs from gitlab_search_tools or gitlab_find_action."), DescribeOutput{}, nil
+		return toolutil.ErrorResult("gitlab_describe_tools: provide action or actions with canonical IDs returned by the registered discovery tool for this surface."), DescribeOutput{}, nil
 	}
 
 	descriptions := make([]ActionDescription, 0, len(ids))
@@ -383,7 +387,7 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, any, error) {
 	id := strings.ToLower(strings.TrimSpace(input.Action))
 	if id == "" {
-		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use gitlab_search_tools or gitlab_find_action to find a canonical action ID."), nil, nil
+		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use the registered discovery tool for this surface to find a canonical action ID."), nil, nil
 	}
 	entry, ok := r.resolveAction(id)
 	if !ok {
@@ -400,6 +404,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		params["confirm"] = true
 	}
 	if entry.Destructive && !hasExplicitConfirm(params) {
+		slog.Warn("blocked destructive dynamic action without explicit confirmation", "action", entry.ID)
 		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
 	}
 
@@ -976,6 +981,7 @@ func describeEntry(entry actionEntry) ActionDescription {
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
 		Usage:          usageHintForEntry(entry),
 		InputSchema:    inputSchema,
+		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
 		Example:        exampleFor(entry, inputSchema),
 	}
 }
@@ -1040,7 +1046,7 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 	}
 	suggestions := r.suggestActionIDs(action, 5)
 	if len(suggestions) == 0 {
-		return fmt.Sprintf("%s: unknown action %q. Use gitlab_search_tools or gitlab_find_action to find canonical action IDs.", toolName, action)
+		return fmt.Sprintf("%s: unknown action %q. Use the registered discovery tool for this surface to find canonical action IDs.", toolName, action)
 	}
 	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_tool.", toolName, action, strings.Join(suggestions, ", "))
 }
@@ -1392,35 +1398,8 @@ func hasExplicitConfirm(params map[string]any) bool {
 	switch typed := value.(type) {
 	case bool:
 		return typed
-	case int:
-		return typed == 1
-	case int8:
-		return typed == 1
-	case int16:
-		return typed == 1
-	case int32:
-		return typed == 1
-	case int64:
-		return typed == 1
-	case uint:
-		return typed == 1
-	case uint8:
-		return typed == 1
-	case uint16:
-		return typed == 1
-	case uint32:
-		return typed == 1
-	case uint64:
-		return typed == 1
-	case float32:
-		return typed == 1
-	case float64:
-		return typed == 1
 	case string:
-		switch strings.ToLower(strings.TrimSpace(typed)) {
-		case "1", "true", "yes", "y":
-			return true
-		}
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
 	}
 	return false
 }

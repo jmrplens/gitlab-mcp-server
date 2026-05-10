@@ -260,9 +260,9 @@ The server returns a structured prompt with context-aware content that the LLM u
 
 ## Configuration
 
-| Variable     | Default | Description                                        |
-| ------------ | ------- | -------------------------------------------------- |
-| `META_TOOLS` | `true`  | Resources and prompts are registered in both modes |
+| Variable             | Default | Description                                                                                       |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `CAPABILITY_SURFACE` | `full`  | `full` registers resources and prompts across tool surfaces; `minimal` keeps only workspace roots |
 
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.

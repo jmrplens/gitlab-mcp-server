@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/elicitation"
@@ -1214,18 +1215,26 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 			defer cleanup()
 
 			var client = testutil.NewTestClient(t, http.NewServeMux())
+			var postHits atomic.Int32
 			if tc.wantError == "" {
 				mux := http.NewServeMux()
 				mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+					postHits.Add(1)
 					testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
 				})
 				client = testutil.NewTestClient(t, mux)
 			}
 
-			_, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
+			out, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
 			if tc.wantError == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
+				}
+				if postHits.Load() != 1 {
+					t.Fatalf("project create POST hits = %d, want 1", postHits.Load())
+				}
+				if out.ID != 300 || out.Name != "proj" {
+					t.Fatalf("ProjectCreate() output = %+v, want created project", out)
 				}
 				return
 			}

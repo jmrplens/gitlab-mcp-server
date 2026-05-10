@@ -45,6 +45,7 @@ const (
 	liveDeleteFixtureFormat      = "delete-fixture-%d"
 	taskFileCreateID             = "MT-030"
 	taskPipelineScheduleID       = "MT-103"
+	taskMergeRequestAwardID      = "MS-033"
 )
 
 // liveFixtureState holds data for main operations.
@@ -1300,7 +1301,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", "MS-033", "MS-035", "MS-036":
+		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036":
 		return true
 	default:
 		return false
@@ -1486,7 +1487,7 @@ func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureSt
 	if taskID == "MT-017" && state.MergeRequestMergeIID > 0 {
 		mrIID = state.MergeRequestMergeIID
 	}
-	if taskID == "MS-033" && state.MergeRequestAwardIID > 0 {
+	if taskID == taskMergeRequestAwardID && state.MergeRequestAwardIID > 0 {
 		mrIID = state.MergeRequestAwardIID
 	}
 	if mrIID > 0 {
@@ -1494,7 +1495,7 @@ func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureSt
 		prompt = strings.ReplaceAll(prompt, "merge request IID `7`", fmt.Sprintf("merge request IID `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "merge_request_iid `7`", fmt.Sprintf("merge_request_iid `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "MR `7`", fmt.Sprintf("MR `%d`", mrIID))
-		if taskID == "MS-033" {
+		if taskID == taskMergeRequestAwardID {
 			prompt = strings.ReplaceAll(prompt, "MR `1`", fmt.Sprintf("MR `%d`", mrIID))
 		}
 	}

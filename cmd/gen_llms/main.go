@@ -40,10 +40,6 @@ const (
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
 	maxFullDescRunes = 600
-
-	// searchTypeParamName keeps backend choices visible; truncating its long
-	// description hides the basic/advanced/zoekt guidance LLMs need.
-	searchTypeParamName = "search_type"
 )
 
 type llmsCatalog struct {
@@ -90,7 +86,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create gitlab.com client: %w", err)
 	}
-
 	version := readVersion()
 	res, resTpl, err := listResources(client)
 	if err != nil {
@@ -598,9 +593,6 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			if name != searchTypeParamName {
-				desc = truncateRunes(desc, 120)
-			}
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)
 		} else {
 			fmt.Fprintf(b, "- `%s` (%s)%s\n", name, typ, req)
