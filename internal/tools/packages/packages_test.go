@@ -403,6 +403,9 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 		t.Fatalf("Pipelines = %+v, want one non-nil pipeline", item.Pipelines)
 	}
 	pipeline := item.Pipelines[0]
+	if pipeline.ID != 77 {
+		t.Fatalf("pipeline ID = %d, want 77", pipeline.ID)
+	}
 	if pipeline.CreatedAt == "" || pipeline.UpdatedAt == "" {
 		t.Fatalf("pipeline timestamps = %+v, want created and updated values", pipeline)
 	}

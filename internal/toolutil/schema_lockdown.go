@@ -15,7 +15,10 @@ import (
 // `additionalProperties: false` at the root and on any nested object schema
 // reachable through "properties", "items", "anyOf", "oneOf", or "allOf". It
 // also strips jsonschema tag metadata such as ",required" from property
-// descriptions after the SDK generates schemas.
+// descriptions after the SDK generates schemas. Schemas converted from SDK
+// types are stored back as map[string]any values, so callers inspecting tools
+// after this middleware runs should not expect the original concrete schema
+// type.
 //
 // Background. The MCP specification (2025-11-25 §server/tools) requires
 // inputSchema to be a valid JSON Schema object but does not mandate
@@ -76,12 +79,12 @@ func schemaMap(schema any) map[string]any {
 	}
 	data, err := json.Marshal(schema)
 	if err != nil {
-		slog.Debug("failed to marshal MCP input schema", "error", err, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
+		slog.Warn("failed to marshal MCP input schema", "error", err, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
 		return nil
 	}
 	var decoded map[string]any
 	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
-		slog.Debug("failed to unmarshal MCP input schema", "error", unmarshalErr, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
+		slog.Warn("failed to unmarshal MCP input schema", "error", unmarshalErr, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
 		return nil
 	}
 	return decoded

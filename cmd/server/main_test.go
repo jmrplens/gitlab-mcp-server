@@ -997,7 +997,13 @@ func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
 	}
 
 	promptsResult, err := session.ListPrompts(t.Context(), nil)
-	if err == nil && len(promptsResult.Prompts) > 0 {
+	if err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "not found") {
+			t.Fatalf("ListPrompts() error = %v", err)
+		}
+		return
+	}
+	if len(promptsResult.Prompts) > 0 {
 		t.Fatalf("minimal prompts = %+v, want none", promptsResult.Prompts)
 	}
 }
@@ -1011,9 +1017,21 @@ func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
 	}
+	wantTools := map[string]bool{
+		"gitlab_search_tools":   false,
+		"gitlab_describe_tools": false,
+	}
 	for _, tool := range toolsResult {
 		if tool.Name == "gitlab_execute_tool" {
 			t.Fatal("read-only dynamic surface should remove gitlab_execute_tool")
+		}
+		if _, ok := wantTools[tool.Name]; ok {
+			wantTools[tool.Name] = true
+		}
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("read-only dynamic surface should keep discovery tool %q", name)
 		}
 	}
 }

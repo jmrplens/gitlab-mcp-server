@@ -493,7 +493,10 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 // TestNormalizeExpectedDynamicRoute_MapsStandaloneTools verifies that standalone
 // tool expectations are normalized to gitlab_execute_tool dynamic action IDs.
 func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
-	catalogRoutes := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	catalogRoutes, err := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
 	routes := dynamicValidationRoutes(catalogRoutes)
 
 	tests := []struct {
@@ -531,7 +534,10 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 			}},
 		},
 	}
-	catalogRoutes = dynamictools.AddStandaloneRoutes(catalogRoutes, nil, dynamictools.StandaloneOptions{})
+	catalogRoutes, err := dynamictools.AddStandaloneRoutes(catalogRoutes, nil, dynamictools.StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
 	routes := dynamicValidationRoutes(catalogRoutes)
 
 	tests := []struct {
@@ -545,15 +551,15 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			content, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
+			content, contentErr := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
 				Name: dynamicSearchTool,
 				Input: map[string]any{
 					"query": tt.query,
 					"limit": float64(3),
 				},
 			})
-			if err != nil {
-				t.Fatalf("dynamicDiscoveryResult() error = %v", err)
+			if contentErr != nil {
+				t.Fatalf("dynamicDiscoveryResult() error = %v", contentErr)
 			}
 			for _, want := range tt.want {
 				if !strings.Contains(content, want) {
@@ -713,6 +719,35 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	}
 	if _, ok := routes["gitlab"]; ok {
 		t.Fatal("dynamic validation routes unexpectedly exposed gitlab dispatcher")
+	}
+}
+
+// TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes verifies dynamic-3 keeps
+// the same three-tool surface and executable validation routes as dynamic mode.
+func TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes(t *testing.T) {
+	client := newEvalTestClient(t, false)
+	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic3)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic-3) error = %v", err)
+	}
+	defer closeSession()
+
+	names := make([]string, 0, len(toolList))
+	for _, tool := range toolList {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
+		t.Fatalf("dynamic-3 catalog tools = %q, want search/describe/execute", got)
+	}
+	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
+		t.Fatal("dynamic-3 validation routes missing project.get")
+	}
+	if _, ok := routes[dynamicExecuteTool]["discover_project.resolve"]; !ok {
+		t.Fatal("dynamic-3 validation routes missing discover_project.resolve")
+	}
+	if _, ok := routes["gitlab"]; ok {
+		t.Fatal("dynamic-3 validation routes should not expose the unified gitlab dispatcher")
 	}
 }
 
@@ -3688,8 +3723,21 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 		if _, ok := result.Content["enabled"].(bool); !ok {
 			return nil, nil, fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
 		}
-		if _, ok := result.Content["count"].(string); ok {
-			return nil, nil, errors.New("elicitation count should not be a string")
+		count, ok := result.Content["count"]
+		if !ok {
+			return nil, nil, errors.New("elicitation count must be a numeric value")
+		}
+		switch typed := count.(type) {
+		case float64:
+			if typed != 0 {
+				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+			}
+		case int:
+			if typed != 0 {
+				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+			}
+		default:
+			return nil, nil, fmt.Errorf("elicitation count must be a numeric value, got %T", count)
 		}
 		if result.Content["selection"] != "private" {
 			return nil, nil, fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])

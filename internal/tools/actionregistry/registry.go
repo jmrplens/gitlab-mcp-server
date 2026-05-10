@@ -14,6 +14,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+const (
+	errCatalogNil       = "action registry catalog is nil"
+	errToolNameRequired = "tool name is required"
+)
+
 // ActionID is the stable dynamic identifier for one GitLab action.
 type ActionID string
 
@@ -173,7 +178,7 @@ func (g *Group) ActionMap() toolutil.ActionMap {
 // AddGroup adds a complete group to the catalog.
 func (c *Catalog) AddGroup(group Group) error {
 	if c == nil {
-		return errors.New("action registry catalog is nil")
+		return errors.New(errCatalogNil)
 	}
 	if c.groups == nil {
 		c.groups = make(map[string]Group)
@@ -205,19 +210,35 @@ func (c *Catalog) AddGroup(group Group) error {
 	return nil
 }
 
-// AddAction adds one action to an existing or newly-created group.
-func (c *Catalog) AddAction(toolName string, action Action) error {
+// AddAction adds one action to an existing or newly-created group. When the
+// group does not exist, callers may provide GroupOptions so the synthesized
+// group carries the same metadata as a normal catalog group.
+func (c *Catalog) AddAction(toolName string, action Action, groupOptions ...GroupOptions) error {
 	if c == nil {
-		return errors.New("action registry catalog is nil")
+		return errors.New(errCatalogNil)
+	}
+	if len(groupOptions) > 1 {
+		return errors.New("at most one group options value is supported")
 	}
 	toolName = strings.TrimSpace(toolName)
 	if toolName == "" {
-		return errors.New("tool name is required")
+		return errors.New(errToolNameRequired)
 	}
 	next := c.Clone()
 	group, ok := next.groups[toolName]
 	if !ok {
-		group = NewGroup(GroupOptions{ToolName: toolName})
+		opts := GroupOptions{ToolName: toolName}
+		if len(groupOptions) == 1 {
+			opts = groupOptions[0]
+			opts.ToolName = strings.TrimSpace(opts.ToolName)
+			if opts.ToolName == "" {
+				opts.ToolName = toolName
+			}
+			if opts.ToolName != toolName {
+				return fmt.Errorf("group options tool name %q does not match %q", opts.ToolName, toolName)
+			}
+		}
+		group = NewGroup(opts)
 	}
 	group.SetAction(action)
 	if ok {
@@ -345,12 +366,12 @@ func mustAddCatalogGroup(catalog *Catalog, group Group, operation string) {
 // Validate verifies that the catalog has a consistent, executable action index.
 func (c *Catalog) Validate() error {
 	if c == nil {
-		return errors.New("action registry catalog is nil")
+		return errors.New(errCatalogNil)
 	}
 	seenAliases := make(map[string]ActionID)
 	for _, group := range c.Groups() {
 		if strings.TrimSpace(group.ToolName) == "" {
-			return errors.New("tool name is required")
+			return errors.New(errToolNameRequired)
 		}
 		for _, action := range group.ActionsInOrder() {
 			if strings.TrimSpace(action.Name) == "" {
@@ -462,7 +483,7 @@ func DomainFromToolName(toolName string) string {
 func normalizeGroup(group Group) (Group, error) {
 	toolName := strings.TrimSpace(group.ToolName)
 	if toolName == "" {
-		return Group{}, errors.New("tool name is required")
+		return Group{}, errors.New(errToolNameRequired)
 	}
 	normalized := NewGroup(GroupOptions{
 		ToolName:     toolName,

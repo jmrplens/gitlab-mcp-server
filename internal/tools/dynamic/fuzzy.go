@@ -3,9 +3,12 @@ package dynamic
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
+	// fuzzyMaxDistance and fuzzyMinTokenLen bound typo tolerance so short tokens
+	// still require exact matches while longer tokens allow two edit mistakes.
 	fuzzyMaxDistance = 2
 	fuzzyMinTokenLen = 3
 )
@@ -107,8 +110,8 @@ func splitWordTokens(value string) []string {
 }
 
 func comparableTokenLength(needle, token string) bool {
-	ln := len([]rune(needle))
-	lt := len([]rune(token))
+	ln := utf8.RuneCountInString(needle)
+	lt := utf8.RuneCountInString(token)
 	diff := ln - lt
 	if diff < 0 {
 		diff = -diff

@@ -73,6 +73,7 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 		ToolName:    "gitlab_server",
 		Description: desc,
 		Icons:       toolutil.IconHealth,
+		ReadOnly:    updater == nil,
 	})
 	for name, route := range routes {
 		group.SetAction(actionregistry.Action{Name: name, Route: route})

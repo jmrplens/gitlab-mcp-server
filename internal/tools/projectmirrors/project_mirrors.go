@@ -37,7 +37,7 @@ type GetPublicKeyInput struct {
 // AddInput holds parameters for creating a new project mirror.
 type AddInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
-	URL                   string               `json:"url"                               jsonschema:"Remote mirror URL (e.g. https://user:token@example.com/repo.git). Treat embedded credentials as secrets: do not log or store them, and redact tokens or passwords in telemetry/errors,required"`
+	URL                   string               `json:"url"                               jsonschema:"Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors,required"`
 	Enabled               *bool                `json:"enabled,omitempty"                 jsonschema:"Whether the mirror is enabled"`
 	KeepDivergentRefs     *bool                `json:"keep_divergent_refs,omitempty"     jsonschema:"Keep divergent refs on the remote"`
 	OnlyProtectedBranches *bool                `json:"only_protected_branches,omitempty" jsonschema:"Mirror only protected branches"`

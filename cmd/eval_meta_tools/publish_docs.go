@@ -559,10 +559,14 @@ func publishTraceJSONLPath(reportPath, content string) string {
 	if filepath.IsAbs(tracePath) {
 		return tracePath
 	}
+	reportRelative := filepath.Join(filepath.Dir(reportPath), tracePath)
+	if _, err := os.Stat(reportRelative); err == nil {
+		return reportRelative
+	}
 	if _, err := os.Stat(tracePath); err == nil {
 		return tracePath
 	}
-	return filepath.Join(filepath.Dir(reportPath), tracePath)
+	return reportRelative
 }
 
 // publishSingleTaskStats is an internal helper for the main package.

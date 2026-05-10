@@ -223,7 +223,10 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 			{params: map[string]any{"confirm": true}, want: true},
 			{params: map[string]any{"confirm": " yes "}, want: true},
 			{params: map[string]any{"confirm": "no"}, want: false},
-			{params: map[string]any{"confirm": 1}, want: false},
+			{params: map[string]any{"confirm": 1}, want: true},
+			{params: map[string]any{"confirm": int64(1)}, want: true},
+			{params: map[string]any{"confirm": 1.0}, want: true},
+			{params: map[string]any{"confirm": 2}, want: false},
 		}
 		for _, tt := range cases {
 			if got := hasExplicitConfirm(tt.params); got != tt.want {

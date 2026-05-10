@@ -777,6 +777,7 @@ func multiModelPublishReport() string {
 		"| `google:gemini-3.1-flash-lite-preview` | 1 | MT-002 | `gitlab_project` / `list` | `gitlab_project` / `list` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
 }
 
+// dynamicFullRunPublishReportNoPreset returns a minimal dynamic report fixture without preset metadata.
 func dynamicFullRunPublishReportNoPreset() string {
 	return "# Meta-Tool Model Evaluation\n\n" +
 		"Date: 2026-05-09T18:00:00Z\n" +
@@ -805,6 +806,7 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"| 1 | MT-008 | `gitlab_execute_tool` / `group.delete` | `gitlab_execute_tool` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
 }
 
+// fullRunTraceJSONL returns trace rows for all tasks in the publish report fixture.
 func fullRunTraceJSONL() string {
 	return strings.Join([]string{
 		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
@@ -113,7 +114,7 @@ func CanonicalImportArchivePath(path string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("archive %s is not a regular file", canonicalPath)
 	}
-	if info.Mode().Perm()&0o022 != 0 {
+	if archiveHasUnsafePermissions(info) {
 		return "", fmt.Errorf("archive %s must not be group/world-writable", canonicalPath)
 	}
 
@@ -121,6 +122,10 @@ func CanonicalImportArchivePath(path string) (string, error) {
 		return "", fmt.Errorf("archive %s is outside allowed import directories; use the current working directory, the OS temp directory, or set %s", canonicalPath, ImportArchiveAllowlistEnv)
 	}
 	return canonicalPath, nil
+}
+
+func archiveHasUnsafePermissions(info os.FileInfo) bool {
+	return runtime.GOOS != "windows" && info.Mode().Perm()&0o022 != 0
 }
 
 func pathWithinAllowedImportDirs(canonicalPath string) bool {

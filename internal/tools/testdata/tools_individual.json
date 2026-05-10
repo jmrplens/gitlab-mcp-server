@@ -1730,7 +1730,7 @@
   },
   {
     "name": "gitlab_add_project_mirror",
-    "description": "Create a new remote push mirror for a GitLab project. The mirror URL may include credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors.\n\nReturns: JSON with created mirror details. See also: gitlab_edit_project_mirror.",
+    "description": "Create a new remote push mirror for a GitLab project. This push-mirror endpoint may use URL-embedded credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors. Pull mirroring uses separate auth_user/auth_password fields and must not put credentials in the URL.\n\nReturns: JSON with created mirror details. See also: gitlab_edit_project_mirror.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1778,7 +1778,7 @@
           "type": "string"
         },
         "url": {
-          "description": "Remote mirror URL (e.g. https://user:token@example.com/repo.git). Treat embedded credentials as secrets: do not log or store them, and redact tokens or passwords in telemetry/errors",
+          "description": "Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors",
           "type": "string"
         }
       },
@@ -88327,7 +88327,7 @@
           "type": "string"
         },
         "url": {
-          "description": "Mirror source URL. Do not include credentials in the URL; use auth_user and auth_password for authentication",
+          "description": "Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication",
           "type": "string"
         }
       },

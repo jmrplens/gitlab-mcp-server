@@ -98,8 +98,8 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ## Implementation Notes
 
-- **IMP-001**: Add the dynamic toolset behind a non-default configuration value such as `META_TOOLS=dynamic` or a new
-  explicit flag/env var, while preserving existing boolean behavior.
+- **IMP-001**: Add the dynamic toolset behind the non-default `TOOL_SURFACE=dynamic` / `TOOL_SURFACE=dynamic-3`
+  selector, while preserving existing `META_TOOLS=true|false` boolean behavior.
 - **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
   enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
   MCP server.
@@ -116,7 +116,8 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **CHK-001**: Existing meta-tool mode remains available.
 - **CHK-002**: Existing individual-tool mode remains available.
-- **CHK-003**: Low-token mode exposes at most 4 tools.
+- **CHK-003**: Low-token mode exposes at most 3 tools for `dynamic`/`dynamic-3`, and 2 tools for the experimental
+  `dynamic-2` comparison surface.
 - **CHK-004**: Low-token mode preserves destructive-action safety.
 - **CHK-005**: Low-token mode works over stdio and Streamable HTTP.
 - **CHK-006**: Evaluation shows no more than 2 percentage-point task success regression before default rollout.

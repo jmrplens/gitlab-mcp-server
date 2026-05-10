@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
@@ -57,6 +59,16 @@ func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
 	dynamicTools := listDynamicTools(actionregistry.FromActionMaps(routes))
 	if len(dynamicTools) != 3 {
 		t.Fatalf("listDynamicTools() count = %d, want 3", len(dynamicTools))
+	}
+	names := make([]string, 0, len(dynamicTools))
+	for _, tool := range dynamicTools {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	for _, want := range []string{"gitlab_describe_tools", "gitlab_execute_tool", "gitlab_search_tools"} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
+		}
 	}
 }
 

@@ -100,7 +100,10 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	})
 
 	t.Run("removes admin and preserves project", func(t *testing.T) {
-		filtered := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		filtered, filterErr := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", filterErr)
+		}
 		if _, ok := filtered.Group("gitlab_admin"); ok {
 			t.Fatal("filtered catalog still contains gitlab_admin")
 		}
@@ -110,14 +113,19 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	})
 
 	t.Run("source remains unchanged", func(t *testing.T) {
-		_ = FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if _, filterErr := FilterScopeFilteredCatalog(catalog, []string{"read_api"}); filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", filterErr)
+		}
 		if _, ok := catalog.Group("gitlab_admin"); !ok {
 			t.Fatal("source catalog was mutated")
 		}
 	})
 
 	t.Run("nil scopes return clone", func(t *testing.T) {
-		unfiltered := FilterScopeFilteredCatalog(catalog, nil)
+		unfiltered, filterErr := FilterScopeFilteredCatalog(catalog, nil)
+		if filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog(nil) error = %v", filterErr)
+		}
 		if unfiltered == catalog {
 			t.Fatal("nil token scopes should return a cloned catalog")
 		}

@@ -287,7 +287,7 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"fork":                     routeAction(client, projects.Fork),
 		"star":                     routeAction(client, projects.Star),
 		"unstar":                   routeAction(client, projects.Unstar),
-		"archive":                  destructiveAction(client, projects.Archive),
+		"archive":                  routeAction(client, projects.Archive),
 		"unarchive":                routeAction(client, projects.Unarchive),
 		"transfer":                 routeAction(client, projects.Transfer),
 		"list_forks":               routeAction(client, projects.ListForks),

@@ -197,7 +197,12 @@ func dynamicActionRoutes(client *gitlabclient.Client, enterprise bool) map[strin
 		fmt.Fprintf(os.Stderr, "build dynamic action catalog: %v\n", err)
 		os.Exit(1)
 	}
-	return dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}).ActionMaps()
+	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "add standalone dynamic actions: %v\n", err)
+		os.Exit(1)
+	}
+	return catalog.ActionMaps()
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
@@ -267,7 +272,7 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
-	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{})
+	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build meta action catalog: %v\n", err)
 		os.Exit(1)

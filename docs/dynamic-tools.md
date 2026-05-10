@@ -288,7 +288,7 @@ E2E_MODE=docker go test -v -tags e2e -timeout 600s \
 Model-facing evaluations can compare surfaces with `cmd/eval_meta_tools`:
 
 ```bash
-go run ./cmd/eval_meta_tools --tool-surface=dynamic --preset schema-base-read
+go run ./cmd/eval_meta_tools --tool-surface=dynamic --dry-run --partition base-read
 ```
 
 Use `dynamic-3` when you need an explicit name for the current three-tool candidate in A/B reports. Use `dynamic` for production-like configuration.

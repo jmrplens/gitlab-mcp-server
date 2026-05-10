@@ -10509,7 +10509,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_project_mirror
 
-Create a new remote push mirror for a GitLab project. The mirror URL may include credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors.
+Create a new remote push mirror for a GitLab project. This push-mirror endpoint may use URL-embedded credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors. Pull mirroring uses separate auth_user/auth_password fields and must not put credentials in the URL.
 
 **Parameters:**
 
@@ -10520,7 +10520,7 @@ Create a new remote push mirror for a GitLab project. The mirror URL may include
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `only_protected_branches` (): Mirror only protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string) (required): Remote mirror URL (e.g. https://user:token@example.com/repo.git). Treat embedded credentials as secrets: do not log or s...
+- `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for p...
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -20461,7 +20461,7 @@ Configure or update pull mirroring for a project. Set the mirror URL, authentica
 - `mirror_trigger_builds` (): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (): Only mirror protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string): Mirror source URL. Do not include credentials in the URL; use auth_user and auth_password for authentication
+- `url` (string): Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires aut...
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

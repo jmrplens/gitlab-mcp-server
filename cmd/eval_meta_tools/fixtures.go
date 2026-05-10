@@ -136,7 +136,7 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 		DeployKeyCreateKey:    deployKeyCreateKey,
 		FeatureFlagName:       liveFixtureFeatureFlag,
 		WikiSlug:              liveFixtureWikiSlug,
-		CleanupReleaseTag:     liveFixtureFailureTag,
+		CleanupReleaseTag:     liveFixtureCleanupTag,
 		ReleaseSummaryTag:     liveFixtureCleanupTag,
 		ElicitationReleaseTag: liveFixtureElicitationTag,
 	}
@@ -191,7 +191,7 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 		return nil, fmt.Errorf("fixture state %s is missing project identity", path)
 	}
 	if state.CleanupReleaseTag == "" {
-		state.CleanupReleaseTag = liveFixtureFailureTag
+		state.CleanupReleaseTag = liveFixtureCleanupTag
 	}
 	if state.ReleaseSummaryTag == "" {
 		state.ReleaseSummaryTag = liveFixtureCleanupTag
@@ -446,7 +446,7 @@ func (p *liveFixturePreparer) ensureMergeRequests(ctx context.Context) error {
 		p.notef("merge fixture not mergeable: %v", mergeableErr)
 	}
 	p.state.MergeRequestMergeIID = mergeMR.IID
-	awardMR, err := p.ensureFixtureMergeRequest(ctx, fmt.Sprintf("%s%d", liveFixtureAwardBranchPrefix, time.Now().UnixNano()), "Evaluation time and award fixture MR", false)
+	awardMR, err := p.ensureFixtureMergeRequest(ctx, liveFixtureAwardBranchPrefix+"stable", "Evaluation time and award fixture MR", false)
 	if err != nil {
 		return err
 	}
@@ -1494,7 +1494,9 @@ func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureSt
 		prompt = strings.ReplaceAll(prompt, "merge request IID `7`", fmt.Sprintf("merge request IID `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "merge_request_iid `7`", fmt.Sprintf("merge_request_iid `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "MR `7`", fmt.Sprintf("MR `%d`", mrIID))
-		prompt = strings.ReplaceAll(prompt, "MR `1`", fmt.Sprintf("MR `%d`", mrIID))
+		if taskID == "MS-033" {
+			prompt = strings.ReplaceAll(prompt, "MR `1`", fmt.Sprintf("MR `%d`", mrIID))
+		}
 	}
 	if taskID == "MT-061" && state.MergeRequestThreadID != "" {
 		prompt = strings.ReplaceAll(prompt, "discussion `abc123`", fmt.Sprintf("discussion `%s`", state.MergeRequestThreadID))

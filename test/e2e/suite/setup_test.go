@@ -221,7 +221,12 @@ func TestMain(m *testing.M) {
 		metaServerCancel()
 		log.Fatalf("e2e: build dynamic action catalog: %v", err)
 	}
-	dynamicCatalog = dynamictools.AddStandaloneCatalog(dynamicCatalog, glClient, dynamictools.StandaloneOptions{})
+	dynamicCatalog, err = dynamictools.AddStandaloneCatalog(dynamicCatalog, glClient, dynamictools.StandaloneOptions{})
+	if err != nil {
+		serverCancel()
+		metaServerCancel()
+		log.Fatalf("e2e: add standalone dynamic catalog: %v", err)
+	}
 	dynamictools.RegisterCatalogTools(dynamicServer, dynamicCatalog)
 
 	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()

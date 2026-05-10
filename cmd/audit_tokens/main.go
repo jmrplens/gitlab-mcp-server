@@ -81,8 +81,16 @@ func main() {
 
 	metaBaseRoutes := buildMetaActionMaps(client, false)
 	metaEnterpriseRoutes := buildMetaActionMaps(client, true)
-	dynamicBaseCatalog := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
-	dynamicEnterpriseCatalog := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicBaseCatalog, err := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "add standalone base dynamic catalog: %v\n", err)
+		os.Exit(1)
+	}
+	dynamicEnterpriseCatalog, err := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "add standalone enterprise dynamic catalog: %v\n", err)
+		os.Exit(1)
+	}
 	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
 	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
 

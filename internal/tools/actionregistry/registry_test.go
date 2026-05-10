@@ -127,12 +127,44 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	if err := catalog.AddAction("", Action{Name: "get", Route: testRoute(false)}); err == nil {
 		t.Fatal("AddAction(empty tool) error = nil, want error")
 	}
+	if err := catalog.AddAction("gitlab_project", Action{Name: "owned", Route: testRoute(false)}, GroupOptions{}, GroupOptions{}); err == nil {
+		t.Fatal("AddAction(multiple group options) error = nil, want error")
+	}
 
 	duplicateID := NewGroup(GroupOptions{ToolName: "gitlab_duplicate"})
 	duplicateID.SetAction(Action{Name: "one", ID: "duplicate.id", Route: testRoute(false)})
 	duplicateID.SetAction(Action{Name: "two", ID: "duplicate.id", Route: testRoute(false)})
 	if err := NewCatalog().AddGroup(duplicateID); err == nil {
 		t.Fatal("AddGroup(duplicate action ID) error = nil, want error")
+	}
+}
+
+func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
+	catalog := NewCatalog()
+	formatResult := func(any) *mcp.CallToolResult { return nil }
+	err := catalog.AddAction("gitlab_discover_project", Action{Name: "resolve", Route: testRoute(false)}, GroupOptions{
+		Description:  "Resolve git remotes to projects.",
+		Icons:        toolutil.IconProject,
+		ReadOnly:     true,
+		FormatResult: formatResult,
+	})
+	if err != nil {
+		t.Fatalf("AddAction() error = %v", err)
+	}
+
+	group, ok := catalog.Group("gitlab_discover_project")
+	if !ok {
+		t.Fatal("Group(gitlab_discover_project) = false")
+	}
+	if group.Description == "" || !group.ReadOnly || len(group.Icons) == 0 || group.FormatResult == nil {
+		t.Fatalf("group metadata = %+v, want description, read-only, icons, and formatter", group)
+	}
+	if _, hasResolve := group.Actions["resolve"]; !hasResolve {
+		t.Fatal("group missing resolve action")
+	}
+	mismatchErr := NewCatalog().AddAction("gitlab_discover_project", Action{Name: "resolve", Route: testRoute(false)}, GroupOptions{ToolName: "gitlab_project"})
+	if mismatchErr == nil {
+		t.Fatal("AddAction(mismatched group options) error = nil, want error")
 	}
 }
 

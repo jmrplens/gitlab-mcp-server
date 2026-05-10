@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -372,15 +371,41 @@ func openAIToolSchema(tool modelTool) any {
 func cloneOpenAISchema(schema map[string]any) map[string]any {
 	data, err := json.Marshal(schema)
 	if err != nil {
-		slog.Warn("failed to marshal OpenAI tool schema; using shallow schema fallback", "error", err)
-		return maps.Clone(schema)
+		slog.Warn("failed to marshal OpenAI tool schema; using recursive schema fallback", "error", err)
+		return deepCloneMap(schema)
 	}
 	var cloned map[string]any
 	if unmarshalErr := json.Unmarshal(data, &cloned); unmarshalErr != nil {
-		slog.Warn("failed to unmarshal OpenAI tool schema clone; using shallow schema fallback", "error", unmarshalErr)
-		return maps.Clone(schema)
+		slog.Warn("failed to unmarshal OpenAI tool schema clone; using recursive schema fallback", "error", unmarshalErr)
+		return deepCloneMap(schema)
 	}
 	return cloned
+}
+
+func deepCloneMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(input))
+	for key, value := range input {
+		cloned[key] = deepCloneAny(value)
+	}
+	return cloned
+}
+
+func deepCloneAny(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return deepCloneMap(typed)
+	case []any:
+		cloned := make([]any, len(typed))
+		for i, item := range typed {
+			cloned[i] = deepCloneAny(item)
+		}
+		return cloned
+	default:
+		return typed
+	}
 }
 
 func addOpenAIExecuteParamHints(schema map[string]any) {

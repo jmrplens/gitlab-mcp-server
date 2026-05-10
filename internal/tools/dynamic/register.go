@@ -1392,6 +1392,30 @@ func hasExplicitConfirm(params map[string]any) bool {
 	switch typed := value.(type) {
 	case bool:
 		return typed
+	case int:
+		return typed == 1
+	case int8:
+		return typed == 1
+	case int16:
+		return typed == 1
+	case int32:
+		return typed == 1
+	case int64:
+		return typed == 1
+	case uint:
+		return typed == 1
+	case uint8:
+		return typed == 1
+	case uint16:
+		return typed == 1
+	case uint32:
+		return typed == 1
+	case uint64:
+		return typed == 1
+	case float32:
+		return typed == 1
+	case float64:
+		return typed == 1
 	case string:
 		switch strings.ToLower(strings.TrimSpace(typed)) {
 		case "1", "true", "yes", "y":

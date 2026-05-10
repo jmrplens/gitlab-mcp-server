@@ -79,6 +79,7 @@ const (
 	flagSkipDestructive               = "skip-destructive"
 	flagSkipUnavailable               = "skip-unavailable"
 	promptMarkerIssue                 = "issue "
+	promptMarkerMergeRequest          = "merge request "
 	promptMarkerBranch                = "branch "
 	promptMarkerProject               = "project "
 	promptMarkerAwardEmojiID          = "award emoji ID "
@@ -93,6 +94,18 @@ const (
 	metricEstimatedTokens             = "Estimated tokens"
 	metricValueTableHeader            = "| Metric | Value |\n| --- | ---: |\n"
 	metricIntegerValueTableRow        = "| %s | %d |\n"
+
+	actionDiscoverProjectResolve   = "discover_project.resolve"
+	actionSearchProjects           = "search.projects"
+	actionProjectGet               = "project.get"
+	actionProjectList              = "project.list"
+	actionEnvironmentProtectedList = "environment.protected_list"
+	actionPipelineGet              = "pipeline.get"
+	actionIssueCreate              = "issue.create"
+	errBuildActionCatalog          = "build action catalog: %w"
+	diagnosticUnknownParams        = "unknown params"
+	diagnosticNotFound             = "not found"
+	diagnosticExpectedAction       = "expected action"
 )
 
 var evalElicitationReleaseTag atomic.Value
@@ -1481,7 +1494,7 @@ func normalizeExpectedDynamicRoute(tool, action string, routes map[string]toolut
 func standaloneDynamicActionCandidates(tool string) []string {
 	switch tool {
 	case "gitlab_discover_project":
-		return []string{"discover_project.resolve"}
+		return []string{actionDiscoverProjectResolve}
 	case "gitlab_interactive_issue_create":
 		return []string{"interactive.issue_create"}
 	case "gitlab_interactive_mr_create":
@@ -2730,7 +2743,7 @@ func ensureLiveMRAwardDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	if !ok {
 		return task, fmt.Errorf("prepare MT-109 fixture: project path not found in prompt %q", task.Prompt)
 	}
-	mergeRequestIID, err := promptInt64After(task.Prompt, "merge request ")
+	mergeRequestIID, err := promptInt64After(task.Prompt, promptMarkerMergeRequest)
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-109 fixture: %w", err)
 	}
@@ -3323,23 +3336,29 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
 		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("build action catalog: %w", catalogErr)
+			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
-		actionCatalog = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
+		actionCatalog, catalogErr = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
+		if catalogErr != nil {
+			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic catalog: %w", catalogErr)
+		}
 		dynamictools.RegisterCatalogTools(server, actionCatalog)
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceDynamic2:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
 		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("build action catalog: %w", catalogErr)
+			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
-		actionCatalog = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
+		actionCatalog, catalogErr = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
+		if catalogErr != nil {
+			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic-2 catalog: %w", catalogErr)
+		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceMeta:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
 		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("build action catalog: %w", catalogErr)
+			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
 		tools.RegisterMetaCatalog(server, actionCatalog)
 		routes = actionCatalog.ActionMaps()
@@ -3814,7 +3833,7 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 	if !ok || route.Destructive {
 		return false
 	}
-	if strings.Contains(validation.Message, "unknown params") {
+	if strings.Contains(validation.Message, diagnosticUnknownParams) {
 		return false
 	}
 	if toolUse.Name == dynamicExecuteTool {
@@ -3894,11 +3913,11 @@ func acceptsDynamicPreludeCall(toolSurface string, step evalStep, validation val
 		return false
 	}
 	switch {
-	case step.ExpectedAction == "discover_project.resolve":
-		return validation.Action == "search.projects" || validation.Action == "project.list" || validation.Action == "project.get" || validation.Action == "environment.list" || validation.Action == "environment.protected_list" || validation.Action == "environment.deployment_list"
+	case step.ExpectedAction == actionDiscoverProjectResolve:
+		return validation.Action == actionSearchProjects || validation.Action == actionProjectList || validation.Action == actionProjectGet || validation.Action == "environment.list" || validation.Action == actionEnvironmentProtectedList || validation.Action == "environment.deployment_list"
 	case step.ExpectedAction == "release.link_get" && validation.Action == "release.get":
 		return true
-	case step.ExpectedAction == "environment.protected_get" && validation.Action == "environment.protected_list":
+	case step.ExpectedAction == "environment.protected_get" && validation.Action == actionEnvironmentProtectedList:
 		return true
 	case step.ExpectedAction == "environment.protected_get" && validation.Action == "environment.deployment_list":
 		return true
@@ -3910,7 +3929,7 @@ func acceptsDynamicPreludeCall(toolSurface string, step evalStep, validation val
 	case strings.HasSuffix(step.ExpectedAction, "_get") && strings.HasSuffix(validation.Action, "_list"):
 		expectedListAction := strings.TrimSuffix(step.ExpectedAction, "_get") + "_list"
 		return validation.Action == expectedListAction
-	case hasParam(step.RequiredParams, "project_id") && (validation.Action == "project.list" || validation.Action == "project.get" || validation.Action == "search.projects"):
+	case hasParam(step.RequiredParams, "project_id") && (validation.Action == actionProjectList || validation.Action == actionProjectGet || validation.Action == actionSearchProjects):
 		return true
 	default:
 		return false
@@ -3927,7 +3946,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 	params, _ := toolUse.Input["params"].(map[string]any)
 	addSimulatedResourceIDs(result, action, params)
 	switch {
-	case toolUse.Name == "gitlab_discover_project" || action == "discover_project.resolve":
+	case toolUse.Name == "gitlab_discover_project" || action == actionDiscoverProjectResolve:
 		remoteURL, _ := toolUse.Input["remote_url"].(string)
 		if remoteURL == "" {
 			remoteURL, _ = params["remote_url"].(string)
@@ -3941,7 +3960,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"default_branch":      "main",
 			"web_url":             strings.TrimSuffix(remoteURL, ".git"),
 		}
-	case step.ExpectedAction == "discover_project.resolve" && (action == "search.projects" || action == "project.list" || action == "project.get"):
+	case step.ExpectedAction == actionDiscoverProjectResolve && (action == actionSearchProjects || action == actionProjectList || action == actionProjectGet):
 		project := simulatedProjectFromLookup(toolUse.Input, params)
 		result["project"] = project
 		result["projects"] = []map[string]any{project}
@@ -3953,7 +3972,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"project_path":   project["path_with_namespace"],
 			"default_branch": project["default_branch"],
 		}}
-	case action == "project.get":
+	case action == actionProjectGet:
 		projectID, _ := params["project_id"].(string)
 		result["project"] = map[string]any{
 			"id":                  42,
@@ -3962,7 +3981,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"name":                projectNameFromPath(projectID),
 			"default_branch":      "main",
 		}
-	case action == "project.list":
+	case action == actionProjectList:
 		result["projects"] = []map[string]any{simulatedProjectFromLookup(toolUse.Input, params)}
 	case action == "pipeline.trigger_list":
 		result["triggers"] = []map[string]any{{
@@ -4002,7 +4021,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"environment": "production",
 			"project_id":  params["project_id"],
 		}}
-	case action == "environment.protected_list":
+	case action == actionEnvironmentProtectedList:
 		result["protected_environments"] = []map[string]any{{
 			"name":        "production",
 			"environment": "production",
@@ -4015,7 +4034,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"ref":        params["ref"],
 			"encoding":   "base64",
 		}
-	case action == "pipeline.get":
+	case action == actionPipelineGet:
 		result["pipeline"] = map[string]any{
 			"project_id":  params["project_id"],
 			"pipeline_id": params["pipeline_id"],
@@ -4075,7 +4094,7 @@ func projectNameFromPath(projectPath string) string {
 
 func addSimulatedResourceIDs(result map[string]any, action string, params map[string]any) {
 	switch action {
-	case "issue.create":
+	case actionIssueCreate:
 		addTopLevelID(result, "issue_iid", 123)
 		result["issue"] = map[string]any{"id": 123, "iid": 123, "issue_iid": 123, "project_id": params["project_id"]}
 	case "issue.link_create":
@@ -4557,11 +4576,11 @@ func schemaGetUsage() map[string]any {
 		"examples": []map[string]any{
 			{
 				"purpose": "unified dispatcher project lookup schema",
-				"call":    map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab", "action": "project.get"}},
+				"call":    map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab", "action": actionProjectGet}},
 			},
 			{
 				"purpose": "unified dispatcher pipeline lookup schema",
-				"call":    map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab", "action": "pipeline.get"}},
+				"call":    map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab", "action": actionPipelineGet}},
 			},
 			{
 				"purpose": "legacy domain meta-tool schema",
@@ -4739,7 +4758,7 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		if value, ok := backtickValueAfter(prompt, "MR "); ok {
 			return numericExampleValue(value)
 		}
-		if value, ok := backtickValueAfter(prompt, "merge request "); ok {
+		if value, ok := backtickValueAfter(prompt, promptMarkerMergeRequest); ok {
 			return numericExampleValue(value)
 		}
 	}
@@ -4783,7 +4802,7 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 				return value
 			}
 		}
-	case "issue.create":
+	case actionIssueCreate:
 		if param == "title" {
 			if value, ok := backtickValueAfter(prompt, "create issue "); ok {
 				return value
@@ -4870,10 +4889,10 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 2 && (steps[0].ExpectedAction == "release.list" || steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "list") {
 		retryGuidance += ` For release inventory plus notes, follow exactly this order: release.list, repository.compare, analyze.release_notes. repository.compare requires params.from and params.to; analyze.release_notes should use the same from/to refs after compare succeeds.`
 	}
-	if len(steps) > 1 && (steps[0].ExpectedAction == "issue.create" || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create") && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
+	if len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create") && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
 		retryGuidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and top-level confirm:true on gitlab_execute_tool.`
 	}
-	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" || steps[0].ExpectedAction == "issue.create") && strings.Contains(strings.ToLower(task.Prompt), "issue time tracking") {
+	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" || steps[0].ExpectedAction == actionIssueCreate) && strings.Contains(strings.ToLower(task.Prompt), "issue time tracking") {
 		retryGuidance += ` For issue time tracking, follow exactly this order: issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete. After issue.create, use the returned issue_iid for every later issue time-tracking and delete step. Set the estimate before adding spent time; reset spent time before resetting the estimate.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "badge_add" {
@@ -4934,7 +4953,7 @@ func taskPrompt(task evalTask) string {
 				hasFailedJobListStep = true
 				break
 			}
-			if step.ExpectedAction == "pipeline.get" || step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "get" {
+			if step.ExpectedAction == actionPipelineGet || step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "get" {
 				hasPipelineGetStep = true
 			}
 		}
@@ -5126,7 +5145,7 @@ var numericExampleParamMarkers = map[string][]string{
 	"child_iid":                {"issue IID "},
 	"token_id":                 {"personal access token ID ", "token ID "},
 	"issue_iid":                {promptMarkerIssue},
-	"merge_request_iid":        {"merge_request_iid ", "merge request ", "MR "},
+	"merge_request_iid":        {"merge_request_iid ", promptMarkerMergeRequest, "MR "},
 	"note_id":                  {"note ", "discussion note "},
 	"pipeline_id":              {"pipeline ID ", "pipeline "},
 	"job_id":                   {"job ID ", "job "},
@@ -5654,7 +5673,7 @@ func validationRepairMessage(task evalTask, step evalStep, validation validation
 	if validation.Action != "" && validation.Action != step.ExpectedAction {
 		fmt.Fprintf(&b, ". The attempted action %s is not the current scenario step; do not skip ahead to later operations or substitute a similarly named action", validation.Action)
 	}
-	if strings.Contains(validation.Message, "unknown params") {
+	if strings.Contains(validation.Message, diagnosticUnknownParams) {
 		b.WriteString(". Remove every unknown param from the retry; do not carry IDs from a previous action into an unrelated action unless the envelope above includes that param")
 	}
 	if hasParam(step.RequiredParams, "project_id") {
@@ -6398,7 +6417,7 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "other"
 	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
 		return "model_provider_auth"
-	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, "not found"):
+	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound):
 		return "model_provider_model_unavailable"
 	case strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || strings.Contains(text, "integer") && strings.Contains(text, "invalid"):
 		return "mcp_implementation_bug"
@@ -6410,17 +6429,17 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "standalone_unavailable"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, "unknown params") || strings.Contains(text, "unexpected top-level parameter"):
+	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, "unexpected top-level parameter"):
 		return "params_shape_miss"
 	case dynamicMultiStepOrderMiss(text):
 		return "multi_step_order_miss"
-	case strings.Contains(text, "expected action") || strings.Contains(text, "expected tool") || strings.Contains(text, "unknown action") || strings.Contains(text, "model returned no tool_use"):
+	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool") || strings.Contains(text, "unknown action") || strings.Contains(text, "model returned no tool_use"):
 		return "true_discovery_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"
 	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
 		return "timeout_resource_exhaustion"
-	case strings.Contains(text, "404") || strings.Contains(text, "not found"):
+	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
 		return "not_found"
 	default:
 		return "other"
@@ -6428,7 +6447,7 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 }
 
 func dynamicAliasMiss(text string) bool {
-	if !strings.Contains(text, "expected action") || !strings.Contains(text, "got ") {
+	if !strings.Contains(text, diagnosticExpectedAction) || !strings.Contains(text, "got ") {
 		return false
 	}
 	aliasMarkers := []string{
@@ -6458,7 +6477,7 @@ func failureDiagnosticCategory(notes []string) string {
 	switch {
 	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
 		return "model_provider_auth"
-	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, "not found"):
+	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound):
 		return "model_provider_model_unavailable"
 	case strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || (strings.Contains(text, "integer") && strings.Contains(text, "invalid")):
 		return "mcp_implementation_bug"
@@ -6468,15 +6487,15 @@ func failureDiagnosticCategory(notes []string) string {
 		return "gitlab_ce_limitation"
 	case strings.Contains(text, "fixture unavailable") || strings.Contains(text, "fixture state") || strings.Contains(text, "prepare fixtures"):
 		return "fixture_setup_failure"
-	case strings.Contains(text, "expected action") || strings.Contains(text, "expected tool"):
+	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool"):
 		return "model_route_selection_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, "unknown params") || strings.Contains(text, "unexpected top-level parameter") || strings.Contains(text, "standalone tool uses top-level"):
+	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, "unexpected top-level parameter") || strings.Contains(text, "standalone tool uses top-level"):
 		return "model_parameter_shape_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"
 	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
 		return "timeout_resource_exhaustion"
-	case strings.Contains(text, "404") || strings.Contains(text, "not found"):
+	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
 		return "not_found"
 	default:
 		return "other"
@@ -7101,7 +7120,7 @@ func acceptsAlternativeDynamicFirstPath(result taskResult, steps []evalStep) boo
 	if result.FirstTool != first.ExpectedTool {
 		return false
 	}
-	if first.ExpectedAction == "discover_project.resolve" && result.FirstAction == "search.projects" {
+	if first.ExpectedAction == actionDiscoverProjectResolve && result.FirstAction == actionSearchProjects {
 		return true
 	}
 	if len(steps) < 2 {

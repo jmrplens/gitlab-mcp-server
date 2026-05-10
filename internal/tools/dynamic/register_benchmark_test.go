@@ -58,7 +58,11 @@ func benchmarkRegistry(b *testing.B) *Registry {
 	if err != nil {
 		b.Fatalf("BuildActionCatalog() error: %v", err)
 	}
-	registry := NewRegistryFromCatalog(AddStandaloneCatalog(catalog, nil, StandaloneOptions{}))
+	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	if err != nil {
+		b.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+	registry := NewRegistryFromCatalog(catalog)
 	if len(registry.entries) == 0 {
 		b.Fatal("benchmark registry is empty")
 	}

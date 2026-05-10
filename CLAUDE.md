@@ -536,7 +536,7 @@ E2E tests run against a real GitLab instance using in-memory MCP transport (no n
 **Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
 
 ```bash
-# Run full E2E suite (two workflows: individual tools + meta-tools)
+# Run full E2E suite (three workflows: individual tools + meta-tools + dynamic tools)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
@@ -555,7 +555,7 @@ go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
-The suite runs two sequential workflows:
+The suite runs three sequential workflows:
 
 - **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → sampling → elicitation → cleanup)
 - **TestMetaToolWorkflow** (~151 subtests): exercises the same operations through meta-tools plus 15 additional domains (wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, milestones)

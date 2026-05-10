@@ -1201,8 +1201,9 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: "decline", content: nil},                                       // decline description
 				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
 				{action: "cancel", content: nil},                                        // cancel readme
+				{action: "decline", content: nil},                                       // keep default branch
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},     // final confirmation
 			},
-			wantError: "canceled",
 		},
 	}
 
@@ -1212,7 +1213,22 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(tc.steps))
 			defer cleanup()
 
-			_, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, ProjectInput{})
+			var client = testutil.NewTestClient(t, http.NewServeMux())
+			if tc.wantError == "" {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+					testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
+				})
+				client = testutil.NewTestClient(t, mux)
+			}
+
+			_, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
 			if err == nil {
 				t.Fatal("expected error")
 			}

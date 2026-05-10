@@ -219,6 +219,8 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 		value string
 		want  string
 	}{
+		{value: "DYNAMIC", want: ToolSurfaceDynamic},
+		{value: " dynamic ", want: ToolSurfaceDynamic},
 		{value: ToolSurfaceDynamic2, want: ToolSurfaceDynamic2},
 		{value: ToolSurfaceDynamic3, want: ToolSurfaceDynamic3},
 	}
@@ -246,16 +248,21 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 // TestLoad_CapabilitySurfaceMinimal verifies that CAPABILITY_SURFACE selects
 // the non-default low-token resource and prompt surface.
 func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("CAPABILITY_SURFACE", "minimal")
+	tests := []string{"minimal", "MINIMAL", " minimal "}
+	for _, value := range tests {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv("CAPABILITY_SURFACE", value)
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if cfg.CapabilitySurface != CapabilitySurfaceMinimal {
-		t.Fatalf("CapabilitySurface = %q, want %q", cfg.CapabilitySurface, CapabilitySurfaceMinimal)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.CapabilitySurface != CapabilitySurfaceMinimal {
+				t.Fatalf("CapabilitySurface = %q, want %q", cfg.CapabilitySurface, CapabilitySurfaceMinimal)
+			}
+		})
 	}
 }
 

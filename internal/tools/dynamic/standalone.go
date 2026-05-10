@@ -1,7 +1,7 @@
 package dynamic
 
 import (
-	"log/slog"
+	"fmt"
 	"slices"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -21,14 +21,18 @@ type StandaloneOptions struct {
 // AddStandaloneRoutes adds non-meta standalone tools to the canonical dynamic
 // action catalog so dynamic mode can still execute them through
 // gitlab_execute_tool without increasing the visible tool count.
-func AddStandaloneRoutes(routes map[string]toolutil.ActionMap, client *gitlabclient.Client, opts StandaloneOptions) map[string]toolutil.ActionMap {
-	return AddStandaloneCatalog(actionregistry.FromActionMaps(routes), client, opts).ActionMaps()
+func AddStandaloneRoutes(routes map[string]toolutil.ActionMap, client *gitlabclient.Client, opts StandaloneOptions) (map[string]toolutil.ActionMap, error) {
+	catalog, err := AddStandaloneCatalog(actionregistry.FromActionMaps(routes), client, opts)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.ActionMaps(), nil
 }
 
 // AddStandaloneCatalog adds non-meta standalone tools to the canonical dynamic
 // action catalog so dynamic mode can execute them without increasing the
 // visible tool count.
-func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.Client, opts StandaloneOptions) *actionregistry.Catalog {
+func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.Client, opts StandaloneOptions) (*actionregistry.Catalog, error) {
 	if catalog == nil {
 		catalog = actionregistry.NewCatalog()
 	} else {
@@ -38,15 +42,24 @@ func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.
 		if err := catalog.AddAction("gitlab_discover_project", actionregistry.Action{
 			Name:  "resolve",
 			Route: toolutil.RouteAction(client, projectdiscovery.Resolve),
+		}, actionregistry.GroupOptions{
+			ToolName:    "gitlab_discover_project",
+			Description: "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
+			Icons:       toolutil.IconProject,
+			ReadOnly:    true,
 		}); err != nil {
-			slog.Error("failed to add standalone dynamic action", "tool", "gitlab_discover_project", "action", "resolve", "error", err)
+			return nil, fmt.Errorf("add standalone dynamic action gitlab_discover_project.resolve: %w", err)
 		}
 	}
 	if opts.ReadOnly || standaloneExcluded(opts.ExcludeTools, "gitlab_interactive") {
-		return catalog
+		return catalog, nil
 	}
 
-	interactive := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_interactive"})
+	interactive := actionregistry.NewGroup(actionregistry.GroupOptions{
+		ToolName:    "gitlab_interactive",
+		Description: "Guided interactive creation flows for issues, merge requests, projects, and releases. Mutating; use only when the task explicitly asks for a guided flow.",
+		Icons:       toolutil.IconServer,
+	})
 	if !standaloneExcluded(opts.ExcludeTools, "gitlab_interactive_issue_create") {
 		interactive.SetAction(actionregistry.Action{Name: "issue_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.IssueCreate)})
 	}
@@ -61,10 +74,10 @@ func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.
 	}
 	if len(interactive.Actions) > 0 {
 		if err := catalog.AddGroup(interactive); err != nil {
-			slog.Error("failed to add standalone dynamic group", "tool", interactive.ToolName, "error", err)
+			return nil, fmt.Errorf("add standalone dynamic group %q: %w", interactive.ToolName, err)
 		}
 	}
-	return catalog
+	return catalog, nil
 }
 
 func standaloneExcluded(excludeTools []string, name string) bool {

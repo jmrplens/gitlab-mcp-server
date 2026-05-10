@@ -5,6 +5,7 @@ package snippets
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -182,6 +183,13 @@ func TestCreate_Success(t *testing.T) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		if !strings.Contains(string(body), "package main") {
+			t.Fatalf("request body = %q, want snippet content", string(body))
 		}
 		testutil.RespondJSON(w, http.StatusCreated, snippetJSON)
 	})

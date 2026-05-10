@@ -16,7 +16,7 @@ import (
 func setInputSchema() *jsonschema.Schema {
 	schema, err := jsonschema.For[SetInput](nil)
 	if err != nil {
-		panic(fmt.Sprintf("feature set input schema: %v", err))
+		panic(fmt.Sprintf("build feature set input schema: %v; check SetInput struct tags, unsupported field types, or circular schema references", err))
 	}
 	if property := schema.Properties["value"]; property != nil {
 		property.Type = ""
@@ -32,11 +32,11 @@ func setInputSchema() *jsonschema.Schema {
 func setInputSchemaMap() map[string]any {
 	data, err := json.Marshal(setInputSchema())
 	if err != nil {
-		panic(fmt.Sprintf("marshal feature set input schema: %v", err))
+		panic(fmt.Sprintf("marshal feature set input schema: %v; check schema serialization for unsupported values", err))
 	}
 	var schema map[string]any
 	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
-		panic(fmt.Sprintf("unmarshal feature set input schema: %v", unmarshalErr))
+		panic(fmt.Sprintf("unmarshal feature set input schema: %v; check generated schema JSON shape", unmarshalErr))
 	}
 	return schema
 }
@@ -88,7 +88,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Set or create a feature flag (admin). Requires name and value. Supports scoping to user, group, project, namespace, or repository.\n\nReturns: JSON with the feature flag details.\n\nSee also: gitlab_list_features.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
-		InputSchema: setInputSchema(),
+		InputSchema: setInputSchemaMap(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SetInput) (*mcp.CallToolResult, SetOutput, error) {
 		start := time.Now()
 		out, err := Set(ctx, client, input)

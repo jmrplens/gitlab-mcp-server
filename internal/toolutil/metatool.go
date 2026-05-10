@@ -26,9 +26,12 @@ import (
 const maxInt = int(math.MaxInt)
 
 const (
-	minInt64AsFloat          = -float64(1 << 63)
-	maxInt64AsFloat          = float64(1<<63 - 1)
-	invalidActionParamsError = "invalid params for this action: %w"
+	minInt64AsFloat                      = -float64(1 << 63)
+	maxInt64AsFloat                      = float64(1<<63 - 1)
+	invalidActionParamsError             = "invalid params for this action: %w"
+	actionProjectMemberDelete            = "project.member_delete"
+	actionProjectMemberEdit              = "project.member_edit"
+	actionExternalStatusCheckListProject = "external_status_check.list_project"
 )
 
 // MetaToolInput is the common input for all meta-tools.
@@ -100,18 +103,18 @@ var commonActionAliases = map[string]string{
 	"package.list_generic":                      "package.list",
 	"project.releases.list":                     "release.list",
 	"project.hooks.list":                        "project.hook_list",
-	"project.member_remove":                     "project.member_delete",
-	"project.member_update":                     "project.member_edit",
+	"project.member_remove":                     actionProjectMemberDelete,
+	"project.member_update":                     actionProjectMemberEdit,
 	"project.schedule_storage_move":             "storage_move.schedule_project",
-	"project.status_check_list":                 "external_status_check.list_project",
-	"project.status_checks.list":                "external_status_check.list_project",
+	"project.status_check_list":                 actionExternalStatusCheckListProject,
+	"project.status_checks.list":                actionExternalStatusCheckListProject,
 	"project_member.add":                        "project.member_add",
-	"project_member.delete":                     "project.member_delete",
-	"project_member.edit":                       "project.member_edit",
+	"project_member.delete":                     actionProjectMemberDelete,
+	"project_member.edit":                       actionProjectMemberEdit,
 	"project_member.get":                        "project.member_get",
-	"project_member.remove":                     "project.member_delete",
-	"project_member.update":                     "project.member_edit",
-	"external_status_check.list_project_checks": "external_status_check.list_project",
+	"project_member.remove":                     actionProjectMemberDelete,
+	"project_member.update":                     actionProjectMemberEdit,
+	"external_status_check.list_project_checks": actionExternalStatusCheckListProject,
 	"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
 	"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
 	"feature_flag_user_list.get":                "feature_flags.ff_user_list_get",

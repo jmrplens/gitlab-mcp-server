@@ -119,7 +119,10 @@ func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 // TestAddStandaloneRoutes_AddsDynamicActions verifies that standalone dynamic
 // routes are indexed alongside captured meta-tool routes.
 func TestAddStandaloneRoutes_AddsDynamicActions(t *testing.T) {
-	routes := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
+	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
 	registry := NewRegistry(routes)
 
 	tests := []string{
@@ -141,10 +144,13 @@ func TestAddStandaloneRoutes_AddsDynamicActions(t *testing.T) {
 // TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions verifies that standalone
 // route registration respects read-only mode and explicit tool exclusions.
 func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
-	routes := AddStandaloneRoutes(nil, nil, StandaloneOptions{
+	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
 		ReadOnly:     true,
 		ExcludeTools: []string{"gitlab_discover_project"},
 	})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
 	registry := NewRegistry(routes)
 
 	if _, ok := registry.resolveAction("discover_project.resolve"); ok {
@@ -159,8 +165,16 @@ func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
 // catalog-native standalone builder preserves the old route-map wrapper output.
 func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
 	routes := testRoutes(t)
-	fromRoutes := NewRegistry(AddStandaloneRoutes(routes, nil, StandaloneOptions{}))
-	fromCatalog := NewRegistryFromCatalog(AddStandaloneCatalog(actionregistry.FromActionMaps(routes), nil, StandaloneOptions{}))
+	standaloneRoutes, err := AddStandaloneRoutes(routes, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	standaloneCatalog, err := AddStandaloneCatalog(actionregistry.FromActionMaps(routes), nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+	fromRoutes := NewRegistry(standaloneRoutes)
+	fromCatalog := NewRegistryFromCatalog(standaloneCatalog)
 
 	for _, actionID := range []string{"project.list", "discover_project.resolve", "interactive.issue_create"} {
 		if _, ok := fromRoutes.resolveAction(actionID); !ok {
@@ -175,12 +189,15 @@ func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
 // TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions verifies
 // nil catalogs are supported and no empty interactive group is added.
 func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testing.T) {
-	catalog := AddStandaloneCatalog(nil, nil, StandaloneOptions{ExcludeTools: []string{
+	catalog, err := AddStandaloneCatalog(nil, nil, StandaloneOptions{ExcludeTools: []string{
 		"gitlab_interactive_issue_create",
 		"gitlab_interactive_mr_create",
 		"gitlab_interactive_project_create",
 		"gitlab_interactive_release_create",
 	}})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
 	registry := NewRegistryFromCatalog(catalog)
 
 	if _, ok := registry.resolveAction("discover_project.resolve"); !ok {
@@ -262,7 +279,11 @@ func TestNewRegistryFromCatalog_NilCatalog(t *testing.T) {
 // TestDescribe_CanonicalizesStandaloneAlias verifies that Describe resolves a
 // standalone MCP tool name to its canonical dynamic action ID.
 func TestDescribe_CanonicalizesStandaloneAlias(t *testing.T) {
-	registry := NewRegistry(AddStandaloneRoutes(nil, nil, StandaloneOptions{}))
+	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	registry := NewRegistry(routes)
 
 	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "gitlab_interactive_issue_create"})
 	if err != nil {
@@ -417,7 +438,7 @@ func TestFind_RequiresQuery(t *testing.T) {
 	}
 }
 
-// TestRegisterFindExecuteTools_ExposesTwoDynamicTools verifies that the dynamic
+// TestRegisterCatalogFindExecuteTools_ExposesTwoDynamicTools verifies that the dynamic
 // two-tool surface exposes only find and execute through an MCP session.
 func TestRegisterCatalogFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
@@ -962,7 +983,7 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_ExposesThreeDynamicTools verifies that the full dynamic
+// TestRegisterCatalogTools_ExposesThreeDynamicTools verifies that the full dynamic
 // surface exposes search, describe, and execute through an MCP session.
 func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
@@ -1024,7 +1045,11 @@ func TestSearch_PartialMatchLongQuery(t *testing.T) {
 // TestSearch_NaturalLLMQueriesReturnActions verifies natural-language queries
 // observed from LLMs still return the intended dynamic actions.
 func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
-	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+	routes, err := AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	registry := NewRegistry(routes)
 
 	tests := []struct {
 		name  string
@@ -1037,9 +1062,9 @@ func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 5})
-			if err != nil {
-				t.Fatalf("Search() error = %v", err)
+			result, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 5})
+			if searchErr != nil {
+				t.Fatalf("Search() error = %v", searchErr)
 			}
 			if result == nil || result.IsError {
 				t.Fatalf("Search() result = %+v, want non-error", result)
@@ -1054,7 +1079,11 @@ func TestSearch_NaturalLLMQueriesReturnActions(t *testing.T) {
 // TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches verifies that a long
 // query containing multiple intents is segmented into actionable matches.
 func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
-	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+	routes, err := AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	registry := NewRegistry(routes)
 
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{
 		Query: "discover project from remote url merge request list current user open authored",
@@ -1098,7 +1127,11 @@ func TestSearch_MultiIntentLongQueryOnMetaCatalog_ReturnsSegmentMatches(t *testi
 // TestSearch_QueryShapeMatrix_ReturnsExpectedActions verifies short, long,
 // typo-heavy, alias-based, and mixed queries against expected action IDs.
 func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
-	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+	routes, err := AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	registry := NewRegistry(routes)
 
 	tests := []struct {
 		name  string
@@ -1126,9 +1159,9 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: tt.limit})
-			if err != nil {
-				t.Fatalf("Search() error = %v", err)
+			result, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: tt.limit})
+			if searchErr != nil {
+				t.Fatalf("Search() error = %v", searchErr)
 			}
 			if result == nil || result.IsError {
 				t.Fatalf("Search() result = %+v, want non-error", result)
@@ -1175,7 +1208,11 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 // TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet verifies that mixed
 // intent queries return the expected action set even when the limit is tight.
 func TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet(t *testing.T) {
-	registry := NewRegistry(AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{}))
+	routes, err := AddStandaloneRoutes(testRoutes(t), nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	registry := NewRegistry(routes)
 
 	tests := []struct {
 		name  string
@@ -1201,9 +1238,9 @@ func TestSearch_MixedQueriesWithTightLimit_ReturnExactActionSet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: len(tt.want)})
-			if err != nil {
-				t.Fatalf("Search() error = %v", err)
+			result, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: len(tt.want)})
+			if searchErr != nil {
+				t.Fatalf("Search() error = %v", searchErr)
 			}
 			if result == nil || result.IsError {
 				t.Fatalf("Search() result = %+v, want non-error", result)
@@ -1268,7 +1305,10 @@ func realCatalogRegistry(t *testing.T) *Registry {
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
-	catalog = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
 	return NewRegistryFromCatalog(catalog)
 }
 

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
@@ -25,12 +26,12 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 	catalog := actionregistry.NewCatalog()
 	for _, definition := range definitions {
 		if err := catalog.AddGroup(groupFromMetaToolDefinition(definition)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("add meta tool group %q: %w", definition.Name, err)
 		}
 	}
 	if opts.IncludeMCP {
 		if err := catalog.AddGroup(BuildMCPActionGroup(client, opts.Updater)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("add MCP action group: %w", err)
 		}
 	}
 	return catalog, nil

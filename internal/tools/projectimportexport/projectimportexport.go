@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -187,17 +188,18 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", errors.New("one of file_path or content_base64 is required"))
 	}
 
-	var archiveReader *bytes.Reader
+	var archiveReader io.Reader
 	if hasFilePath {
 		archivePath, err := toolutil.CanonicalImportArchivePath(input.FilePath)
 		if err != nil {
 			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", err)
 		}
-		data, err := os.ReadFile(archivePath) //#nosec G304 -- archivePath is canonicalized, extension-checked, regular-file checked, and constrained to allowed import directories.
+		file, err := os.Open(archivePath) //#nosec G304 -- archivePath is canonicalized, extension-checked, regular-file checked, and constrained to allowed import directories.
 		if err != nil {
-			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("reading file: %w", err))
+			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("open archive: %w", err))
 		}
-		archiveReader = bytes.NewReader(data)
+		defer file.Close()
+		archiveReader = file
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
 		if err != nil {

@@ -92,7 +92,6 @@ type httpConfig struct {
 	gitlabURL          string
 	skipTLSVerify      bool
 	metaTools          bool
-	metaToolsSet       bool
 	toolSurface        string
 	capabilitySurface  string
 	enterprise         bool
@@ -163,11 +162,8 @@ func main() {
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "enterprise":
+		if f.Name == "enterprise" {
 			hcfg.enterpriseSet = true
-		case "meta-tools":
-			hcfg.metaToolsSet = true
 		}
 	})
 
@@ -621,11 +617,17 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 	switch toolSurface {
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		actionCatalog := buildDynamicActionCatalog(client, cfg, updater)
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			panic(fmt.Sprintf("build dynamic action catalog: %v", catalogErr))
+		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		dynamictools.RegisterCatalogTools(server, actionCatalog)
 	case config.ToolSurfaceDynamic2:
-		actionCatalog := buildDynamicActionCatalog(client, cfg, updater)
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			panic(fmt.Sprintf("build dynamic action catalog: %v", catalogErr))
+		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 	case config.ToolSurfaceMeta:
@@ -638,6 +640,11 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			slog.Warn("failed to build meta action catalog", "error", catalogErr)
 			actionCatalog = actionregistry.NewCatalog()
 		}
+		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
+		if filterErr != nil {
+			panic(fmt.Sprintf("filter meta action catalog: %v", filterErr))
+		}
+		actionCatalog = filteredCatalog
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
 	default:
@@ -1397,7 +1404,10 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 	return visibleRoutes, nil
 }
 
-func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) *actionregistry.Catalog {
+// buildDynamicActionCatalog builds the executable catalog for low-token dynamic
+// mode. Filters run before standalone tools are added so configured exclusions,
+// token scopes, and read-only mode cannot leave hidden catalog actions behind.
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actionregistry.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 		Enterprise: cfg.Enterprise,
 		IncludeMCP: true,
@@ -1407,17 +1417,34 @@ func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerCo
 		slog.Warn("failed to build dynamic action catalog", "error", err)
 		catalog = actionregistry.NewCatalog()
 	}
-	catalog = catalog.FilterExcludedTools(cfg.ExcludeTools)
-	catalog = gitlabtools.FilterScopeFilteredCatalog(catalog, cfg.TokenScopes)
-	if cfg.ReadOnly {
-		catalog = catalog.FilterReadOnlyGroups()
+	filtered, filterErr := filterActionCatalog(catalog, cfg)
+	if filterErr != nil {
+		return nil, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
-	return dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{
+	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
 		ReadOnly:     cfg.ReadOnly,
 		ExcludeTools: cfg.ExcludeTools,
 	})
+	if standaloneErr != nil {
+		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
+	}
+	return withStandalone, nil
 }
 
+func filterActionCatalog(catalog *actionregistry.Catalog, cfg *config.ServerConfig) (*actionregistry.Catalog, error) {
+	filtered := catalog.FilterExcludedTools(cfg.ExcludeTools)
+	var err error
+	filtered, err = gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ReadOnly {
+		filtered = filtered.FilterReadOnlyGroups()
+	}
+	return filtered, nil
+}
+
+// countCatalogActions sums actions across catalog route maps for startup logs.
 func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 	total := 0
 	for _, actions := range routes {

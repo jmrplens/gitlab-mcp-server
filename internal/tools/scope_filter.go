@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -80,15 +81,15 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 
 // FilterScopeFilteredCatalog removes catalog groups whose required scopes are
 // not satisfied by the detected token scopes.
-func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) *actionregistry.Catalog {
+func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) (*actionregistry.Catalog, error) {
 	if catalog == nil {
-		return nil
+		return actionregistry.NewCatalog(), nil
 	}
 	if tokenScopes == nil {
 		// Return a defensive clone because callers may further filter the returned
 		// catalog; nil scopes mean detection was unavailable, not that the source
 		// catalog may be mutated in place.
-		return catalog.Clone()
+		return catalog.Clone(), nil
 	}
 
 	scopeSet := buildScopeSet(tokenScopes)
@@ -106,7 +107,7 @@ func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []s
 			continue
 		}
 		if err := filtered.AddGroup(group); err != nil {
-			slog.Error("failed to add scope-filtered catalog group", "tool", group.ToolName, "error", err)
+			return nil, fmt.Errorf("add scope-filtered catalog group %q: %w", group.ToolName, err)
 		}
 	}
 	if len(removed) > 0 {
@@ -116,7 +117,7 @@ func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []s
 			"scopes", strings.Join(tokenScopes, ", "),
 		)
 	}
-	return filtered
+	return filtered, nil
 }
 
 func buildScopeSet(tokenScopes []string) map[string]struct{} {
