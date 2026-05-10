@@ -1614,8 +1614,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {
-			var validationErr *ParamValidationError
-			if errors.As(err, &validationErr) {
+			if validationErr, matched := errors.AsType[*ParamValidationError](err); matched {
 				return ErrorResult(fmt.Sprintf("%s/%s: %s", toolName, input.Action, validationErr.Error())), nil, nil
 			}
 			return nil, nil, err

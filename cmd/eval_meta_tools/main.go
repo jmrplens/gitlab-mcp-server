@@ -3652,8 +3652,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		if err != nil {
 			result.Notes = append(result.Notes, err.Error())
 			event := traceEvent{Turn: result.ModelCalls, Kind: "model_error", Content: err.Error(), IsError: true}
-			var providerErr *modelProviderCallError
-			if errors.As(err, &providerErr) {
+			if providerErr, ok := errors.AsType[*modelProviderCallError](err); ok {
 				event.Provider = providerErr.Trace
 			}
 			result.Trace.Events = append(result.Trace.Events, event)

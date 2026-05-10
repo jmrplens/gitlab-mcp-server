@@ -65,8 +65,7 @@ func ClassifyError(err error) string {
 		return "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_SKIP_TLS_VERIFY=true"
 	}
 
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		return fmt.Sprintf("network error reaching GitLab (%s)", urlErr.Op)
 	}
 
@@ -98,8 +97,7 @@ func ClassifyHTTPStatus(code int) string {
 
 // isConnectionRefused checks for ECONNREFUSED at any depth in the error chain.
 func isConnectionRefused(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if opErr, ok := errors.AsType[*net.OpError](err); ok {
 		if errors.Is(opErr.Err, syscall.ECONNREFUSED) {
 			return true
 		}

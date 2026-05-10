@@ -129,7 +129,7 @@ func FormatReleaseDataForAnalysis(from, to string, cmp repository.CompareOutput,
 			}
 			fmt.Fprintf(&b, "- !%d — %s (@%s)%s\n", mr.IID, mr.Title, mr.Author, labels)
 			if mr.Description != "" {
-				desc := strings.SplitN(mr.Description, "\n", 2)[0]
+				desc, _, _ := strings.Cut(mr.Description, "\n")
 				if len(desc) > 200 {
 					desc = desc[:200] + "..."
 				}
