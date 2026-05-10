@@ -142,8 +142,8 @@ Compare token and evaluation reports:
 
 ```bash
 timeout 180s go run ./cmd/eval_meta_tools \
-  --compare dist/evaluation/meta-tools/snapshots/release-1.5.1/tokens.md \
-  --compare dist/evaluation/meta-tools/snapshots/release-1.5.1/schema-base-read.md \
+  --compare dist/evaluation/meta-tools/snapshots/release-1.6.0/tokens.md \
+  --compare dist/evaluation/meta-tools/snapshots/release-1.6.0/schema-base-read.md \
   --compare dist/evaluation/meta-tools/snapshots/current/schema-base-read.md \
   --out dist/evaluation/meta-tools/comparison/version-summary.md
 ```
@@ -174,15 +174,15 @@ Run validated calls through an older or separately built stdio MCP server:
 
 ```bash
 E2E_MODE=docker timeout 900s go run ./cmd/eval_meta_tools \
-  --tools-file dist/evaluation/meta-tools/snapshots/release-1.5.1/tools.json \
-  --mcp-command dist/evaluation/meta-tools/snapshots/release-1.5.1/gitlab-mcp-server-release-1.5.1 \
+  --tools-file dist/evaluation/meta-tools/snapshots/release-1.6.0/tools.json \
+  --mcp-command dist/evaluation/meta-tools/snapshots/release-1.6.0/gitlab-mcp-server-release-1.6.0 \
   --mcp-env-file test/e2e/.env.docker \
   --execute-tools \
   --use-fixtures \
   --fixtures dist/evaluation/meta-tools/e2e-fixtures.json \
   --task MS-028 \
   --skip-unavailable \
-  --out dist/evaluation/meta-tools/snapshots/release-1.5.1/live-ms-028.md
+  --out dist/evaluation/meta-tools/snapshots/release-1.6.0/live-ms-028.md
 ```
 
 The Docker presets apply safe defaults for `--backend=gitlab`, `--gitlab-env-file test/e2e/.env.docker`, `--execute-tools`, `--use-fixtures`, `--skip-unavailable`, and the matching partition. Override any of those flags explicitly when debugging a narrower case.

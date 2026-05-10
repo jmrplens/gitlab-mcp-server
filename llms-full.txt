@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.5.1 | up to 1011 tools | 32 meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise) | 3 dynamic tools | 46 resources | 38 prompts
+> Version 1.6.0 | up to 1011 tools | 32 meta-tools (47 self-managed enterprise, 48 GitLab.com Enterprise) | 3 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
