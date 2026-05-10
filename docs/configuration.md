@@ -27,7 +27,9 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise instead of individual tools) |
+| `META_TOOLS` | `true` | Legacy tool catalog selector: `true` for domain meta-tools, `false` for individual tools, `dynamic` for the recommended current low-token search/describe/execute surface, `dynamic-3` for the same current dynamic surface selected explicitly, or `dynamic-2` for the experimental find/execute comparison surface |
+| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
+| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources and prompts; `minimal` keeps only `gitlab://workspace/roots` and omits optional resource and prompt templates |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -197,9 +199,17 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
 | **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
+| **Dynamic toolset** | `TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, or `META_TOOLS=dynamic` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions. Current candidate for a future default |
+| **Dynamic-2 candidate** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental A/B candidate that combines discovery and schema lookup |
 | **Individual tools** | `META_TOOLS=false` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
 
-See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
+`TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, and legacy `META_TOOLS=dynamic` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need an explicit current dynamic selector in reports or pinned configs, and reserve `dynamic-2` for find/execute experiments.
+
+See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token search/describe/execute workflow.
+
+### Capability Surface
+
+`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_describe_tools` in `dynamic`/`dynamic-3` and `gitlab_find_action` in `dynamic-2` return exact action schemas inline.
 
 ### HTTP Server Mode
 
@@ -211,7 +221,9 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--http-addr` | `:8080` | HTTP listen address |
 | `--gitlab-url` | *(optional)* | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
-| `--meta-tools` | `true` | Enable meta-tools |
+| `--meta-tools` | `true` | Enable meta-tools. Use `--meta-tools=false` for individual tools |
+| `--tool-surface` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `--meta-tools` when set |
+| `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |

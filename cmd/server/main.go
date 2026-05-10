@@ -61,6 +61,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -90,6 +92,8 @@ type httpConfig struct {
 	gitlabURL          string
 	skipTLSVerify      bool
 	metaTools          bool
+	toolSurface        string
+	capabilitySurface  string
 	enterprise         bool
 	enterpriseSet      bool
 	readOnly           bool
@@ -135,6 +139,8 @@ func main() {
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
+	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic, dynamic-2, dynamic-3; overrides --meta-tools when set")
+	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
@@ -176,7 +182,13 @@ func main() {
 	}
 
 	if toolSearch != "" {
-		runToolSearch(toolSearch, hcfg.metaTools, hcfg.enterprise)
+		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+		if surfaceErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", surfaceErr)
+			exitProcess(1)
+			return
+		}
+		runToolSearch(toolSearch, toolSurface, hcfg.enterprise)
 		return
 	}
 
@@ -246,6 +258,8 @@ FLAGS
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
   -meta-tools               Enable meta-tools for tool discovery (default true)
+  -tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides -meta-tools
+  -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
   -exclude-tools string     Comma-separated tool names to exclude from registration
@@ -261,10 +275,12 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
-	GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
+  GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  META_TOOLS                Enable meta-tools: true/false (default true)
+  META_TOOLS                Legacy tool selector: true|false (default true)
+  TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
+  CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
@@ -363,10 +379,17 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	}
 
+	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+	if err != nil {
+		return fmt.Errorf("parse tool surface: %w", err)
+	}
+
 	cfg := &config.Config{
 		GitLabURL:            hcfg.gitlabURL,
 		SkipTLSVerify:        hcfg.skipTLSVerify,
-		MetaTools:            hcfg.metaTools,
+		MetaTools:            metaTools,
+		ToolSurface:          toolSurface,
+		CapabilitySurface:    hcfg.capabilitySurface,
 		Enterprise:           hcfg.enterprise,
 		AutoDetectEnterprise: !hcfg.enterpriseSet,
 		ReadOnly:             hcfg.readOnly,
@@ -404,6 +427,14 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		return fmt.Errorf("--meta-param-schema must be one of %q, %q, %q, got %q",
 			config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull, cfg.MetaParamSchema)
 	}
+	switch cfg.CapabilitySurface {
+	case "":
+		cfg.CapabilitySurface = config.DefaultCapabilitySurface
+	case config.CapabilitySurfaceFull, config.CapabilitySurfaceMinimal:
+	default:
+		return fmt.Errorf("--capability-surface must be %q or %q, got %q",
+			config.CapabilitySurfaceFull, config.CapabilitySurfaceMinimal, cfg.CapabilitySurface)
+	}
 	// OAuth mode requires a fixed --gitlab-url because the RFC 9728
 	// protected-resource metadata and token verifier are initialized at
 	// startup and tied to one GitLab instance. Without it, token
@@ -433,8 +464,8 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
 	}
 
-	if err := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); err != nil {
-		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", err)
+	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
+		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -505,7 +536,10 @@ func runStdio(ctx context.Context) error {
 	}
 
 	updater := newUpdaterForTools(cfg)
-	server := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	server, err := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	if err != nil {
+		return fmt.Errorf("creating MCP server: %w", err)
+	}
 	return serveStdio(ctx, server)
 }
 
@@ -513,13 +547,22 @@ func runStdio(ctx context.Context) error {
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
-func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) *mcp.Server {
+func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*mcp.Server, error) {
 	if client == nil {
-		panic("createServer: client must not be nil")
+		return nil, errors.New("createServer: client must not be nil")
 	}
 
 	completionHandler := completions.NewHandler(client)
 	rootsManager := roots.NewManager()
+	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
+	serverCapabilities := &mcp.ServerCapabilities{
+		Logging:   &mcp.LoggingCapabilities{},
+		Tools:     &mcp.ToolCapabilities{ListChanged: true},
+		Resources: &mcp.ResourceCapabilities{ListChanged: true},
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		serverCapabilities.Prompts = &mcp.PromptCapabilities{ListChanged: true}
+	}
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:       "gitlab-mcp-server",
@@ -552,13 +595,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			"ID vs IID — GitLab uses two identifiers for issues and merge requests:\n" +
 			"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most tools expect IID.\n" +
 			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
-		Logger: slog.Default(),
-		Capabilities: &mcp.ServerCapabilities{
-			Logging:   &mcp.LoggingCapabilities{},
-			Tools:     &mcp.ToolCapabilities{ListChanged: true},
-			Resources: &mcp.ResourceCapabilities{ListChanged: true},
-			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
-		},
+		Logger:       slog.Default(),
+		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
 		},
@@ -581,14 +619,44 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		KeepAlive: 30 * time.Second,
 	})
 
+	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap
-	if cfg.MetaTools {
+	if toolSurface != config.ToolSurfaceIndividual {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
-		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
-			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
-			gitlabtools.RegisterMCPMeta(server, client, updater)
+	}
+	switch toolSurface {
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+		}
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		dynamictools.RegisterCatalogTools(server, actionCatalog)
+	case config.ToolSurfaceDynamic2:
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+		}
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
+	case config.ToolSurfaceMeta:
+		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+			Enterprise: cfg.Enterprise,
+			IncludeMCP: true,
+			Updater:    updater,
 		})
-	} else {
+		if catalogErr != nil {
+			slog.Warn("failed to build meta action catalog", "error", catalogErr)
+			actionCatalog = actionregistry.NewCatalog()
+		}
+		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
+		if filterErr != nil {
+			return nil, fmt.Errorf("filter meta action catalog: %w", filterErr)
+		}
+		actionCatalog = filteredCatalog
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
+	default:
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
 	}
@@ -617,13 +685,16 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	if err != nil {
 		slog.Warn("failed to count registered tools", "error", err)
 	}
-	if cfg.MetaTools {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+		slog.Info("registered dynamic toolset", "tools", toolCount, "catalog_groups", len(metaSchemaRoutes), "catalog_actions", countCatalogActions(metaSchemaRoutes))
+	case config.ToolSurfaceMeta:
 		slog.Info("registered meta-tools", "tools", toolCount)
-	} else {
+	default:
 		slog.Info("registered individual tools", "tools", toolCount)
 	}
 
-	if cfg.MetaTools {
+	if toolSurface == config.ToolSurfaceMeta {
 		var routesErr error
 		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
 		if routesErr != nil {
@@ -631,13 +702,17 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 	}
 
-	resources.Register(server, client)
-	if cfg.MetaTools {
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.Register(server, client)
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull && toolSurface != config.ToolSurfaceIndividual {
 		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
 	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
-	resources.RegisterWorkflowGuides(server)
-	prompts.Register(server, client)
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.RegisterWorkflowGuides(server)
+		prompts.Register(server, client)
+	}
 
 	// Force `additionalProperties: false` on tool input schemas so unknown
 	// properties produce actionable validation errors LLMs can self-correct
@@ -664,7 +739,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		)
 	}
 
-	return server
+	return server, nil
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context
@@ -687,7 +762,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		"commit", commit,
 	)
 
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) *mcp.Server {
+	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		return createServer(client, serverCfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
@@ -1017,7 +1092,10 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("creating dummy client: %w", err)
 	}
 
-	srv := createServer(dummyClient, cfg.ServerConfig(), nil)
+	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1125,27 +1203,30 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		Arguments   []serverCardPromptArgument `json:"arguments,omitempty"`
 	}
 
-	promptsResult, err := session.ListPrompts(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list prompts: %w", err)
-	}
-	cardPrompts := make([]serverCardPrompt, 0, len(promptsResult.Prompts))
-	for _, p := range promptsResult.Prompts {
-		args := make([]serverCardPromptArgument, 0, len(p.Arguments))
-		for _, a := range p.Arguments {
-			args = append(args, serverCardPromptArgument{
-				Name:        a.Name,
-				Title:       a.Title,
-				Description: a.Description,
-				Required:    a.Required,
+	cardPrompts := []serverCardPrompt{}
+	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
+		promptsResult, promptsErr := session.ListPrompts(ctx, nil)
+		if promptsErr != nil {
+			return nil, fmt.Errorf("list prompts: %w", promptsErr)
+		}
+		cardPrompts = make([]serverCardPrompt, 0, len(promptsResult.Prompts))
+		for _, p := range promptsResult.Prompts {
+			args := make([]serverCardPromptArgument, 0, len(p.Arguments))
+			for _, a := range p.Arguments {
+				args = append(args, serverCardPromptArgument{
+					Name:        a.Name,
+					Title:       a.Title,
+					Description: a.Description,
+					Required:    a.Required,
+				})
+			}
+			cardPrompts = append(cardPrompts, serverCardPrompt{
+				Name:        p.Name,
+				Title:       p.Title,
+				Description: p.Description,
+				Arguments:   args,
 			})
 		}
-		cardPrompts = append(cardPrompts, serverCardPrompt{
-			Name:        p.Name,
-			Title:       p.Title,
-			Description: p.Description,
-			Arguments:   args,
-		})
 	}
 
 	card := map[string]any{
@@ -1316,7 +1397,7 @@ func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, er
 	return result.Tools, nil
 }
 
-// visibleMetaSchemaRoutes filters captured meta-tool route maps to the tools
+// visibleMetaSchemaRoutes filters catalog-derived route maps to the tools
 // still visible after read-only or exclude-tools registration filters run.
 func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.ActionMap) (map[string]toolutil.ActionMap, error) {
 	registeredTools, err := listRegisteredToolsForInspection(server, "meta-schema-filter")
@@ -1336,6 +1417,54 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 		}
 	}
 	return visibleRoutes, nil
+}
+
+// buildDynamicActionCatalog builds the executable catalog for low-token dynamic
+// mode. Filters run before standalone tools are added so configured exclusions,
+// token scopes, and read-only mode cannot leave hidden catalog actions behind.
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actionregistry.Catalog, error) {
+	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+		Enterprise: cfg.Enterprise,
+		IncludeMCP: true,
+		Updater:    updater,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build action catalog: %w", err)
+	}
+	filtered, filterErr := filterActionCatalog(catalog, cfg)
+	if filterErr != nil {
+		return nil, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
+	}
+	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
+		ReadOnly:     cfg.ReadOnly,
+		ExcludeTools: cfg.ExcludeTools,
+	})
+	if standaloneErr != nil {
+		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
+	}
+	return withStandalone, nil
+}
+
+func filterActionCatalog(catalog *actionregistry.Catalog, cfg *config.ServerConfig) (*actionregistry.Catalog, error) {
+	filtered := catalog.FilterExcludedTools(cfg.ExcludeTools)
+	var err error
+	filtered, err = gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ReadOnly {
+		filtered = filtered.FilterReadOnlyGroups()
+	}
+	return filtered, nil
+}
+
+// countCatalogActions sums actions across catalog route maps for startup logs.
+func countCatalogActions(routes map[string]toolutil.ActionMap) int {
+	total := 0
+	for _, actions := range routes {
+		total += len(actions)
+	}
+	return total
 }
 
 // removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory
@@ -1432,8 +1561,8 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 // runToolSearch creates an in-memory MCP server, lists all tools, and
 // prints those matching every space-separated search term (AND logic,
 // case-insensitive match on name + description). Then it exits.
-func runToolSearch(query string, metaTools, enterprise bool) {
-	if err := toolSearchRunner(query, metaTools, enterprise); err != nil {
+func runToolSearch(query, toolSurface string, enterprise bool) {
+	if err := toolSearchRunner(query, toolSurface, enterprise); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		exitProcess(1)
 	}
@@ -1449,7 +1578,7 @@ var (
 // doToolSearch builds the selected MCP tool catalog, searches tool names and
 // descriptions with case-insensitive AND matching, and prints matching tool
 // names with the first description line.
-func doToolSearch(query string, metaTools, enterprise bool) error {
+func doToolSearch(query, toolSurface string, enterprise bool) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
 		return nil
@@ -1457,10 +1586,27 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
 
-	if metaTools {
-		gitlabtools.RegisterAllMeta(server, nil, enterprise)
-	} else {
+	switch config.EffectiveToolSurface(true, toolSurface) {
+	case config.ToolSurfaceMeta:
+		if err := gitlabtools.RegisterAllMeta(server, nil, enterprise); err != nil {
+			return err
+		}
+	case config.ToolSurfaceIndividual:
 		gitlabtools.RegisterAll(server, nil, enterprise)
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
+		catalog, err := buildToolSearchCatalog(enterprise)
+		if err != nil {
+			return err
+		}
+		dynamictools.RegisterCatalogTools(server, catalog)
+	case config.ToolSurfaceDynamic2:
+		catalog, err := buildToolSearchCatalog(enterprise)
+		if err != nil {
+			return err
+		}
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	default:
+		return fmt.Errorf("unsupported tool surface for search: %q", toolSurface)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -1515,6 +1661,21 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 		fmt.Printf("%-45s %s\n", t.Name, desc)
 	}
 	return nil
+}
+
+func buildToolSearchCatalog(enterprise bool) (*actionregistry.Catalog, error) {
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
+		Enterprise: enterprise,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build action catalog: %w", err)
+	}
+	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(catalog, nil, dynamictools.StandaloneOptions{})
+	if standaloneErr != nil {
+		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
+	}
+	return withStandalone, nil
 }
 
 // setupAutoUpdateRedaction wraps the current global slog handler with a

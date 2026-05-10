@@ -71,12 +71,40 @@ const (
 	DefaultMetaParamSchema = MetaParamSchemaOpaque
 )
 
+// Tool surface modes select which tool catalog is exposed by the server.
+const (
+	// ToolSurfaceMeta exposes the current domain meta-tool catalog.
+	ToolSurfaceMeta = "meta"
+	// ToolSurfaceIndividual exposes the full individual tool catalog.
+	ToolSurfaceIndividual = "individual"
+	// ToolSurfaceDynamic exposes the low-token search/describe/execute catalog.
+	ToolSurfaceDynamic = "dynamic"
+	// ToolSurfaceDynamic2 exposes the experimental find/execute dynamic catalog.
+	ToolSurfaceDynamic2 = "dynamic-2"
+	// ToolSurfaceDynamic3 explicitly selects the search/describe/execute dynamic catalog.
+	ToolSurfaceDynamic3 = "dynamic-3"
+	// DefaultToolSurface preserves the existing meta-tool default.
+	DefaultToolSurface = ToolSurfaceMeta
+)
+
+// Capability surface modes select which non-tool MCP capabilities are exposed.
+const (
+	// CapabilitySurfaceFull exposes the current resource and prompt catalog.
+	CapabilitySurfaceFull = "full"
+	// CapabilitySurfaceMinimal exposes only capabilities required for dynamic use.
+	CapabilitySurfaceMinimal = "minimal"
+	// DefaultCapabilitySurface preserves the existing resource and prompt catalog.
+	DefaultCapabilitySurface = CapabilitySurfaceFull
+)
+
 // Config holds all configuration values for the MCP server.
 type Config struct {
 	GitLabURL            string
 	GitLabToken          string
 	SkipTLSVerify        bool
 	MetaTools            bool
+	ToolSurface          string
+	CapabilitySurface    string
 	Enterprise           bool
 	AutoDetectEnterprise bool
 	ReadOnly             bool
@@ -114,16 +142,18 @@ type Config struct {
 // ServerConfig is an immutable configuration snapshot used to build one MCP
 // server instance for a specific GitLab URL and credential principal.
 type ServerConfig struct {
-	GitLabURL       string
-	MetaTools       bool
-	Enterprise      bool
-	ReadOnly        bool
-	SafeMode        bool
-	ExcludeTools    []string
-	TokenScopes     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	MetaParamSchema string
+	GitLabURL         string
+	MetaTools         bool
+	ToolSurface       string
+	CapabilitySurface string
+	Enterprise        bool
+	ReadOnly          bool
+	SafeMode          bool
+	ExcludeTools      []string
+	TokenScopes       []string
+	RateLimitRPS      float64
+	RateLimitBurst    int
+	MetaParamSchema   string
 }
 
 // ServerConfig returns the server-scoped subset of Config. Callers may enrich
@@ -134,15 +164,17 @@ func (c *Config) ServerConfig() *ServerConfig {
 		return &ServerConfig{}
 	}
 	return &ServerConfig{
-		GitLabURL:       c.GitLabURL,
-		MetaTools:       c.MetaTools,
-		Enterprise:      c.Enterprise,
-		ReadOnly:        c.ReadOnly,
-		SafeMode:        c.SafeMode,
-		ExcludeTools:    slices.Clone(c.ExcludeTools),
-		RateLimitRPS:    c.RateLimitRPS,
-		RateLimitBurst:  c.RateLimitBurst,
-		MetaParamSchema: c.MetaParamSchema,
+		GitLabURL:         c.GitLabURL,
+		MetaTools:         c.MetaTools,
+		ToolSurface:       c.ToolSurface,
+		CapabilitySurface: c.CapabilitySurface,
+		Enterprise:        c.Enterprise,
+		ReadOnly:          c.ReadOnly,
+		SafeMode:          c.SafeMode,
+		ExcludeTools:      slices.Clone(c.ExcludeTools),
+		RateLimitRPS:      c.RateLimitRPS,
+		RateLimitBurst:    c.RateLimitBurst,
+		MetaParamSchema:   c.MetaParamSchema,
 	}
 }
 
@@ -171,9 +203,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY value: %w", err)
 	}
 
-	metaTools, err := parseBool(os.Getenv("META_TOOLS"), true)
+	toolSurface, metaTools, err := ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid META_TOOLS value: %w", err)
+		return nil, err
+	}
+
+	capabilitySurface, err := parseCapabilitySurface(os.Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CAPABILITY_SURFACE value: %w", err)
 	}
 
 	enterprise, err := parseBool(os.Getenv("GITLAB_ENTERPRISE"), false)
@@ -276,6 +313,8 @@ func Load() (*Config, error) {
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
 		SkipTLSVerify:      skipTLS,
 		MetaTools:          metaTools,
+		ToolSurface:        toolSurface,
+		CapabilitySurface:  capabilitySurface,
 		Enterprise:         enterprise,
 		ReadOnly:           readOnly,
 		SafeMode:           safeMode,
@@ -342,6 +381,20 @@ func (c *Config) validate() error {
 	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
 		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
 	}
+	if c.ToolSurface != "" {
+		switch c.ToolSurface {
+		case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3:
+		default:
+			return fmt.Errorf("TOOL_SURFACE must be one of %s (got %q)", validToolSurfaceList(), c.ToolSurface)
+		}
+	}
+	if c.CapabilitySurface != "" {
+		switch c.CapabilitySurface {
+		case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
+		default:
+			return fmt.Errorf("CAPABILITY_SURFACE must be %q or %q (got %q)", CapabilitySurfaceFull, CapabilitySurfaceMinimal, c.CapabilitySurface)
+		}
+	}
 	if c.OAuthCacheTTL != 0 {
 		if c.OAuthCacheTTL < MinOAuthCacheTTL {
 			return fmt.Errorf("OAUTH_CACHE_TTL %s is below minimum of %s", c.OAuthCacheTTL, MinOAuthCacheTTL)
@@ -374,6 +427,89 @@ func parseBool(s string, defaultValue bool) (bool, error) {
 		return defaultValue, nil
 	}
 	return strconv.ParseBool(s)
+}
+
+// EffectiveToolSurface returns the canonical tool surface for legacy and new
+// configuration snapshots. Empty ToolSurface values are derived from MetaTools
+// so older tests and callers keep their current behavior.
+func EffectiveToolSurface(metaTools bool, toolSurface string) string {
+	switch toolSurface {
+	case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3:
+		return toolSurface
+	}
+	if metaTools {
+		return ToolSurfaceMeta
+	}
+	return ToolSurfaceIndividual
+}
+
+// EffectiveCapabilitySurface returns the canonical capability surface.
+func EffectiveCapabilitySurface(capabilitySurface string) string {
+	switch capabilitySurface {
+	case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
+		return capabilitySurface
+	default:
+		return DefaultCapabilitySurface
+	}
+}
+
+// ParseToolSurface resolves the explicit TOOL_SURFACE value and legacy
+// META_TOOLS value into a canonical tool surface and compatible MetaTools bool.
+func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, metaTools bool, err error) {
+	if strings.TrimSpace(toolSurfaceValue) != "" {
+		resolvedMode, parseErr := parseToolSurfaceValue(toolSurfaceValue, "TOOL_SURFACE")
+		if parseErr != nil {
+			return "", false, parseErr
+		}
+		// MetaTools keeps its legacy meaning for callers that only need to know
+		// whether the selected surface is not the individual-tool catalog.
+		return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
+	}
+
+	if strings.TrimSpace(metaToolsValue) == "" {
+		return DefaultToolSurface, true, nil
+	}
+	resolvedMode, parseErr := parseToolSurfaceValue(metaToolsValue, "META_TOOLS")
+	if parseErr != nil {
+		return "", false, parseErr
+	}
+	return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
+}
+
+func parseToolSurfaceValue(value, name string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "true", "t", "1", "yes", "y", ToolSurfaceMeta, "meta-tools", "metatools":
+		return ToolSurfaceMeta, nil
+	case "false", "f", "0", "no", "n", ToolSurfaceIndividual, "individual-tools", "tools":
+		return ToolSurfaceIndividual, nil
+	case ToolSurfaceDynamic, "dynamic-tools", "low-token":
+		return ToolSurfaceDynamic, nil
+	case ToolSurfaceDynamic2, "find-execute", "two-tool", "2-tool", "2-tools":
+		return ToolSurfaceDynamic2, nil
+	case ToolSurfaceDynamic3, "search-describe-execute", "three-tool", "3-tool", "3-tools":
+		return ToolSurfaceDynamic3, nil
+	default:
+		return "", fmt.Errorf("invalid %s value: expected true, false, or one of %s, got %q", name, validToolSurfaceList(), value)
+	}
+}
+
+func validToolSurfaceList() string {
+	return fmt.Sprintf("%q, %q, %q, %q, or %q", ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3)
+}
+
+func parseCapabilitySurface(s, defaultValue string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return defaultValue, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case CapabilitySurfaceFull, "default":
+		return CapabilitySurfaceFull, nil
+	case CapabilitySurfaceMinimal, "minimum", "low-token":
+		return CapabilitySurfaceMinimal, nil
+	default:
+		return "", fmt.Errorf("expected %q or %q, got %q", CapabilitySurfaceFull, CapabilitySurfaceMinimal, s)
+	}
 }
 
 // parseMetaParamSchema validates the META_PARAM_SCHEMA setting. It accepts

@@ -26,11 +26,27 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 > **Security first**: Continuously monitored on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) with quality gates, coverage, and security scanning. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
 
+## Token Footprint
+
+Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals estimate startup context visible to an MCP client: tool schemas plus shared resources and prompts, using a 200K-token context window as a reference.
+
+**Default configuration**: with `TOOL_SURFACE` unset, `META_TOOLS` unset or `true`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses **base meta-tools**. That means 33 visible tools, 855 reachable actions, and no Enterprise/Premium-only catalog.
+
+| Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Individual tools (Enterprise/Premium catalog) | 1006 | 1006 | 532,774 | 17,622 | 550,396 |
+| Meta-tools (base catalog + MCP helpers, **default**) | 33 | 855 | 57,018 | 18,198 | 75,216 |
+| Meta-tools (Enterprise/Premium catalog + MCP helpers) | 48 | 1010 | 71,837 | 18,198 | 90,035 |
+| Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 855 / 1010 | 2,029 | 18,198 | 20,227 |
+| Dynamic-3 + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 3 | 855 / 1010 | 2,029 | 184 | 2,213 |
+
+Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 850 / 1005 while the comparable reachable-action count is 855 / 1010. `dynamic` and `dynamic-3` expose the same current three-tool search/describe/execute surface. The experimental `dynamic-2` comparison surface uses two visible tools and measures about **19,521 tokens** with full capabilities or **1,507 tokens** with `CAPABILITY_SURFACE=minimal`.
+
 ## Highlights
 
 - **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional self-managed enterprise meta-tools plus the GitLab.com-only `gitlab_orbit` meta-tool are available for Premium/Ultimate features
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current published Docker economy run covers 419 live task attempts and 804 expected MCP operations with a 100.0% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
+- **32 meta-tools** (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current reviewed result is published in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
@@ -219,12 +235,17 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 ## Tool Modes
 
-Two registration modes, controlled by the `META_TOOLS` environment variable:
+Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
+
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
+
+Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the search/describe/execute workflow, diagrams, and migration guidance.
 
 Meta-tool summary:
 
@@ -312,7 +333,7 @@ The evaluator measures whether each model chooses the correct meta-tool and
 action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
-<!-- START MODEL EVAL SUMMARY -->
+<!-- START MODEL EVAL META SUMMARY -->
 Current published result: **2026-05-05 Full Docker Economy Run**.
 
 | Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
@@ -323,7 +344,24 @@ Current published result: **2026-05-05 Full Docker Economy Run**.
 | Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 84 ops |
 
 The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
-<!-- END MODEL EVAL SUMMARY -->
+<!-- END MODEL EVAL META SUMMARY -->
+
+<!-- START MODEL EVAL DYNAMIC2 SUMMARY -->
+No Dynamic 2-tool evaluation summary has been published yet.
+<!-- END MODEL EVAL DYNAMIC2 SUMMARY -->
+
+<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->
+Current published result: **Dynamic 3-tool all-provider Docker run 2026-05-09**.
+
+| Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
+| --- | --- | --- | ---: | ---: | --- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 44.4% (4/9) | 100.0% final across 256 ops |
+| Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 8.3% (1/12) | 100.0% final across 256 ops |
+| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 44.4% (12/27) | 100.0% final across 256 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | 25.0% (1/4) | 100.0% final across 256 ops |
+
+The published model-evaluation set covers 512 task attempts and 1024 expected MCP operations. Across the selected reports, models emitted 1397 tool calls over 1397 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->
 
 ## Documentation
 
@@ -337,6 +375,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
 | [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
 | [Meta-Tools](docs/meta-tools.md) | 32/47/48 domain meta-tools with action dispatching |
+| [Dynamic Toolset](docs/dynamic-tools.md) | 3-tool low-token mode with canonical action catalog, safety model, and examples |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
@@ -430,65 +469,65 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 650 | 134,257 |
-| Unit tests (`_test.go`) | 412 | 219,088 |
-| End-to-end tests | 110 | 23,718 |
-| **Total** | **1,172** | **377,063** |
+| Source (`.go`, non-test) | 655 | 138,992 |
+| Unit tests (`_test.go`) | 418 | 223,956 |
+| End-to-end tests | 111 | 24,022 |
+| **Total** | **1,184** | **386,970** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,988 |
-| — exported (public) | 2,220 |
-| — unexported (private) | 1,768 |
-| Unit test functions (`TestXxx`) | 9,132 |
-| Subtests (`t.Run(...)`) | 1,956 |
-| End-to-end test functions | 246 |
+| Source functions | 4,199 |
+| — exported (public) | 2,265 |
+| — unexported (private) | 1,934 |
+| Unit test functions (`TestXxx`) | 9,264 |
+| Subtests (`t.Run(...)`) | 2,012 |
+| End-to-end test functions | 248 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.63× more tests than code |
-| Average source file length | ~206 lines |
-| Average test file length | ~531 lines |
-| Comment lines in source | 10,436 (~7.8% of source) |
-| Test functions per source function | 2.3× |
+| Test lines vs source lines | 1.61× more tests than code |
+| Average source file length | ~212 lines |
+| Average test file length | ~535 lines |
+| Comment lines in source | 10,642 (~7.7% of source) |
+| Test functions per source function | 2.2× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,790 |
-| `defer` statements | 728 |
-| `struct` types defined | 2,031 |
-| `//nolint` suppressions | 53 |
-| `TODO` / `FIXME` / `HACK` comments | 0 |
+| `if err != nil` checks | 5,896 |
+| `defer` statements | 732 |
+| `struct` types defined | 2,062 |
+| `//nolint` suppressions | 54 |
+| `TODO` / `FIXME` / `HACK` comments | 1 |
 
 ### Project
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 197 |
+| Go packages | 198 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 103 |
+| Git commits | 122 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 5,759 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 7,136 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,441 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,958 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,527 pages of A4 |
+| Source lines mentioning `"gitlab"` | 11,136 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

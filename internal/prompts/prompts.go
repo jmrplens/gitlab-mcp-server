@@ -393,7 +393,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
-		title := strings.SplitN(c.Title, "\n", 2)[0]
+		title, _, _ := strings.Cut(c.Title, "\n")
 		fmt.Fprintf(&b, "- %s — %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
 	}
 
@@ -481,7 +481,7 @@ func writeReleaseNotesMRs(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		}
 		fmt.Fprintf(b, "- !%d — %s (@%s)%s\n", mr.IID, mr.Title, author, labels)
 		if mr.Description != "" {
-			desc := strings.SplitN(mr.Description, "\n", 2)[0]
+			desc, _, _ := strings.Cut(mr.Description, "\n")
 			if len(desc) > 200 {
 				desc = desc[:200] + "..."
 			}
@@ -706,7 +706,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
-		title := strings.SplitN(c.Title, "\n", 2)[0]
+		title, _, _ := strings.Cut(c.Title, "\n")
 		fmt.Fprintf(&b, "- %s — %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
 	}
 

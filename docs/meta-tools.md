@@ -12,7 +12,7 @@ Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`.
 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
-> **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
+> **See also**: [Tools Reference](tools/README.md) | [Dynamic Toolset](dynamic-tools.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
 
 ## How Meta-Tools Work
@@ -39,10 +39,27 @@ Meta-tools are **enabled by default**. To switch to individual tools:
 META_TOOLS=false
 ```
 
+To switch to the low-token dynamic toolset:
+
+```env
+TOOL_SURFACE=dynamic
+```
+
+Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the current low-token candidate for a future default; use it when the client can search, describe, then execute actions.
+
 | Mode                       | Tool Count | Best For                                                         |
 | -------------------------- | ---------- | ---------------------------------------------------------------- |
 | Meta-tools (`true`)        | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | LLMs with limited tool context windows                           |
+| Dynamic toolset (`dynamic`/`dynamic-3`) | 3 visible tools plus the canonical action catalog | Low-token clients that can call search, describe, then execute actions |
+| Dynamic-2 candidate (`dynamic-2`) | 2 visible tools plus the canonical action catalog | Experimental clients that can call find, then execute actions |
 | Individual tools (`false`) | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from granular tool discovery                |
+
+The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It consumes the same
+canonical action catalog as meta-tools, including typed schemas, destructive-action metadata, Markdown formatters, read-only filtering, safe-mode previews, and token-scope filtering. The difference is packaging: dynamic keeps the full catalog out of the initial `tools/list` response and reveals actions through search and describe calls.
+The experimental `dynamic-2` candidate exposes `gitlab_find_action` and `gitlab_execute_tool`; it combines search and schema lookup into one discovery call for A/B evaluation.
+Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources and prompts.
+
+See [Dynamic Toolset](dynamic-tools.md) for the full user workflow, architecture diagrams, safety model, and troubleshooting guidance.
 
 ---
 
@@ -147,6 +164,10 @@ The base mode provides a ~53% reduction from the v1.0 baseline, with enterprise 
 - Client rendering overhead for tool palettes
 
 ### Implementation Pattern
+
+Meta-tools and the dynamic toolset are both built from the canonical action catalog in `internal/tools/action_catalog.go`.
+`RegisterAllMeta()` registers visible domain dispatchers from that catalog, while dynamic mode builds a catalog-backed search/describe/execute registry from the same action definitions.
+Developers define route metadata once through `ActionMap` and `ActionRoute`; both surfaces inherit the same parameter schemas, output schemas, destructive flags, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
@@ -267,7 +288,7 @@ If the MCP client supports elicitation, the server will ask for user confirmatio
 
 Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
 
-1. **MCP Resource** (recommended, works in every mode) — read the per-action JSON Schema:
+1. **MCP Resource** (recommended, available unless `CAPABILITY_SURFACE=minimal` is enabled) — read the per-action JSON Schema:
 
    ```text
    gitlab://schema/meta/{tool}/{action}

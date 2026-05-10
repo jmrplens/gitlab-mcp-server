@@ -50,6 +50,7 @@ The server translates these requests into GitLab API calls, executes them, and r
 | Feature                  | Details                                                                                                                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Meta-Tools**           | 32 base tools, 47 on self-managed Enterprise/Premium, and 48 on GitLab.com Enterprise/Premium with Orbit, covering projects, issues, merge requests, pipelines, CI/CD, wikis, releases, and more |
+| **Dynamic Toolset**      | Optional low-token compact mode: search the canonical action catalog, describe exact schemas, then execute canonical GitLab actions                                                              |
 | **11 Analysis Tools**    | AI-powered analysis via MCP sampling — pipeline failure diagnosis, MR security review, technical debt detection                                                                                  |
 | **46 MCP Resources**     | Read-only data endpoints for project info, user profiles, server configuration, and meta-tool schemas                                                                                            |
 | **38 MCP Prompts**       | Pre-built prompt templates for reports, audits, cross-project analysis, and team workflows                                                                                                       |
@@ -147,6 +148,11 @@ Try these with your AI assistant once GitLab MCP Server is connected:
 		title="Tools Reference"
 		href="/gitlab-mcp-server/tools/overview/"
 		description="Browse all available MCP tools by domain"
+	/>
+	<LinkCard
+		title="Dynamic Toolset"
+		href="/gitlab-mcp-server/tools/dynamic-tools/"
+		description="Use the low-token search, describe, execute mode"
 	/>
 </CardGrid>
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/elicitation"
@@ -1044,6 +1045,28 @@ func TestIssueCreate_CancelAtLabels(t *testing.T) {
 	}
 }
 
+// TestIssueCreate_CancelAtConfidentiality verifies IssueCreate returns an error
+// when the user cancels the optional confidentiality prompt instead of declining it.
+func TestIssueCreate_CancelAtConfidentiality(t *testing.T) {
+	ctx := context.Background()
+	steps := []elicitationStep{
+		{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+		{action: "decline", content: nil},
+		{action: "decline", content: nil},
+		{action: "cancel", content: nil},
+	}
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(steps))
+	defer cleanup()
+
+	_, err := IssueCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, IssueInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error when user cancels confidentiality")
+	}
+	if !strings.Contains(err.Error(), "confidentiality") {
+		t.Errorf("error = %q, want 'confidentiality' context", err)
+	}
+}
+
 // MRCreate — cancel at intermediate prompts (table-driven).
 
 // TestMRCreate_CancelAtVariousSteps verifies that MRCreate returns an
@@ -1092,6 +1115,31 @@ func TestMRCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: "cancel", content: nil},  // cancel labels
 			},
 			wantError: "labels",
+		},
+		{
+			name: "cancel at remove source",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"source_branch": "f/x"}},
+				{action: actionAccept, content: map[string]any{"target_branch": "main"}},
+				{action: actionAccept, content: map[string]any{"title": "feat: x"}},
+				{action: "decline", content: nil},
+				{action: "decline", content: nil},
+				{action: "cancel", content: nil},
+			},
+			wantError: "source branch removal",
+		},
+		{
+			name: "cancel at squash",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"source_branch": "f/x"}},
+				{action: actionAccept, content: map[string]any{"target_branch": "main"}},
+				{action: actionAccept, content: map[string]any{"title": "feat: x"}},
+				{action: "decline", content: nil},
+				{action: "decline", content: nil},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: "cancel", content: nil},
+			},
+			wantError: "squash option",
 		},
 	}
 
@@ -1189,10 +1237,31 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: actionAccept, content: map[string]any{"name": "proj"}},
 				{action: "decline", content: nil},                                       // decline description
 				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
-				{action: "decline", content: nil},                                       // decline readme
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},    // explicit no for readme
 				{action: "cancel", content: nil},                                        // cancel default branch
 			},
 			wantError: "default branch",
+		},
+		{
+			name: "decline at readme",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": "proj"}},
+				{action: "decline", content: nil},                                       // decline description
+				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
+				{action: "decline", content: nil},                                       // decline readme
+				{action: "decline", content: nil},                                       // keep default branch
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},     // final confirmation
+			},
+		},
+		{
+			name: "cancel at readme",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": "proj"}},
+				{action: "decline", content: nil},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: "cancel", content: nil},
+			},
+			wantError: "README initialization",
 		},
 	}
 
@@ -1202,9 +1271,32 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(tc.steps))
 			defer cleanup()
 
-			_, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, ProjectInput{})
+			var postHits atomic.Int32
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+				postHits.Add(1)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			out, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if postHits.Load() != 1 {
+					t.Fatalf("project create POST hits = %d, want 1", postHits.Load())
+				}
+				if out.ID != 300 || out.Name != "proj" {
+					t.Fatalf("ProjectCreate() output = %+v, want created project", out)
+				}
+				return
+			}
 			if err == nil {
 				t.Fatal("expected error")
+			}
+			if postHits.Load() != 0 {
+				t.Fatalf("project create POST hits = %d, want 0 for error path", postHits.Load())
 			}
 			if !strings.Contains(err.Error(), tc.wantError) {
 				t.Errorf("error = %q, want to contain %q", err, tc.wantError)

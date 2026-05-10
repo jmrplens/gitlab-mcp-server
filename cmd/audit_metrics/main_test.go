@@ -4,13 +4,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // newAuditMetricsClient creates a [gitlabclient.Client] backed by a mock
@@ -39,5 +44,43 @@ func TestCountResources_IncludesMetaSchema(t *testing.T) {
 	}
 	if templates == 0 {
 		t.Fatal("countResources() templates = 0, want registered templates")
+	}
+}
+
+// TestListDynamicTools_ExposesThreeTools verifies audit metrics count the
+// dynamic public surface independently from catalog action volume.
+func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {
+			"get": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
+		},
+	}
+
+	dynamicTools := listDynamicTools(actionregistry.FromActionMaps(routes))
+	if len(dynamicTools) != 3 {
+		t.Fatalf("listDynamicTools() count = %d, want 3", len(dynamicTools))
+	}
+	names := make([]string, 0, len(dynamicTools))
+	for _, tool := range dynamicTools {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	for _, want := range []string{"gitlab_describe_tools", "gitlab_execute_tool", "gitlab_search_tools"} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
+		}
+	}
+}
+
+// TestCountActionRoutes_CountsCatalogActions verifies catalog route counting is
+// independent from MCP tool advertisement.
+func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": {}, "list": {}},
+		"gitlab_issue":   {"create": {}},
+	}
+
+	if got := countActionRoutes(routes); got != 3 {
+		t.Fatalf("countActionRoutes() = %d, want 3", got)
 	}
 }

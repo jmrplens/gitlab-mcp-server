@@ -1,10 +1,13 @@
 package tools
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 )
 
 // MetaToolScopes maps meta-tool names to the PAT scopes required for that
@@ -47,10 +50,7 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 		return 0
 	}
 
-	scopeSet := make(map[string]struct{}, len(tokenScopes))
-	for _, s := range tokenScopes {
-		scopeSet[s] = struct{}{}
-	}
+	scopeSet := buildScopeSet(tokenScopes)
 
 	var toRemove []string
 	for name, required := range MetaToolScopes {
@@ -77,6 +77,57 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 	)
 
 	return len(toRemove)
+}
+
+// FilterScopeFilteredCatalog removes catalog groups whose required scopes are
+// not satisfied by the detected token scopes. It returns a non-nil error when
+// rebuilding the filtered catalog fails, which means callers could not safely
+// evaluate the scope filter and should propagate the failure.
+func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) (*actionregistry.Catalog, error) {
+	if catalog == nil {
+		return actionregistry.NewCatalog(), nil
+	}
+	if tokenScopes == nil {
+		// Return a defensive clone because callers may further filter the returned
+		// catalog; nil scopes mean detection was unavailable, not that the source
+		// catalog may be mutated in place.
+		return catalog.Clone(), nil
+	}
+
+	scopeSet := buildScopeSet(tokenScopes)
+
+	filtered := actionregistry.NewCatalog()
+	var removed []string
+	for _, group := range catalog.Groups() {
+		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {
+			removed = append(removed, group.ToolName)
+			slog.Debug("catalog group requires missing PAT scope",
+				"tool", group.ToolName,
+				"required", required,
+				"available", tokenScopes,
+			)
+			continue
+		}
+		if err := filtered.AddGroup(group); err != nil {
+			return nil, fmt.Errorf("add scope-filtered catalog group %q: %w", group.ToolName, err)
+		}
+	}
+	if len(removed) > 0 {
+		slog.Info("scope-filtered catalog groups removed",
+			"removed", len(removed),
+			"tools", strings.Join(removed, ", "),
+			"scopes", strings.Join(tokenScopes, ", "),
+		)
+	}
+	return filtered, nil
+}
+
+func buildScopeSet(tokenScopes []string) map[string]struct{} {
+	scopeSet := make(map[string]struct{}, len(tokenScopes))
+	for _, scope := range tokenScopes {
+		scopeSet[scope] = struct{}{}
+	}
+	return scopeSet
 }
 
 // allScopesPresent checks if all required scopes exist in the set.

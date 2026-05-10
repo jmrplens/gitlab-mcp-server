@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -219,7 +220,11 @@ func TestAuditSeeAlso_AllPresent_NoFindings(t *testing.T) {
 func TestAuditRouteOutputSchema_AllSchemasPresent_ReturnsNoFindings(t *testing.T) {
 	t.Parallel()
 	// The full registered meta-routes all have OutputSchema after the refactor.
-	if got := auditRouteOutputSchema(); len(got) != 0 {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if got := collectRouteOutputSchemaFindings(catalog.ActionMaps()); len(got) != 0 {
 		t.Fatalf("expected 0 findings, got %d: %+v", len(got), got)
 	}
 }

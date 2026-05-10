@@ -85,6 +85,56 @@ func TestRemoveScopeFilteredTools_EmptyScopes(t *testing.T) {
 	}
 }
 
+// TestFilterScopeFilteredCatalog_MissingAdminMode verifies that catalog-level
+// scope filtering removes the same admin-mode groups without mutating the source.
+func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+
+	t.Run("source contains admin", func(t *testing.T) {
+		if _, ok := catalog.Group("gitlab_admin"); !ok {
+			t.Fatal("source catalog missing gitlab_admin")
+		}
+	})
+
+	t.Run("removes admin and preserves project", func(t *testing.T) {
+		filtered, filterErr := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", filterErr)
+		}
+		if _, ok := filtered.Group("gitlab_admin"); ok {
+			t.Fatal("filtered catalog still contains gitlab_admin")
+		}
+		if _, ok := filtered.Group("gitlab_project"); !ok {
+			t.Fatal("filtered catalog removed ungated gitlab_project")
+		}
+	})
+
+	t.Run("source remains unchanged", func(t *testing.T) {
+		if _, filterErr := FilterScopeFilteredCatalog(catalog, []string{"read_api"}); filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", filterErr)
+		}
+		if _, ok := catalog.Group("gitlab_admin"); !ok {
+			t.Fatal("source catalog was mutated")
+		}
+	})
+
+	t.Run("nil scopes return clone", func(t *testing.T) {
+		unfiltered, filterErr := FilterScopeFilteredCatalog(catalog, nil)
+		if filterErr != nil {
+			t.Fatalf("FilterScopeFilteredCatalog(nil) error = %v", filterErr)
+		}
+		if unfiltered == catalog {
+			t.Fatal("nil token scopes should return a cloned catalog")
+		}
+		if unfiltered.CountGroups() != catalog.CountGroups() {
+			t.Fatalf("nil-scope group count = %d, want %d", unfiltered.CountGroups(), catalog.CountGroups())
+		}
+	})
+}
+
 // TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.
 func TestAllScopesPresent_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {
@@ -139,7 +189,9 @@ func newMetaServer(t *testing.T) *mcp.Server {
 	})
 	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAllMeta(server, client, true)
+	if err := RegisterAllMeta(server, client, true); err != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", err)
+	}
 	return server
 }
 

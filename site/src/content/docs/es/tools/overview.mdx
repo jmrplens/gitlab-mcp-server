@@ -3,7 +3,9 @@ title: Visión general de herramientas
 description: Guía completa de las herramientas y meta-herramientas de GitLab MCP Server
 ---
 
-GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los asistentes de IA pueden invocar directamente. El servidor ofrece dos modos de operación para equilibrar capacidad con eficiencia de tokens.
+GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los asistentes de IA pueden invocar directamente. El servidor ofrece tres modos de operación para equilibrar capacidad con eficiencia de tokens.
+
+Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaquetado: el modo individual expone una herramienta MCP por operación, el modo meta-herramientas agrupa acciones por dominio, y el modo dinámico busca y ejecuta IDs canónicos `domain.action` desde el mismo catálogo de acciones.
 
 ## Modos de operación
 
@@ -28,12 +30,26 @@ En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se c
 }
 ```
 
+### Conjunto de herramientas dinámico
+
+El modo dinámico (`TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`) es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
+
+```mermaid
+flowchart LR
+	A[Buscar herramientas] --> B[Describir acción]
+	B --> C[Ejecutar domain.action]
+	C --> D[Handler existente de GitLab]
+```
+
+Como las meta-herramientas y el modo dinámico comparten el catálogo de acciones canónico, el comportamiento de seguridad es consistente entre ambos modos: filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token, confirmaciones destructivas, schemas y formato de resultados se definen una vez y se reutilizan.
+
 ## Convención de nombres de herramientas
 
 Todas las herramientas siguen un patrón de nomenclatura consistente:
 
 - **Herramientas individuales**: `gitlab_{action}_{resource}` (p. ej., `gitlab_create_issue`, `gitlab_list_projects`)
 - **Meta-herramientas**: `gitlab_{domain}` (p. ej., `gitlab_issue`, `gitlab_project`)
+- **Acciones dinámicas**: IDs canónicos `domain.action` ejecutados mediante `gitlab_execute_tool` (p. ej., `issue.create`, `merge_request.list`)
 
 ## Meta-herramientas base (32)
 
@@ -106,7 +122,7 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 | `gitlab_resolve_project` | Resolución de URLs remotas Git a IDs de proyecto GitLab                | resolve                                          |
 
 :::note
-Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en ambos modos cuando la autoactualización está habilitada.
+Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en los modos meta e individual cuando la autoactualización está habilitada. El modo dinámico expone las mismas acciones de actualización mediante el catálogo canónico de acciones.
 :::
 
 ## Herramientas solo Enterprise
@@ -123,7 +139,8 @@ Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate 
 
 ## Lectura adicional
 
-- [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) — arquitectura detallada de meta-herramientas y uso
-- [Orbit](/gitlab-mcp-server/tools/orbit/) — herramientas Knowledge Graph para GitLab.com Enterprise/Premium
-- [Herramientas de análisis](/gitlab-mcp-server/tools/analysis/) — herramientas de sampling impulsadas por IA
-- [Recursos y prompts](/gitlab-mcp-server/tools/resources-prompts/) — contexto de solo lectura y plantillas de prompts
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — arquitectura detallada de meta-herramientas y uso
+- [Conjunto dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — modo de búsqueda, descripción y ejecución con bajo consumo de tokens
+- [Orbit](/gitlab-mcp-server/es/tools/orbit/) — herramientas Knowledge Graph para GitLab.com Enterprise/Premium
+- [Herramientas de análisis](/gitlab-mcp-server/es/tools/analysis/) — herramientas de sampling impulsadas por IA
+- [Recursos y prompts](/gitlab-mcp-server/es/tools/resources-prompts/) — contexto de solo lectura y plantillas de prompts

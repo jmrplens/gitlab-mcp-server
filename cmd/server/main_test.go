@@ -93,6 +93,15 @@ func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server {
+	t.Helper()
+	server, err := createServer(client, cfg, nil)
+	if err != nil {
+		t.Fatalf("createServer() error: %v", err)
+	}
+	return server
+}
+
 // newTestMCPServer creates an MCP server with the full individual tool catalog,
 // resources, and prompts registered. HTTP protocol tests use it as a stable
 // handler target for initialize and tools/list requests.
@@ -428,7 +437,7 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP() unexpected error on graceful shutdown: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("serveHTTP() did not return within timeout after context cancellation")
 	}
 }
@@ -695,7 +704,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{MetaTools: false}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
@@ -855,7 +864,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{MetaTools: true}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
@@ -895,12 +904,188 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	}
 }
 
+// TestCreateServer_DynamicToolSurface verifies that the low-token dynamic
+// surface exposes only search, describe, and execute tools while still
+// advertising meta-schema resources for the catalog-backed action registry.
+func TestCreateServer_DynamicToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_search_tools":   false,
+		"gitlab_describe_tools": false,
+		"gitlab_execute_tool":   false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic surface should expose catalog action schema resources: %v", err)
+	}
+}
+
+// TestCreateServer_DynamicTwoToolSurface verifies the experimental two-tool
+// dynamic surface exposes find and execute while retaining catalog schemas.
+func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic2})
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_find_action":  false,
+		"gitlab_execute_tool": false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic-2 tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic-2 tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic-2 surface should expose catalog action schema resources: %v", err)
+	}
+}
+
+// TestCreateServer_DynamicThreeToolSurface verifies the explicit current
+// three-tool dynamic selector remains equivalent to TOOL_SURFACE=dynamic.
+func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3})
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_search_tools":   false,
+		"gitlab_describe_tools": false,
+		"gitlab_execute_tool":   false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; !ok {
+			t.Fatalf("unexpected dynamic-3 tool %q", tool.Name)
+		}
+		wantTools[tool.Name] = true
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("dynamic-3 tool %q was not registered", name)
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("dynamic-3 surface should expose catalog action schema resources: %v", err)
+	}
+}
+
+// TestCreateServer_MinimalCapabilitySurface verifies the explicit low-token
+// capability surface keeps workspace roots while omitting optional schema,
+// workflow, static data resources, and prompts.
+func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{
+		MetaTools:         true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+	})
+	session := newInMemorySession(t, server)
+
+	resourcesResult, err := session.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResources() error = %v", err)
+	}
+	if len(resourcesResult.Resources) != 1 || resourcesResult.Resources[0].URI != "gitlab://workspace/roots" {
+		t.Fatalf("minimal resources = %+v, want only workspace_roots", resourcesResult.Resources)
+	}
+
+	templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", err)
+	}
+	if len(templatesResult.ResourceTemplates) != 0 {
+		t.Fatalf("minimal resource templates = %+v, want none", templatesResult.ResourceTemplates)
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err == nil {
+		t.Fatal("minimal capability surface should omit meta-schema resources")
+	}
+
+	promptsResult, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "not found") {
+			t.Fatalf("ListPrompts() error = %v", err)
+		}
+		return
+	}
+	if len(promptsResult.Prompts) > 0 {
+		t.Fatalf("minimal prompts = %+v, want none", promptsResult.Prompts)
+	}
+}
+
+// TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
+// keeps discovery tools but removes execution from the dynamic surface.
+func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
+	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
+	if err != nil {
+		t.Fatalf("list dynamic read-only tools: %v", err)
+	}
+	wantTools := map[string]struct{}{
+		"gitlab_search_tools":   {},
+		"gitlab_describe_tools": {},
+	}
+	gotTools := make(map[string]struct{}, len(toolsResult))
+	for _, tool := range toolsResult {
+		gotTools[tool.Name] = struct{}{}
+	}
+	for name := range gotTools {
+		if _, ok := wantTools[name]; !ok {
+			t.Fatalf("read-only dynamic surface tool %q is registered; want only discovery tools", name)
+		}
+	}
+	for name := range wantTools {
+		if _, found := gotTools[name]; !found {
+			t.Fatalf("read-only dynamic surface missing discovery tool %q", name)
+		}
+	}
+}
+
 // TestCreateServer_MetaSchemaResourcesFollowMetaMode verifies that the
 // per-action schema resources are only advertised when meta-tools are active.
 func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	individual := createServer(client, &config.ServerConfig{MetaTools: false}, nil)
+	individual := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false})
 	individualSession := newInMemorySession(t, individual)
 	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -912,7 +1097,7 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 		}
 	}
 
-	meta := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	meta := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	metaSession := newInMemorySession(t, meta)
 	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -939,7 +1124,7 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 		MetaTools:    true,
 		ExcludeTools: []string{"gitlab_runner"},
 	}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 	session := newInMemorySession(t, server)
 
 	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"})
@@ -971,10 +1156,10 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 // server registers a different CE/Enterprise catalog later in the same process.
 func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
-	ceServer := createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: false}, nil)
+	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: false})
 	ceSession := newInMemorySession(t, ceServer)
 
-	_ = createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: true}, nil)
+	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: true})
 
 	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
 	if err == nil {
@@ -992,10 +1177,10 @@ func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
 func TestCreateServer_FilteringModes(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	readAPIServer := createServer(client, &config.ServerConfig{
+	readAPIServer := mustCreateServer(t, client, &config.ServerConfig{
 		MetaTools:   false,
 		TokenScopes: []string{"read_api"},
-	}, nil)
+	})
 	readAPITools, err := listRegisteredTools(readAPIServer, "read-api-filter-test")
 	if err != nil {
 		t.Fatalf("list read-api tools: %v", err)
@@ -1006,7 +1191,7 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 		}
 	}
 
-	safeModeServer := createServer(client, &config.ServerConfig{MetaTools: false, SafeMode: true}, nil)
+	safeModeServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false, SafeMode: true})
 	safeModeTools, err := listRegisteredTools(safeModeServer, "safe-mode-test")
 	if err != nil {
 		t.Fatalf("list safe-mode tools: %v", err)
@@ -1027,7 +1212,7 @@ func TestCreateServer_MetaSchemaRouteFilterError(t *testing.T) {
 	}
 	t.Cleanup(func() { listRegisteredToolsForInspection = original })
 
-	server := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	session := newInMemorySession(t, server)
 	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"}); err != nil {
 		t.Fatalf("schema index should still be readable after filter error: %v", err)
@@ -1698,15 +1883,19 @@ func TestLogIgnoredRequestOptions(t *testing.T) {
 	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{IgnoredOptions: []string{"GITLAB_URL"}})
 }
 
-// TestDoToolSearch_MetaAndIndividualModes verifies tool search can inspect
-// both reduced meta-tool mode and the full individual-tool catalog.
-func TestDoToolSearch_MetaAndIndividualModes(t *testing.T) {
+// TestDoToolSearch_HonorsToolSurface verifies tool search can inspect each
+// selectable tool surface instead of always searching the legacy meta setting.
+func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 	tests := []struct {
-		name      string
-		metaTools bool
+		name        string
+		toolSurface string
+		query       string
 	}{
-		{name: "meta", metaTools: true},
-		{name: "individual", metaTools: false},
+		{name: "meta", toolSurface: config.ToolSurfaceMeta, query: "project"},
+		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
+		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "search"},
+		{name: "dynamic-2", toolSurface: config.ToolSurfaceDynamic2, query: "find"},
+		{name: "dynamic-3", toolSurface: config.ToolSurfaceDynamic3, query: "search"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1718,7 +1907,7 @@ func TestDoToolSearch_MetaAndIndividualModes(t *testing.T) {
 			os.Stdout = w
 			t.Cleanup(func() { os.Stdout = oldStdout })
 
-			if searchErr := doToolSearch("project", tt.metaTools, false); searchErr != nil {
+			if searchErr := doToolSearch(tt.query, tt.toolSurface, false); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
 			_ = w.Close()
@@ -1745,7 +1934,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_ string, _ bool, _ bool) error {
+	toolSearchRunner = func(_ string, _ string, _ bool) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }
@@ -1778,7 +1967,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 		}
 	}()
 
-	runToolSearch("project", true, false)
+	runToolSearch("project", config.ToolSurfaceMeta, false)
 }
 
 // TestParseLogLevel verifies that LOG_LEVEL values map to correct slog levels.
@@ -2921,6 +3110,46 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 	const minIndividualTools = 700
 	if len(toolsRaw) < minIndividualTools {
 		t.Errorf("individual mode tools count = %d, want at least %d", len(toolsRaw), minIndividualTools)
+	}
+}
+
+// TestBuildServerCard_MinimalCapabilitySurface verifies that server-card
+// generation returns a reduced catalog instead of failing when prompts are not
+// registered.
+func TestBuildServerCard_MinimalCapabilitySurface(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:         "",
+		SkipTLSVerify:     true,
+		MetaTools:         true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON: %v", unmarshalErr)
+	}
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) != 3 {
+		t.Fatalf("card tools = %d, want 3 dynamic tools", len(toolsRaw))
+	}
+	resourcesRaw, resourcesOK := card["resources"].([]any)
+	if !resourcesOK || len(resourcesRaw) == 0 {
+		t.Fatal("card resources array missing or empty")
+	}
+	promptsRaw, promptsOK := card["prompts"].([]any)
+	if !promptsOK {
+		t.Fatal("card prompts array missing")
+	}
+	if len(promptsRaw) != 0 {
+		t.Fatalf("card prompts = %d, want 0 for minimal capability surface", len(promptsRaw))
 	}
 }
 

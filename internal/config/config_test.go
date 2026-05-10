@@ -146,7 +146,7 @@ func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 }
 
 // TestLoad_MetaToolsInvalid verifies that [Load] returns an error when
-// META_TOOLS contains a non-boolean string.
+// META_TOOLS contains an unsupported tool surface value.
 func TestLoad_MetaToolsInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
@@ -156,6 +156,138 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() expected error for invalid META_TOOLS, got nil")
+	}
+}
+
+// TestLoad_MetaToolsDynamic verifies that META_TOOLS=dynamic selects the
+// low-token dynamic tool surface while preserving legacy MetaTools truthiness.
+func TestLoad_MetaToolsDynamic(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "dynamic")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
+	}
+	if !cfg.MetaTools {
+		t.Fatal("MetaTools = false, want true for dynamic mode")
+	}
+}
+
+// TestLoad_ToolSurfaceOverridesMetaTools verifies that TOOL_SURFACE is the
+// explicit catalog-mode knob when both new and legacy settings are present.
+func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "false")
+	t.Setenv("TOOL_SURFACE", "dynamic")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
+	}
+	if !cfg.MetaTools {
+		t.Fatal("MetaTools = false, want true for dynamic mode")
+	}
+}
+
+// TestLoad_ToolSurfaceInvalid verifies that Load rejects unsupported explicit
+// tool surface values before falling back to META_TOOLS.
+func TestLoad_ToolSurfaceInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("TOOL_SURFACE", "not-a-surface")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for invalid TOOL_SURFACE, got nil")
+	}
+}
+
+// TestLoad_ToolSurfaceDynamicCandidates verifies that the explicit dynamic
+// candidate selectors are accepted without changing the default surface.
+func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{value: "DYNAMIC", want: ToolSurfaceDynamic},
+		{value: " dynamic ", want: ToolSurfaceDynamic},
+		{value: "low-token", want: ToolSurfaceDynamic},
+		{value: ToolSurfaceDynamic2, want: ToolSurfaceDynamic2},
+		{value: ToolSurfaceDynamic3, want: ToolSurfaceDynamic3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv("TOOL_SURFACE", tt.value)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.ToolSurface != tt.want {
+				t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, tt.want)
+			}
+			if !cfg.MetaTools {
+				t.Fatal("MetaTools = false, want true for dynamic candidate mode")
+			}
+		})
+	}
+}
+
+// TestLoad_CapabilitySurfaceMinimal verifies that CAPABILITY_SURFACE selects
+// the non-default low-token resource and prompt surface.
+func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {
+	tests := []string{"minimal", "MINIMAL", " minimal "}
+	for _, value := range tests {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv("CAPABILITY_SURFACE", value)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.CapabilitySurface != CapabilitySurfaceMinimal {
+				t.Fatalf("CapabilitySurface = %q, want %q", cfg.CapabilitySurface, CapabilitySurfaceMinimal)
+			}
+		})
+	}
+}
+
+// TestLoad_CapabilitySurfaceInvalid verifies unsupported capability surfaces
+// are rejected during environment configuration loading.
+func TestLoad_CapabilitySurfaceInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("CAPABILITY_SURFACE", "everything")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for invalid CAPABILITY_SURFACE, got nil")
+	}
+}
+
+// TestEffectiveCapabilitySurface verifies that empty capability settings resolve
+// to the full surface while explicit minimal settings are preserved.
+func TestEffectiveCapabilitySurface(t *testing.T) {
+	if got := EffectiveCapabilitySurface(""); got != CapabilitySurfaceFull {
+		t.Fatalf("EffectiveCapabilitySurface(empty) = %q, want %q", got, CapabilitySurfaceFull)
+	}
+	if got := EffectiveCapabilitySurface(CapabilitySurfaceMinimal); got != CapabilitySurfaceMinimal {
+		t.Fatalf("EffectiveCapabilitySurface(minimal) = %q, want %q", got, CapabilitySurfaceMinimal)
 	}
 }
 
@@ -689,15 +821,17 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 
 	cfg := &Config{
-		GitLabURL:       "https://gitlab.example.com",
-		MetaTools:       true,
-		Enterprise:      true,
-		ReadOnly:        true,
-		SafeMode:        true,
-		ExcludeTools:    []string{"gitlab_create_project"},
-		RateLimitRPS:    2.5,
-		RateLimitBurst:  7,
-		MetaParamSchema: MetaParamSchemaFull,
+		GitLabURL:         "https://gitlab.example.com",
+		MetaTools:         true,
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		ExcludeTools:      []string{"gitlab_create_project"},
+		RateLimitRPS:      2.5,
+		RateLimitBurst:    7,
+		MetaParamSchema:   MetaParamSchemaFull,
+		ToolSurface:       ToolSurfaceDynamic,
+		CapabilitySurface: CapabilitySurfaceMinimal,
 	}
 
 	snapshot := cfg.ServerConfig()
@@ -709,6 +843,12 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 	if snapshot.MetaParamSchema != MetaParamSchemaFull {
 		t.Fatalf("MetaParamSchema = %q, want %q", snapshot.MetaParamSchema, MetaParamSchemaFull)
+	}
+	if snapshot.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", snapshot.ToolSurface, ToolSurfaceDynamic)
+	}
+	if snapshot.CapabilitySurface != CapabilitySurfaceMinimal {
+		t.Fatalf("CapabilitySurface = %q, want %q", snapshot.CapabilitySurface, CapabilitySurfaceMinimal)
 	}
 	if !slices.Equal(snapshot.ExcludeTools, cfg.ExcludeTools) {
 		t.Fatalf("ExcludeTools = %v, want %v", snapshot.ExcludeTools, cfg.ExcludeTools)
@@ -737,7 +877,7 @@ func TestLoad_InvalidSkipTLS(t *testing.T) {
 }
 
 // TestLoad_InvalidMetaTools verifies that Load returns an error when
-// META_TOOLS has an invalid boolean value.
+// META_TOOLS has an invalid tool surface value.
 func TestLoad_InvalidMetaTools(t *testing.T) {
 	t.Setenv("META_TOOLS", "notabool")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")

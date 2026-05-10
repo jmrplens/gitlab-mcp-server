@@ -520,7 +520,7 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 type SingleArtifactInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	JobID        int64                `json:"job_id"         jsonschema:"Job ID,required"`
-	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive"`
+	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive,required"`
 }
 
 // SingleArtifactOutput holds the content of a single artifact file.
@@ -559,9 +559,9 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 // SingleArtifactRefInput defines parameters for downloading a single artifact file by ref.
 type SingleArtifactRefInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	RefName      string               `json:"ref_name"       jsonschema:"Branch or tag name"`
-	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive"`
-	JobName      string               `json:"job"            jsonschema:"Job name"`
+	RefName      string               `json:"ref_name"       jsonschema:"Branch or tag name,required"`
+	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive,required"`
+	JobName      string               `json:"job"            jsonschema:"Job name,required"`
 }
 
 // DownloadSingleArtifactByRef downloads a single artifact file by ref and job name.
@@ -577,6 +577,9 @@ func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Clien
 	}
 	if input.ArtifactPath == "" {
 		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: artifact_path is required")
+	}
+	if input.JobName == "" {
+		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: job is required")
 	}
 
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFileByTagOrBranch(

@@ -43,6 +43,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 163 domain sub-packages
 │   │   ├── register.go     # RegisterAll() — delegates to sub-package RegisterTools()
 │   │   ├── register_meta.go # RegisterAllMeta() — delegates to sub-package RegisterMeta()
+│   │   ├── dynamic/        # Low-token dynamic search/describe/execute tool surface
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
 │   │   ├── issues/         # Issue CRUD tools
@@ -84,6 +85,8 @@ gitlab-mcp-server/
 - Register tools via `mcp.AddTool()` with descriptive names
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
+- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. Keep dynamic-2 parked unless explicitly requested.
+- When adding GitLab actions, register route metadata once through `internal/tools/register_meta.go` or delegated domain `RegisterMeta` route maps using typed `ActionRoute` constructors. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and audits all consume the canonical action catalog built from those definitions.
 
 ### GitLab Integration
 
@@ -147,6 +150,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
 - Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
+- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default three-tool dynamic workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
@@ -187,6 +191,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
+| `TOOL_SURFACE`           | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `META_TOOLS` | _(empty)_          |
+| `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
 | `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action schema always discoverable via `gitlab://schema/meta/{tool}/{action}` resource | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |

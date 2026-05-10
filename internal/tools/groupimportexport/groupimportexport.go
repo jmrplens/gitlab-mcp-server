@@ -84,7 +84,7 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 type ImportFileInput struct {
 	Name     string `json:"name" jsonschema:"Name for the imported group,required"`
 	Path     string `json:"path" jsonschema:"URL path for the imported group,required"`
-	File     string `json:"file" jsonschema:"Absolute path to a local export archive (.tar.gz) on the MCP server filesystem,required"`
+	File     string `json:"file" jsonschema:"Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected,required"`
 	ParentID *int64 `json:"parent_id,omitempty" jsonschema:"ID of the parent group to import into"`
 }
 
@@ -96,16 +96,20 @@ type ImportFileOutput struct {
 
 // ImportFile imports a group from an export archive.
 func ImportFile(ctx context.Context, client *gitlabclient.Client, input ImportFileInput) (ImportFileOutput, error) {
+	archivePath, err := toolutil.CanonicalImportArchivePath(input.File)
+	if err != nil {
+		return ImportFileOutput{}, toolutil.WrapErrWithMessage("import_group_file", err)
+	}
 	opts := &gl.GroupImportFileOptions{
 		Name: new(input.Name),
 		Path: new(input.Path),
-		File: new(input.File),
+		File: new(archivePath),
 	}
 	if input.ParentID != nil {
 		opts.ParentID = input.ParentID
 	}
 
-	_, err := client.GL().GroupImportExport.ImportFile(opts, gl.WithContext(ctx))
+	_, err = client.GL().GroupImportExport.ImportFile(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ImportFileOutput{}, toolutil.WrapErrWithStatusHint("import_group_file", err, http.StatusBadRequest, "verify the file path points to a valid .tar.gz group export archive")
 	}

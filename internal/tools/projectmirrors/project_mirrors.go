@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"regexp"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -15,6 +17,8 @@ import (
 
 // hintVerifyMirrorID is the 404 hint shared by project mirror tools.
 const hintVerifyMirrorID = "verify mirror_id with gitlab_list_project_mirrors"
+
+var credentialedURLPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^\s/@]+@)`)
 
 // ListInput holds parameters for listing project mirrors.
 type ListInput struct {
@@ -37,7 +41,7 @@ type GetPublicKeyInput struct {
 // AddInput holds parameters for creating a new project mirror.
 type AddInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
-	URL                   string               `json:"url"                               jsonschema:"Remote mirror URL (e.g. https://user:token@example.com/repo.git),required"`
+	URL                   string               `json:"url"                               jsonschema:"Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors,required"`
 	Enabled               *bool                `json:"enabled,omitempty"                 jsonschema:"Whether the mirror is enabled"`
 	KeepDivergentRefs     *bool                `json:"keep_divergent_refs,omitempty"     jsonschema:"Keep divergent refs on the remote"`
 	OnlyProtectedBranches *bool                `json:"only_protected_branches,omitempty" jsonschema:"Mirror only protected branches"`
@@ -110,9 +114,9 @@ func toOutput(m *gl.ProjectMirror) Output {
 	o := Output{
 		ID:                    m.ID,
 		Enabled:               m.Enabled,
-		URL:                   m.URL,
+		URL:                   redactMirrorURL(m.URL),
 		UpdateStatus:          m.UpdateStatus,
-		LastError:             m.LastError,
+		LastError:             redactCredentialsInText(m.LastError),
 		OnlyProtectedBranches: m.OnlyProtectedBranches,
 		KeepDivergentRefs:     m.KeepDivergentRefs,
 		MirrorBranchRegex:     m.MirrorBranchRegex,
@@ -233,14 +237,14 @@ func Add(ctx context.Context, client *gitlabclient.Client, in AddInput) (Output,
 	m, _, err := client.GL().ProjectMirrors.AddProjectMirror(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", err,
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", redactMirrorError(err),
 				"creating push mirrors requires GitLab Premium/Ultimate and Maintainer+ role")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", err,
-				"check the mirror URL is well-formed (https:// or ssh://) and includes credentials inline if required \u2014 mirror to the same project is forbidden")
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", redactMirrorError(err),
+				"check the mirror URL is well-formed (https:// or ssh://), includes credentials inline if required, and does not mirror to the same project")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("projectMirrorAdd", err)
+		return Output{}, toolutil.WrapErrWithMessage("projectMirrorAdd", redactMirrorError(err))
 	}
 	return toOutput(m), nil
 }
@@ -273,11 +277,13 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 	m, _, err := client.GL().ProjectMirrors.EditProjectMirror(string(in.ProjectID), in.MirrorID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", err,
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", redactMirrorError(err),
 				"editing push mirrors requires Maintainer+ role on a Premium/Ultimate project")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorEdit", err, http.StatusNotFound,
-			hintVerifyMirrorID)
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", redactMirrorError(err), hintVerifyMirrorID)
+		}
+		return Output{}, toolutil.WrapErrWithMessage("projectMirrorEdit", redactMirrorError(err))
 	}
 	return toOutput(m), nil
 }
@@ -303,6 +309,36 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 			hintVerifyMirrorID)
 	}
 	return nil
+}
+
+func redactMirrorURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		if credentialedURLPattern.MatchString(rawURL) {
+			return redactCredentialsInText(rawURL)
+		}
+		return rawURL
+	}
+	if parsed.User == nil {
+		return rawURL
+	}
+	parsed.User = url.User("redacted")
+	return parsed.String()
+}
+
+func redactMirrorError(err error) error {
+	if err == nil {
+		return nil
+	}
+	message := redactCredentialsInText(err.Error())
+	if message == err.Error() {
+		return err
+	}
+	return errors.New(message)
+}
+
+func redactCredentialsInText(text string) string {
+	return credentialedURLPattern.ReplaceAllString(text, `${1}[redacted]@`)
 }
 
 // ForcePushUpdate triggers an immediate push mirror update.

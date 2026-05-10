@@ -68,7 +68,9 @@ graph TD
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
         TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
+        CATALOG[action catalog<br/>canonical ActionRoute registry]
         META[metatool<br/>32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
+        DYN[dynamic<br/>3 visible tools over canonical action catalog]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
         RES[resources<br/>46 resource handlers]
@@ -93,7 +95,9 @@ graph TD
     HTTP --> POOL
     POOL -->|one server per token+URL| SRV
     TOOLS --> GL
-    META --> TOOLS
+    META --> CATALOG
+    DYN --> CATALOG
+    CATALOG --> TOOLS
     SAMP --> GL
     SAMP --> SAMPLING
     ELIC --> ELICIT
@@ -102,6 +106,7 @@ graph TD
     PROMPTS --> GL
     MAIN -->|register| TOOLS
     MAIN -->|register| META
+    MAIN -->|register| DYN
     MAIN -->|register| SAMP
     MAIN -->|register| ELIC
     MAIN -->|register| RES
@@ -172,6 +177,9 @@ The largest package — contains 1006 self-managed Enterprise/Premium MCP tool i
 | ------------------ | ------------------------------------------------------------- |
 | `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
 | `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive (+ 15 enterprise inline, + 1 GitLab.com Enterprise Orbit) |
+| `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, schema resources, audits, and generators |
+| `meta_catalog.go`  | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog |
+| `actionregistry/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |
@@ -250,6 +258,8 @@ Shared helpers for unit testing with httptest mocks:
 
 The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
+Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
+
 ```mermaid
 sequenceDiagram
     participant LLM as AI Client
@@ -269,6 +279,60 @@ sequenceDiagram
     META-->>MCP: CallToolResult (Markdown + structured JSON)
     MCP-->>LLM: JSON-RPC response
 ```
+
+### Dynamic Toolset (`internal/tools/dynamic`)
+
+The dynamic toolset is a progressive-disclosure layer over the canonical action catalog. Instead of exposing all domain
+meta-tools in `tools/list`, it exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
+The current default remains meta-tools, but dynamic mode is the low-token candidate for a future default.
+
+Startup builds the canonical action catalog from the same route definitions used by meta-tools, then adds standalone
+actions such as project discovery for dynamic mode. This preserves existing typed schemas, route classification, markdown formatters,
+read-only filtering, safe-mode behavior, destructive confirmation, and GitLab API handlers.
+
+```mermaid
+flowchart TD
+    START[Server startup] --> CATALOG[Build canonical action catalog]
+    CATALOG --> STANDALONE[Add standalone dynamic actions]
+    STANDALONE --> REGISTRY[Catalog-backed action registry]
+
+    subgraph Public Dynamic Tools
+        SEARCH[gitlab_search_tools]
+        DESCRIBE[gitlab_describe_tools]
+        EXECUTE[gitlab_execute_tool]
+    end
+
+    REGISTRY --> SEARCH
+    REGISTRY --> DESCRIBE
+    REGISTRY --> EXECUTE
+    EXECUTE --> VALIDATE[Validate canonical action and params]
+    VALIDATE --> ROUTE[Reuse ActionRoute handler]
+    ROUTE --> HANDLER[Typed domain handler]
+    HANDLER --> GITLAB[GitLab REST v4 or GraphQL]
+```
+
+Runtime use follows a search, describe, execute sequence:
+
+```mermaid
+sequenceDiagram
+    participant LLM as AI Client
+    participant DYN as Dynamic Registry
+    participant TOOL as Domain Handler
+    participant GL as GitLab API
+
+    LLM->>DYN: gitlab_search_tools(query)
+    DYN-->>LLM: Candidate action IDs
+    LLM->>DYN: gitlab_describe_tools(actions)
+    DYN-->>LLM: Input schemas, examples, safety metadata
+    LLM->>DYN: gitlab_execute_tool(action, params)
+    DYN->>TOOL: Existing handler through ActionRoute
+    TOOL->>GL: REST or GraphQL request
+    GL-->>TOOL: JSON response
+    TOOL-->>DYN: Typed output + Markdown
+    DYN-->>LLM: MCP tool result
+```
+
+See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety behavior, and troubleshooting.
 
 ### Resources (`internal/resources`)
 

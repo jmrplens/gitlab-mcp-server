@@ -88,16 +88,20 @@ The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:l
 
 The host must provide these variables before enabling the plugin:
 
-| Variable                 | Required | Description                                                                           |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
-| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                   |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                        |
-| `META_TOOLS`             | No       | `true` for grouped tools, `false` for individual (default `true`)                     |
-| `GITLAB_ENTERPRISE`      | No       | `true` to enable Premium/Ultimate tools (default `false`)                             |
-| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                    |
-| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                              |
-| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                     |
+| Variable                 | Required | Description                                                                                     |
+| ------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances           |
+| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                             |
+| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                  |
+| `META_TOOLS`             | No       | Legacy boolean selector: `true` for meta-tools or `false` for individual tools (default `true`) |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`    |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                      |
+| `GITLAB_ENTERPRISE`      | No       | `true` to enable Premium/Ultimate tools (default `false`)                                       |
+| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                              |
+| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                        |
+| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                               |
+
+`TOOL_SURFACE` is the preferred current selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=meta` instead of `META_TOOLS=true`, `TOOL_SURFACE=individual` instead of `META_TOOLS=false`, and `TOOL_SURFACE=dynamic`, `dynamic-2`, or `dynamic-3` for dynamic surfaces. `META_TOOLS` remains supported for backward compatibility but should be treated as deprecated in favor of the explicit selector.
 
 ### Prefer a native binary instead of Docker?
 
@@ -485,6 +489,10 @@ This is transparent to you — your AI client handles the routing automatically.
 
 :::tip
 Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
+
+For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute option.
+
+Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources and prompts when you need the smallest initial MCP context.
 :::
 
 ## Next steps

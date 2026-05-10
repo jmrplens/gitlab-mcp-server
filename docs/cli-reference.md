@@ -38,7 +38,9 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-http-addr` | string | `:8080` | HTTP listen address (e.g. `localhost:8080`, `:9090`) |
 | `-gitlab-url` | string | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
-| `-meta-tools` | bool | `true` | Enable domain-level meta-tools (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise instead of individual tools) |
+| `-meta-tools` | bool | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
+| `-tool-surface` | string | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. Overrides `--meta-tools` when set |
+| `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and disables optional resources and prompts |
 | `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. See [env-reference.md](env-reference.md) |
 | `-enterprise` | bool | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
@@ -160,12 +162,23 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --skip-tls-veri
 # Start HTTP server with individual tools (no meta-tools)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --meta-tools=false
 
+# Start HTTP server with the dynamic toolset (reduces token usage for LLM context)
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
+
+# Start HTTP server with a specific dynamic toolset version (dynamic-3)
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic-3
+
+# Start HTTP server with the dynamic toolset and reduced non-tool capabilities
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
+
 # Start with auto-update in check-only mode
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check
 
 # Terminate all running instances (used by external updaters)
 gitlab-mcp-server --shutdown
 ```
+
+See [Dynamic Tools](dynamic-tools.md) for how `dynamic`, `dynamic-2`, and `dynamic-3` relate.
 
 ---
 
@@ -182,5 +195,6 @@ gitlab-mcp-server --shutdown
 
 - [Configuration](configuration.md) — Environment variables and `.env` files
 - [HTTP Server Mode](http-server-mode.md) — Architecture and deployment details
+- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute mode
 - [Auto-Update](auto-update.md) — Update modes, release requirements, troubleshooting
 - [Getting Started](getting-started.md) — Step-by-step tutorial

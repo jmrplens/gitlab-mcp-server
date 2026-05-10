@@ -140,6 +140,22 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 With `META_TOOLS=false`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1006 on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
+### Dynamic toolset
+
+With `TOOL_SURFACE=dynamic`, the server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
+
+```mermaid
+flowchart TD
+    A[Canonical action catalog] --> B[Dynamic action registry]
+    B --> C[gitlab_search_tools]
+    B --> D[gitlab_describe_tools]
+    B --> E[gitlab_execute_tool]
+    E --> F[Existing typed handler]
+    F --> G[GitLab API]
+```
+
+Meta-tools remain the default today. Dynamic mode is the low-token candidate for a future default and is documented in [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/).
+
 ## Optional components
 
 The server includes several optional capabilities that can be enabled or disabled:

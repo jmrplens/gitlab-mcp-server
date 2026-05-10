@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -176,7 +177,19 @@ import (
 // parameter. This reduces token usage for LLMs while preserving full
 // functionality. Interactive tools cannot be consolidated because they
 // require multi-round MCP elicitation/create exchanges with the client.
-func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
+// Returns an error if the action catalog cannot be built or if wiring tools
+// to the MCP server fails.
+func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) error {
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise})
+	if err != nil {
+		return fmt.Errorf("failed to build action catalog: %w", err)
+	}
+	RegisterMetaCatalog(server, catalog)
+	registerStandaloneUtilities(server, client)
+	return nil
+}
+
+func registerAllMetaGroups(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
 	// Core domain meta-tools (inline handlers — enterprise routes injected when enabled)
 	registerProjectMeta(server, client, enterprise)
 	registerBranchMeta(server, client)
@@ -233,7 +246,9 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	search.RegisterMeta(server, client)
 	runners.RegisterMeta(server, client)
 	samplingtools.RegisterMeta(server, client)
+}
 
+func registerStandaloneUtilities(server *mcp.Server, client *gitlabclient.Client) {
 	// Standalone utility tools (not consolidated into meta-tools).
 	// projectdiscovery: git-remote → project resolution helper.
 	// elicitationtools: 4 gitlab_interactive_* tools that drive multi-step MCP
@@ -381,7 +396,7 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"mirror_add":            routeAction(client, projectmirrors.Add),
 		"mirror_edit":           routeAction(client, projectmirrors.Edit),
 		"mirror_delete":         destructiveVoidAction(client, projectmirrors.Delete),
-		"mirror_force_push":     routeVoidAction(client, projectmirrors.ForcePushUpdate),
+		"mirror_force_push":     destructiveVoidAction(client, projectmirrors.ForcePushUpdate),
 	}
 
 	if enterprise {
@@ -2119,7 +2134,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"broadcast_message_delete":       destructiveVoidAction(client, broadcastmessages.Delete),
 		"feature_list":                   routeAction(client, features.List),
 		"feature_list_definitions":       routeAction(client, features.ListDefinitions),
-		"feature_set":                    routeAction(client, features.Set),
+		"feature_set":                    features.SetRoute(client),
 		"feature_delete":                 destructiveVoidAction(client, features.Delete),
 		"license_get":                    routeAction(client, license.Get),
 		"license_add":                    routeAction(client, license.Add),
@@ -2141,7 +2156,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"usage_data_metric_definitions":  routeAction(client, usagedata.GetMetricDefinitions),
 		"usage_data_track_event":         routeAction(client, usagedata.TrackEvent),
 		"usage_data_track_events":        routeAction(client, usagedata.TrackEvents),
-		"db_migration_mark":              routeAction(client, dbmigrations.Mark),
+		"db_migration_mark":              destructiveAction(client, dbmigrations.Mark),
 		"application_list":               routeAction(client, applications.List),
 		"application_create":             routeAction(client, applications.Create),
 		"application_delete":             destructiveVoidAction(client, applications.Delete),
@@ -2175,7 +2190,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"terraform_state_get":            routeAction(client, terraformstates.Get),
 		"terraform_state_delete":         destructiveVoidAction(client, terraformstates.Delete),
 		"terraform_state_lock":           routeAction(client, terraformstates.Lock),
-		"terraform_state_unlock":         routeAction(client, terraformstates.Unlock),
+		"terraform_state_unlock":         destructiveAction(client, terraformstates.Unlock),
 		"terraform_version_delete":       destructiveVoidAction(client, terraformstates.DeleteVersion),
 		"cluster_agent_list":             routeAction(client, clusteragents.ListAgents),
 		"cluster_agent_get":              routeAction(client, clusteragents.GetAgent),
@@ -2550,20 +2565,25 @@ See also: gitlab_release (release asset links), gitlab_project`, routes, tooluti
 // discussion_update_note, discussion_delete_note, note_list, note_get, note_create,
 // note_update, and note_delete.
 func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
+	createRoute := routeAction(client, snippets.Create)
+	createRoute.InputSchema = snippets.CreateInputSchemaMap()
+	projectCreateRoute := routeAction(client, snippets.ProjectCreate)
+	projectCreateRoute.InputSchema = snippets.ProjectCreateInputSchemaMap()
+
 	routes := actionMap{
 		"list":                      routeAction(client, snippets.List),
 		"list_all":                  routeAction(client, snippets.ListAll),
 		"get":                       routeAction(client, snippets.Get),
 		"content":                   routeAction(client, snippets.Content),
 		"file_content":              routeAction(client, snippets.FileContent),
-		"create":                    routeAction(client, snippets.Create),
+		"create":                    createRoute,
 		"update":                    routeAction(client, snippets.Update),
 		"delete":                    destructiveVoidAction(client, snippets.Delete),
 		"explore":                   routeAction(client, snippets.Explore),
 		"project_list":              routeAction(client, snippets.ProjectList),
 		"project_get":               routeAction(client, snippets.ProjectGet),
 		"project_content":           routeAction(client, snippets.ProjectContent),
-		"project_create":            routeAction(client, snippets.ProjectCreate),
+		"project_create":            projectCreateRoute,
 		"project_update":            routeAction(client, snippets.ProjectUpdate),
 		"project_delete":            destructiveVoidAction(client, snippets.ProjectDelete),
 		"discussion_list":           routeAction(client, snippetdiscussions.List),

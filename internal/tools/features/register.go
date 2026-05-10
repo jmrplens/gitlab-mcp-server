@@ -2,14 +2,51 @@ package features
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+func setInputSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[SetInput](nil)
+	if err != nil {
+		panic(fmt.Sprintf("build feature set input schema: %v; check SetInput struct tags, unsupported field types, or circular schema references", err))
+	}
+	if property := schema.Properties["value"]; property != nil {
+		property.Type = ""
+		property.OneOf = []*jsonschema.Schema{
+			{Type: "boolean"},
+			{Type: "integer"},
+			{Type: "string"},
+		}
+	}
+	return schema
+}
+
+func setInputSchemaMap() map[string]any {
+	data, err := json.Marshal(setInputSchema())
+	if err != nil {
+		panic(fmt.Sprintf("marshal feature set input schema: %v; check schema serialization for unsupported values", err))
+	}
+	var schema map[string]any
+	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+		panic(fmt.Sprintf("unmarshal feature set input schema: %v; check generated schema JSON shape", unmarshalErr))
+	}
+	return schema
+}
+
+// SetRoute returns the meta-tool route for setting instance feature flags.
+func SetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Set)
+	route.InputSchema = setInputSchemaMap()
+	return route
+}
 
 // RegisterTools registers all feature flag tools on the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
@@ -51,6 +88,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Set or create a feature flag (admin). Requires name and value. Supports scoping to user, group, project, namespace, or repository.\n\nReturns: JSON with the feature flag details.\n\nSee also: gitlab_list_features.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
+		InputSchema: setInputSchemaMap(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SetInput) (*mcp.CallToolResult, SetOutput, error) {
 		start := time.Now()
 		out, err := Set(ctx, client, input)

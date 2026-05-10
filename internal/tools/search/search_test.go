@@ -820,6 +820,8 @@ func TestSearchOpts_InvalidSearchType(t *testing.T) {
 	}
 }
 
+// TestSearchHandlers_InvalidSearchType_ReturnValidationError verifies that every
+// search handler rejects unsupported search_type values before calling GitLab.
 func TestSearchHandlers_InvalidSearchType_ReturnValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("handler should not call GitLab API for invalid search_type: %s %s", r.Method, r.URL.Path)
@@ -1732,16 +1734,13 @@ func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
 // TestRegisterMeta_SearchTypeActionSchemaEnum verifies that gitlab_search
 // action schemas expose the same search_type enum as the individual tools.
 func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
-	toolutil.ClearMetaRoutes()
-	defer toolutil.ClearMetaRoutes()
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	routes := toolutil.CaptureMetaRoutes(func() {
-		RegisterMeta(server, client)
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, client)
 	})
+	routes := map[string]toolutil.ActionMap{"gitlab_search": searchMetaRoutesFromDefinitions(t, definitions)}
 
 	for _, action := range []string{"code", "merge_requests", "issues", "commits", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
 		t.Run(action, func(t *testing.T) {
@@ -1754,6 +1753,19 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 	}
 }
 
+func searchMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+	t.Helper()
+	for _, definition := range definitions {
+		if definition.Name == "gitlab_search" {
+			return definition.Routes
+		}
+	}
+	t.Fatal("missing gitlab_search meta definition")
+	return nil
+}
+
+// TestSearchInputSchema_UnsupportedTypePanics verifies that unsupported schema
+// shapes panic with search input schema context during registration.
 func TestSearchInputSchema_UnsupportedTypePanics(t *testing.T) {
 	defer func() {
 		recovered := recover()
@@ -1768,6 +1780,8 @@ func TestSearchInputSchema_UnsupportedTypePanics(t *testing.T) {
 	_ = searchInputSchema[unsupportedSearchSchemaInput]()
 }
 
+// TestSearchSchemaPanic_ErrorPanics verifies that searchSchemaPanic ignores nil
+// errors and panics with operation context for non-nil errors.
 func TestSearchSchemaPanic_ErrorPanics(t *testing.T) {
 	searchSchemaPanic("noop", nil)
 

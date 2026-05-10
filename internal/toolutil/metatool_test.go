@@ -268,21 +268,23 @@ func TestUnmarshalParams_CoercesNumericPathAliasesToStrings(t *testing.T) {
 func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
-			"query":             map[string]any{"type": "string"},
-			"merge_request_iid": map[string]any{"type": "integer"},
-			"project_id":        map[string]any{"type": "string"},
-			"link_url":          map[string]any{"type": "string"},
-			"labels":            map[string]any{"type": "string"},
-			"source_branch":     map[string]any{"type": "string"},
-			"target_branch":     map[string]any{"type": "string"},
-			"environment_scope": map[string]any{"type": "string"},
-			"auto_merge":        map[string]any{"type": "boolean"},
-			"paused":            map[string]any{"type": "boolean"},
-			"assignee_ids":      map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
-			"variables":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"weight":            map[string]any{"type": "number"},
-			"path":              map[string]any{"type": "string"},
-			"filename":          map[string]any{"type": "string"},
+			"query":                    map[string]any{"type": "string"},
+			"merge_request_iid":        map[string]any{"type": "integer"},
+			"project_id":               map[string]any{"type": "string"},
+			"link_url":                 map[string]any{"type": "string"},
+			"labels":                   map[string]any{"type": "string"},
+			"source_branch":            map[string]any{"type": "string"},
+			"target_branch":            map[string]any{"type": "string"},
+			"environment_scope":        map[string]any{"type": "string"},
+			"auto_merge":               map[string]any{"type": "boolean"},
+			"paused":                   map[string]any{"type": "boolean"},
+			"assignee_ids":             map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
+			"variables":                map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"weight":                   map[string]any{"type": "number"},
+			"path":                     map[string]any{"type": "string"},
+			"filename":                 map[string]any{"type": "string"},
+			"note":                     map[string]any{"type": "string"},
+			"destination_storage_name": map[string]any{"type": "string"},
 		},
 	}
 	params := map[string]any{
@@ -300,6 +302,8 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 		"variables":                    "DEPLOY_ENV=prod",
 		"weight":                       "3.5",
 		"file_path":                    "packages/npm/package.tgz",
+		"body":                         "review note",
+		"shard":                        "default",
 	}
 
 	got := NormalizeParamAliasesForSchema(params, schema)
@@ -327,7 +331,10 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	if got["path"] != "packages/npm" || got["filename"] != "package.tgz" {
 		t.Fatalf("file_path split values = %#v", got)
 	}
-	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path"} {
+	if got["note"] != "review note" || got["destination_storage_name"] != "default" {
+		t.Fatalf("note/storage shard values = %#v", got)
+	}
+	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path", "body", "shard"} {
 		if _, exists := got[alias]; exists {
 			t.Fatalf("alias %q still present in %#v", alias, got)
 		}
@@ -347,6 +354,77 @@ func TestNormalizeParamAliasesForSchema_CanonicalWins(t *testing.T) {
 	}
 	if _, exists := got["search"]; exists {
 		t.Fatalf("search alias still present: %#v", got)
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_ObservedDynamicAliases verifies aliases
+// seen in dynamic execution traces normalize only when the selected schema
+// exposes the canonical field.
+func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
+	tests := map[string]struct {
+		schema map[string]any
+		params map[string]any
+		want   map[string]any
+	}{
+		"id to project_id": {
+			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "42"},
+			want:   map[string]any{"project_id": int64(42)},
+		},
+		"id to group_id": {
+			schema: map[string]any{"properties": map[string]any{"group_id": map[string]any{"type": "string"}}},
+			params: map[string]any{"id": 99},
+			want:   map[string]any{"group_id": "99"},
+		},
+		"id to user_id": {
+			schema: map[string]any{"properties": map[string]any{"user_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "123"},
+			want:   map[string]any{"user_id": int64(123)},
+		},
+		"ambiguous id is preserved": {
+			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}, "group_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "42"},
+			want:   map[string]any{"id": "42"},
+		},
+		"branch to branch_name": {
+			schema: map[string]any{"properties": map[string]any{"branch_name": map[string]any{"type": "string"}}},
+			params: map[string]any{"branch": "main"},
+			want:   map[string]any{"branch_name": "main"},
+		},
+		"feature_flag_name to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"feature_flag_name": "eval-flag"},
+			want:   map[string]any{"name": "eval-flag"},
+		},
+		"emoji_name to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"emoji_name": "eyes"},
+			want:   map[string]any{"name": "eyes"},
+		},
+		"award to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"award": "thumbsup"},
+			want:   map[string]any{"name": "thumbsup"},
+		},
+		"time_estimate to duration": {
+			schema: map[string]any{"properties": map[string]any{"duration": map[string]any{"type": "string"}}},
+			params: map[string]any{"time_estimate": "1h"},
+			want:   map[string]any{"duration": "1h"},
+		},
+		"alias is preserved when schema accepts alias": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}, "emoji_name": map[string]any{"type": "string"}}},
+			params: map[string]any{"emoji_name": "eyes"},
+			want:   map[string]any{"emoji_name": "eyes"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := NormalizeParamAliasesForSchema(tc.params, tc.schema)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("NormalizeParamAliasesForSchema() = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -740,6 +818,100 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	out, ok := raw.(testOutput)
 	if !ok || out.Result != "ok" {
 		t.Fatalf("raw = %#v, want test output", raw)
+	}
+}
+
+// TestNormalizeActionAlias_DynamicCompatibilityAliases verifies dynamic-surface
+// compatibility aliases map to canonical meta-tool action IDs.
+func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
+	routes := ActionMap{
+		"storage_move.schedule_project":      {},
+		"mr_review.changes_get":              {},
+		"mr_review.draft_note_publish_all":   {},
+		"package.list":                       {},
+		"project.hook_list":                  {},
+		"external_status_check.list_project": {},
+		"access.deploy_token_create_project": {},
+		"project.member_delete":              {},
+		"project.member_edit":                {},
+		"merge_request.spent_time_add":       {},
+		"merge_request.time_estimate_set":    {},
+		"job.token_scope_list_inbound":       {},
+		"package.file_list":                  {},
+		"audit_event.list_group":             {},
+		"release.list":                       {},
+		"analyze.release_notes":              {},
+		"ci_variable.create":                 {},
+		"ci_variable.group_create":           {},
+		"access.deploy_key_add":              {},
+		"release.link_create":                {},
+		"feature_flags.ff_user_list_create":  {},
+		"feature_flags.ff_user_list_delete":  {},
+		"issue.create":                       {},
+		"server.health_check":                {},
+		"job.download_single_artifact":       {},
+		"issue.link_create":                  {},
+		"repository.tree":                    {},
+		"repository.file_get":                {},
+		"pipeline.schedule_create_variable":  {},
+		"project.badge_edit":                 {},
+		"merge_request.spent_time_reset":     {},
+		"issue.note_create":                  {},
+		"interactive.issue_create":           {},
+	}
+
+	tests := map[string]string{
+		"project.schedule_storage_move":             "storage_move.schedule_project",
+		"merge_request.changes":                     "mr_review.changes_get",
+		"project.hooks.list":                        "project.hook_list",
+		"project.status_check_list":                 "external_status_check.list_project",
+		"project.status_checks.list":                "external_status_check.list_project",
+		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
+		"deploy_token.create":                       "access.deploy_token_create_project",
+		"deploy_key.create":                         "access.deploy_key_add",
+		"project_member.update":                     "project.member_edit",
+		"project_member.edit":                       "project.member_edit",
+		"project.member_remove":                     "project.member_delete",
+		"project_member.remove":                     "project.member_delete",
+		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
+		"mr_review.publish":                         "mr_review.draft_note_publish_all",
+		"package.list_generic":                      "package.list",
+		"package.files":                             "package.file_list",
+		"group.audit_events":                        "audit_event.list_group",
+		"project.releases.list":                     "release.list",
+		"release.generate_notes":                    "analyze.release_notes",
+		"release.asset_link.create":                 "release.link_create",
+		"variable.create":                           "ci_variable.create",
+		"group.variable.create":                     "ci_variable.group_create",
+		"merge_request.add_spent_time":              "merge_request.spent_time_add",
+		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
+		"merge_request.time_estimate":               "merge_request.time_estimate_set",
+		"merge_request.time_spent_add":              "merge_request.spent_time_add",
+		"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
+		"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
+		"gitlab_issue.create":                       "issue.create",
+		"gitlab_server.health_check":                "server.health_check",
+		"job.artifact_download":                     "job.download_single_artifact",
+		"issue.link":                                "issue.link_create",
+		"repository_tree":                           "repository.tree",
+		"repository_file.get":                       "repository.file_get",
+		"repository_file.read":                      "repository.file_get",
+		"pipeline.schedule_variable_create":         "pipeline.schedule_create_variable",
+		"project.badge_update":                      "project.badge_edit",
+		"merge_request.time_spent_reset":            "merge_request.spent_time_reset",
+		"generic_package.list":                      "package.list",
+		"issue_note.create":                         "issue.note_create",
+		"gitlab_interactive_issue.create":           "interactive.issue_create",
+	}
+	for alias, want := range tests {
+		t.Run(alias, func(t *testing.T) {
+			if got := NormalizeActionAlias(alias, routes); got != want {
+				t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
+			}
+		})
+	}
+	if got := NormalizeActionAlias("repository_file.read", ActionMap{}); got != "repository_file.read" {
+		t.Fatalf("NormalizeActionAlias without canonical route = %q, want unchanged", got)
 	}
 }
 
@@ -1534,13 +1706,92 @@ func TestReadOnlyMetaAnnotationsWithTitle(t *testing.T) {
 	}
 }
 
+// TestCaptureMetaToolDefinitions_CapturesMetadataWithoutServer verifies that
+// meta-tool registrations can be captured without constructing an MCP server.
+func TestCaptureMetaToolDefinitions_CapturesMetadataWithoutServer(t *testing.T) {
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+	routes := ActionMap{"list": Route(noop)}
+	formatResult := func(any) *mcp.CallToolResult { return nil }
+
+	defs := CaptureMetaToolDefinitions(func() {
+		AddReadOnlyMetaTool(nil, "gitlab_capture", "Capture description.", routes, IconSearch, formatResult)
+		routes["delete"] = DestructiveRoute(noop)
+	})
+
+	if len(defs) != 1 {
+		t.Fatalf("captured definitions = %d, want 1", len(defs))
+	}
+	def := defs[0]
+	if def.Name != "gitlab_capture" || def.Description != "Capture description." || !def.ReadOnly {
+		t.Fatalf("captured definition metadata = %+v", def)
+	}
+	if len(def.Icons) != len(IconSearch) {
+		t.Fatalf("captured icon count = %d, want %d", len(def.Icons), len(IconSearch))
+	}
+	if def.FormatResult == nil {
+		t.Fatal("captured definition missing formatter")
+	}
+	if _, ok := def.Routes["list"]; !ok {
+		t.Fatal("captured definition missing list route")
+	}
+	if _, ok := def.Routes["delete"]; ok {
+		t.Fatal("captured definition route map was not cloned")
+	}
+}
+
+// TestCaptureMetaToolDefinitions_InactiveAllowsServerRegistration verifies the
+// capture path does not interfere with normal MCP tool registration.
+func TestCaptureMetaToolDefinitions_InactiveAllowsServerRegistration(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+
+	AddReadOnlyMetaTool(server, "gitlab_capture_normal", "Capture normal.", routes, nil, nil)
+
+	tool := findTool(t, listToolsViaClient(t, server), "gitlab_capture_normal")
+	if tool.Name != "gitlab_capture_normal" {
+		t.Fatalf("registered tool name = %q", tool.Name)
+	}
+}
+
+// TestCaptureMetaToolDefinitions_IgnoresNonNilServer verifies capture mode is
+// reserved for nil-server catalog registration and does not duplicate normal
+// MCP server registrations into the captured metadata slice.
+func TestCaptureMetaToolDefinitions_IgnoresNonNilServer(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+
+	defs := CaptureMetaToolDefinitions(func() {
+		AddReadOnlyMetaTool(server, "gitlab_capture_normal_server", "Capture normal server.", routes, nil, nil)
+	})
+
+	if len(defs) != 0 {
+		t.Fatalf("captured definitions = %d, want 0 for non-nil server registration", len(defs))
+	}
+	tool := findTool(t, listToolsViaClient(t, server), "gitlab_capture_normal_server")
+	if tool.Name != "gitlab_capture_normal_server" {
+		t.Fatalf("registered tool name = %q", tool.Name)
+	}
+}
+
+// TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic verifies nil-server
+// registration remains a no-op when no capture session is active.
+func TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic(t *testing.T) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+
+	AddMetaTool(nil, "gitlab_capture_noop", "Capture noop.", routes, nil, nil)
+	AddReadOnlyMetaTool(nil, "gitlab_capture_readonly_noop", "Capture readonly noop.", routes, nil, nil)
+}
+
 // TestAddMetaTool_RegistersSharedMetadata verifies the shared registration
 // helper applies the same metadata contract used by all action-dispatched
 // meta-tools.
 func TestAddMetaTool_RegistersSharedMetadata(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	routes := ActionMap{
 		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
@@ -1569,18 +1820,12 @@ func TestAddMetaTool_RegistersSharedMetadata(t *testing.T) {
 	if tool.OutputSchema == nil {
 		t.Fatal("output schema is nil")
 	}
-	if _, ok := MetaRoutes()["gitlab_test_meta"]; !ok {
-		t.Fatal("meta routes were not registered")
-	}
 }
 
 // TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata verifies the read-only
 // helper preserves read-only annotations while sharing the common schema and
 // description contract.
 func TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	routes := ActionMap{
 		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -1608,9 +1853,6 @@ func TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata(t *testing.T) {
 	}
 	if tool.Annotations.Title != "Test Read" {
 		t.Errorf("annotation title = %q, want %q", tool.Annotations.Title, "Test Read")
-	}
-	if _, ok := MetaRoutes()["gitlab_test_read"]; !ok {
-		t.Fatal("meta routes were not registered")
 	}
 }
 
@@ -2002,93 +2244,6 @@ func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 	}
 }
 
-// TestRegisterRoutes_MetaRoutes_ClearMetaRoutes verifies the meta-tool route
-// registry lifecycle: RegisterRoutes stores routes, MetaRoutes returns a
-// snapshot, and ClearMetaRoutes empties the registry.
-func TestRegisterRoutes_MetaRoutes_ClearMetaRoutes(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
-	routes := ActionMap{
-		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
-			return "", nil
-		}),
-	}
-	RegisterRoutes("gitlab_test_tool", routes)
-
-	snap := MetaRoutes()
-	if len(snap) != 1 {
-		t.Fatalf("MetaRoutes() returned %d entries, want 1", len(snap))
-	}
-	if _, ok := snap["gitlab_test_tool"]; !ok {
-		t.Error("MetaRoutes() missing key 'gitlab_test_tool'")
-	}
-
-	ClearMetaRoutes()
-	snap = MetaRoutes()
-	if len(snap) != 0 {
-		t.Fatalf("MetaRoutes() after ClearMetaRoutes() returned %d entries, want 0", len(snap))
-	}
-}
-
-// TestMetaRoutes_ReturnsSnapshot verifies that the map returned by
-// MetaRoutes is a copy — mutations do not affect the internal registry.
-func TestMetaRoutes_ReturnsSnapshot(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
-	RegisterRoutes("gitlab_snap", ActionMap{
-		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
-			return "", nil
-		}),
-	})
-
-	snap := MetaRoutes()
-	delete(snap, "gitlab_snap")
-
-	snap2 := MetaRoutes()
-	if _, ok := snap2["gitlab_snap"]; !ok {
-		t.Error("deleting from snapshot must not affect the internal registry")
-	}
-}
-
-// TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback verifies that
-// per-server schema resources can capture a local route catalog without
-// inheriting older global registry entries.
-func TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
-	RegisterRoutes("gitlab_existing", ActionMap{
-		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
-			return "existing", nil
-		}),
-	})
-
-	captured := CaptureMetaRoutes(func() {
-		RegisterRoutes("gitlab_captured", ActionMap{
-			"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
-				return "captured", nil
-			}),
-		})
-	})
-
-	if _, ok := captured["gitlab_captured"]; !ok {
-		t.Fatal("captured routes missing gitlab_captured")
-	}
-	if _, ok := captured["gitlab_existing"]; ok {
-		t.Fatal("captured routes should not include pre-existing global routes")
-	}
-	if _, ok := MetaRoutes()["gitlab_captured"]; !ok {
-		t.Fatal("CaptureMetaRoutes should still populate the global audit registry")
-	}
-
-	delete(captured["gitlab_captured"], "list")
-	if _, ok := MetaRoutes()["gitlab_captured"]["list"]; !ok {
-		t.Fatal("mutating captured inner maps should not affect the global registry")
-	}
-}
-
 // --- Coverage tests for BuildMetaToolSchema helpers and supporting paths ---
 // The following tests target branches not exercised by the higher-level
 // tests above:
@@ -2348,6 +2503,25 @@ func TestSchemaForType_CacheHit(t *testing.T) {
 	// Cache hit should return the same map pointer.
 	if reflect.ValueOf(first).Pointer() != reflect.ValueOf(second).Pointer() {
 		t.Error("expected cached schema map to be reused on second call")
+	}
+}
+
+// TestInputSchemaForType_RequiredSuffixRemoved verifies requiredness is kept in
+// the schema's required array instead of leaking into property descriptions.
+func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {
+	type requiredDescription struct {
+		Name string `json:"name" jsonschema:"Resource name,required"`
+	}
+
+	schema := inputSchemaForType(reflect.TypeFor[requiredDescription]())
+	properties := schema["properties"].(map[string]any)
+	name := properties["name"].(map[string]any)
+	if name["description"] != "Resource name" {
+		t.Fatalf("description = %q, want Resource name", name["description"])
+	}
+	required := schema["required"].([]string)
+	if !reflect.DeepEqual(required, []string{"name"}) {
+		t.Fatalf("required = %v, want [name]", required)
 	}
 }
 
@@ -2627,9 +2801,6 @@ func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *test
 // TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent verifies that
 // protocol-level calls to void actions include typed structured content.
 func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T) {
-	ClearMetaRoutes()
-	t.Cleanup(ClearMetaRoutes)
-
 	routes := ActionMap{
 		"delete": DestructiveVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
 			return nil

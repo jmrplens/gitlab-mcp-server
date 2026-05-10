@@ -2,9 +2,9 @@
 
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
-gitlab-mcp-server v1.5.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides up to 1011 individual MCP tools across 97 GitLab API domains, 32 meta-tools (47 self-managed enterprise, 48 on GitLab.com Enterprise),
-46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+gitlab-mcp-server v1.6.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
+It provides up to 1011 individual MCP tools across 97 GitLab API domains, 32 base meta-tools, 47 self-managed enterprise meta-tools, 48 GitLab.com Enterprise meta-tools,
+an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
@@ -18,6 +18,8 @@ It provides up to 1011 individual MCP tools across 97 GitLab API domains, 32 met
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
 - META_TOOLS: Enable meta-tools for reduced tool count (default: true)
+- TOOL_SURFACE: Explicit catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2
+- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny
 - GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)
 
 ## Tool Domains
@@ -63,6 +65,10 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab_template — Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, pr...
 - gitlab_user — User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, pe...
 - gitlab_wiki — CRUD project wiki pages and upload attachments to wikis.
+
+## Dynamic Toolset
+
+Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.
 
 ## Resources
 
@@ -162,6 +168,7 @@ tool with an "action" parameter. Key meta-tools:
 
 - docs/configuration.md — Full configuration reference
 - docs/meta-tools.md — Meta-tool action reference
+- docs/dynamic-tools.md — Low-token dynamic search/describe/execute mode
 - docs/tools/README.md — All tools reference
 - docs/resources-reference.md — Resources reference
 - docs/prompts-reference.md — Prompts reference

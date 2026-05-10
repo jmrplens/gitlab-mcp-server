@@ -24,24 +24,28 @@ import (
 )
 
 const (
-	liveFixtureGroupPath    = "my-org"
-	liveFixtureToolsPath    = "my-org/tools"
-	liveFixtureProjectPath  = "my-org/tools/gitlab-mcp-server"
-	liveFixtureDefaultRef   = "main"
-	liveFixtureFeatureRef   = "feature/eval"
-	liveFixtureObsoleteRef  = "obsolete/eval"
-	liveFixtureFailureTag   = "v0.0.0-eval"
-	liveFixtureCleanupTag   = "v0.0.0-eval-ms"
-	liveFixtureFeatureFlag  = "eval_flag"
-	liveFixturePackageName  = "eval-package"
-	liveFixturePackageVer   = "0.0.1"
-	liveFixturePackageFile  = "artifact.txt"
-	liveFixtureWikiSlug     = "obsolete-eval"
-	liveFixtureReviewBranch = "feature/eval-review-fixture"
-	liveFixtureMergeBranch  = "feature/eval-merge-fixture"
-	liveDeleteFixtureFormat = "delete-fixture-%d"
-	taskFileCreateID        = "MT-030"
-	taskPipelineScheduleID  = "MT-103"
+	liveFixtureGroupPath         = "my-org"
+	liveFixtureToolsPath         = "my-org/tools"
+	liveFixtureProjectPath       = "my-org/tools/gitlab-mcp-server"
+	liveFixtureDefaultRef        = "main"
+	liveFixtureFeatureRef        = "feature/eval"
+	liveFixtureObsoleteRef       = "obsolete/eval"
+	liveFixtureFailureTag        = "v0.0.0-eval"
+	liveFixtureCleanupTag        = "v0.0.0-eval-ms"
+	liveFixtureElicitationTag    = "v0.0.0-eval-elicit"
+	liveFixtureInteractiveMRFile = "interactive/eval-mr.txt"
+	liveFixtureFeatureFlag       = "eval_flag"
+	liveFixturePackageName       = "eval-package"
+	liveFixturePackageVer        = "0.0.1"
+	liveFixturePackageFile       = "artifact.txt"
+	liveFixtureWikiSlug          = "obsolete-eval"
+	liveFixtureReviewBranch      = "feature/eval-review-fixture"
+	liveFixtureMergeBranch       = "feature/eval-merge-fixture"
+	liveFixtureAwardBranchPrefix = "feature/eval-award-fixture-"
+	liveDeleteFixtureFormat      = "delete-fixture-%d"
+	taskFileCreateID             = "MT-030"
+	taskPipelineScheduleID       = "MT-103"
+	taskMergeRequestAwardID      = "MS-033"
 )
 
 // liveFixtureState holds data for main operations.
@@ -60,6 +64,7 @@ type liveFixtureState struct {
 	IssueDeleteIID         int64    `json:"issue_delete_iid"`
 	MergeRequestIID        int64    `json:"merge_request_iid"`
 	MergeRequestMergeIID   int64    `json:"merge_request_merge_iid"`
+	MergeRequestAwardIID   int64    `json:"merge_request_award_iid,omitempty"`
 	MergeRequestThreadID   string   `json:"merge_request_thread_id,omitempty"`
 	PipelineID             int64    `json:"pipeline_id"`
 	PipelineIID            int64    `json:"pipeline_iid"`
@@ -89,6 +94,8 @@ type liveFixtureState struct {
 	FeatureFlagName        string   `json:"feature_flag_name"`
 	WikiSlug               string   `json:"wiki_slug"`
 	CleanupReleaseTag      string   `json:"cleanup_release_tag"`
+	ReleaseSummaryTag      string   `json:"release_summary_tag,omitempty"`
+	ElicitationReleaseTag  string   `json:"elicitation_release_tag,omitempty"`
 	Notes                  []string `json:"notes,omitempty"`
 }
 
@@ -120,17 +127,19 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	state := &liveFixtureState{
-		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
-		GitLabURL:          cfg.GitLabURL,
-		GroupPath:          liveFixtureGroupPath,
-		ToolsGroupPath:     liveFixtureToolsPath,
-		ProjectPath:        liveFixtureProjectPath,
-		DefaultBranch:      liveFixtureDefaultRef,
-		RemoteURL:          fixtureRemoteURL(cfg.GitLabURL, liveFixtureProjectPath),
-		DeployKeyCreateKey: deployKeyCreateKey,
-		FeatureFlagName:    liveFixtureFeatureFlag,
-		WikiSlug:           liveFixtureWikiSlug,
-		CleanupReleaseTag:  liveFixtureCleanupTag,
+		GeneratedAt:           time.Now().UTC().Format(time.RFC3339),
+		GitLabURL:             cfg.GitLabURL,
+		GroupPath:             liveFixtureGroupPath,
+		ToolsGroupPath:        liveFixtureToolsPath,
+		ProjectPath:           liveFixtureProjectPath,
+		DefaultBranch:         liveFixtureDefaultRef,
+		RemoteURL:             fixtureRemoteURL(cfg.GitLabURL, liveFixtureProjectPath),
+		DeployKeyCreateKey:    deployKeyCreateKey,
+		FeatureFlagName:       liveFixtureFeatureFlag,
+		WikiSlug:              liveFixtureWikiSlug,
+		CleanupReleaseTag:     liveFixtureCleanupTag,
+		ReleaseSummaryTag:     liveFixtureCleanupTag,
+		ElicitationReleaseTag: liveFixtureElicitationTag,
 	}
 	preparer := &liveFixturePreparer{client: client, state: state}
 	if prepareErr := preparer.prepare(ctx); prepareErr != nil {
@@ -182,6 +191,15 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.ProjectPath == "" || state.ProjectID == 0 {
 		return nil, fmt.Errorf("fixture state %s is missing project identity", path)
 	}
+	if state.CleanupReleaseTag == "" {
+		state.CleanupReleaseTag = liveFixtureCleanupTag
+	}
+	if state.ReleaseSummaryTag == "" {
+		state.ReleaseSummaryTag = liveFixtureCleanupTag
+	}
+	if state.ElicitationReleaseTag == "" {
+		state.ElicitationReleaseTag = liveFixtureElicitationTag
+	}
 	return &state, nil
 }
 
@@ -214,6 +232,9 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 		return ensureErr
 	}
 	if ensureErr := p.ensureBranches(ctx); ensureErr != nil {
+		return ensureErr
+	}
+	if ensureErr := p.ensureInteractiveResources(ctx); ensureErr != nil {
 		return ensureErr
 	}
 	if ensureErr := p.ensureCoreIssues(ctx); ensureErr != nil {
@@ -381,6 +402,21 @@ func (p *liveFixturePreparer) ensureBranches(ctx context.Context) error {
 	return p.closeOpenMergeRequestsForBranch(ctx, liveFixtureFeatureRef)
 }
 
+// ensureInteractiveResources seeds resources used by MCP elicitation evaluation flows.
+func (p *liveFixturePreparer) ensureInteractiveResources(ctx context.Context) error {
+	defaultRef := p.defaultRef()
+	if err := p.ensureFile(ctx, liveFixtureInteractiveMRFile, liveFixtureFeatureRef, "interactive merge request fixture\n", "Seed interactive merge request evaluation file"); err != nil {
+		return err
+	}
+	if err := p.ensureTag(ctx, liveFixtureElicitationTag, defaultRef); err != nil {
+		return err
+	}
+	if p.state.ElicitationReleaseTag == "" {
+		p.state.ElicitationReleaseTag = liveFixtureElicitationTag
+	}
+	return nil
+}
+
 // ensureCoreIssues performs the ensure core issues operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCoreIssues(ctx context.Context) error {
 	issue, err := p.createIssue(ctx, "Fixture issue for evaluation reads", "Used by read, update, close, note, emoji, and analyzer cases.", []string{"evaluation"})
@@ -411,6 +447,11 @@ func (p *liveFixturePreparer) ensureMergeRequests(ctx context.Context) error {
 		p.notef("merge fixture not mergeable: %v", mergeableErr)
 	}
 	p.state.MergeRequestMergeIID = mergeMR.IID
+	awardMR, err := p.ensureFixtureMergeRequest(ctx, liveFixtureAwardBranchPrefix+"stable", "Evaluation time and award fixture MR", false)
+	if err != nil {
+		return err
+	}
+	p.state.MergeRequestAwardIID = awardMR.IID
 	return nil
 }
 
@@ -1175,6 +1216,38 @@ func applyLiveFixtureState(tasks []evalTask, state *liveFixtureState) []evalTask
 	return out
 }
 
+// filterTasksByLiveFixtureState removes tasks whose live Docker resources were not seeded.
+func filterTasksByLiveFixtureState(tasks []evalTask, state *liveFixtureState) []evalTask {
+	if state == nil {
+		return tasks
+	}
+	filtered := make([]evalTask, 0, len(tasks))
+	for _, task := range tasks {
+		if taskLiveFixtureStateAvailable(task, state) {
+			filtered = append(filtered, task)
+		}
+	}
+	return filtered
+}
+
+// taskLiveFixtureStateAvailable reports whether a task's live fixture dependencies exist.
+func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool {
+	switch task.ID {
+	case "MT-020", "MT-021", "MT-039", "MF-001":
+		return state.PipelineID > 0
+	case "MT-022", "MT-024", "MT-065", "MS-002":
+		return state.FailedJobID > 0
+	case "MT-064":
+		return state.ManualJobID > 0
+	case "MT-046", "MT-047":
+		return state.RunnerID > 0
+	case "MS-008":
+		return state.RunnerID > 0 && state.FailedJobID > 0
+	default:
+		return true
+	}
+}
+
 // addLiveAttemptResourceSuffix is an internal helper for the main package.
 func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int, runSuffix string) evalTask {
 	if !taskNeedsAttemptResourceSuffix(task.ID) {
@@ -1228,7 +1301,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", "MS-033", "MS-035", "MS-036":
+		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036":
 		return true
 	default:
 		return false
@@ -1414,11 +1487,17 @@ func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureSt
 	if taskID == "MT-017" && state.MergeRequestMergeIID > 0 {
 		mrIID = state.MergeRequestMergeIID
 	}
+	if taskID == taskMergeRequestAwardID && state.MergeRequestAwardIID > 0 {
+		mrIID = state.MergeRequestAwardIID
+	}
 	if mrIID > 0 {
 		prompt = strings.ReplaceAll(prompt, "merge request `7`", fmt.Sprintf("merge request `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "merge request IID `7`", fmt.Sprintf("merge request IID `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "merge_request_iid `7`", fmt.Sprintf("merge_request_iid `%d`", mrIID))
 		prompt = strings.ReplaceAll(prompt, "MR `7`", fmt.Sprintf("MR `%d`", mrIID))
+		if taskID == taskMergeRequestAwardID {
+			prompt = strings.ReplaceAll(prompt, "MR `1`", fmt.Sprintf("MR `%d`", mrIID))
+		}
 	}
 	if taskID == "MT-061" && state.MergeRequestThreadID != "" {
 		prompt = strings.ReplaceAll(prompt, "discussion `abc123`", fmt.Sprintf("discussion `%s`", state.MergeRequestThreadID))
@@ -1503,8 +1582,8 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 			prompt = strings.ReplaceAll(prompt, liveFixtureFailureTag, state.CleanupReleaseTag)
 		}
 	case "MT-095", "MS-012":
-		if state.CleanupReleaseTag != "" {
-			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval-ms`", fmt.Sprintf("`%s`", state.CleanupReleaseTag))
+		if state.ReleaseSummaryTag != "" {
+			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval-ms`", fmt.Sprintf("`%s`", state.ReleaseSummaryTag))
 		}
 	case "MS-006":
 		prompt = replaceID(prompt, "deployment ID", 77, 0)

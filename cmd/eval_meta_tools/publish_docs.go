@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -10,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 const (
@@ -19,10 +23,27 @@ const (
 	publishModeAppend         = "append"
 	publishModeReplaceCurrent = "replace-current"
 
-	modelEvalSummaryStart = "<!-- START MODEL EVAL SUMMARY -->"
-	modelEvalSummaryEnd   = "<!-- END MODEL EVAL SUMMARY -->"
-	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
-	modelEvalResultsEnd   = "<!-- END MODEL EVAL RESULTS -->"
+	modelEvalMetaSummaryStart     = "<!-- START MODEL EVAL META SUMMARY -->"
+	modelEvalMetaSummaryEnd       = "<!-- END MODEL EVAL META SUMMARY -->"
+	modelEvalDynamic3SummaryStart = "<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->"
+	modelEvalDynamic3SummaryEnd   = "<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->"
+	modelEvalMetaResultsStart     = "<!-- START MODEL EVAL META RESULTS -->"
+	modelEvalMetaResultsEnd       = "<!-- END MODEL EVAL META RESULTS -->"
+	modelEvalDynamic3ResultsStart = "<!-- START MODEL EVAL DYNAMIC3 RESULTS -->"
+	modelEvalDynamic3ResultsEnd   = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
+	modelEvalSummaryStart         = "<!-- START MODEL EVAL SUMMARY -->"
+	modelEvalSummaryEnd           = "<!-- END MODEL EVAL SUMMARY -->"
+	modelEvalResultsStart         = "<!-- START MODEL EVAL RESULTS -->"
+	modelEvalResultsEnd           = "<!-- END MODEL EVAL RESULTS -->"
+	publishProjectResolveAction   = "discover_project.resolve"
+	publishProjectSearchAction    = "search.projects"
+	publishSamplingContinue       = "sampling_unsupported_continue"
+	publishElicitationContinue    = "elicitation_unsupported_continue"
+
+	publishSectionMeta     = "meta"
+	publishSectionDynamic2 = "dynamic2"
+	publishSectionDynamic3 = "dynamic3"
+	publishSectionUnknown  = "unknown"
 
 	usageModelRequests    = "Model requests"
 	usageToolCallsEmitted = "Tool calls emitted"
@@ -45,6 +66,7 @@ type publishReport struct {
 	Date                   string
 	Mode                   string
 	Model                  string
+	ToolSurface            string
 	Backend                string
 	Preset                 string
 	ToolExecution          string
@@ -90,6 +112,16 @@ type publishTaskStats struct {
 	RepairSuccesses int
 }
 
+// publishTaskMetrics holds count-based metrics for one publish row.
+type publishTaskMetrics struct {
+	ToolOK           int
+	ActionOK         int
+	FirstPassOK      int
+	FinalSuccessOK   int
+	DestructiveTotal int
+	DestructiveOK    int
+}
+
 // publishModelMetrics holds data for main operations.
 type publishModelMetrics struct {
 	Attempts          int
@@ -99,6 +131,14 @@ type publishModelMetrics struct {
 	RepairSuccess     float64
 	DestructiveSafety float64
 	FinalSuccess      float64
+}
+
+// publishTraceAccumulator aggregates one model/preset slice from trace JSONL.
+type publishTraceAccumulator struct {
+	Stats        publishTaskStats
+	Metrics      publishTaskMetrics
+	InputTokens  int
+	OutputTokens int
 }
 
 // publishModelSummary holds data for main operations.
@@ -113,6 +153,15 @@ type publishModelSummary struct {
 	RepairSuccesses int
 	FinalSuccess    float64
 	DockerBacked    bool
+}
+
+// publishDocSection identifies one independently managed publication section.
+type publishDocSection struct {
+	Key                string
+	ResultsStartMarker string
+	ResultsEndMarker   string
+	SummaryStartMarker string
+	SummaryEndMarker   string
 }
 
 // publishEvaluationDocs is an internal helper for the main package.
@@ -133,22 +182,109 @@ func publishEvaluationDocs(opts options) error {
 		return validateErr
 	}
 
-	resultsBlock := buildModelResultsBlock(label, reports)
-	summaryBlock := buildReadmeSummaryBlock(label, reports)
+	applyManagedDoc := updateManagedDoc
 	if opts.CheckDocs {
-		if checkErr := checkManagedDoc(opts.PublishResults, modelEvalResultsStart, modelEvalResultsEnd, resultsBlock, opts.PublishMode, label); checkErr != nil {
-			return checkErr
+		applyManagedDoc = checkManagedDoc
+	}
+	for _, section := range publishDocSectionsForReports(reports) {
+		sectionReports := filterPublishReportsBySection(reports, section.Key)
+		sectionLabel := publishSectionLabel(label)
+		resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
+		summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
+		if applyErr := applyManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); applyErr != nil {
+			return applyErr
 		}
-		return checkManagedDoc(opts.PublishReadme, modelEvalSummaryStart, modelEvalSummaryEnd, summaryBlock, publishModeReplaceCurrent, label)
+		if applyErr := applyManagedDoc(opts.PublishReadme, section.SummaryStartMarker, section.SummaryEndMarker, summaryBlock, publishModeReplaceCurrent, sectionLabel); applyErr != nil {
+			return applyErr
+		}
 	}
-	if updateErr := updateManagedDoc(opts.PublishResults, modelEvalResultsStart, modelEvalResultsEnd, resultsBlock, opts.PublishMode, label); updateErr != nil {
-		return updateErr
-	}
-	if updateErr := updateManagedDoc(opts.PublishReadme, modelEvalSummaryStart, modelEvalSummaryEnd, summaryBlock, publishModeReplaceCurrent, label); updateErr != nil {
-		return updateErr
+	if opts.CheckDocs {
+		return nil
 	}
 	fmt.Printf("published evaluation docs: %s, %s\n", opts.PublishResults, opts.PublishReadme)
 	return nil
+}
+
+// publishDocSectionsForReports returns the managed sections touched by reports.
+func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
+	keys := map[string]bool{}
+	for _, report := range reports {
+		keys[publishSectionForReport(report)] = true
+	}
+	sections := make([]publishDocSection, 0, len(keys))
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic2, publishSectionDynamic3} {
+		if keys[key] {
+			sections = append(sections, publishDocSectionForKey(key))
+		}
+	}
+	return sections
+}
+
+// filterPublishReportsBySection keeps reports for one managed section.
+func filterPublishReportsBySection(reports []publishReport, sectionKey string) []publishReport {
+	filtered := make([]publishReport, 0, len(reports))
+	for _, report := range reports {
+		if publishSectionForReport(report) == sectionKey {
+			filtered = append(filtered, report)
+		}
+	}
+	return filtered
+}
+
+// publishSectionForReport maps a report tool surface to its publication section.
+func publishSectionForReport(report publishReport) string {
+	surface := strings.ToLower(strings.TrimSpace(report.ToolSurface))
+	switch surface {
+	case "", config.ToolSurfaceMeta:
+		return publishSectionMeta
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
+		return publishSectionDynamic3
+	case config.ToolSurfaceDynamic2:
+		return publishSectionDynamic2
+	default:
+		return publishSectionUnknown
+	}
+}
+
+// publishDocSectionForKey returns marker pairs for a publication section.
+func publishDocSectionForKey(sectionKey string) publishDocSection {
+	switch sectionKey {
+	case publishSectionDynamic2:
+		return publishDocSection{
+			Key:                publishSectionDynamic2,
+			ResultsStartMarker: "<!-- START MODEL EVAL DYNAMIC2 RESULTS -->",
+			ResultsEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 RESULTS -->",
+			SummaryStartMarker: "<!-- START MODEL EVAL DYNAMIC2 SUMMARY -->",
+			SummaryEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 SUMMARY -->",
+		}
+	case publishSectionDynamic3:
+		return publishDocSection{
+			Key:                publishSectionDynamic3,
+			ResultsStartMarker: modelEvalDynamic3ResultsStart,
+			ResultsEndMarker:   modelEvalDynamic3ResultsEnd,
+			SummaryStartMarker: modelEvalDynamic3SummaryStart,
+			SummaryEndMarker:   modelEvalDynamic3SummaryEnd,
+		}
+	case publishSectionMeta:
+		return publishDocSection{
+			Key:                publishSectionMeta,
+			ResultsStartMarker: modelEvalMetaResultsStart,
+			ResultsEndMarker:   modelEvalMetaResultsEnd,
+			SummaryStartMarker: modelEvalMetaSummaryStart,
+			SummaryEndMarker:   modelEvalMetaSummaryEnd,
+		}
+	default:
+		return publishDocSection{Key: publishSectionUnknown}
+	}
+}
+
+// publishSectionLabel returns the snapshot heading used within a managed section.
+func publishSectionLabel(label string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		trimmed = strings.TrimSpace(publishSnapshotLabel("", nil))
+	}
+	return trimmed
 }
 
 // readPublishReports parses one or more local evaluation reports.
@@ -183,6 +319,7 @@ func readPublishReport(path string) (publishReport, error) {
 		Date:                   input.Date,
 		Mode:                   input.Mode,
 		Model:                  input.Model,
+		ToolSurface:            input.ToolSurface,
 		Backend:                input.Backend,
 		Preset:                 input.Preset,
 		ToolExecution:          input.ToolExecution,
@@ -191,7 +328,11 @@ func readPublishReport(path string) (publishReport, error) {
 		Diagnostics:            input.Diagnostics,
 		UnresolvedHarnessNoise: reportMentionsHarnessNoise(content),
 	}
-	report.Rows = publishRowsForReport(report, input, content)
+	rows, rowsErr := publishRowsForReport(report, input, content)
+	if rowsErr != nil {
+		return publishReport{}, rowsErr
+	}
+	report.Rows = rows
 	if len(report.Rows) == 0 {
 		return publishReport{}, fmt.Errorf("publish input %s has no task result rows", path)
 	}
@@ -199,7 +340,14 @@ func readPublishReport(path string) (publishReport, error) {
 }
 
 // publishRowsForReport is an internal helper for the main package.
-func publishRowsForReport(report publishReport, input comparisonInput, content string) []publishRow {
+func publishRowsForReport(report publishReport, input comparisonInput, content string) ([]publishRow, error) {
+	if shouldSplitPublishReportByPreset(report) {
+		rows, splitErr := publishRowsByPresetFromTraces(report, content)
+		if splitErr != nil {
+			return nil, splitErr
+		}
+		return rows, nil
+	}
 	taskStats := publishTaskStatsByModel(content, report.Model)
 	modelMetrics := publishMetricsByModel(content)
 	modelUsage := publishUsageByModel(content)
@@ -207,7 +355,7 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		model := report.Model
 		stats := publishSingleTaskStats(taskStats, model, input.TaskAttempts)
 		usage := publishSingleUsage(input.Usage, stats)
-		return []publishRow{newPublishRow(report, model, stats, metricsFromComparison(input), usage)}
+		return []publishRow{newPublishRow(report, model, report.Preset, stats, metricsFromComparison(input), usage)}, nil
 	}
 
 	models := sortedStringKeys(modelMetrics)
@@ -221,9 +369,209 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		if len(usage) == 0 {
 			usage = publishSingleUsage(input.Usage, stats)
 		}
-		rows = append(rows, newPublishRow(report, model, stats, modelMetrics[model], usage))
+		rows = append(rows, newPublishRow(report, model, report.Preset, stats, modelMetrics[model], usage))
 	}
-	return rows
+	return rows, nil
+}
+
+func shouldSplitPublishReportByPreset(report publishReport) bool {
+	if strings.TrimSpace(report.Preset) != "" {
+		return false
+	}
+	return report.Backend == backendGitLab && report.ToolExecution == "mcp"
+}
+
+func publishRowsByPresetFromTraces(report publishReport, content string) ([]publishRow, error) {
+	tracePath := publishTraceJSONLPath(report.Path, content)
+	if tracePath == "" {
+		return nil, fmt.Errorf("publish input %s has no preset and no trace artifacts; publish full runs with trace artifacts or publish separate preset reports", report.Path)
+	}
+	tasks, err := parseTasksFile(publishTasksPath())
+	if err != nil {
+		return nil, fmt.Errorf("read publish task presets: %w", err)
+	}
+	tasksByID := make(map[string]evalTask, len(tasks))
+	for _, task := range tasks {
+		tasksByID[task.ID] = task
+	}
+	file, err := os.Open(tracePath) // #nosec G304 -- trace path comes from an explicit developer-selected evaluation report.
+	if err != nil {
+		return nil, fmt.Errorf("read publish trace artifacts %s: %w", tracePath, err)
+	}
+	defer file.Close()
+
+	accumulators := map[string]*publishTraceAccumulator{}
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), maxResponseBytes)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var trace taskTrace
+		if decodeErr := json.Unmarshal([]byte(line), &trace); decodeErr != nil {
+			return nil, fmt.Errorf("decode publish trace %s: %w", tracePath, decodeErr)
+		}
+		model := cleanReportValue(trace.Model)
+		if model == "" {
+			model = report.Model
+		}
+		task, ok := tasksByID[trace.TaskID]
+		if !ok {
+			return nil, fmt.Errorf("publish trace %s references unknown task %s", tracePath, trace.TaskID)
+		}
+		preset := publishPresetForTask(task)
+		key := model + "\x00" + preset
+		acc := accumulators[key]
+		if acc == nil {
+			acc = &publishTraceAccumulator{}
+			accumulators[key] = acc
+		}
+		acc.addTrace(trace, task, report.ToolSurface)
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		return nil, fmt.Errorf("scan publish trace artifacts %s: %w", tracePath, scanErr)
+	}
+	rows := make([]publishRow, 0, len(accumulators))
+	for key, acc := range accumulators {
+		model, preset, _ := strings.Cut(key, "\x00")
+		rows = append(rows, newPublishRow(report, model, preset, acc.Stats, acc.metrics(), acc.usage()))
+	}
+	return rows, nil
+}
+
+func publishTasksPath() string {
+	if _, err := os.Stat(defaultTasksPath); err == nil {
+		return defaultTasksPath
+	}
+	packageRelative := filepath.Join("testdata", filepath.Base(defaultTasksPath))
+	if _, err := os.Stat(packageRelative); err == nil {
+		return packageRelative
+	}
+	return defaultTasksPath
+}
+
+func (a *publishTraceAccumulator) addTrace(trace taskTrace, task evalTask, toolSurface string) {
+	a.Stats.Attempts++
+	expectedSteps := trace.Summary.ExpectedSteps
+	if expectedSteps == 0 {
+		expectedSteps = len(trace.Expected)
+	}
+	a.Stats.ExpectedOps += expectedSteps
+	a.Stats.ModelRequests += trace.Summary.ModelCalls
+	a.Stats.ToolCalls += trace.Summary.ToolCalls
+	if trace.Summary.RepairAttempted {
+		a.Stats.RepairAttempts++
+		if trace.Summary.RepairSuccess {
+			a.Stats.RepairSuccesses++
+		}
+	}
+	toolOK, actionOK, firstPassOK := publishEffectiveTraceOutcome(trace, toolSurface)
+	if toolOK {
+		a.Metrics.ToolOK++
+	}
+	if actionOK {
+		a.Metrics.ActionOK++
+	}
+	if firstPassOK {
+		a.Metrics.FirstPassOK++
+	}
+	if trace.Summary.FinalSuccess {
+		a.Metrics.FinalSuccessOK++
+	}
+	if taskHasDestructiveStep(task) {
+		a.Metrics.DestructiveTotal++
+		if trace.Summary.DestructiveSafe {
+			a.Metrics.DestructiveOK++
+		}
+	}
+	for _, event := range trace.Events {
+		if event.Usage == nil {
+			continue
+		}
+		a.InputTokens += event.Usage.InputTokens
+		a.OutputTokens += event.Usage.OutputTokens
+	}
+}
+
+func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, actionOK, firstPassOK bool) {
+	if len(trace.Expected) == 0 {
+		return false, false, false
+	}
+	first := trace.Expected[0]
+	toolOK = trace.Summary.FirstTool == first.Tool
+	actionOK = trace.Summary.FirstAction == first.Action
+	firstPassOK = trace.Summary.FirstPass
+	if !trace.Summary.FinalSuccess || !isDynamicThreeToolEvalSurface(toolSurface) || !toolOK {
+		return toolOK, actionOK, firstPassOK
+	}
+	if first.Action == publishProjectResolveAction && trace.Summary.FirstAction == publishProjectSearchAction {
+		return true, true, true
+	}
+	if len(trace.Expected) < 2 {
+		return toolOK, actionOK, firstPassOK
+	}
+	if first.Simulation != publishSamplingContinue && first.Simulation != publishElicitationContinue {
+		return toolOK, actionOK, firstPassOK
+	}
+	if trace.Summary.FirstAction == trace.Expected[1].Action {
+		return true, true, true
+	}
+	return toolOK, actionOK, firstPassOK
+}
+
+func (a *publishTraceAccumulator) metrics() publishModelMetrics {
+	return publishModelMetrics{
+		Attempts:          a.Stats.Attempts,
+		ToolSelection:     percent(a.Metrics.ToolOK, a.Stats.Attempts),
+		ActionSelection:   percent(a.Metrics.ActionOK, a.Stats.Attempts),
+		FirstPass:         percent(a.Metrics.FirstPassOK, a.Stats.Attempts),
+		RepairSuccess:     percent(a.Stats.RepairSuccesses, a.Stats.RepairAttempts),
+		DestructiveSafety: percent(a.Metrics.DestructiveOK, a.Metrics.DestructiveTotal),
+		FinalSuccess:      percent(a.Metrics.FinalSuccessOK, a.Stats.Attempts),
+	}
+}
+
+func (a *publishTraceAccumulator) usage() map[string]string {
+	return map[string]string{
+		usageModelRequests:    strconv.Itoa(a.Stats.ModelRequests),
+		usageToolCallsEmitted: strconv.Itoa(a.Stats.ToolCalls),
+		usageInputTokens:      strconv.Itoa(a.InputTokens),
+		usageOutputTokens:     strconv.Itoa(a.OutputTokens),
+	}
+}
+
+func publishPresetForTask(task evalTask) string {
+	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetSchemaEnterprise} {
+		if taskMatchesPreset(task, preset) {
+			return preset
+		}
+	}
+	for _, partition := range []string{partitionErrorRecovery, partitionCapabilityFallback} {
+		if taskMatchesPartition(task, partition) {
+			return partition
+		}
+	}
+	return "other"
+}
+
+func publishTraceJSONLPath(reportPath, content string) string {
+	traceDir := firstMetadataValue(content, "Trace artifacts")
+	if traceDir == "" {
+		return ""
+	}
+	tracePath := filepath.Join(traceDir, "traces.jsonl")
+	if filepath.IsAbs(tracePath) {
+		return tracePath
+	}
+	reportRelative := filepath.Join(filepath.Dir(reportPath), tracePath)
+	if _, err := os.Stat(reportRelative); err == nil {
+		return reportRelative
+	}
+	if _, err := os.Stat(tracePath); err == nil {
+		return tracePath
+	}
+	return reportRelative
 }
 
 // publishSingleTaskStats is an internal helper for the main package.
@@ -267,11 +615,11 @@ func publishSingleUsage(usage map[string]string, stats publishTaskStats) map[str
 }
 
 // newPublishRow is an internal helper for the main package.
-func newPublishRow(report publishReport, model string, stats publishTaskStats, metrics publishModelMetrics, usage map[string]string) publishRow {
+func newPublishRow(report publishReport, model, preset string, stats publishTaskStats, metrics publishModelMetrics, usage map[string]string) publishRow {
 	return publishRow{
 		SourcePath:        report.Path,
 		Model:             cleanReportValue(model),
-		Preset:            report.Preset,
+		Preset:            preset,
 		Backend:           report.Backend,
 		ToolExecution:     report.ToolExecution,
 		Attempts:          firstPositive(stats.Attempts, metrics.Attempts),
@@ -463,6 +811,9 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
+		if publishSectionForReport(report) == publishSectionUnknown {
+			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
+		}
 		if report.Backend == backendGitLab && report.ToolExecution != "mcp" {
 			return fmt.Errorf("publish input %s uses backend=gitlab but Tool execution is %q; Docker metrics require --execute-tools", report.Path, report.ToolExecution)
 		}
@@ -580,8 +931,12 @@ func presetRank(preset string) int {
 		return 2
 	case presetDockerDestructiveSafe:
 		return 3
-	case presetSchemaEnterprise:
+	case partitionErrorRecovery:
 		return 4
+	case partitionCapabilityFallback:
+		return 5
+	case presetSchemaEnterprise:
+		return 6
 	default:
 		return 99
 	}

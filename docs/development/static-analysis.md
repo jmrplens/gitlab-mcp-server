@@ -444,7 +444,7 @@ lint:
 
 `make analyze` always runs all nine tools. If any tool fails, the target exits non-zero after printing every tool's output.
 
-Make targets set `GOTOOLCHAIN` to the Go version declared in `go.mod` (for example, `go1.26.2`) unless a caller explicitly overrides it on the command line.
+Make targets set `GOTOOLCHAIN` to the Go version declared in `go.mod` (for example, `go1.26.3`) unless a caller explicitly overrides it on the command line.
 
 Or as separate jobs for parallel execution:
 

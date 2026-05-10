@@ -235,7 +235,7 @@ func TestNewClientWithToken_SkipTLS(t *testing.T) {
 	}
 }
 
-// TestIsGitLabDotComURL verifies host-only matching for GitLab.com detection.
+// TestIsGitLabDotComURL_HostMatching verifies host-only matching for GitLab.com detection.
 func TestIsGitLabDotComURL_HostMatching(t *testing.T) {
 	tests := []struct {
 		name string

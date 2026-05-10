@@ -17,6 +17,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// TestStatus_Success_ExpectedOutput verifies that Status decodes the Orbit
+// status endpoint, including component replica metadata, from a successful API response.
 func TestStatus_Success_ExpectedOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -43,6 +45,8 @@ func TestStatus_Success_ExpectedOutput(t *testing.T) {
 	}
 }
 
+// TestSchema_WithExpandAndFormat_ForwardsQuery verifies that Schema forwards
+// expand and format query parameters and decodes schema domains, nodes, and edges.
 func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -66,6 +70,8 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 	}
 }
 
+// TestTools_Success_ExpectedOutput verifies that Tools decodes the Orbit tools
+// catalog returned by the GitLab API.
 func TestTools_Success_ExpectedOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -84,6 +90,8 @@ func TestTools_Success_ExpectedOutput(t *testing.T) {
 	}
 }
 
+// TestQuery_Success_ForwardsRawQuery verifies that Query posts the raw graph
+// query object and response format before decoding the query result.
 func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
@@ -122,6 +130,8 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}
 }
 
+// TestGraphStatus_RequiresExactlyOneScope verifies that GraphStatus rejects
+// missing, conflicting, or invalid scope inputs before making an HTTP request.
 func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("handler should not be called for invalid input: %s %s", r.Method, r.URL.Path)
@@ -147,6 +157,8 @@ func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
 	}
 }
 
+// TestGraphStatus_Success_ByFullPath verifies that GraphStatus forwards a full
+// project path and decodes project, domain, and indexing status data.
 func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -168,6 +180,8 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 	}
 }
 
+// TestOrbit_ValidationErrors_ReturnActionableErrors verifies client-side input
+// validation messages for invalid formats and malformed Orbit queries.
 func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("handler should not be called for invalid input: %s %s", r.Method, r.URL.Path)
@@ -234,6 +248,8 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 	}
 }
 
+// TestOrbit_HTTPErrorHints_ReturnExpectedGuidance verifies that HTTP failures
+// from Orbit endpoints include actionable enablement or retry guidance.
 func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -318,6 +334,8 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 	}
 }
 
+// TestWrapOrbitErr_GenericError_UsesWrappedMessage verifies that non-HTTP Orbit
+// errors retain both operation context and the original error message.
 func TestWrapOrbitErr_GenericError_UsesWrappedMessage(t *testing.T) {
 	err := wrapOrbitErr("orbit_status", errors.New("network unavailable"))
 	if err == nil || !strings.Contains(err.Error(), "orbit_status") || !strings.Contains(err.Error(), "network unavailable") {
@@ -325,6 +343,8 @@ func TestWrapOrbitErr_GenericError_UsesWrappedMessage(t *testing.T) {
 	}
 }
 
+// TestOrbitHandlers_ContextCancellation_ReturnsError verifies that all Orbit
+// handlers respect cancellation and do not issue requests after context cancelation.
 func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("handler should not be called after context cancellation: %s %s", r.Method, r.URL.Path)
@@ -357,6 +377,8 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestOrbit_RegisterTools_RegistersToolDefinitions verifies that individual
+// Orbit tools are registered with the MCP server.
 func TestOrbit_RegisterTools_RegistersToolDefinitions(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
 	if err != nil {
@@ -372,6 +394,8 @@ func TestOrbit_RegisterTools_RegistersToolDefinitions(t *testing.T) {
 	}
 }
 
+// TestOrbit_RegisterMeta_RegistersMetaTool verifies that the consolidated
+// gitlab_orbit meta-tool is registered with the MCP server.
 func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
 	if err != nil {
@@ -384,6 +408,8 @@ func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
 	}
 }
 
+// TestOrbit_RegisterMeta_CallThroughMCP verifies that the consolidated Orbit
+// meta-tool dispatches an MCP status call through to the GitLab API.
 func TestOrbit_RegisterMeta_CallThroughMCP(t *testing.T) {
 	session := newOrbitMetaSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -403,6 +429,8 @@ func TestOrbit_RegisterMeta_CallThroughMCP(t *testing.T) {
 	}
 }
 
+// TestOrbit_RegisterTools_CallThroughMCP verifies that each individual Orbit
+// MCP tool can be invoked through an in-memory MCP session.
 func TestOrbit_RegisterTools_CallThroughMCP(t *testing.T) {
 	session := newOrbitSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -450,6 +478,8 @@ func TestOrbit_RegisterTools_CallThroughMCP(t *testing.T) {
 	}
 }
 
+// TestOrbit_RegisterTools_NotFoundReturnsInformationalResult verifies that
+// Orbit 404 responses become informational MCP errors with setup guidance.
 func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
 	session := newOrbitSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -489,6 +519,8 @@ func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
 	}
 }
 
+// TestFormatQueryMarkdown_IncludesPrettyJSON verifies that query markdown
+// renders structured result data inside a JSON code fence.
 func TestFormatQueryMarkdown_IncludesPrettyJSON(t *testing.T) {
 	md := FormatQueryMarkdown(QueryOutput{
 		QueryType: "traversal",
@@ -500,6 +532,8 @@ func TestFormatQueryMarkdown_IncludesPrettyJSON(t *testing.T) {
 	}
 }
 
+// TestOrbitMarkdownFormatters_IncludeExpectedSections verifies that each Orbit
+// markdown formatter emits the expected headings and key result sections.
 func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 	tests := []struct {
 		name string
@@ -564,6 +598,8 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 	}
 }
 
+// TestOrbitMarkdownFormatters_UseSafeFences verifies that formatter output uses
+// longer fences when embedded query text contains triple backticks.
 func TestOrbitMarkdownFormatters_UseSafeFences(t *testing.T) {
 	md := FormatQueryMarkdown(QueryOutput{
 		QueryType:       "traversal",
@@ -579,6 +615,8 @@ func TestOrbitMarkdownFormatters_UseSafeFences(t *testing.T) {
 	}
 }
 
+// TestOrbitMarkdownFormatters_EscapeTableCells verifies that markdown table
+// cells escape pipes and normalize newlines from Orbit data.
 func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
 	tests := []struct {
 		name string
@@ -615,6 +653,8 @@ func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
 	}
 }
 
+// TestOrbitMarkdownAndDynamicJSON_FallbackBranches verifies empty-state
+// markdown and converter fallback behavior for nil or invalid Orbit payloads.
 func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	if md := FormatStatusMarkdown(StatusOutput{}); !strings.Contains(md, "No Orbit status data") {
 		t.Fatalf("FormatStatusMarkdown() = %q, want empty-state text", md)
@@ -654,6 +694,8 @@ func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	}
 }
 
+// TestGraphStatusOptions_SetsEachSupportedScope verifies that graphStatusOptions
+// maps namespace, project, and full-path scopes into GitLab client options.
 func TestGraphStatusOptions_SetsEachSupportedScope(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -706,6 +748,8 @@ func TestGraphStatusOptions_SetsEachSupportedScope(t *testing.T) {
 	}
 }
 
+// TestGraphStatusOptions_InvalidProjectAndFormat verifies that graphStatusOptions
+// rejects invalid project IDs and unsupported response formats.
 func TestGraphStatusOptions_InvalidProjectAndFormat(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -723,6 +767,8 @@ func TestGraphStatusOptions_InvalidProjectAndFormat(t *testing.T) {
 	}
 }
 
+// TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields verifies
+// Orbit response converters skip nil slices while preserving optional metadata.
 func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testing.T) {
 	status := convertStatus(&gl.OrbitStatus{Components: []*gl.OrbitStatusComponent{nil, {Name: "api", Status: "healthy"}}})
 	if len(status.Components) != 1 || status.Components[0].Name != "api" || status.Components[0].Replicas != nil {

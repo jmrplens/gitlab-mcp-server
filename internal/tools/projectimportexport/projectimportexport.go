@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -151,7 +152,7 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 
 // ImportFromFileInput is the input for importing a project from an archive file.
 type ImportFromFileInput struct {
-	FilePath      string `json:"file_path,omitempty" jsonschema:"Absolute path to a local export archive (.tar.gz) on the MCP server filesystem. Only one of file_path or content_base64 should be provided."`
+	FilePath      string `json:"file_path,omitempty" jsonschema:"Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided."`
 	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded export archive content. Only one of file_path or content_base64 should be provided."`
 	Namespace     string `json:"namespace,omitempty" jsonschema:"Namespace to import the project into (user or group path)"`
 	Name          string `json:"name,omitempty" jsonschema:"Name for the imported project"`
@@ -187,13 +188,18 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", errors.New("one of file_path or content_base64 is required"))
 	}
 
-	var archiveReader *bytes.Reader
+	var archiveReader io.Reader
 	if hasFilePath {
-		data, err := os.ReadFile(input.FilePath)
+		archivePath, err := toolutil.CanonicalImportArchivePath(input.FilePath)
 		if err != nil {
-			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("reading file: %w", err))
+			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", err)
 		}
-		archiveReader = bytes.NewReader(data)
+		file, err := os.Open(archivePath) //#nosec G304 -- archivePath is canonicalized, extension-checked, regular-file checked, and constrained to allowed import directories.
+		if err != nil {
+			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("open archive: %w", err))
+		}
+		defer file.Close()
+		archiveReader = file
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
 		if err != nil {

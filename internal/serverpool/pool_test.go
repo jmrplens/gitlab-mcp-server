@@ -4,6 +4,7 @@ package serverpool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,11 +21,11 @@ import (
 
 // testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
 func testFactory() ServerFactory {
-	return func(client *gitlabclient.Client, _ *config.ServerConfig) *mcp.Server {
+	return func(client *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
 		return mcp.NewServer(&mcp.Implementation{
 			Name:    "test-server",
 			Version: "0.0.0",
-		}, nil)
+		}, nil), nil
 	}
 }
 
@@ -99,9 +100,9 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	cfg := testConfig(srv.URL)
 	cfg.IgnoreScopes = false
 	capturedScopes := make([][]string, 0, 2)
-	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
+	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
 		capturedScopes = append(capturedScopes, append([]string(nil), entryCfg.TokenScopes...))
-		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
 	pool := New(cfg, factory)
 
@@ -146,12 +147,12 @@ func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
 	cfg.Enterprise = true
 	cfg.AutoDetectEnterprise = true
 	captured := make([]bool, 0, 2)
-	factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
+	factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
 		if entryCfg.Enterprise != client.IsEnterprise() {
 			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
 		}
 		captured = append(captured, entryCfg.Enterprise)
-		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
 	pool := New(cfg, factory)
 
@@ -206,12 +207,12 @@ func TestGetOrCreate_EnterpriseConfigOverridesDetection(t *testing.T) {
 			cfg.AutoDetectEnterprise = false
 
 			var captured bool
-			factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
+			factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
 				if entryCfg.Enterprise != client.IsEnterprise() {
 					t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
 				}
 				captured = entryCfg.Enterprise
-				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 			}
 
 			pool := New(cfg, factory)
@@ -527,6 +528,53 @@ func TestStartRevalidation_CancelledContext(t *testing.T) {
 
 	// Give goroutine time to exit cleanly
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
+	cfg := testConfig("https://gitlab.example.com")
+	factoryErr := errors.New("catalog unavailable")
+	pool := New(cfg, func(_ *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
+		return nil, factoryErr
+	})
+
+	server, err := pool.GetOrCreate("token", cfg.GitLabURL)
+	if err == nil {
+		t.Fatal("GetOrCreate() error = nil, want error")
+	}
+	if server != nil {
+		t.Fatalf("GetOrCreate() server = %v, want nil", server)
+	}
+	if !strings.Contains(err.Error(), factoryErr.Error()) {
+		t.Fatalf("GetOrCreate() error = %q, want factory error", err)
+	}
+	if pool.Size() != 0 {
+		t.Fatalf("pool.Size() = %d, want 0 after factory error", pool.Size())
+	}
+	if stats := pool.Stats(); stats.CurrentSize != 0 {
+		t.Fatalf("pool.Stats().CurrentSize = %d, want 0 after factory error", stats.CurrentSize)
+	}
+}
+
+func TestGetOrCreate_NilFactory_ReturnsError(t *testing.T) {
+	cfg := testConfig("https://gitlab.example.com")
+	pool := New(cfg, nil)
+
+	server, err := pool.GetOrCreate("token", cfg.GitLabURL)
+	if err == nil {
+		t.Fatal("GetOrCreate() error = nil, want error")
+	}
+	if server != nil {
+		t.Fatalf("GetOrCreate() server = %v, want nil", server)
+	}
+	if !strings.Contains(err.Error(), "server factory is nil") {
+		t.Fatalf("GetOrCreate() error = %q, want server factory error", err)
+	}
+	if pool.Size() != 0 {
+		t.Fatalf("pool.Size() = %d, want 0 after nil factory error", pool.Size())
+	}
+	if stats := pool.Stats(); stats.CurrentSize != 0 {
+		t.Fatalf("pool.Stats().CurrentSize = %d, want 0 after nil factory error", stats.CurrentSize)
+	}
 }
 
 // TestEvictByKey verifies that evictByKey removes the specified entry

@@ -29,7 +29,9 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise) or `false` (individual tools) |
+| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), `dynamic` (low-token search/describe/execute surface), experimental `dynamic-2` comparison surface, or `dynamic-3` (explicit current dynamic surface) |
+| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
+| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
 | `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
@@ -57,6 +59,12 @@ These are checked by the elicitation subsystem. When the MCP client supports eli
 | Variable | Default | Description |
 | --- | --- | --- |
 | `UPLOAD_MAX_FILE_SIZE` | `2GB` | Maximum file size for upload tools. Supports human-friendly suffixes: `KB`, `MB`, `GB` (case-insensitive). Upper bound: 1 TB |
+
+## Optional — Local Import Files
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | *(empty)* | Additional OS path-list-separated directories allowed for `file_path`/`file` project and group import archives. The current working directory and OS temp directory are always allowed. Import archives must resolve inside an allowed directory after symlink resolution and must use the `.tar.gz` extension |
 
 ---
 
@@ -130,7 +138,9 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode unless `--auth-mode=oauth` is used, which requires a fixed `--gitlab-url`. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
-| `META_TOOLS` | `--meta-tools` | |
+| `META_TOOLS` | `--meta-tools` | Legacy boolean selector. `META_TOOLS=dynamic`, `dynamic-2`, and `dynamic-3` are supported in stdio mode; use `--tool-surface` in HTTP mode |
+| `TOOL_SURFACE` | `--tool-surface` | Explicit selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `CAPABILITY_SURFACE` | `--capability-surface` | Explicit selector: `full` or `minimal` |
 | `META_PARAM_SCHEMA` | `--meta-param-schema` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |
 | `SESSION_TIMEOUT` | `--session-timeout` | |
@@ -157,6 +167,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 - [CLI Reference](cli-reference.md) — Command-line flags for HTTP mode
 - [Configuration](configuration.md) — Setup wizard, client config, secure token management
+- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute workflow and migration guidance
 - [Auto-Update](auto-update.md) — Update modes and release requirements
 - [Security](security.md) — Token management best practices
 - [HTTP Server Mode](http-server-mode.md) — OAuth mode architecture and deployment

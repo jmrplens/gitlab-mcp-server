@@ -141,6 +141,32 @@ func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions
 	return &options
 }
 
+// validateCreateSnippetContent validates the two supported snippet creation
+// modes: single-file snippets require fileName and content when files is empty,
+// while multi-file snippets require FilePath and Content on every file entry.
+// Missing single-file fields return [toolutil.ErrFieldRequired]; invalid
+// multi-file entries include the offending files[index] field in the error.
+func validateCreateSnippetContent(fileName, content string, files []CreateFileInput) error {
+	if len(files) == 0 {
+		if fileName == "" {
+			return toolutil.ErrFieldRequired("file_name")
+		}
+		if content == "" {
+			return toolutil.ErrFieldRequired("content")
+		}
+		return nil
+	}
+	for index, file := range files {
+		if file.FilePath == "" {
+			return fmt.Errorf("files[%d].file_path is required", index)
+		}
+		if file.Content == "" {
+			return fmt.Errorf("files[%d].content is required", index)
+		}
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Markdown formatters
 // ---------------------------------------------------------------------------.
@@ -354,6 +380,9 @@ type CreateInput struct {
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if input.Title == "" {
 		return Output{}, toolutil.ErrFieldRequired("title")
+	}
+	if err := validateCreateSnippetContent(input.FileName, input.ContentBody, input.Files); err != nil {
+		return Output{}, err
 	}
 	opts := &gl.CreateSnippetOptions{
 		Title: new(input.Title),

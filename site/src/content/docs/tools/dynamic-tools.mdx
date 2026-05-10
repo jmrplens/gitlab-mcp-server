@@ -1,0 +1,196 @@
+---
+title: Dynamic toolset
+description: Low-token search, describe, and execute mode for large GitLab MCP catalogs
+---
+
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) in the repository.
+:::
+
+The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only three public tools:
+
+| Tool                    | What it does                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `gitlab_search_tools`   | Finds the right GitLab action from natural language, domains, verbs, aliases, and typo-tolerant matching |
+| `gitlab_describe_tools` | Returns the exact parameters, examples, and safety metadata for one or more actions                      |
+| `gitlab_execute_tool`   | Executes the selected action after validating the action ID and parameters                               |
+
+Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the current low-token candidate for a future default.
+
+## Why dynamic mode exists
+
+Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1011 individual operations, and even the default meta-tool catalog advertises 32 to 48 domain tools.
+
+Dynamic mode exposes that catalog through search, describe, and execute tools. The model discovers only what it needs for the current task.
+
+```mermaid
+flowchart LR
+    A[tools/list] --> B[3 public dynamic tools]
+    B --> C[Search action catalog]
+    C --> D[Describe selected actions]
+    D --> E[Execute one canonical action]
+    E --> F[GitLab REST v4 or GraphQL]
+```
+
+This usually adds one or two discovery calls per task, but it keeps the initial MCP tool context very small.
+The catalog is shared with meta-tools, so dynamic mode reuses the same schemas, destructive-action safeguards, read-only filtering, safe-mode previews, token-scope filtering, and result formatting.
+
+## Enable dynamic mode
+
+### Stdio clients
+
+Add `TOOL_SURFACE=dynamic` to your server environment:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
+				"TOOL_SURFACE": "dynamic"
+			}
+		}
+	}
+}
+```
+
+### HTTP deployments
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.com \
+  --tool-surface=dynamic
+```
+
+For the smallest startup context, also use the minimal capability surface:
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.com \
+  --tool-surface=dynamic \
+  --capability-surface=minimal
+```
+
+:::tip[Current names]
+`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` both select the current three-tool surface. Use `dynamic` for normal configuration and `dynamic-3` only when you need an explicit candidate name in evaluations.
+
+`TOOL_SURFACE=dynamic-2` is a parked comparison mode with `gitlab_find_action` plus `gitlab_execute_tool`.
+:::
+
+## The model workflow
+
+Dynamic mode works best when the assistant follows a simple rhythm: search, describe, execute.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant AI as AI Assistant
+    participant Search as gitlab_search_tools
+    participant Describe as gitlab_describe_tools
+    participant Execute as gitlab_execute_tool
+    participant GitLab
+
+    User->>AI: List open merge requests authored by me
+    AI->>Search: merge request list open authored by me
+    Search-->>AI: merge_request.list
+    AI->>Describe: merge_request.list
+    Describe-->>AI: Params schema and examples
+    AI->>Execute: merge_request.list with validated params
+    Execute->>GitLab: API request
+    GitLab-->>Execute: GitLab data
+    Execute-->>AI: Markdown and structured JSON
+    AI-->>User: Formatted answer
+```
+
+## Example
+
+First, search for the action:
+
+```json
+{
+	"tool": "gitlab_search_tools",
+	"arguments": {
+		"query": "merge request list open authored by me project",
+		"limit": 5
+	}
+}
+```
+
+Then describe the selected action:
+
+```json
+{
+	"tool": "gitlab_describe_tools",
+	"arguments": {
+		"actions": ["merge_request.list"]
+	}
+}
+```
+
+Finally, execute it:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "merge_request.list",
+		"params": {
+			"project_id": "my-group/my-project",
+			"state": "opened",
+			"scope": "created_by_me",
+			"per_page": 20
+		}
+	}
+}
+```
+
+The assistant should execute the canonical action ID returned by search or describe. Aliases are useful for discovery, but canonical IDs are the stable execution contract.
+
+## Destructive actions stay protected
+
+Dynamic mode reuses the same safety model as meta-tools. Destructive actions still require explicit confirmation unless your deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`.
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+Without confirmation, the server returns an error result instead of deleting the project. To run the action intentionally, pass `confirm: true` in the action params.
+
+For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or `GITLAB_SAFE_MODE=true` to preview mutations without applying them.
+
+## Dynamic vs meta-tools
+
+| Question                         | Meta-tools                                          | Dynamic toolset                                               |
+| -------------------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
+| What is visible in `tools/list`? | 32 to 48 domain tools                               | 3 public discovery/execution tools                            |
+| How does the model choose?       | Pick a domain tool and action                       | Search the canonical action catalog, then describe the action |
+| Where are schemas found?         | Tool schema or `gitlab://schema/meta/...` resources | `gitlab_describe_tools`                                       |
+| Best current use                 | Default compatibility                               | Low-token clients and future-default preparation              |
+| Rollback                         | Already default                                     | Unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta`               |
+
+## Troubleshooting
+
+| Symptom                                 | What to do                                                                                          |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| You only see three tools                | That is expected in dynamic mode. Ask the assistant to search and describe actions before execution |
+| Search returns broad results            | Include domain, resource, action, and filters, for example `merge request list open authored by me` |
+| Execute rejects an action               | Search again and use the canonical `domain.action` ID from the result                               |
+| Execute rejects parameters              | Describe the action and retry with the exact field names and types                                  |
+| Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                  |
+
+## Further reading
+
+- [Tools overview](/gitlab-mcp-server/tools/overview/)
+- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/)
+- [Configuration](/gitlab-mcp-server/configuration/)
+- [Architecture](/gitlab-mcp-server/architecture/)

@@ -66,6 +66,8 @@ func TestBuildTable_UsesRealMetaToolDescription(t *testing.T) {
 	}
 }
 
+// TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom verifies that the
+// README table merges enterprise catalogs and prefers GitLab.com metadata.
 func TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom(t *testing.T) {
 	baseTool := testMetaTool("gitlab_issue", "Manage GitLab issues.", "list")
 	selfManagedOnly := testMetaTool("gitlab_geo", "Manage self-managed Geo replication.", "list")

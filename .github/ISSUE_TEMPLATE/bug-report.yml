@@ -86,7 +86,7 @@ body:
     id: go-version
     attributes:
       label: Go version (only if building from source)
-      placeholder: "e.g., 1.26.2"
+      placeholder: "e.g., 1.26.3"
 
   - type: dropdown
     id: mcp-client

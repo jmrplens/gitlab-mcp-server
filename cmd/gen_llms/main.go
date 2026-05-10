@@ -40,10 +40,6 @@ const (
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
 	maxFullDescRunes = 600
-
-	// searchTypeParamName keeps backend choices visible; truncating its long
-	// description hides the basic/advanced/zoekt guidance LLMs need.
-	searchTypeParamName = "search_type"
 )
 
 type llmsCatalog struct {
@@ -52,6 +48,7 @@ type llmsCatalog struct {
 	MetaBase                []*mcp.Tool
 	MetaEnterprise          []*mcp.Tool
 	MetaGitLabComEnterprise []*mcp.Tool
+	MetaRoutes              map[string]toolutil.ActionMap
 	Resources               []*mcp.Resource
 	ResourceTemplates       []*mcp.ResourceTemplate
 	Prompts                 []*mcp.Prompt
@@ -89,7 +86,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create gitlab.com client: %w", err)
 	}
-
 	version := readVersion()
 	res, resTpl, err := listResources(client)
 	if err != nil {
@@ -115,6 +111,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	metaCatalog, err := tools.BuildActionCatalog(gitLabComClient, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		return fmt.Errorf("build meta action catalog: %w", err)
+	}
 	promptList, err := listPrompts(client)
 	if err != nil {
 		return err
@@ -125,6 +125,7 @@ func run() error {
 		MetaBase:                metaBase,
 		MetaEnterprise:          metaEnterprise,
 		MetaGitLabComEnterprise: metaGitLabComEnterprise,
+		MetaRoutes:              metaCatalog.ActionMaps(),
 		Resources:               res,
 		ResourceTemplates:       resTpl,
 		Prompts:                 promptList,
@@ -153,10 +154,13 @@ func readVersion() string {
 }
 
 // newSession creates an in-memory MCP server+client session with high page size.
-func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(), err error) {
+func newSession(setupServer func(*mcp.Server) error) (session *mcp.ClientSession, cleanup func(), err error) {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-llms", Version: "0.0.1"}, opts)
-	setupServer(server)
+	if setupErr := setupServer(server); setupErr != nil {
+		return nil, nil, setupErr
+	}
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -183,12 +187,12 @@ func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, clea
 // listTools returns either the enterprise individual catalog or the base
 // meta-tool catalog, depending on meta.
 func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		if meta {
-			tools.RegisterAllMeta(server, client, false)
-		} else {
-			tools.RegisterAll(server, client, true)
+			return tools.RegisterAllMeta(server, client, false)
 		}
+		tools.RegisterAll(server, client, true)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -204,8 +208,8 @@ func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
 
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
-		tools.RegisterAllMeta(server, client, true)
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
+		return tools.RegisterAllMeta(server, client, true)
 	})
 	if err != nil {
 		return nil, err
@@ -222,13 +226,16 @@ func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 // listResources returns the static resources and resource templates advertised
 // by the MCP server, including the per-action meta-schema template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
-		metaRoutes := toolutil.CaptureMetaRoutes(func() {
-			tools.RegisterAllMeta(server, client, false)
-		})
+	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("build meta action catalog: %w", err)
+	}
+	metaRoutes := metaCatalog.ActionMaps()
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		resources.Register(server, client)
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
+		return nil
 	})
 	if err != nil {
 		return nil, nil, err
@@ -249,8 +256,9 @@ func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.Resourc
 
 // listPrompts returns all registered MCP prompt definitions for llms output.
 func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		prompts.Register(server, client)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -272,9 +280,9 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("# gitlab-mcp-server\n\n")
 	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.\n\n")
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
-	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d meta-tools (%d self-managed enterprise, %d on GitLab.com Enterprise),\n",
+	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "%d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+	fmt.Fprintf(&b, "an optional 3-tool dynamic search/describe/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
 		resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Quick Start\n\n")
@@ -287,6 +295,8 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- META_TOOLS: Enable meta-tools for reduced tool count (default: true)\n")
+	b.WriteString("- TOOL_SURFACE: Explicit catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2\n")
+	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
 	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
 
 	b.WriteString("## Tool Domains\n\n")
@@ -305,6 +315,9 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
 	}
 	b.WriteString("\n")
+
+	b.WriteString("## Dynamic Toolset\n\n")
+	b.WriteString("Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.\n\n")
 
 	b.WriteString("## Resources\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
@@ -329,6 +342,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("## Documentation\n\n")
 	b.WriteString("- docs/configuration.md — Full configuration reference\n")
 	b.WriteString("- docs/meta-tools.md — Meta-tool action reference\n")
+	b.WriteString("- docs/dynamic-tools.md — Low-token dynamic search/describe/execute mode\n")
 	b.WriteString("- docs/tools/README.md — All tools reference\n")
 	b.WriteString("- docs/resources-reference.md — Resources reference\n")
 	b.WriteString("- docs/prompts-reference.md — Prompts reference\n")
@@ -347,15 +361,16 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
-	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d meta-tools (%d self-managed enterprise, %d GitLab.com Enterprise) | %d resources | %d prompts\n\n",
+	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | 3 dynamic tools | %d resources | %d prompts\n\n",
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
+
+	b.WriteString("## Dynamic Toolset\n\n")
+	b.WriteString("Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`. It exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the same canonical action catalog used by the default meta-tool catalog. Models should search for candidate actions, describe selected actions for exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-2` remains a parked comparison surface with `gitlab_find_action` plus `gitlab_execute_tool`.\n\n")
 
 	// --- Meta-tools (primary mode) ---
 	b.WriteString("## Meta-Tools\n\n")
 	b.WriteString("Meta-tools are the default mode (META_TOOLS=true). Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
-
-	allRoutes := toolutil.MetaRoutes()
 
 	for _, t := range catalog.MetaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
@@ -366,7 +381,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		b.WriteString("\n\n")
 		writeAnnotations(&b, t.Annotations)
 		b.WriteString("\n")
-		if routes, ok := allRoutes[t.Name]; ok {
+		if routes, ok := catalog.MetaRoutes[t.Name]; ok {
 			writeActionOutputSchemas(&b, t.Name, routes)
 		}
 	}
@@ -394,7 +409,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 			b.WriteString("\n\n")
 			writeAnnotations(&b, t.Annotations)
 			b.WriteString("\n")
-			if routes, ok := allRoutes[t.Name]; ok {
+			if routes, ok := catalog.MetaRoutes[t.Name]; ok {
 				writeActionOutputSchemas(&b, t.Name, routes)
 			}
 		}
@@ -578,9 +593,6 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			if name != searchTypeParamName {
-				desc = truncateRunes(desc, 120)
-			}
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)
 		} else {
 			fmt.Fprintf(b, "- `%s` (%s)%s\n", name, typ, req)

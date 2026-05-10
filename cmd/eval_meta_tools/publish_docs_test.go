@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 // TestReadPublishReport_ParsesSingleModelReport verifies that ReadPublishReport handles the parses single model report scenario correctly.
@@ -22,6 +24,9 @@ func TestReadPublishReport_ParsesSingleModelReport(t *testing.T) {
 	row := report.Rows[0]
 	if row.Model != "openai:gpt-5.4-nano" || row.Preset != presetDockerRead || row.Backend != backendGitLab || row.ToolExecution != "mcp" {
 		t.Fatalf("row metadata = %+v", row)
+	}
+	if report.ToolSurface != config.ToolSurfaceMeta {
+		t.Fatalf("tool surface = %q, want meta", report.ToolSurface)
 	}
 	if row.Attempts != 2 || row.ExpectedOps != 3 || row.ModelRequests != 3 || row.ToolCalls != 3 {
 		t.Fatalf("row counts = %+v, want attempts=2 expected=3 requests=3 tools=3", row)
@@ -201,10 +206,16 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	}
 	resultsPath := filepath.Join(tmp, "model-results.md")
 	readmePath := filepath.Join(tmp, "README.md")
-	if err := os.WriteFile(resultsPath, []byte("# Results\n\n"+modelEvalResultsStart+"\n"+modelEvalResultsEnd+"\n"), 0o600); err != nil {
+	resultsDoc := "# Results\n\n" +
+		modelEvalMetaResultsStart + "\n" + modelEvalMetaResultsEnd + "\n\n" +
+		modelEvalDynamic3ResultsStart + "\nexisting dynamic\n" + modelEvalDynamic3ResultsEnd + "\n"
+	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
 		t.Fatalf("write results doc: %v", err)
 	}
-	if err := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalSummaryStart+"\n"+modelEvalSummaryEnd+"\n"), 0o600); err != nil {
+	readmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
 
@@ -229,6 +240,9 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if strings.Contains(string(results), "Source reports") || strings.Contains(string(results), reportPath) {
 		t.Fatalf("results doc leaked local report paths: %s", results)
 	}
+	if !strings.Contains(string(results), "existing dynamic") {
+		t.Fatalf("results doc did not preserve dynamic section: %s", results)
+	}
 	readme, err := os.ReadFile(readmePath)
 	if err != nil {
 		t.Fatalf("read readme: %v", err)
@@ -236,17 +250,130 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if !strings.Contains(string(readme), "| OpenAI | `gpt-5.4-nano` | OK | 100.0% | No repairs | 100.0% final across 41 ops |") {
 		t.Fatalf("readme = %s", readme)
 	}
+	if !strings.Contains(string(readme), "existing dynamic summary") {
+		t.Fatalf("readme did not preserve dynamic summary section: %s", readme)
+	}
 
 	opts.CheckDocs = true
 	opts.PublishDocs = false
 	if publishErr := publishEvaluationDocs(opts); publishErr != nil {
 		t.Fatalf("publishEvaluationDocs(check) error = %v", publishErr)
 	}
-	if writeErr := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalSummaryStart+"\nstale\n"+modelEvalSummaryEnd+"\n"), 0o600); writeErr != nil {
+	staleReadmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\nstale\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if writeErr := os.WriteFile(readmePath, []byte(staleReadmeDoc), 0o600); writeErr != nil {
 		t.Fatalf("write stale readme: %v", writeErr)
 	}
 	if checkErr := publishEvaluationDocs(opts); checkErr == nil || !strings.Contains(checkErr.Error(), "not up to date") {
 		t.Fatalf("publishEvaluationDocs(stale check) error = %v, want not up to date", checkErr)
+	}
+}
+
+// TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection verifies that
+// dynamic reports update only the dynamic3 blocks while preserving meta-tool data.
+func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T) {
+	tmp := t.TempDir()
+	reportPath := filepath.Join(tmp, "dynamic-report.md")
+	if err := os.WriteFile(reportPath, []byte(dynamicSingleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 40)), 0o600); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+	resultsPath := filepath.Join(tmp, "model-results.md")
+	readmePath := filepath.Join(tmp, "README.md")
+	resultsDoc := "# Results\n\n" +
+		modelEvalMetaResultsStart + "\nexisting meta results\n" + modelEvalMetaResultsEnd + "\n\n" +
+		modelEvalDynamic3ResultsStart + "\n" + modelEvalDynamic3ResultsEnd + "\n"
+	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
+		t.Fatalf("write results doc: %v", err)
+	}
+	readmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\nexisting meta summary\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+
+	opts := options{
+		PublishDocs:    true,
+		PublishFrom:    stringList{reportPath},
+		PublishResults: resultsPath,
+		PublishReadme:  readmePath,
+		PublishLabel:   "2026-05-09 Dynamic OpenAI Docker full run",
+		PublishMode:    publishModeReplaceCurrent,
+	}
+	if err := publishEvaluationDocs(opts); err != nil {
+		t.Fatalf("publishEvaluationDocs(dynamic) error = %v", err)
+	}
+	results, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("read results: %v", err)
+	}
+	if !strings.Contains(string(results), "existing meta results") {
+		t.Fatalf("dynamic publish did not preserve meta results: %s", results)
+	}
+	if !strings.Contains(string(results), "### 2026-05-09 Dynamic OpenAI Docker full run") || !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read` | Docker GitLab via MCP | 40 | 41 | 41 | 41 |") {
+		t.Fatalf("dynamic results section was not updated: %s", results)
+	}
+	readme, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("read readme: %v", err)
+	}
+	if !strings.Contains(string(readme), "existing meta summary") {
+		t.Fatalf("dynamic publish did not preserve meta summary: %s", readme)
+	}
+	if !strings.Contains(string(readme), "Current published result: **2026-05-09 Dynamic OpenAI Docker full run**.") {
+		t.Fatalf("dynamic readme summary was not updated: %s", readme)
+	}
+
+	opts.CheckDocs = true
+	opts.PublishDocs = false
+	if checkErr := publishEvaluationDocs(opts); checkErr != nil {
+		t.Fatalf("publishEvaluationDocs(dynamic check) error = %v", checkErr)
+	}
+}
+
+// TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts verifies that
+// full dynamic runs without a report-level preset are still published as
+// preset-scoped rows when trace artifacts are available.
+func TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts(t *testing.T) {
+	tmp := t.TempDir()
+	traceDir := filepath.Join(tmp, "traces")
+	if err := os.MkdirAll(traceDir, 0o700); err != nil {
+		t.Fatalf("mkdir traces: %v", err)
+	}
+	tracePath := filepath.Join(traceDir, "traces.jsonl")
+	if err := os.WriteFile(tracePath, []byte(fullRunTraceJSONL()), 0o600); err != nil {
+		t.Fatalf("write traces: %v", err)
+	}
+	reportPath := filepath.Join(tmp, "dynamic-report.md")
+	if err := os.WriteFile(reportPath, []byte(dynamicFullRunPublishReportNoPreset()), 0o600); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+
+	report, err := readPublishReport(reportPath)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	if len(report.Rows) != 3 {
+		t.Fatalf("rows = %d, want 3 preset rows", len(report.Rows))
+	}
+	rows := map[string]publishRow{}
+	for _, row := range report.Rows {
+		rows[row.Preset] = row
+	}
+	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe} {
+		if rows[preset].Attempts != 1 {
+			t.Fatalf("row[%s] = %+v, want one attempt", preset, rows[preset])
+		}
+	}
+	if rows[presetDockerMutatingSafe].ModelRequests != 2 || rows[presetDockerMutatingSafe].ToolCalls != 2 {
+		t.Fatalf("mutating row counts = %+v, want requests/tools 2", rows[presetDockerMutatingSafe])
+	}
+	if rows[presetDockerMutatingSafe].CostTokens != "in 15 / out 4" {
+		t.Fatalf("mutating cost/tokens = %q", rows[presetDockerMutatingSafe].CostTokens)
+	}
+	if rows[presetDockerDestructiveSafe].DestructiveSafety != 100 {
+		t.Fatalf("destructive safety = %.1f, want 100", rows[presetDockerDestructiveSafe].DestructiveSafety)
 	}
 }
 
@@ -275,6 +402,12 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 
 	if got := dockerLiveStatus(publishModelSummary{DockerBacked: false}); got != "Not Docker-backed" {
 		t.Fatalf("dockerLiveStatus(non-docker) = %q", got)
+	}
+	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic2}); got != publishSectionDynamic2 {
+		t.Fatalf("publishSectionForReport(dynamic-2) = %q, want dynamic2", got)
+	}
+	if got := publishSectionForReport(publishReport{ToolSurface: "experimental"}); got != publishSectionUnknown {
+		t.Fatalf("publishSectionForReport(unknown) = %q, want unknown", got)
 	}
 	if got := dockerBackendLabel(publishRow{}); got != "-" {
 		t.Fatalf("dockerBackendLabel(empty) = %q", got)
@@ -554,6 +687,10 @@ func writeTempPublishReport(t *testing.T, content string) string {
 
 // singleModelPublishReport is an internal helper for the main package.
 func singleModelPublishReport(model, preset string, attempts int) string {
+	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceMeta)
+}
+
+func singleModelPublishReportForSurface(model, preset string, attempts int, toolSurface string) string {
 	var rows strings.Builder
 	for i := 1; i <= attempts; i++ {
 		steps := "1/1"
@@ -569,6 +706,7 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 		"Git commit: `8c696a2`\n" +
 		"Mode: model tool-calling\n" +
 		"Model: `" + model + "`\n" +
+		"Tool surface: `" + toolSurface + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
@@ -597,12 +735,18 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 		rows.String()
 }
 
+// dynamicSingleModelPublishReport is an internal helper for the main package.
+func dynamicSingleModelPublishReport(model, preset string, attempts int) string {
+	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceDynamic)
+}
+
 // multiModelPublishReport is an internal helper for the main package.
 func multiModelPublishReport() string {
 	return "# Meta-Tool Model Evaluation\n\n" +
 		"Date: 2026-05-05T18:00:00Z\n" +
 		"Mode: model tool-calling\n" +
 		"Model: `anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview`\n" +
+		"Tool surface: `meta`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `docker-read`\n" +
 		"Tool execution: `mcp`\n" +
@@ -638,4 +782,42 @@ func multiModelPublishReport() string {
 		"| `anthropic:claude-haiku-4-5-20251001` | 1 | MT-002 | `gitlab_project` / `list` | `gitlab_project` / `list` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
 		"| `google:gemini-3.1-flash-lite-preview` | 1 | MT-001 | `gitlab_project` / `get` | `gitlab_project` / `get` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
 		"| `google:gemini-3.1-flash-lite-preview` | 1 | MT-002 | `gitlab_project` / `list` | `gitlab_project` / `list` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
+}
+
+// dynamicFullRunPublishReportNoPreset returns a minimal dynamic report fixture without preset metadata.
+func dynamicFullRunPublishReportNoPreset() string {
+	return "# Meta-Tool Model Evaluation\n\n" +
+		"Date: 2026-05-09T18:00:00Z\n" +
+		"Mode: model tool-calling\n" +
+		"Model: `openai:gpt-5.4-nano`\n" +
+		"Tool surface: `dynamic`\n" +
+		"Backend: `gitlab`\n" +
+		"Tool execution: `mcp`\n" +
+		"Catalog tools: 3\n" +
+		"Runs: 1\n" +
+		"Task attempts: 3\n\n" +
+		"Trace artifacts: `traces`\n\n" +
+		"## Metrics\n\n" +
+		"| Metric | Value |\n| --- | ---: |\n" +
+		"| Tool-selection accuracy | 100.0% |\n" +
+		"| Action-selection accuracy | 100.0% |\n" +
+		"| First-call validation pass rate | 100.0% |\n" +
+		"| Repair success rate | 100.0% |\n" +
+		"| Destructive safety | 100.0% |\n" +
+		"| Final task success proxy | 100.0% |\n" +
+		"\n## Task Results\n\n" +
+		"| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n" +
+		"| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n" +
+		"| 1 | MT-001 | `gitlab_execute_tool` / `user.current` | `gitlab_execute_tool` / `user.current` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
+		"| 1 | MT-010 | `gitlab_execute_tool` / `issue.create` | `gitlab_execute_tool` / `issue.create` | 1/1 | No | Yes | - | Yes | 2 | 2 | - |\n" +
+		"| 1 | MT-008 | `gitlab_execute_tool` / `group.delete` | `gitlab_execute_tool` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
+}
+
+// fullRunTraceJSONL returns trace rows for all tasks in the publish report fixture.
+func fullRunTraceJSONL() string {
+	return strings.Join([]string{
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-010","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"issue.create"}],"events":[{"usage":{"input_tokens":15,"output_tokens":4}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"issue.create","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":2,"tool_calls":2}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-008","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"group.delete","destructive":true}],"events":[{"usage":{"input_tokens":11,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"group.delete","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+	}, "\n") + "\n"
 }

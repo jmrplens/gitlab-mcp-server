@@ -152,6 +152,14 @@ To register the complete individual tool set instead (one tool per GitLab operat
 META_TOOLS=false
 ```
 
+To register the low-token dynamic toolset instead, set:
+
+```env
+TOOL_SURFACE=dynamic
+```
+
+For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts. Dynamic action search, describe, and execute remain available. Experimental variant selectors are also available for testing dynamic toolset configurations: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
+
 See [Meta-Tools](meta-tools.md) for the full reference.
 
 ---
@@ -173,11 +181,15 @@ The host passes these environment variables through to the container:
 | `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
 | `GITLAB_TOKEN`           | Yes      | Personal Access Token                                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
-| `META_TOOLS`             | No       | Group tools per domain (default `true`)                  |
+| `META_TOOLS`             | No       | Legacy boolean selector: `true` for meta-tools or `false` for individual tools (default `true`) |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Premium/Ultimate tools (default `false`)          |
 | `GITLAB_READ_ONLY`       | No       | Disable mutating tools (default `false`)                 |
 | `GITLAB_SAFE_MODE`       | No       | Preview mutating tool inputs (default `false`)           |
 | `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)        |
+
+`TOOL_SURFACE` takes precedence over `META_TOOLS` when both are set. Prefer `TOOL_SURFACE` for new configurations: `meta` is the default consolidated catalog, `individual` exposes every tool separately, `dynamic`/`dynamic-3` expose the current three-tool low-token search/describe/execute surface, and `dynamic-2` selects the experimental find/execute comparison surface. `META_TOOLS` remains supported for legacy configs (`true` maps to `meta`, `false` maps to `individual`) but should be treated as deprecated in favor of the explicit selector.
 
 The Open Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 

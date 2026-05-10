@@ -364,6 +364,8 @@ func TestPackageList_Success(t *testing.T) {
 	}
 }
 
+// TestPackageToListItem_OptionalPipelineFields verifies that package conversion
+// preserves optional pipeline timestamps and user metadata while skipping nil entries.
 func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 	now := time.Date(2026, 5, 6, 11, 0, 0, 0, time.UTC)
 	updated := now.Add(time.Minute)
@@ -401,6 +403,9 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 		t.Fatalf("Pipelines = %+v, want one non-nil pipeline", item.Pipelines)
 	}
 	pipeline := item.Pipelines[0]
+	if pipeline.ID != 77 {
+		t.Fatalf("pipeline ID = %d, want 77", pipeline.ID)
+	}
 	if pipeline.CreatedAt == "" || pipeline.UpdatedAt == "" {
 		t.Fatalf("pipeline timestamps = %+v, want created and updated values", pipeline)
 	}
@@ -409,6 +414,8 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 	}
 }
 
+// TestPackagePipelineToOutput_NilPipeline_ReturnsNil verifies that nil package
+// pipeline pointers are converted to nil output values.
 func TestPackagePipelineToOutput_NilPipeline_ReturnsNil(t *testing.T) {
 	if got := packagePipelineToOutput(nil); got != nil {
 		t.Fatalf("packagePipelineToOutput(nil) = %+v, want nil", got)

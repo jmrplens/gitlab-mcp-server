@@ -88,20 +88,24 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 El host debe proporcionar estas variables antes de habilitar el plugin:
 
-| Variable                 | Obligatoria | Descripción                                                                                                   |
-| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas |
-| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                           |
-| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                   |
-| `META_TOOLS`             | No          | `true` para herramientas agrupadas, `false` individuales (por defecto `true`)                                 |
-| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                     |
-| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                      |
-| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                             |
-| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                         |
+| Variable                 | Obligatoria | Descripción                                                                                                             |
+| ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas           |
+| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                                     |
+| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                             |
+| `META_TOOLS`             | No          | Selector booleano heredado: `true` para meta-herramientas o `false` para herramientas individuales (por defecto `true`) |
+| `TOOL_SURFACE`           | No          | Selector explícito del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                             |
+| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                                    |
+| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                               |
+| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                                |
+| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                                       |
+| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                                   |
+
+`TOOL_SURFACE` tiene precedencia sobre `META_TOOLS` cuando ambos están definidos. Usa `TOOL_SURFACE` en configuraciones nuevas: `meta` es el catálogo consolidado por defecto, `individual` expone cada herramienta por separado, `dynamic` y `dynamic-3` seleccionan la superficie actual de bajo consumo con tres herramientas, y `dynamic-2` selecciona la comparación experimental find/execute. `META_TOOLS` sigue funcionando para configuraciones heredadas (`true` equivale a `meta`, `false` equivale a `individual`), pero se recomienda tratarlo como obsoleto frente al selector explícito.
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
-La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/).
+La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 Si prefieres el binario nativo, instala el plugin, localiza el directorio del plugin instalado `gitlab-mcp-server` desde la interfaz de plugins de tu host o la salida de instalación, y después edita su `mcp.json` local (habitualmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
@@ -344,7 +348,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 Añade `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado.
 
-El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/configuration/) para el orden de carga completo.
+El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para el orden de carga completo.
 
 ## Modo HTTP
 
@@ -354,7 +358,7 @@ Para despliegues en equipo, puedes ejecutar el servidor en modo HTTP donde cada 
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
-Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para más detalles.
+Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para más detalles.
 
 ### Modo OAuth (recomendado para producción)
 
@@ -367,7 +371,7 @@ Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuari
 Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
-Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de GitLab y el scope `api`. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para ejemplos por cliente.
+Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de GitLab y el scope `api`. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
 :::
 
 ## GitLab autoalojado
@@ -433,7 +437,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, habilita el catálogo Enterprise/Premium con `GITLAB_ENTERPRISE=true` en modo stdio o `--enterprise`/autodetección en modo HTTP. Consulta [Configuración](/gitlab-mcp-server/configuration/) para todas las opciones disponibles.
+Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, habilita el catálogo Enterprise/Premium con `GITLAB_ENTERPRISE=true` en modo stdio o `--enterprise`/autodetección en modo HTTP. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
 
 ## Verificar la configuración
 
@@ -484,12 +488,16 @@ Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_cr
 Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automáticamente. Solo pregunta de forma natural: _"crea un issue para el bug del login"_ y el LLM selecciona la meta-herramienta y acción correctas.
 
 :::tip
-Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) para la referencia completa.
+Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
+
+Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`. El servidor expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. `TOOL_SURFACE=dynamic-2` está disponible como candidato experimental A/B find/execute.
+
+Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y omitir recursos y prompts opcionales cuando necesites el contexto MCP inicial más pequeño.
 :::
 
 ## Próximos pasos
 
-- [Configuración](/gitlab-mcp-server/configuration/) — Ajusta las variables de entorno y funciones opcionales
-- [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
-- [Arquitectura](/gitlab-mcp-server/architecture/) — Comprende cómo funciona el servidor internamente
-- [Referencia de herramientas](/gitlab-mcp-server/tools/overview/) — Explora todas las herramientas disponibles por dominio
+- [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
+- [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
+- [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio

@@ -2,11 +2,13 @@ package tools
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -16,6 +18,16 @@ import (
 // health/status and update operations. If updater is nil, only the status
 // action is available.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
+	catalog := actionregistry.NewCatalog()
+	if err := catalog.AddGroup(BuildMCPActionGroup(client, updater)); err != nil {
+		slog.Error("failed to add MCP meta action group", "error", err)
+		return
+	}
+	RegisterMetaCatalog(server, catalog)
+}
+
+// BuildMCPActionGroup builds the registry group backing the gitlab_server meta-tool.
+func BuildMCPActionGroup(client *gitlabclient.Client, updater *autoupdate.Updater) actionregistry.Group {
 	routes := actionMap{
 		"status":       routeAction(client, health.Check),
 		"health_check": routeAction(client, health.Check),
@@ -57,7 +69,16 @@ Errors: connectivity / auth failures appear inside the diagnostics object (statu
 
 See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (GitLab instance admin), gitlab_user (current user identity).`
 	}
-	addMetaTool(server, "gitlab_server", desc, routes, toolutil.IconHealth)
+	group := actionregistry.NewGroup(actionregistry.GroupOptions{
+		ToolName:    "gitlab_server",
+		Description: desc,
+		Icons:       toolutil.IconHealth,
+		ReadOnly:    updater == nil,
+	})
+	for name, route := range routes {
+		group.SetAction(actionregistry.Action{Name: name, Route: route})
+	}
+	return group
 }
 
 // wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead

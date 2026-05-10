@@ -26,9 +26,12 @@ import (
 const maxInt = int(math.MaxInt)
 
 const (
-	minInt64AsFloat          = -float64(1 << 63)
-	maxInt64AsFloat          = float64(1<<63 - 1)
-	invalidActionParamsError = "invalid params for this action: %w"
+	minInt64AsFloat                      = -float64(1 << 63)
+	maxInt64AsFloat                      = float64(1<<63 - 1)
+	invalidActionParamsError             = "invalid params for this action: %w"
+	actionProjectMemberDelete            = "project.member_delete"
+	actionProjectMemberEdit              = "project.member_edit"
+	actionExternalStatusCheckListProject = "external_status_check.list_project"
 )
 
 // MetaToolInput is the common input for all meta-tools.
@@ -59,16 +62,88 @@ type ActionRoute struct {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
+// MetaToolDefinition describes one action-dispatched meta-tool registration.
+type MetaToolDefinition struct {
+	Name         string
+	Description  string
+	Routes       ActionMap
+	Icons        []mcp.Icon
+	ReadOnly     bool
+	FormatResult FormatResultFunc
+}
+
+//nolint:gosec // Alias keys and values are MCP action route names, not credentials.
 var commonActionAliases = map[string]string{
-	"badge.add":               "project.badge_add",
-	"hook.add":                "project.hook_add",
-	"milestone.create":        "project.milestone_create",
-	"milestone.delete":        "project.milestone_delete",
-	"milestone.get":           "project.milestone_get",
-	"milestone.list":          "project.milestone_list",
-	"milestone.update":        "project.milestone_update",
-	"group.custom_emoji_list": "custom_emoji.list",
-	"me":                      "current",
+	"badge.add":                "project.badge_add",
+	"hook.add":                 "project.hook_add",
+	"milestone.create":         "project.milestone_create",
+	"milestone.delete":         "project.milestone_delete",
+	"milestone.get":            "project.milestone_get",
+	"milestone.list":           "project.milestone_list",
+	"milestone.update":         "project.milestone_update",
+	"group.custom_emoji_list":  "custom_emoji.list",
+	"me":                       "current",
+	"broadcast_message.create": "admin.broadcast_message_create",
+	"broadcast_message.delete": "admin.broadcast_message_delete",
+	"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
+	"deploy_key.create":                         "access.deploy_key_add",
+	"deploy_key.list":                           "access.deploy_key_list_project",
+	"deploy_token.create":                       "access.deploy_token_create_project",
+	"deploy_token.delete":                       "access.deploy_token_delete_project",
+	"deploy_token.get":                          "access.deploy_token_get_project",
+	"deploy_token.list":                         "access.deploy_token_list_project",
+	"merge_request.changes":                     "mr_review.changes_get",
+	"merge_request_note.create":                 "mr_review.note_create",
+	"merge_request_note.delete":                 "mr_review.note_delete",
+	"merge_request_note.get":                    "mr_review.note_get",
+	"merge_request_note.update":                 "mr_review.note_update",
+	"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
+	"mr_review.publish":                         "mr_review.draft_note_publish_all",
+	"package.files":                             "package.file_list",
+	"package.list_generic":                      "package.list",
+	"project.releases.list":                     "release.list",
+	"project.hooks.list":                        "project.hook_list",
+	"project.member_remove":                     actionProjectMemberDelete,
+	"project.member_update":                     actionProjectMemberEdit,
+	"project.schedule_storage_move":             "storage_move.schedule_project",
+	"project.status_check_list":                 actionExternalStatusCheckListProject,
+	"project.status_checks.list":                actionExternalStatusCheckListProject,
+	"project_member.add":                        "project.member_add",
+	"project_member.delete":                     actionProjectMemberDelete,
+	"project_member.edit":                       actionProjectMemberEdit,
+	"project_member.get":                        "project.member_get",
+	"project_member.remove":                     actionProjectMemberDelete,
+	"project_member.update":                     actionProjectMemberEdit,
+	"external_status_check.list_project_checks": actionExternalStatusCheckListProject,
+	"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
+	"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
+	"feature_flag_user_list.get":                "feature_flags.ff_user_list_get",
+	"feature_flag_user_list.list":               "feature_flags.ff_user_list_list",
+	"feature_flag_user_list.update":             "feature_flags.ff_user_list_update",
+	"gitlab_issue.create":                       "issue.create",
+	"gitlab_issue.delete":                       "issue.delete",
+	"gitlab_server.health_check":                "server.health_check",
+	"group.audit_events":                        "audit_event.list_group",
+	"issue.link":                                "issue.link_create",
+	"job.artifact_download":                     "job.download_single_artifact",
+	"group.variable.create":                     "ci_variable.group_create",
+	"merge_request.add_spent_time":              "merge_request.spent_time_add",
+	"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
+	"merge_request.time_estimate":               "merge_request.time_estimate_set",
+	"merge_request.time_spent_add":              "merge_request.spent_time_add",
+	"release.asset_link.create":                 "release.link_create",
+	"release.generate_notes":                    "analyze.release_notes",
+	"repository_tree":                           "repository.tree",
+	"repository_file.get":                       "repository.file_get",
+	"repository_file.read":                      "repository.file_get",
+	"pipeline.schedule_variable_create":         "pipeline.schedule_create_variable",
+	"project.badge_update":                      "project.badge_edit",
+	"merge_request.time_spent_reset":            "merge_request.spent_time_reset",
+	"generic_package.list":                      "package.list",
+	"issue_note.create":                         "issue.note_create",
+	"gitlab_interactive_issue.create":           "interactive.issue_create",
+	"variable.create":                           "ci_variable.create",
+	"webhook.add":                               "project.hook_add",
 }
 
 // NormalizeActionAlias returns the canonical action name for common shortened
@@ -107,74 +182,71 @@ func (e *ParamValidationError) Unwrap() error {
 	return e.Err
 }
 
-// Meta-tool route registry state supports both the global audit view and the
-// per-server capture used when registering meta-schema resources in HTTP mode.
+// Meta-tool definition capture lets the canonical catalog collect meta-tool
+// metadata without constructing an MCP server.
 var (
-	metaRoutesMu      sync.Mutex
-	metaRoutesMap     = map[string]ActionMap{}
-	metaRouteCapture  map[string]ActionMap
-	metaRouteCaptureM sync.Mutex
+	metaToolDefinitionMu          sync.Mutex
+	metaToolDefinitionCapture     []MetaToolDefinition
+	metaToolDefinitionCaptureLock sync.Mutex
 )
 
-// RegisterRoutes records a meta-tool's action routes for external consumers
-// (gen_llms, audit_output) to inspect per-action OutputSchema.
-func RegisterRoutes(toolName string, routes ActionMap) {
-	metaRoutesMu.Lock()
-	metaRoutesMap[toolName] = routes
-	if metaRouteCapture != nil {
-		metaRouteCapture[toolName] = routes
-	}
-	metaRoutesMu.Unlock()
-}
+// CaptureMetaToolDefinitions runs register and returns the meta-tool
+// definitions registered during that call without requiring an MCP server.
+func CaptureMetaToolDefinitions(register func()) []MetaToolDefinition {
+	metaToolDefinitionCaptureLock.Lock()
+	defer metaToolDefinitionCaptureLock.Unlock()
 
-// MetaRoutes returns a snapshot of all registered meta-tool route maps.
-func MetaRoutes() map[string]ActionMap {
-	metaRoutesMu.Lock()
-	defer metaRoutesMu.Unlock()
-	return cloneMetaRoutes(metaRoutesMap)
-}
-
-// CaptureMetaRoutes runs register and returns only the meta-tool routes
-// registered during that call. The global registry is still populated for
-// audit tools, but callers that build per-server resources should prefer the
-// returned snapshot so concurrent HTTP server instances do not share schema
-// state accidentally.
-func CaptureMetaRoutes(register func()) map[string]ActionMap {
-	metaRouteCaptureM.Lock()
-	defer metaRouteCaptureM.Unlock()
-
-	metaRoutesMu.Lock()
-	metaRouteCapture = map[string]ActionMap{}
-	metaRoutesMu.Unlock()
+	metaToolDefinitionMu.Lock()
+	metaToolDefinitionCapture = []MetaToolDefinition{}
+	metaToolDefinitionMu.Unlock()
 
 	defer func() {
-		metaRoutesMu.Lock()
-		metaRouteCapture = nil
-		metaRoutesMu.Unlock()
+		metaToolDefinitionMu.Lock()
+		metaToolDefinitionCapture = nil
+		metaToolDefinitionMu.Unlock()
 	}()
 
 	register()
 
-	metaRoutesMu.Lock()
-	defer metaRoutesMu.Unlock()
-	return cloneMetaRoutes(metaRouteCapture)
+	metaToolDefinitionMu.Lock()
+	defer metaToolDefinitionMu.Unlock()
+	return cloneMetaToolDefinitions(metaToolDefinitionCapture)
 }
 
-// ClearMetaRoutes resets the registry (useful for tests).
-func ClearMetaRoutes() {
-	metaRoutesMu.Lock()
-	metaRoutesMap = map[string]ActionMap{}
-	metaRoutesMu.Unlock()
+func captureMetaToolDefinition(def MetaToolDefinition) {
+	metaToolDefinitionMu.Lock()
+	defer metaToolDefinitionMu.Unlock()
+	if metaToolDefinitionCapture == nil {
+		return
+	}
+	metaToolDefinitionCapture = append(metaToolDefinitionCapture, cloneMetaToolDefinition(def))
 }
 
-// cloneMetaRoutes creates a shallow copy of every action map so callers can
-// inspect registered routes without racing later registration work.
-func cloneMetaRoutes(routes map[string]ActionMap) map[string]ActionMap {
-	out := make(map[string]ActionMap, len(routes))
-	for tool, actions := range routes {
-		actionCopy := make(ActionMap, len(actions))
-		maps.Copy(actionCopy, actions)
-		out[tool] = actionCopy
+func cloneMetaToolDefinitions(defs []MetaToolDefinition) []MetaToolDefinition {
+	out := make([]MetaToolDefinition, 0, len(defs))
+	for _, def := range defs {
+		out = append(out, cloneMetaToolDefinition(def))
+	}
+	return out
+}
+
+func cloneMetaToolDefinition(def MetaToolDefinition) MetaToolDefinition {
+	return MetaToolDefinition{
+		Name:         def.Name,
+		Description:  def.Description,
+		Routes:       cloneActionMap(def.Routes),
+		Icons:        append([]mcp.Icon(nil), def.Icons...),
+		ReadOnly:     def.ReadOnly,
+		FormatResult: def.FormatResult,
+	}
+}
+
+func cloneActionMap(routes ActionMap) ActionMap {
+	out := make(ActionMap, len(routes))
+	for action, route := range routes {
+		route.InputSchema = cloneSchemaMap(route.InputSchema)
+		route.OutputSchema = cloneSchemaMap(route.OutputSchema)
+		out[action] = route
 	}
 	return out
 }
@@ -218,8 +290,25 @@ func schemaForType(rt reflect.Type) map[string]any {
 	if json.Unmarshal(data, &m) != nil {
 		return nil
 	}
+	normalizeSchemaDescriptions(m)
 	outputSchemaCache.Store(rt, m)
 	return m
+}
+
+func normalizeSchemaDescriptions(node any) {
+	switch typed := node.(type) {
+	case map[string]any:
+		if description, ok := typed["description"].(string); ok {
+			typed["description"] = strings.TrimSuffix(description, ",required")
+		}
+		for _, value := range typed {
+			normalizeSchemaDescriptions(value)
+		}
+	case []any:
+		for _, value := range typed {
+			normalizeSchemaDescriptions(value)
+		}
+	}
 }
 
 func inputSchemaForType(rt reflect.Type) map[string]any {
@@ -368,15 +457,16 @@ var commonParamAliases = []struct {
 	{Alias: "project_id", Canonical: "project_path"},
 	{Alias: "group_path", Canonical: "group_id"},
 	{Alias: "group_id", Canonical: "group_path"},
-	{Alias: "id", Canonical: "snippet_id"},
-	{Alias: "id", Canonical: "runner_id"},
 	{Alias: "link", Canonical: "link_url"},
 	{Alias: "image", Canonical: "image_url"},
 	{Alias: "content", Canonical: "body"},
 	{Alias: "description", Canonical: "body"},
 	{Alias: "note", Canonical: "body"},
+	{Alias: "body", Canonical: "note"},
 	{Alias: "body", Canonical: "message"},
 	{Alias: "content", Canonical: "message"},
+	{Alias: "shard", Canonical: "destination_storage_name"},
+	{Alias: "storage_shard", Canonical: "destination_storage_name"},
 	{Alias: "scope", Canonical: "scopes"},
 	{Alias: "scope", Canonical: "environment_scope"},
 	{Alias: "environment", Canonical: "environment_scope"},
@@ -384,12 +474,42 @@ var commonParamAliases = []struct {
 	{Alias: "expiry", Canonical: "expires_at"},
 	{Alias: "expiration", Canonical: "expires_at"},
 	{Alias: "merge_when_pipeline_succeeds", Canonical: "auto_merge"},
+	{Alias: "branch", Canonical: "branch_name"},
 	{Alias: "branch_name", Canonical: "ref"},
 	{Alias: "ref", Canonical: "content_ref"},
 	{Alias: "from_ref", Canonical: "from"},
 	{Alias: "to_ref", Canonical: "to"},
 	{Alias: "target_branch", Canonical: "to"},
+	{Alias: "feature_flag_name", Canonical: "name"},
+	{Alias: "emoji_name", Canonical: "name"},
+	{Alias: "award", Canonical: "name"},
+	{Alias: "time_estimate", Canonical: "duration"},
 	{Alias: "name", Canonical: "environment"},
+}
+
+func normalizeIDAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool, clone func() map[string]any) {
+	value, hasID := params["id"]
+	if !hasID || accepts("id") {
+		return
+	}
+	canonical := ""
+	for name := range fields {
+		if name == "id" || !strings.HasSuffix(name, "_id") {
+			continue
+		}
+		if canonical != "" {
+			return
+		}
+		canonical = name
+	}
+	if canonical == "" {
+		return
+	}
+	updated := clone()
+	if _, hasCanonical := params[canonical]; !hasCanonical {
+		updated[canonical] = value
+	}
+	delete(updated, "id")
 }
 
 // normalizeParamAliases accepts common LLM-generated parameter aliases only
@@ -434,6 +554,7 @@ func normalizeParamAliases(params map[string]any, target reflect.Type) map[strin
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
+	normalizeIDAlias(out, fields, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {
@@ -535,6 +656,7 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
+	normalizeIDAlias(out, fields, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {
@@ -1424,6 +1546,16 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // annotations. Use it for meta-tools that may include mutating or destructive
 // actions; if any route is destructive, the tool receives DestructiveHint=true.
 func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	if server == nil {
+		captureMetaToolDefinition(MetaToolDefinition{
+			Name:         name,
+			Description:  desc,
+			Routes:       routes,
+			Icons:        icons,
+			FormatResult: formatResult,
+		})
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
@@ -1438,6 +1570,17 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 // AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
 // are all read-only list/get/search-style operations.
 func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	if server == nil {
+		captureMetaToolDefinition(MetaToolDefinition{
+			Name:         name,
+			Description:  desc,
+			Routes:       routes,
+			Icons:        icons,
+			ReadOnly:     true,
+			FormatResult: formatResult,
+		})
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
@@ -1458,7 +1601,6 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 // Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-	RegisterRoutes(toolName, routes)
 	if formatResult == nil {
 		formatResult = defaultFormatResult
 	}
@@ -1499,8 +1641,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {
-			var validationErr *ParamValidationError
-			if errors.As(err, &validationErr) {
+			if validationErr, matched := errors.AsType[*ParamValidationError](err); matched {
 				return ErrorResult(fmt.Sprintf("%s/%s: %s", toolName, input.Action, validationErr.Error())), nil, nil
 			}
 			return nil, nil, err
@@ -1691,6 +1832,24 @@ var (
 func SetMetaParamSchemaMode(mode string) {
 	metaParamSchemaMu.Lock()
 	defer metaParamSchemaMu.Unlock()
+	setMetaParamSchemaModeLocked(mode)
+}
+
+// SetMetaParamSchemaModeScoped selects the meta-tool input schema strategy and
+// returns a restore function for tests that temporarily override the global mode.
+func SetMetaParamSchemaModeScoped(mode string) func() {
+	metaParamSchemaMu.Lock()
+	previous := metaParamSchemaMode
+	setMetaParamSchemaModeLocked(mode)
+	metaParamSchemaMu.Unlock()
+	return func() {
+		metaParamSchemaMu.Lock()
+		defer metaParamSchemaMu.Unlock()
+		metaParamSchemaMode = previous
+	}
+}
+
+func setMetaParamSchemaModeLocked(mode string) {
 	switch mode {
 	case MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull:
 		metaParamSchemaMode = mode

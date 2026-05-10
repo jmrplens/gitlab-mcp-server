@@ -62,7 +62,7 @@ func main() {
 	findings = append(findings, auditTitle(individual, "individual")...)
 	findings = append(findings, auditTitle(meta, "meta")...)
 	findings = append(findings, auditSeeAlso(individual, "individual")...)
-	findings = append(findings, auditRouteOutputSchema()...)
+	findings = append(findings, auditRouteOutputSchema(client)...)
 
 	printReport(individual, meta, findings)
 }
@@ -71,7 +71,10 @@ func main() {
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
 	if meta {
-		tools.RegisterAllMeta(server, client, true)
+		if err := tools.RegisterAllMeta(server, client, true); err != nil {
+			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
+			os.Exit(1)
+		}
 	} else {
 		tools.RegisterAll(server, client, true)
 	}
@@ -152,8 +155,12 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 // auditRouteOutputSchema checks meta-tool routes for missing OutputSchema.
 // Routes without OutputSchema are reported (these are typically void actions
 // or plain Route() calls that lack typed output).
-func auditRouteOutputSchema() []finding {
-	return collectRouteOutputSchemaFindings(toolutil.MetaRoutes())
+func auditRouteOutputSchema(client *gitlabclient.Client) []finding {
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		return []finding{{"gitlab_meta", "route-output-schema", fmt.Sprintf("failed to build action catalog: %v", err)}}
+	}
+	return collectRouteOutputSchemaFindings(catalog.ActionMaps())
 }
 
 // collectRouteOutputSchemaFindings scans the given meta-tool route map and

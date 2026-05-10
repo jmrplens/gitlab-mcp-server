@@ -54,6 +54,7 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	RegisterAll(server, client, ent)
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -80,7 +81,10 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 	client := newTestClient(t, handler)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, client, enterprise)
+	if err := RegisterAllMeta(server, client, enterprise); err != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", err)
+	}
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -238,7 +242,9 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
 			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-			RegisterAllMeta(server, client, tt.enterprise)
+			if registerErr := RegisterAllMeta(server, client, tt.enterprise); registerErr != nil {
+				t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+			}
 			if gotOrbit := slices.Contains(toolNamesFromServer(t, server), "gitlab_orbit"); gotOrbit != tt.wantOrbit {
 				t.Fatalf("RegisterAllMeta() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
 			}
@@ -1464,8 +1470,10 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 var knownExceptions = map[string]string{
 	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
 	// it is registered in cmd/server/main.go.
-	"serverupdate": "registered in cmd/server/main.go with *autoupdate.Updater",
-	"testdata":     "contains test data, not a tool package",
+	"actionregistry": "infrastructure package for catalog metadata, not an MCP tool package",
+	"dynamic":        "registered in cmd/server/main.go from the canonical action catalog",
+	"serverupdate":   "registered in cmd/server/main.go with *autoupdate.Updater",
+	"testdata":       "contains test data, not a tool package",
 }
 
 // TestAllSubPackagesRegistered verifies that every sub-directory under
@@ -1830,17 +1838,22 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
 }
 
+// Actions that are destructive but do NOT contain a destructive keyword.
+// These are known edge cases verified manually.
+var knownNonKeywordDestructive = map[string]struct{}{
+	"merge": {}, "erase": {}, "stop": {}, "ban": {},
+	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
+	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
+	"unshare": {}, "disable_project": {}, "import_from_file": {},
+	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
+	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
+}
+
 // isExactMatchException reports whether an action name is too generic for the
 // normal destructive-name heuristic but is accepted by explicit policy.
 func isExactMatchException(action string) bool {
-	exceptions := map[string]bool{
-		"merge": true, "erase": true, "stop": true, "ban": true,
-		"block": true, "deactivate": true, "reject": true, "unapprove": true,
-		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"unshare": true, "disable_project": true,
-		"cancel_github": true, "rotate": true, "import_from_file": true,
-	}
-	return exceptions[action]
+	_, ok := knownNonKeywordDestructive[action]
+	return ok
 }
 
 // TestDestructiveRoutes_NameHeuristic_ClassifiesActions scans ALL route definitions across the
@@ -1966,16 +1979,6 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		return false
 	}
 
-	// Actions that are destructive but do NOT contain a destructive keyword.
-	// These are known edge cases verified manually.
-	knownNonKeywordDestructive := map[string]bool{
-		"merge": true, "erase": true, "stop": true, "ban": true,
-		"block": true, "deactivate": true, "reject": true, "unapprove": true,
-		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"unshare": true, "disable_project": true, "import_from_file": true,
-		"cancel_github": true, "rotate": true,
-	}
-
 	var failures int
 	for _, r := range allRoutes {
 		hasDestructiveKw := containsDestructiveKeyword(r.action)
@@ -1990,14 +1993,15 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 2: Action with safe keyword MUST NOT be marked destructive,
 		// UNLESS it also contains a destructive keyword or is a known exception.
-		if hasSafeKw && r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+		_, isKnownException := knownNonKeywordDestructive[r.action]
+		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s:%d action %q contains safe keyword but uses destructive wrapper",
 				r.file, r.line, r.action)
 			failures++
 		}
 
 		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
-		if r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+		if r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s:%d action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive",
 				r.file, r.line, r.action)
 			failures++

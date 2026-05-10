@@ -25,7 +25,7 @@ const (
 
 // ImportFromGitHubInput represents input for importing a repository from GitHub.
 type ImportFromGitHubInput struct {
-	PersonalAccessToken string `json:"personal_access_token" jsonschema:"GitHub personal access token,required"`
+	PersonalAccessToken string `json:"personal_access_token" jsonschema:"GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors,required"`
 	RepoID              int64  `json:"repo_id" jsonschema:"GitHub repository ID,required"`
 	NewName             string `json:"new_name,omitempty" jsonschema:"New name for the imported project"`
 	TargetNamespace     string `json:"target_namespace" jsonschema:"Target namespace for the imported project,required"`
@@ -131,7 +131,7 @@ func CancelGitHubImport(ctx context.Context, client *gitlabclient.Client, input 
 
 // ImportGistsInput represents input for importing GitHub gists as GitLab snippets.
 type ImportGistsInput struct {
-	PersonalAccessToken string `json:"personal_access_token" jsonschema:"GitHub personal access token,required"`
+	PersonalAccessToken string `json:"personal_access_token" jsonschema:"GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors,required"`
 }
 
 // ImportGists imports GitHub gists into GitLab snippets.
@@ -152,7 +152,7 @@ func ImportGists(ctx context.Context, client *gitlabclient.Client, input ImportG
 // ImportFromBitbucketCloudInput represents input for importing from Bitbucket Cloud.
 type ImportFromBitbucketCloudInput struct {
 	BitbucketUsername    string `json:"bitbucket_username" jsonschema:"Bitbucket Cloud username,required"`
-	BitbucketAppPassword string `json:"bitbucket_app_password" jsonschema:"Bitbucket Cloud app password,required"`
+	BitbucketAppPassword string `json:"bitbucket_app_password" jsonschema:"Bitbucket Cloud app password. Treat as secret: do not log or store it, and redact it in telemetry/errors,required"`
 	RepoPath             string `json:"repo_path" jsonschema:"Bitbucket repository path (e.g. owner/repo),required"`
 	TargetNamespace      string `json:"target_namespace" jsonschema:"Target namespace for the imported project,required"`
 	NewName              string `json:"new_name,omitempty" jsonschema:"New name for the imported project"`
@@ -204,7 +204,7 @@ func ImportFromBitbucketCloud(ctx context.Context, client *gitlabclient.Client, 
 type ImportFromBitbucketServerInput struct {
 	BitbucketServerURL      string `json:"bitbucket_server_url" jsonschema:"Bitbucket Server URL,required"`
 	BitbucketServerUsername string `json:"bitbucket_server_username" jsonschema:"Bitbucket Server username,required"`
-	PersonalAccessToken     string `json:"personal_access_token" jsonschema:"Bitbucket Server personal access token,required"`
+	PersonalAccessToken     string `json:"personal_access_token" jsonschema:"Bitbucket Server personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors,required"`
 	BitbucketServerProject  string `json:"bitbucket_server_project" jsonschema:"Bitbucket Server project key,required"`
 	BitbucketServerRepo     string `json:"bitbucket_server_repo" jsonschema:"Bitbucket Server repository slug,required"`
 	NewName                 string `json:"new_name,omitempty" jsonschema:"New name for the imported project"`

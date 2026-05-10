@@ -30,7 +30,7 @@ Common issues and solutions for gitlab-mcp-server.
 | Symptom | Cause | Solution |
 | --- | --- | --- |
 | MCP client shows hundreds of individual tools instead of 32 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 32 base meta-tools, 47 self-managed enterprise meta-tools, or 48 GitLab.com Enterprise meta-tools instead of the individual catalog |
-| Tool not found in `tools/list` | Tool not registered, or meta-tools mode mismatch | Check if the tool exists in individual mode (`META_TOOLS=false`) or meta-tool mode (`META_TOOLS=true`) — they expose different tool names |
+| Tool not found in `tools/list` | Tool not registered, or tool surface mismatch | Check the active tool surface. `TOOL_SURFACE` is the preferred mode selector and overrides legacy `META_TOOLS` when both are set. Use `TOOL_SURFACE=individual` or `META_TOOLS=false` for one tool per operation, `TOOL_SURFACE=meta` or `META_TOOLS=true` for consolidated domain meta-tools, and `TOOL_SURFACE=dynamic` for the supported low-token search/describe/execute surface. See [Configuration](configuration.md#tool-modes) and [Dynamic Toolset](dynamic-tools.md) for mode selection details |
 | `unknown action` in meta-tool call | Invalid `action` parameter | List valid actions by calling the meta-tool with `action: "list"` or check [Meta-Tools Reference](meta-tools.md) |
 | `json: unknown field "<name>"` from a meta-tool | Misspelled or stale parameter name in `params` | Meta-tools reject unknown keys (`DisallowUnknownFields`). Use the exact parameter names listed for the chosen `action` (e.g. `merge_request_iid`, `issue_iid`, `epic_iid`, `work_item_iid`, `snippet_id`) — see [Meta-Tools Reference](meta-tools.md) |
 
