@@ -104,6 +104,37 @@ sequenceDiagram
     AI-->>User: Formatted answer
 ```
 
+Each dynamic tool returns a normal MCP tool result: Markdown for clients that render text and structured content for models that inspect JSON. `gitlab_execute_tool` does not use a special GitLab path. It dispatches to the same underlying action handler used by meta-tools, so schemas, policy checks, safe-mode previews, destructive confirmations, and result formatting stay consistent.
+
+## What each call returns
+
+| Call                    | What the assistant receives                                                                                                                             | How the assistant should use it                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `gitlab_search_tools`   | A ranked list of canonical action IDs with the backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, and score | Pick the best `domain.action` candidate and describe it before execution          |
+| `gitlab_describe_tools` | Exact `input_schema`, required params, safety metadata, optional `output_schema`, schema URI, and an executable `gitlab_execute_tool` example           | Build `params` from the schema and avoid guessed field names                      |
+| `gitlab_execute_tool`   | The existing action response from the backing handler, usually Markdown plus structured JSON                                                            | Use the returned data to answer the user, or repair from `isError: true` feedback |
+
+Search and describe are deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
+
+## How search finds actions
+
+`gitlab_search_tools` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, and schema property names.
+
+The ranking pipeline:
+
+1. Normalizes the query by lower-casing it and splitting spaces, dots, underscores, and hyphens.
+2. Removes common stopwords such as `the`, `to`, `with`, and `please`.
+3. Expands synonyms such as `mr` → merge request, `secret` → CI variable/token, `show` → get, and `remove` → delete.
+4. Scores exact canonical IDs first, then aliases, tags, domain/action names, partial ID matches, and broader metadata matches.
+5. Runs fuzzy typo recovery only when lexical search returns no matches.
+6. Searches long prompts in three- to six-term windows so multi-step prompts can surface multiple relevant actions.
+
+Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
+
+:::tip[Use canonical IDs]
+Aliases help search and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. When in doubt, describe the action ID returned by search and execute exactly that ID.
+:::
+
 ## Example
 
 First, search for the action:
@@ -147,6 +178,18 @@ Finally, execute it:
 ```
 
 The assistant should execute the canonical action ID returned by search or describe. Aliases are useful for discovery, but canonical IDs are the stable execution contract.
+
+## Repair behavior
+
+Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should use the message as feedback and retry the right step.
+
+| Failure                       | Recovery                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| Search query is empty         | Retry search with a domain, resource, verb, and useful filters                                |
+| Search is too broad           | Add terms like `project`, `merge request`, `issue`, `pipeline`, `authored by me`, or `opened` |
+| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message                        |
+| Params are rejected           | Describe the action and rebuild `params` from `input_schema`                                  |
+| Destructive action is blocked | Ask the user for explicit approval before retrying with `confirm: true`                       |
 
 ## Destructive actions stay protected
 
