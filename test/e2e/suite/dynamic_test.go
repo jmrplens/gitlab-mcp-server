@@ -121,7 +121,7 @@ func dynamicProjectGet(ctx context.Context, t *testing.T, proj ProjectFixture) p
 
 	description := dynamicDescribe(ctx, t, "project.get")
 	requireDescriptionParam(t, description, "project_id")
-	requireDescriptionOutputParam(t, description, "project_id")
+	requireDescriptionOutputParam(t, description, "id")
 
 	out, err := callToolOn[projects.Output](ctx, sess.dynamic, "gitlab_execute_tool", dynamictools.ExecuteInput{
 		Action: "project.get",
