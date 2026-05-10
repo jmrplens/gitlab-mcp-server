@@ -121,6 +121,7 @@ func dynamicProjectGet(ctx context.Context, t *testing.T, proj ProjectFixture) p
 
 	description := dynamicDescribe(ctx, t, "project.get")
 	requireDescriptionParam(t, description, "project_id")
+	requireDescriptionOutputParam(t, description, "project_id")
 
 	out, err := callToolOn[projects.Output](ctx, sess.dynamic, "gitlab_execute_tool", dynamictools.ExecuteInput{
 		Action: "project.get",
@@ -193,8 +194,7 @@ func dynamicSearch(ctx context.Context, t *testing.T, query string, limit int) d
 }
 
 // dynamicDescribe calls gitlab_describe_tools for one canonical action and
-// returns the action description. The helper also asserts that output_schema is
-// omitted, preserving the token reduction contract added for dynamic describe.
+// returns the action description.
 func dynamicDescribe(ctx context.Context, t *testing.T, action string) dynamictools.ActionDescription {
 	t.Helper()
 
@@ -208,9 +208,6 @@ func dynamicDescribe(ctx context.Context, t *testing.T, action string) dynamicto
 	description := out.Actions[0]
 	if description.ID != action {
 		t.Fatalf("describe ID = %q, want %q", description.ID, action)
-	}
-	if len(description.OutputSchema) != 0 {
-		t.Fatalf("describe %s returned output_schema, want omitted", action)
 	}
 	return description
 }
@@ -247,4 +244,18 @@ func requireDescriptionParam(t *testing.T, description dynamictools.ActionDescri
 		}
 	}
 	t.Fatalf("describe %s missing input parameter %q; required=%v schema=%v", description.ID, param, description.RequiredParams, description.InputSchema)
+}
+
+// requireDescriptionOutputParam fails the current test when description does
+// not expose the expected structured output schema property.
+func requireDescriptionOutputParam(t *testing.T, description dynamictools.ActionDescription, param string) {
+	t.Helper()
+
+	properties, ok := description.OutputSchema["properties"].(map[string]any)
+	if ok {
+		if _, exists := properties[param]; exists {
+			return
+		}
+	}
+	t.Fatalf("describe %s missing output parameter %q; schema=%v", description.ID, param, description.OutputSchema)
 }
