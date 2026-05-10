@@ -97,6 +97,93 @@ sequenceDiagram
     LLM-->>User: Human-readable result
 ```
 
+The three dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
+
+## MCP Response Shapes
+
+### `gitlab_search_tools`
+
+Search returns a ranked shortlist of catalog actions. The Markdown response is a compact table with action IDs, destructive flags, and required params. The `structuredContent` payload uses this shape:
+
+```json
+{
+  "query": "merge request list open authored by me project",
+  "count": 1,
+  "results": [
+    {
+      "id": "merge_request.list",
+      "tool": "gitlab_merge_request",
+      "domain": "merge_request",
+      "action": "list",
+      "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
+      "destructive": false,
+      "required_params": ["project_id"],
+      "usage": "",
+      "score": 275
+    }
+  ]
+}
+```
+
+An empty query returns `isError: true` with example search terms. A query with no matches returns a non-error result with a no-match message and `count: 0`, so the model can broaden the query and try again.
+
+### `gitlab_describe_tools`
+
+Describe hydrates one or more canonical action IDs. It accepts either `action` or `actions`, trims duplicates, resolves unambiguous aliases, and rejects unknown or ambiguous IDs with repair guidance. The `structuredContent` payload includes the exact action-specific input schema and an executable example:
+
+```json
+{
+  "count": 1,
+  "actions": [
+    {
+      "id": "merge_request.list",
+      "tool": "gitlab_merge_request",
+      "domain": "merge_request",
+      "action": "list",
+      "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
+      "destructive": false,
+      "required_params": ["project_id"],
+      "input_schema": {
+        "type": "object",
+        "required": ["project_id"],
+        "properties": {
+          "project_id": { "type": "string" },
+          "state": { "type": "string" },
+          "scope": { "type": "string" }
+        }
+      },
+      "example": {
+        "tool": "gitlab_execute_tool",
+        "arguments": {
+          "action": "merge_request.list",
+          "params": { "project_id": "group/project" }
+        }
+      }
+    }
+  ]
+}
+```
+
+`output_schema` is included when the underlying action route provides one. The Markdown response includes the core metadata and embeds the compact JSON input schema for clients that display only text content.
+
+### `gitlab_execute_tool`
+
+Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters. Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, applies a small set of action-scoped compatibility conversions, and moves top-level `confirm: true` into action params for destructive calls.
+
+```json
+{
+  "action": "merge_request.list",
+  "params": {
+    "project_id": "my-group/my-project",
+    "state": "opened",
+    "scope": "created_by_me",
+    "per_page": 20
+  }
+}
+```
+
+The response is the existing action response: the same Markdown and structured result returned by the backing meta-tool handler. If the action ID is unknown, execute returns `isError: true` and may suggest nearby canonical IDs. If params fail validation, the backing handler returns the same repairable validation error it would return in meta-tool mode.
+
 ## Example Calls
 
 ### Search
@@ -111,7 +198,7 @@ sequenceDiagram
 }
 ```
 
-A result contains canonical action IDs such as `merge_request.list`, domains, summaries, aliases, read-only/destructive metadata, and short reasoning hints.
+A result contains canonical action IDs such as `merge_request.list`, backing meta-tool names, domains, action names, schema URIs, destructive metadata, required params, usage hints, and scores.
 
 ### Describe
 
@@ -124,7 +211,7 @@ A result contains canonical action IDs such as `merge_request.list`, domains, su
 }
 ```
 
-Descriptions include input schemas and examples. Output schemas are intentionally omitted from the dynamic description payload to keep discovery small; output behavior remains documented in action summaries and normal tool responses.
+Descriptions include input schemas and examples. Output schemas are included when the underlying action route provides one; otherwise the normal action response remains the authoritative result contract.
 
 ### Execute
 
@@ -144,6 +231,18 @@ Descriptions include input schemas and examples. Output schemas are intentionall
 ```
 
 The action ID is canonical. Aliases can help search, but execution should use the action ID returned by search or describe.
+
+## Repair Loop
+
+Dynamic mode is designed for repairable failures. Models should treat `isError: true` as feedback, not as a dead end:
+
+| Failure | Server response | Model recovery |
+| --- | --- | --- |
+| Missing search query | Error result with example query terms | Retry `gitlab_search_tools` with domain, resource, verb, and filters |
+| Unknown action ID | Error result, often with `Did you mean ...?` canonical IDs | Search or describe the suggested canonical action ID |
+| Ambiguous alias | Error result listing the valid canonical targets | Pick one listed `domain.action` ID and describe it |
+| Invalid params | Backing handler validation error | Call `gitlab_describe_tools` and rebuild `params` from `input_schema` |
+| Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with confirmation only if approved |
 
 ## Destructive Actions
 
@@ -221,15 +320,16 @@ The canonical action catalog is filtered after policy decisions such as enterpri
 
 `gitlab_search_tools` combines several signals:
 
-- Canonical IDs such as `merge_request.list`.
-- Domain and action names.
-- Human descriptions and aliases.
-- Verb synonyms such as show/list/get and remove/delete.
-- Stopword filtering for natural language queries.
-- Fuzzy matching for typo recovery.
-- Segmented matching for multi-intent prompts, such as `discover project from remote url merge request list current user open authored`.
+- **Normalization**: query text is lower-cased and split on spaces, dots, underscores, and hyphens. Frequent words such as `the`, `to`, `with`, and `please` are dropped.
+- **Search corpus**: each action is indexed by canonical ID, split ID words, backing meta-tool name, domain, action name, aliases, tags, required params, and schema property names.
+- **Synonyms**: common task words expand to domain-specific alternatives. For example, `mr` expands toward merge-request terms, `secret` toward CI variables and tokens, `show` toward `get`, and `remove` toward `delete`.
+- **Exact ranking**: exact canonical IDs score highest, followed by aliases, tags, domain/action names, partial ID matches, and broader search-text matches.
+- **Fuzzy fallback**: typo-tolerant matching runs only when exact lexical search returns no matches. It uses bounded Levenshtein distance up to two edits, ignores query tokens shorter than three characters, and requires all terms for one- or two-term queries or all but one term for longer queries.
+- **Segmented matching**: long multi-intent prompts are also searched in overlapping three- to six-term windows. This helps prompts such as `discover project from remote url merge request list current user open authored` surface both project discovery and merge-request listing candidates.
 
 The goal is not to make the model guess blindly. The model should use search to shortlist actions, describe to fetch exact schemas, then execute.
+
+Search returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
 
 ## Dynamic vs Meta-Tools
 
