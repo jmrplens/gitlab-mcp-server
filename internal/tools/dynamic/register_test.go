@@ -371,10 +371,13 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 		t.Fatalf("DescribeOutput JSON missing output_schema: %s", structured)
 	}
 	markdown := textContent(result)
-	for _, notWant := range []string{"input_schema", "output_schema", "properties"} {
+	for _, notWant := range []string{"input_schema", "output_schema"} {
 		if strings.Contains(markdown, notWant) {
 			t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
 		}
+	}
+	if !strings.Contains(markdown, "**Input schema**") || !strings.Contains(markdown, "```json") || !strings.Contains(markdown, "properties") {
+		t.Fatalf("Describe() markdown missing compact input schema: %s", markdown)
 	}
 
 	projectList := actionDescriptionByID(t, output, "project.list")
@@ -394,8 +397,8 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	if !slices.Contains(mergeRequestList.RequiredParams, "project_id") {
 		t.Fatalf("merge_request.list RequiredParams = %v, want project_id", mergeRequestList.RequiredParams)
 	}
-	if got := mergeRequestList.Example.Arguments["params"].(map[string]any)["project_id"]; got != 123 {
-		t.Fatalf("merge_request.list example project_id = %v, want 123", got)
+	if got := mergeRequestList.Example.Arguments["params"].(map[string]any)["project_id"]; got != "group/project" {
+		t.Fatalf("merge_request.list example project_id = %v, want group/project", got)
 	}
 
 	currentUserStatus := actionDescriptionByID(t, output, "user.current_user_status")
@@ -533,7 +536,7 @@ func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
 	}
 
 	got := strings.Join(requiredParams(schema), ",")
-	if got != "content,file_name,project_id,title" {
+	if got != "content,file_name,files,project_id,title" {
 		t.Fatalf("requiredParams() = %q", got)
 	}
 }

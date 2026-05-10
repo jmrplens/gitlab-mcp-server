@@ -28,6 +28,12 @@ other. Raw reports and traces are not committed.
 Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL META RESULTS -->
 
+## Dynamic 2-Tool Results
+
+<!-- START MODEL EVAL DYNAMIC2 RESULTS -->
+No Dynamic 2-tool evaluation results have been published yet.
+<!-- END MODEL EVAL DYNAMIC2 RESULTS -->
+
 ## Dynamic 3-Tool Results
 
 <!-- START MODEL EVAL DYNAMIC3 RESULTS -->

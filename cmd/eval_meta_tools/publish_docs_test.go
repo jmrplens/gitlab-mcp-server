@@ -403,8 +403,11 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 	if got := dockerLiveStatus(publishModelSummary{DockerBacked: false}); got != "Not Docker-backed" {
 		t.Fatalf("dockerLiveStatus(non-docker) = %q", got)
 	}
-	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic2}); got != publishSectionDynamic3 {
-		t.Fatalf("publishSectionForReport(dynamic-2) = %q, want dynamic3", got)
+	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic2}); got != publishSectionDynamic2 {
+		t.Fatalf("publishSectionForReport(dynamic-2) = %q, want dynamic2", got)
+	}
+	if got := publishSectionForReport(publishReport{ToolSurface: "experimental"}); got != publishSectionUnknown {
+		t.Fatalf("publishSectionForReport(unknown) = %q, want unknown", got)
 	}
 	if got := dockerBackendLabel(publishRow{}); got != "-" {
 		t.Fatalf("dockerBackendLabel(empty) = %q", got)

@@ -24,7 +24,7 @@ import (
 // configuration.
 // This is provided by the caller to decouple pool management from
 // registration logic.
-type ServerFactory func(client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server
+type ServerFactory func(client *gitlabclient.Client, cfg *config.ServerConfig) (*mcp.Server, error)
 
 // poolEntry holds a server instance and its associated GitLab client,
 // along with LRU tracking and session validation metadata.
@@ -128,7 +128,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 // creating one if it doesn't exist. The pool key is derived from both the
 // token and gitlabURL, so the same token against different GitLab instances
 // gets separate server entries. It is safe for concurrent use.
-// Returns an error if the GitLab client cannot be created.
+// Returns an error if the GitLab client or MCP server cannot be created.
 func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	if token == "" {
 		return nil, errors.New("empty token: authentication required")
@@ -178,7 +178,10 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 	client.SetEnterprise(p.cfg.Enterprise)
 
 	entryCfg := p.entryConfig(client, gitlabURL)
-	server := p.factory(client, entryCfg)
+	server, err := p.factory(client, entryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating MCP server for pool: %w", err)
+	}
 	element := p.lru.PushFront(key)
 	now := time.Now()
 	p.entries[key] = &poolEntry{

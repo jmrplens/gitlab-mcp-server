@@ -181,7 +181,7 @@ The host passes these environment variables through to the container:
 | `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
 | `GITLAB_TOKEN`           | Yes      | Personal Access Token                                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
-| `META_TOOLS`             | No       | Tool catalog selector: `true`, `false`, `dynamic`, `dynamic-2`, or `dynamic-3` (default `true`) |
+| `META_TOOLS`             | No       | Legacy boolean selector: `true` for meta-tools or `false` for individual tools (default `true`) |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Premium/Ultimate tools (default `false`)          |

@@ -376,6 +376,11 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			params: map[string]any{"id": 99},
 			want:   map[string]any{"group_id": "99"},
 		},
+		"id to user_id": {
+			schema: map[string]any{"properties": map[string]any{"user_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"id": "123"},
+			want:   map[string]any{"user_id": int64(123)},
+		},
 		"ambiguous id is preserved": {
 			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}, "group_id": map[string]any{"type": "integer"}}},
 			params: map[string]any{"id": "42"},

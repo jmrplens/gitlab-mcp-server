@@ -208,6 +208,9 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 		if got := placeholderForParam("due_date"); got != "YYYY-MM-DD" {
 			t.Fatalf("placeholderForParam(date) = %v, want YYYY-MM-DD", got)
 		}
+		if got := placeholderForParam("project_id"); got != "group/project" {
+			t.Fatalf("placeholderForParam(project_id) = %v, want group/project", got)
+		}
 		if got := placeholderForParam("title"); got != "value" {
 			t.Fatalf("placeholderForParam(title) = %v, want value", got)
 		}

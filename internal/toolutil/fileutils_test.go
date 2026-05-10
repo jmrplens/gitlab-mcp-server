@@ -109,13 +109,17 @@ func TestCanonicalImportArchivePath_TempArchive(t *testing.T) {
 	if err := os.WriteFile(path, []byte("archive"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	want, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", path, err)
+	}
 
 	got, err := CanonicalImportArchivePath(path)
 	if err != nil {
 		t.Fatalf("CanonicalImportArchivePath() error: %v", err)
 	}
-	if got != path {
-		t.Fatalf("canonical path = %q, want %q", got, path)
+	if got != want {
+		t.Fatalf("canonical path = %q, want %q", got, want)
 	}
 }
 
@@ -176,13 +180,17 @@ func TestCanonicalImportArchivePath_AllowsConfiguredDirectory(t *testing.T) {
 	if err := os.WriteFile(path, []byte("archive"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	want, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", path, err)
+	}
 
 	got, err := CanonicalImportArchivePath(path)
 	if err != nil {
 		t.Fatalf("CanonicalImportArchivePath() error: %v", err)
 	}
-	if got != path {
-		t.Fatalf("canonical path = %q, want %q", got, path)
+	if got != want {
+		t.Fatalf("canonical path = %q, want %q", got, want)
 	}
 }
 

@@ -3,6 +3,7 @@ package dynamic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -1332,11 +1333,14 @@ func appendPreferredAlternativeRequiredParams(names []string, schema map[string]
 		if !ok || len(alternatives) == 0 {
 			continue
 		}
-		alternative, ok := alternatives[0].(map[string]any)
-		if !ok {
-			continue
+		for _, raw := range alternatives {
+			alternative, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			names = appendRequiredParamNames(names, alternative["required"])
 		}
-		return appendRequiredParamNames(names, alternative["required"])
+		return names
 	}
 	return names
 }
@@ -1381,6 +1385,18 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 }
 
 func placeholderForParam(name string) any {
+	switch name {
+	case "project_id", "target_project_id":
+		return "group/project"
+	case "group_id", "namespace_id":
+		return "group/subgroup"
+	case "file_path", "artifact_path":
+		return "path/to/file"
+	case "ref", "branch", "branch_name", "target_branch", "source_branch":
+		return "main"
+	case "url", "remote_url", "external_url", "web_url":
+		return "https://example.com"
+	}
 	if strings.HasSuffix(name, "_id") || name == "id" || strings.HasSuffix(name, "iid") {
 		return 123
 	}
@@ -1436,9 +1452,28 @@ func formatDescribeOutput(output DescribeOutput) string {
 		if len(action.RequiredParams) > 0 {
 			fmt.Fprintf(&b, "- **Required params**: `%s`\n", strings.Join(action.RequiredParams, "`, `"))
 		}
-		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n\n", action.SchemaURI)
+		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n", action.SchemaURI)
+		if schemaJSON := compactSchemaJSON(action.InputSchema); schemaJSON != "" {
+			b.WriteString("- **Input schema**:\n\n")
+			b.WriteString("```json\n")
+			b.WriteString(schemaJSON)
+			b.WriteString("\n```\n")
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func compactSchemaJSON(schema map[string]any) string {
+	if len(schema) == 0 {
+		return ""
+	}
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		slog.Debug("dynamic action schema marshal failed", "error", err)
+		return ""
+	}
+	return string(encoded)
 }
 
 func formatFindOutput(output FindOutput) string {

@@ -1214,16 +1214,13 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(tc.steps))
 			defer cleanup()
 
-			var client = testutil.NewTestClient(t, http.NewServeMux())
 			var postHits atomic.Int32
-			if tc.wantError == "" {
-				mux := http.NewServeMux()
-				mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
-					postHits.Add(1)
-					testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
-				})
-				client = testutil.NewTestClient(t, mux)
-			}
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+				postHits.Add(1)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
 
 			out, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
 			if tc.wantError == "" {
@@ -1240,6 +1237,9 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 			}
 			if err == nil {
 				t.Fatal("expected error")
+			}
+			if postHits.Load() != 0 {
+				t.Fatalf("project create POST hits = %d, want 0 for error path", postHits.Load())
 			}
 			if !strings.Contains(err.Error(), tc.wantError) {
 				t.Errorf("error = %q, want to contain %q", err, tc.wantError)

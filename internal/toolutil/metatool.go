@@ -487,22 +487,20 @@ var commonParamAliases = []struct {
 	{Alias: "name", Canonical: "environment"},
 }
 
-var idAliasCanonicals = []string{"project_id", "group_id", "snippet_id", "runner_id"}
-
-func normalizeIDAlias(params map[string]any, accepts func(string) bool, clone func() map[string]any) {
+func normalizeIDAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool, clone func() map[string]any) {
 	value, hasID := params["id"]
 	if !hasID || accepts("id") {
 		return
 	}
 	canonical := ""
-	for _, candidate := range idAliasCanonicals {
-		if !accepts(candidate) {
+	for name := range fields {
+		if name == "id" || !strings.HasSuffix(name, "_id") {
 			continue
 		}
 		if canonical != "" {
 			return
 		}
-		canonical = candidate
+		canonical = name
 	}
 	if canonical == "" {
 		return
@@ -556,7 +554,7 @@ func normalizeParamAliases(params map[string]any, target reflect.Type) map[strin
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
-	normalizeIDAlias(out, accepts, clone)
+	normalizeIDAlias(out, fields, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {
@@ -658,7 +656,7 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 		updated[pair.Canonical] = value
 		delete(updated, pair.Alias)
 	}
-	normalizeIDAlias(out, accepts, clone)
+	normalizeIDAlias(out, fields, accepts, clone)
 	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
 		if _, hasPaused := out["paused"]; !hasPaused {
 			if active, ok := value.(bool); ok {

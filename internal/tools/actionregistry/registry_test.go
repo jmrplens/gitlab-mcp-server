@@ -22,6 +22,9 @@ func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	}
 
 	catalog := FromActionMaps(routes)
+	if _, err := FromActionMapsWithError(routes); err != nil {
+		t.Fatalf("FromActionMapsWithError() error = %v", err)
+	}
 	if catalog.CountGroups() != 2 {
 		t.Fatalf("CountGroups() = %d, want 2", catalog.CountGroups())
 	}
@@ -48,6 +51,18 @@ func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	}
 	if ToActionMaps(catalog)["gitlab_project"]["list"].InputSchema == nil {
 		t.Fatal("ToActionMaps(catalog) missing project.list schema")
+	}
+}
+
+func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
+	catalog, err := FromActionMapsWithError(map[string]toolutil.ActionMap{
+		"": {"get": testRoute(false)},
+	})
+	if err == nil {
+		t.Fatal("FromActionMapsWithError() error = nil, want error")
+	}
+	if catalog == nil {
+		t.Fatal("FromActionMapsWithError() catalog = nil, want partial catalog")
 	}
 }
 
@@ -113,6 +128,9 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	}
 	if err := catalog.AddAction("gitlab_project", Action{Name: "bad", ToolName: "gitlab_issue", Route: testRoute(false)}); err == nil {
 		t.Fatal("AddAction(invalid) error = nil, want error")
+	}
+	if err := catalog.AddAction("gitlab_project", Action{Name: "bad_id", ID: "issue.delete", Route: testRoute(false)}); err == nil {
+		t.Fatal("AddAction(non-canonical ID) error = nil, want error")
 	}
 	if catalog.CountActions() != 2 {
 		t.Fatalf("CountActions() after failed AddAction = %d, want 2", catalog.CountActions())

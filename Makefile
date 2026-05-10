@@ -15,10 +15,11 @@ BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
 GO_SOURCE_DIRS=.
-GO_VET_PKGS=./cmd/... ./internal/...
-GO_E2E_VET_PKGS=./test/e2e/...
+GO_VET_PKGS=./...
+GO_E2E_VET_PKGS=./...
 GO_E2E_VET_TAGS=e2e
 GO_ANALYSIS_PKGS=./...
+GO_ANALYSIS_GOFLAGS=GOFLAGS=-tags=$(GO_E2E_VET_TAGS)
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -187,41 +188,41 @@ vet:
 ## Docs: https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize
 modernize:
 	@echo === modernize ===
-	modernize $(GO_ANALYSIS_PKGS)
+	env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS)
 
 ## modernize-fix: apply all modernization fixes automatically (writes files)
 ## Safe to run en masse — fixes should not change program behavior.
 modernize-fix:
 	@echo === modernize -fix ===
-	modernize -fix $(GO_ANALYSIS_PKGS)
+	env $(GO_ANALYSIS_GOFLAGS) modernize -fix $(GO_ANALYSIS_PKGS)
 
 ## golangci-lint: meta-linter orchestrating 25+ linters via .golangci.yml.
 ## Includes security (gosec), style (revive), bugs (errcheck, bodyclose), etc.
 ## Docs: https://golangci-lint.run/
 golangci-lint:
 	@echo === golangci-lint ===
-	golangci-lint run $(GO_ANALYSIS_PKGS)
+	golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## gosec: OWASP-oriented security scanner with taint analysis (G1xx-G7xx).
 ## Detects credentials, SQL injection, path traversal, SSRF, command injection.
 ## Docs: https://github.com/securego/gosec
 gosec:
 	@echo === gosec ===
-	gosec -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS)
+	gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS)
 
 ## staticcheck: advanced static analysis covering SA/S/ST/QF check categories.
 ## Finds bugs, simplifications, deprecations, and style issues.
 ## Docs: https://staticcheck.dev/
 staticcheck:
 	@echo === staticcheck ===
-	staticcheck $(GO_ANALYSIS_PKGS)
+	staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
 ## Only reports vulnerabilities where the vulnerable function is actually called.
 ## Docs: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
 govulncheck:
 	@echo === govulncheck ===
-	govulncheck $(GO_ANALYSIS_PKGS)
+	govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## goimports: apply goimports formatting — gofmt + import grouping/ordering.
 ## Groups: stdlib, external, local module. Removes unused, adds missing imports.
@@ -310,11 +311,11 @@ analyze:
 	run_output_check "[1/9] goimports (check)" goimports -l $(GO_SOURCE_DIRS); \
 	run_output_check "[2/9] gofmt (check)" gofmt -l -s $(GO_SOURCE_DIRS); \
 	run_check "[3/9] go vet" sh -c 'go vet $(GO_VET_PKGS) && go vet -tags $(GO_E2E_VET_TAGS) $(GO_E2E_VET_PKGS)'; \
-	run_check "[4/9] modernize" modernize $(GO_ANALYSIS_PKGS); \
-	run_check "[5/9] golangci-lint" golangci-lint run $(GO_ANALYSIS_PKGS); \
-	run_check "[6/9] gosec" gosec -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS); \
-	run_check "[7/9] staticcheck" staticcheck $(GO_ANALYSIS_PKGS); \
-	run_check "[8/9] govulncheck" govulncheck $(GO_ANALYSIS_PKGS); \
+	run_check "[4/9] modernize" env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS); \
+	run_check "[5/9] golangci-lint" golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/9] gosec" gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS); \
+	run_check "[7/9] staticcheck" staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[8/9] govulncheck" govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
 	run_check "[9/9] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
@@ -335,7 +336,7 @@ analyze-fix:
 	@echo [2/4] gofmt -s -w
 	gofmt -s -w $(GO_SOURCE_DIRS)
 	@echo [3/4] modernize -fix
-	-modernize -fix $(GO_ANALYSIS_PKGS)
+	-env $(GO_ANALYSIS_GOFLAGS) modernize -fix $(GO_ANALYSIS_PKGS)
 	@echo [4/4] markdownlint --fix
 	-npx markdownlint-cli2 --fix "**/*.md" "#plan"
 	@echo === Fixes applied. Run 'make analyze' to verify. ===
@@ -369,27 +370,27 @@ analyze-report:
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 4. modernize" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-modernize $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 5. golangci-lint" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint run $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 6. gosec" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-gosec -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 7. staticcheck" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-staticcheck $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 8. govulncheck" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-govulncheck $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 9. markdownlint" >> $(ANALYSIS_DIR)/report.txt

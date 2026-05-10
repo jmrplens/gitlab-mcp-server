@@ -346,6 +346,10 @@ Current published result: **2026-05-05 Full Docker Economy Run**.
 The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL META SUMMARY -->
 
+<!-- START MODEL EVAL DYNAMIC2 SUMMARY -->
+No Dynamic 2-tool evaluation summary has been published yet.
+<!-- END MODEL EVAL DYNAMIC2 SUMMARY -->
+
 <!-- START MODEL EVAL DYNAMIC3 SUMMARY -->
 Current published result: **Dynamic 3-tool all-provider Docker run 2026-05-09**.
 

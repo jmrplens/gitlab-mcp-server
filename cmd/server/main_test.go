@@ -93,6 +93,15 @@ func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server {
+	t.Helper()
+	server, err := createServer(client, cfg, nil)
+	if err != nil {
+		t.Fatalf("createServer() error: %v", err)
+	}
+	return server
+}
+
 // newTestMCPServer creates an MCP server with the full individual tool catalog,
 // resources, and prompts registered. HTTP protocol tests use it as a stable
 // handler target for initialize and tools/list requests.
@@ -695,7 +704,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{MetaTools: false}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
@@ -855,7 +864,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{MetaTools: true}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
@@ -900,7 +909,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 // advertising meta-schema resources for the catalog-backed action registry.
 func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
 	session := newInMemorySession(t, server)
 
 	toolsResult, err := session.ListTools(t.Context(), nil)
@@ -934,7 +943,7 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 // dynamic surface exposes find and execute while retaining catalog schemas.
 func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic2}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic2})
 	session := newInMemorySession(t, server)
 
 	toolsResult, err := session.ListTools(t.Context(), nil)
@@ -967,7 +976,7 @@ func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
 // three-tool dynamic selector remains equivalent to TOOL_SURFACE=dynamic.
 func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3})
 	session := newInMemorySession(t, server)
 
 	toolsResult, err := session.ListTools(t.Context(), nil)
@@ -1002,11 +1011,11 @@ func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
 // workflow, static data resources, and prompts.
 func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := createServer(client, &config.ServerConfig{
+	server := mustCreateServer(t, client, &config.ServerConfig{
 		MetaTools:         true,
 		ToolSurface:       config.ToolSurfaceDynamic,
 		CapabilitySurface: config.CapabilitySurfaceMinimal,
-	}, nil)
+	})
 	session := newInMemorySession(t, server)
 
 	resourcesResult, err := session.ListResources(t.Context(), nil)
@@ -1046,7 +1055,7 @@ func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
 // keeps discovery tools but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
 	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
@@ -1076,7 +1085,7 @@ func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	individual := createServer(client, &config.ServerConfig{MetaTools: false}, nil)
+	individual := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false})
 	individualSession := newInMemorySession(t, individual)
 	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -1088,7 +1097,7 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 		}
 	}
 
-	meta := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	meta := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	metaSession := newInMemorySession(t, meta)
 	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -1115,7 +1124,7 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 		MetaTools:    true,
 		ExcludeTools: []string{"gitlab_runner"},
 	}
-	server := createServer(client, cfg, nil)
+	server := mustCreateServer(t, client, cfg)
 	session := newInMemorySession(t, server)
 
 	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"})
@@ -1147,10 +1156,10 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 // server registers a different CE/Enterprise catalog later in the same process.
 func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
-	ceServer := createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: false}, nil)
+	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: false})
 	ceSession := newInMemorySession(t, ceServer)
 
-	_ = createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: true}, nil)
+	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: true})
 
 	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
 	if err == nil {
@@ -1168,10 +1177,10 @@ func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
 func TestCreateServer_FilteringModes(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	readAPIServer := createServer(client, &config.ServerConfig{
+	readAPIServer := mustCreateServer(t, client, &config.ServerConfig{
 		MetaTools:   false,
 		TokenScopes: []string{"read_api"},
-	}, nil)
+	})
 	readAPITools, err := listRegisteredTools(readAPIServer, "read-api-filter-test")
 	if err != nil {
 		t.Fatalf("list read-api tools: %v", err)
@@ -1182,7 +1191,7 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 		}
 	}
 
-	safeModeServer := createServer(client, &config.ServerConfig{MetaTools: false, SafeMode: true}, nil)
+	safeModeServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false, SafeMode: true})
 	safeModeTools, err := listRegisteredTools(safeModeServer, "safe-mode-test")
 	if err != nil {
 		t.Fatalf("list safe-mode tools: %v", err)
@@ -1203,7 +1212,7 @@ func TestCreateServer_MetaSchemaRouteFilterError(t *testing.T) {
 	}
 	t.Cleanup(func() { listRegisteredToolsForInspection = original })
 
-	server := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	session := newInMemorySession(t, server)
 	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"}); err != nil {
 		t.Fatalf("schema index should still be readable after filter error: %v", err)

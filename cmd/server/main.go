@@ -278,7 +278,7 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  META_TOOLS                Tool surface selector: true|false|dynamic|dynamic-2|dynamic-3 (default true)
+  META_TOOLS                Legacy tool selector: true|false (default true)
   TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
@@ -536,7 +536,10 @@ func runStdio(ctx context.Context) error {
 	}
 
 	updater := newUpdaterForTools(cfg)
-	server := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	server, err := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	if err != nil {
+		return fmt.Errorf("creating MCP server: %w", err)
+	}
 	return serveStdio(ctx, server)
 }
 
@@ -544,9 +547,9 @@ func runStdio(ctx context.Context) error {
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
-func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) *mcp.Server {
+func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*mcp.Server, error) {
 	if client == nil {
-		panic("createServer: client must not be nil")
+		return nil, errors.New("createServer: client must not be nil")
 	}
 
 	completionHandler := completions.NewHandler(client)
@@ -625,14 +628,14 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
 		if catalogErr != nil {
-			panic(fmt.Sprintf("build dynamic action catalog: %v", catalogErr))
+			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		dynamictools.RegisterCatalogTools(server, actionCatalog)
 	case config.ToolSurfaceDynamic2:
 		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
 		if catalogErr != nil {
-			panic(fmt.Sprintf("build dynamic action catalog: %v", catalogErr))
+			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
@@ -648,7 +651,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
 		if filterErr != nil {
-			panic(fmt.Sprintf("filter meta action catalog: %v", filterErr))
+			return nil, fmt.Errorf("filter meta action catalog: %w", filterErr)
 		}
 		actionCatalog = filteredCatalog
 		metaSchemaRoutes = actionCatalog.ActionMaps()
@@ -736,7 +739,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		)
 	}
 
-	return server
+	return server, nil
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context
@@ -759,7 +762,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		"commit", commit,
 	)
 
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) *mcp.Server {
+	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		return createServer(client, serverCfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
@@ -1089,7 +1092,10 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("creating dummy client: %w", err)
 	}
 
-	srv := createServer(dummyClient, cfg.ServerConfig(), nil)
+	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -84,7 +84,7 @@ func TestDynamicToolSurface_SearchDescribeExecuteReadOnlyWorkflow(t *testing.T) 
 	requireTruef(t, project.ID == proj.ID, "project.get ID = %d, want %d", project.ID, proj.ID)
 	requireTruef(t, project.PathWithNamespace == proj.Path, "project.get path = %q, want %q", project.PathWithNamespace, proj.Path)
 
-	readme := dynamicRepositoryFileGet(ctx, t, proj)
+	readme := dynamicRepositoryFileGet(ctx, t, proj, project.DefaultBranch)
 	requireTruef(t, readme.FilePath == "README.md", "file_get file_path = %q, want README.md", readme.FilePath)
 	requireTruef(t, strings.TrimSpace(readme.Content) != "", "file_get content should not be empty")
 
@@ -135,7 +135,7 @@ func dynamicProjectGet(ctx context.Context, t *testing.T, proj ProjectFixture) p
 // dynamic search can resolve long repository-content phrasing and that execute
 // forwards file-specific parameters to the underlying GitLab repository file
 // handler.
-func dynamicRepositoryFileGet(ctx context.Context, t *testing.T, proj ProjectFixture) files.Output {
+func dynamicRepositoryFileGet(ctx context.Context, t *testing.T, proj ProjectFixture, branch string) files.Output {
 	t.Helper()
 
 	search := dynamicSearch(ctx, t, "download repository file content from project ref", 5)
@@ -151,7 +151,7 @@ func dynamicRepositoryFileGet(ctx context.Context, t *testing.T, proj ProjectFix
 		Params: map[string]any{
 			"project_id": proj.pidStr(),
 			"file_path":  "README.md",
-			"ref":        defaultBranch,
+			"ref":        branch,
 		},
 	})
 	requireNoError(t, err, "dynamic execute repository.file_get")

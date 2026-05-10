@@ -80,7 +80,15 @@ func NewCatalog() *Catalog {
 
 // FromActionMaps converts legacy route maps into a canonical catalog.
 func FromActionMaps(routes map[string]toolutil.ActionMap) *Catalog {
+	catalog, _ := FromActionMapsWithError(routes)
+	return catalog
+}
+
+// FromActionMapsWithError converts legacy route maps into a canonical catalog
+// and reports invalid groups instead of panicking.
+func FromActionMapsWithError(routes map[string]toolutil.ActionMap) (*Catalog, error) {
 	catalog := NewCatalog()
+	var errs []error
 	toolNames := make([]string, 0, len(routes))
 	for toolName := range routes {
 		toolNames = append(toolNames, toolName)
@@ -98,10 +106,10 @@ func FromActionMaps(routes map[string]toolutil.ActionMap) *Catalog {
 			group.SetAction(Action{Name: actionName, Route: actions[actionName]})
 		}
 		if err := catalog.AddGroup(group); err != nil {
-			panic(fmt.Sprintf("build action catalog from route maps: %v", err))
+			errs = append(errs, fmt.Errorf("%s: %w", toolName, err))
 		}
 	}
-	return catalog
+	return catalog, errors.Join(errs...)
 }
 
 // ToActionMaps returns legacy route maps for compatibility with existing
@@ -518,8 +526,11 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 	if action.Domain == "" {
 		action.Domain = DomainFromToolName(action.ToolName)
 	}
+	expectedID := ActionID(action.Domain + "." + action.Name)
 	if action.ID == "" {
-		action.ID = ActionID(action.Domain + "." + action.Name)
+		action.ID = expectedID
+	} else if action.ID != expectedID {
+		return Action{}, fmt.Errorf("action %q has id %q, want %q", action.Name, action.ID, expectedID)
 	}
 	if action.SchemaURI == "" {
 		action.SchemaURI = toolutil.MetaSchemaURI(action.ToolName, action.Name)

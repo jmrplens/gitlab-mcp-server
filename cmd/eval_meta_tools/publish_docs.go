@@ -41,7 +41,9 @@ const (
 	publishElicitationContinue    = "elicitation_unsupported_continue"
 
 	publishSectionMeta     = "meta"
+	publishSectionDynamic2 = "dynamic2"
 	publishSectionDynamic3 = "dynamic3"
+	publishSectionUnknown  = "unknown"
 
 	usageModelRequests    = "Model requests"
 	usageToolCallsEmitted = "Tool calls emitted"
@@ -210,7 +212,7 @@ func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
 		keys[publishSectionForReport(report)] = true
 	}
 	sections := make([]publishDocSection, 0, len(keys))
-	for _, key := range []string{publishSectionMeta, publishSectionDynamic3} {
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic2, publishSectionDynamic3} {
 		if keys[key] {
 			sections = append(sections, publishDocSectionForKey(key))
 		}
@@ -235,16 +237,26 @@ func publishSectionForReport(report publishReport) string {
 	switch surface {
 	case "", config.ToolSurfaceMeta:
 		return publishSectionMeta
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		return publishSectionDynamic3
+	case config.ToolSurfaceDynamic2:
+		return publishSectionDynamic2
 	default:
-		return publishSectionMeta
+		return publishSectionUnknown
 	}
 }
 
 // publishDocSectionForKey returns marker pairs for a publication section.
 func publishDocSectionForKey(sectionKey string) publishDocSection {
 	switch sectionKey {
+	case publishSectionDynamic2:
+		return publishDocSection{
+			Key:                publishSectionDynamic2,
+			ResultsStartMarker: "<!-- START MODEL EVAL DYNAMIC2 RESULTS -->",
+			ResultsEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 RESULTS -->",
+			SummaryStartMarker: "<!-- START MODEL EVAL DYNAMIC2 SUMMARY -->",
+			SummaryEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 SUMMARY -->",
+		}
 	case publishSectionDynamic3:
 		return publishDocSection{
 			Key:                publishSectionDynamic3,
@@ -253,7 +265,7 @@ func publishDocSectionForKey(sectionKey string) publishDocSection {
 			SummaryStartMarker: modelEvalDynamic3SummaryStart,
 			SummaryEndMarker:   modelEvalDynamic3SummaryEnd,
 		}
-	default:
+	case publishSectionMeta:
 		return publishDocSection{
 			Key:                publishSectionMeta,
 			ResultsStartMarker: modelEvalMetaResultsStart,
@@ -261,6 +273,8 @@ func publishDocSectionForKey(sectionKey string) publishDocSection {
 			SummaryStartMarker: modelEvalMetaSummaryStart,
 			SummaryEndMarker:   modelEvalMetaSummaryEnd,
 		}
+	default:
+		return publishDocSection{Key: publishSectionUnknown}
 	}
 }
 
@@ -797,6 +811,9 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
+		if section := publishSectionForReport(report); section == publishSectionUnknown {
+			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
+		}
 		if report.Backend == backendGitLab && report.ToolExecution != "mcp" {
 			return fmt.Errorf("publish input %s uses backend=gitlab but Tool execution is %q; Docker metrics require --execute-tools", report.Path, report.ToolExecution)
 		}

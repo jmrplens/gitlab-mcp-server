@@ -56,6 +56,13 @@ const (
 	publicKeyJSON = `{"public_key": "ssh-rsa AAAAB3..."}`
 )
 
+func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
+	got := redactMirrorURL("https://user:token@example.com/group/repo.git")
+	if got != "https://redacted@example.com/group/repo.git" {
+		t.Fatalf("redactMirrorURL() = %q", got)
+	}
+}
+
 // List tests.
 
 // TestList_Success verifies that List lists a project push mirror on a successful GitLab API response.
@@ -156,6 +163,23 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.UpdateStatus != "finished" {
 		t.Errorf("UpdateStatus = %q, want finished", out.UpdateStatus)
+	}
+}
+
+func TestGet_RedactsCredentialsInOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
+			testutil.RespondJSON(w, http.StatusOK, strings.Replace(mirrorJSON, "https://example.com/repo.git", "https://user:token@example.com/repo.git", 1))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MirrorID: 42})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if out.URL != "https://redacted@example.com/repo.git" {
+		t.Fatalf("URL = %q, want redacted URL", out.URL)
 	}
 }
 

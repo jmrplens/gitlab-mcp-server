@@ -292,10 +292,12 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
 		os.Exit(1)
 	}
+	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
@@ -368,10 +370,12 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "server connect (resources): %v\n", err)
 		os.Exit(1)
 	}
+	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
@@ -433,10 +437,12 @@ func measurePrompts(client *gitlabclient.Client) int {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "server connect (prompts): %v\n", err)
 		os.Exit(1)
 	}
+	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
