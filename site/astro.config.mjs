@@ -330,6 +330,11 @@ export default defineConfig({
 							translations: { es: "Meta-herramientas" },
 						},
 						{
+							slug: "tools/dynamic-tools",
+							label: "Dynamic Toolset",
+							translations: { es: "Herramientas dinámicas" },
+						},
+						{
 							slug: "tools/orbit",
 							label: "Orbit",
 							translations: { es: "Orbit" },
