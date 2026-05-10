@@ -145,7 +145,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Auto-detect authenticated username from token.
-	userInfo, userErr := glClient.CurrentUser(context.Background())
+	userInfo, userErr := currentUserWithRetry(glClient, 60*time.Second)
 	if userErr != nil {
 		log.Fatalf("e2e: auto-detect username: %v", userErr)
 	}
@@ -515,6 +515,40 @@ func waitForAPIStable(client *gitlabclient.Client, timeout time.Duration) error 
 		}
 	}
 	return fmt.Errorf("GitLab API not stable after %v of concurrent probing", timeout)
+}
+
+// currentUserWithRetry waits for the first authenticated GitLab API endpoint
+// used by E2E setup to become stable after Docker GitLab reports readiness.
+func currentUserWithRetry(client *gitlabclient.Client, timeout time.Duration) (*gitlabclient.CurrentUserInfo, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for attempt := 1; time.Now().Before(deadline); attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		userInfo, err := client.CurrentUser(ctx)
+		cancel()
+		if err == nil {
+			return userInfo, nil
+		}
+		lastErr = err
+		if !isTransientNetworkError(err) {
+			return nil, err
+		}
+		log.Printf("e2e: current user lookup hit transient GitLab error (attempt %d): %v", attempt, err)
+		backoff := time.Duration(attempt) * 500 * time.Millisecond
+		if backoff > 2*time.Second {
+			backoff = 2 * time.Second
+		}
+		if remaining := time.Until(deadline); backoff > remaining {
+			backoff = remaining
+		}
+		if backoff > 0 {
+			time.Sleep(backoff)
+		}
+	}
+	if lastErr == nil {
+		lastErr = context.DeadlineExceeded
+	}
+	return nil, fmt.Errorf("current user endpoint not stable after %v: %w", timeout, lastErr)
 }
 
 // ---------------------------------------------------------------------------
