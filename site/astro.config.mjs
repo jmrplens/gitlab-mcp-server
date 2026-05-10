@@ -79,6 +79,12 @@ const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
 	"GitLab MCP Server Dynamic Toolset reduces MCP context from 550K to 2.2K tokens";
+const socialImage = {
+	"@type": "ImageObject",
+	url: socialImageUrl,
+	width: 1200,
+	height: 630,
+};
 
 const jsonLd = JSON.stringify({
 	"@context": "https://schema.org",
@@ -105,9 +111,9 @@ const jsonLd = JSON.stringify({
 			url: `${fullUrl}/`,
 			description: siteDescription,
 			inLanguage: ["en", "es"],
-			image: socialImageUrl,
+			image: socialImage,
 			publisher: { "@id": authorId },
-			mainEntity: { "@id": softwareId },
+			about: { "@id": softwareId },
 		},
 		{
 			"@type": "SoftwareApplication",
@@ -119,8 +125,8 @@ const jsonLd = JSON.stringify({
 			url: repositoryUrl,
 			downloadUrl: releasesUrl,
 			codeRepository: repositoryUrl,
-			image: socialImageUrl,
-			screenshot: socialImageUrl,
+			image: socialImage,
+			screenshot: socialImage,
 			license: "https://opensource.org/licenses/MIT",
 			isAccessibleForFree: true,
 			keywords:
