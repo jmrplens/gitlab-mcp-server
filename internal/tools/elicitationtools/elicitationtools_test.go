@@ -1237,7 +1237,7 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: actionAccept, content: map[string]any{"name": "proj"}},
 				{action: "decline", content: nil},                                       // decline description
 				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
-				{action: actionAccept, content: map[string]any{"confirmed": false}},     // explicit no for readme
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},    // explicit no for readme
 				{action: "cancel", content: nil},                                        // cancel default branch
 			},
 			wantError: "default branch",

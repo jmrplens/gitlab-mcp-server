@@ -129,11 +129,11 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	var confidential *bool
-	confidential, err = confirmOptionalBool(ctx, ec, "Should this issue be confidential?", "confidentiality")
+	confidentialChoice, err := confirmOptionalBool(ctx, ec, "Should this issue be confidential?", "confidentiality")
 	if err != nil {
 		return issues.Output{}, err
 	}
+	confidential := confidentialChoice.Value
 
 	tracker.Step(ctx, 3, 4, "Confirming issue creation...")
 
@@ -264,30 +264,36 @@ func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	removeSource, err := confirmOptionalBool(ctx, ec, "Remove source branch after merge?", "source branch removal")
+	removeSourceChoice, err := confirmOptionalBool(ctx, ec, "Remove source branch after merge?", "source branch removal")
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	removeSource := removeSourceChoice.Value
 
-	squash, err := confirmOptionalBool(ctx, ec, "Squash commits on merge?", "squash option")
+	squashChoice, err := confirmOptionalBool(ctx, ec, "Squash commits on merge?", "squash option")
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	squash := squashChoice.Value
 
 	return labels, removeSource, squash, nil
 }
 
-// confirmOptionalBool returns nil when the user declines an optional boolean
-// prompt and returns an error when the user cancels the flow.
-func confirmOptionalBool(ctx context.Context, ec elicitation.Client, prompt, field string) (*bool, error) {
+type optionalBoolChoice struct {
+	Value *bool
+}
+
+// confirmOptionalBool returns an optional boolean prompt result and reports an
+// error when the user cancels the flow.
+func confirmOptionalBool(ctx context.Context, ec elicitation.Client, prompt, field string) (optionalBoolChoice, error) {
 	confirmed, err := ec.Confirm(ctx, prompt)
 	if err == nil {
-		return &confirmed, nil
+		return optionalBoolChoice{Value: &confirmed}, nil
 	}
 	if errors.Is(err, elicitation.ErrDeclined) {
-		return nil, nil
+		return optionalBoolChoice{}, nil
 	}
-	return nil, fmt.Errorf("collecting %s: %w", field, err)
+	return optionalBoolChoice{}, fmt.Errorf("collecting %s: %w", field, err)
 }
 
 // mrSummaryParams groups the parameters for building an MR confirmation summary.
@@ -426,7 +432,7 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	if err != nil {
 		return projects.Output{}, err
 	}
-	initReadme := initReadmeChoice != nil && *initReadmeChoice
+	initReadme := initReadmeChoice.Value != nil && *initReadmeChoice.Value
 
 	defaultBranch, err := ec.PromptText(ctx, "Enter the default branch name (or leave empty for 'main')", "default_branch")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {

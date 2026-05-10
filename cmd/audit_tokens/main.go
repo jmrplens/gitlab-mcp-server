@@ -297,21 +297,24 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
 		os.Exit(1)
 	}
-	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
+		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
 		os.Exit(1)
 	}
-	defer session.Close()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
+		_ = session.Close()
+		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+		os.Exit(1)
 	}
+	_ = session.Close()
+	_ = serverSession.Close()
 	return result.Tools
 }
 
@@ -375,16 +378,17 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		fmt.Fprintf(os.Stderr, "server connect (resources): %v\n", err)
 		os.Exit(1)
 	}
-	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
+		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, "client connect (resources): %v\n", err)
 		os.Exit(1)
 	}
 	fatalWithSession := func(format string, args ...any) {
 		_ = session.Close()
+		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, format, args...)
 		os.Exit(1)
 	}
@@ -416,6 +420,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 	}
 
 	_ = session.Close()
+	_ = serverSession.Close()
 	return totalBytes / bytesPerTok
 }
 
@@ -442,15 +447,14 @@ func measurePrompts(client *gitlabclient.Client) int {
 		fmt.Fprintf(os.Stderr, "server connect (prompts): %v\n", err)
 		os.Exit(1)
 	}
-	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
+		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, "client connect (prompts): %v\n", err)
 		os.Exit(1)
 	}
-	defer session.Close()
 
 	totalBytes := 0
 	p, err := session.ListPrompts(ctx, nil)
@@ -458,12 +462,16 @@ func measurePrompts(client *gitlabclient.Client) int {
 		for _, pr := range p.Prompts {
 			b, mErr := json.Marshal(pr)
 			if mErr != nil {
+				_ = session.Close()
+				_ = serverSession.Close()
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
-				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+				os.Exit(1)
 			}
 			totalBytes += len(b)
 		}
 	}
+	_ = session.Close()
+	_ = serverSession.Close()
 	return totalBytes / bytesPerTok
 }
 

@@ -555,6 +555,28 @@ func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestGetOrCreate_NilFactory_ReturnsError(t *testing.T) {
+	cfg := testConfig("https://gitlab.example.com")
+	pool := New(cfg, nil)
+
+	server, err := pool.GetOrCreate("token", cfg.GitLabURL)
+	if err == nil {
+		t.Fatal("GetOrCreate() error = nil, want error")
+	}
+	if server != nil {
+		t.Fatalf("GetOrCreate() server = %v, want nil", server)
+	}
+	if !strings.Contains(err.Error(), "server factory is nil") {
+		t.Fatalf("GetOrCreate() error = %q, want server factory error", err)
+	}
+	if pool.Size() != 0 {
+		t.Fatalf("pool.Size() = %d, want 0 after nil factory error", pool.Size())
+	}
+	if stats := pool.Stats(); stats.CurrentSize != 0 {
+		t.Fatalf("pool.Stats().CurrentSize = %d, want 0 after nil factory error", stats.CurrentSize)
+	}
+}
+
 // TestEvictByKey verifies that evictByKey removes the specified entry
 // and not others.
 func TestEvictByKey(t *testing.T) {

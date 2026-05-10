@@ -535,9 +535,7 @@ func currentUserWithRetry(client *gitlabclient.Client, timeout time.Duration) (*
 		}
 		log.Printf("e2e: current user lookup hit transient GitLab error (attempt %d): %v", attempt, err)
 		backoff := time.Duration(attempt) * 500 * time.Millisecond
-		if backoff > 2*time.Second {
-			backoff = 2 * time.Second
-		}
+		backoff = min(backoff, 2*time.Second)
 		if remaining := time.Until(deadline); backoff > remaining {
 			backoff = remaining
 		}

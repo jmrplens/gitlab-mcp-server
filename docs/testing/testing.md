@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,521 |
-| Unit test functions | 9,274 |
+| Total test functions | 9,525 |
+| Unit test functions | 9,278 |
 | E2E test functions | 247 |
 | cmd test functions | 398 |
 | Test files (internal/) | 405 |
@@ -35,9 +35,9 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,545 | 89.7% |
+| `TestFunc_Scenario` (2-part) | 8,547 | 89.7% |
 | `TestFunc` (no underscore) | 696 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
+| `TestFunc_Scenario_Expected` (3+ part) | 282 | 3.0% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,552 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,553 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (165) | 7,091 | 313 | domain-specific GitLab tool handlers |
+| Tool sub-packages (165) | 7,094 | 313 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 398 | 13 | server entry point and developer command utilities |
-| **Total** | **9,521** | **527** |  |
+| **Total** | **9,525** | **527** |  |
 
 ### Core Packages
 
@@ -68,11 +68,11 @@
 | resources | 155 | 98.7% | Package resources registers read-only MCP resources for GitLab and server metadata. |
 | roots | 21 | 98.5% | Package roots provides client workspace discovery via the MCP Roots capability. |
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
-| serverpool | 46 | 99.5% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
+| serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 369 | 92.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 207 | 83.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,552** |  |  |
+| **Subtotal** | **1,553** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -113,7 +113,7 @@
 | --- | ---: | ---: | ---: | ---: |
 | accessrequests | 42 | 2 | 100.0% | 9 |
 | accesstokens | 86 | 2 | 98.9% | 19 |
-| actionregistry | 11 | 1 | 96.3% | 0 |
+| actionregistry | 12 | 1 | 96.3% | 0 |
 | alertmanagement | 30 | 2 | 98.2% | 5 |
 | appearance | 11 | 1 | 100.0% | 2 |
 | applications | 15 | 1 | 98.6% | 3 |
@@ -149,7 +149,7 @@
 | dockerfiletemplates | 14 | 1 | 100.0% | 2 |
 | dorametrics | 9 | 2 | 100.0% | 2 |
 | dynamic | 56 | 4 | 95.9% | 4 |
-| elicitationtools | 56 | 2 | 97.7% | 4 |
+| elicitationtools | 57 | 2 | 98.2% | 4 |
 | enterpriseusers | 33 | 3 | 100.0% | 4 |
 | environments | 47 | 2 | 100.0% | 6 |
 | epicdiscussions | 14 | 2 | 93.0% | 7 |
@@ -234,7 +234,7 @@
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
 | projectimportexport | 31 | 1 | 94.9% | 6 |
 | projectiterations | 18 | 1 | 100.0% | 1 |
-| projectmirrors | 54 | 1 | 93.7% | 7 |
+| projectmirrors | 55 | 1 | 94.1% | 7 |
 | projects | 326 | 3 | 95.6% | 54 |
 | projectstatistics | 9 | 2 | 100.0% | 2 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
@@ -276,7 +276,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,091** | **313** |  | **1,061** |
+| **Total** | **7,094** | **313** |  | **1,061** |
 
 </details>
 
@@ -290,7 +290,7 @@
 | cmd/audit_meta_schema | 80.2% |
 | cmd/audit_metrics | 13.9% |
 | cmd/audit_output | 23.0% |
-| cmd/audit_tokens | 19.6% |
+| cmd/audit_tokens | 19.0% |
 | cmd/eval_meta_tools | 57.3% |
 | cmd/gen_llms | 7.2% |
 | cmd/gen_readme | 14.6% |
@@ -313,7 +313,7 @@
 | resources | 98.7% |
 | roots | 98.5% |
 | sampling | 99.5% |
-| serverpool | 99.5% |
+| serverpool | 99.6% |
 | testutil | 60.9% |
 | toolutil | 92.7% |
 | wizard | 83.1% |
@@ -361,7 +361,7 @@
 | dockerfiletemplates | 100.0% |
 | dorametrics | 100.0% |
 | dynamic | 95.9% |
-| elicitationtools | 97.7% |
+| elicitationtools | 98.2% |
 | enterpriseusers | 100.0% |
 | environments | 100.0% |
 | epicdiscussions | 93.0% |
@@ -446,7 +446,7 @@
 | projectdiscovery | 100.0% |
 | projectimportexport | 94.9% |
 | projectiterations | 100.0% |
-| projectmirrors | 93.7% |
+| projectmirrors | 94.1% |
 | projects | 95.6% |
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
@@ -494,7 +494,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_llms** (7.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (13.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (14.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_tokens** (19.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_tokens** (19.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (23.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -821,7 +821,7 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (108 test files)
+└── suite/                    # Go test package (109 test files)
     ├── setup_test.go         # MCP server setup, helpers, shared state
     ├── fixture_test.go       # Self-contained GitLab resource builders
     └── *_test.go             # Domain-specific test files

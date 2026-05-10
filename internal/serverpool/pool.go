@@ -162,6 +162,9 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 	if server, ok := p.existingServerLocked(key); ok {
 		return server, nil
 	}
+	if p.factory == nil {
+		return nil, errors.New("creating MCP server for pool: server factory is nil")
+	}
 
 	p.metrics.Misses.Add(1)
 

@@ -210,14 +210,16 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 }
 
 func addExecuteTool(server *mcp.Server, registry *Registry) {
+	destructiveHint := true
+	openWorldHint := true
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
 		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
-			DestructiveHint: toolutil.BoolPtr(true),
-			OpenWorldHint:   toolutil.BoolPtr(true),
+			DestructiveHint: &destructiveHint,
+			OpenWorldHint:   &openWorldHint,
 		},
 		Icons: toolutil.IconServer,
 	}, registry.Execute)
@@ -1334,8 +1336,8 @@ func appendPreferredAlternativeRequiredParams(names []string, schema map[string]
 			continue
 		}
 		for _, raw := range alternatives {
-			alternative, ok := raw.(map[string]any)
-			if !ok {
+			alternative, isObject := raw.(map[string]any)
+			if !isObject {
 				continue
 			}
 			names = appendRequiredParamNames(names, alternative["required"])

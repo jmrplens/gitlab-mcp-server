@@ -687,6 +687,10 @@ func writeTempPublishReport(t *testing.T, content string) string {
 
 // singleModelPublishReport is an internal helper for the main package.
 func singleModelPublishReport(model, preset string, attempts int) string {
+	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceMeta)
+}
+
+func singleModelPublishReportForSurface(model, preset string, attempts int, toolSurface string) string {
 	var rows strings.Builder
 	for i := 1; i <= attempts; i++ {
 		steps := "1/1"
@@ -702,7 +706,7 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 		"Git commit: `8c696a2`\n" +
 		"Mode: model tool-calling\n" +
 		"Model: `" + model + "`\n" +
-		"Tool surface: `meta`\n" +
+		"Tool surface: `" + toolSurface + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
@@ -733,7 +737,7 @@ func singleModelPublishReport(model, preset string, attempts int) string {
 
 // dynamicSingleModelPublishReport is an internal helper for the main package.
 func dynamicSingleModelPublishReport(model, preset string, attempts int) string {
-	return strings.Replace(singleModelPublishReport(model, preset, attempts), "Tool surface: `meta`\n", "Tool surface: `dynamic`\n", 1)
+	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceDynamic)
 }
 
 // multiModelPublishReport is an internal helper for the main package.

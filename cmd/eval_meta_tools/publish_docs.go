@@ -811,7 +811,7 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
-		if section := publishSectionForReport(report); section == publishSectionUnknown {
+		if publishSectionForReport(report) == publishSectionUnknown {
 			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
 		}
 		if report.Backend == backendGitLab && report.ToolExecution != "mcp" {
