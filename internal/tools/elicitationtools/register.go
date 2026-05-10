@@ -130,17 +130,17 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_project_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_project_create"),
-		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
+		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.\n\n" +
 			"Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- name (string, required) — project display name and (when path is omitted) URL slug.\n" +
 			"- description (string, optional) — leave empty to skip.\n" +
 			"- visibility (enum, required) — one of private, internal, public.\n" +
-			"- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no continues with false, while decline/cancel aborts.\n" +
+			"- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no, decline, or cancel continues with false.\n" +
 			"- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n" +
 			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
-			"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
+			"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group.",
 		Annotations: toolutil.CreateAnnotations,

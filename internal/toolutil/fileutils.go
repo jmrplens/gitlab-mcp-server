@@ -20,6 +20,9 @@ import (
 // source of truth for tool utilities.
 const (
 	DefaultMaxFileSize = config.DefaultMaxFileSize
+	// ImportArchiveAllowlistEnv names extra directories allowed for local
+	// GitLab project/group import archives, separated by the OS path-list separator.
+	ImportArchiveAllowlistEnv = "GITLAB_MCP_ALLOWED_IMPORT_DIRS"
 )
 
 // UploadConfig holds runtime-configurable upload parameters. Initialized with
@@ -80,6 +83,109 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 	}
 
 	return f, info, nil
+}
+
+// CanonicalImportArchivePath validates a local GitLab export archive path and
+// returns the canonical path resolved through symlinks. Archives must be regular
+// .tar.gz files under the current working directory, the OS temporary directory,
+// or a directory listed in GITLAB_MCP_ALLOWED_IMPORT_DIRS.
+func CanonicalImportArchivePath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("archive path is required")
+	}
+
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("resolve archive path: %w", err)
+	}
+	canonicalPath, err := filepath.EvalSymlinks(absolutePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve archive symlinks: %w", err)
+	}
+	if !strings.HasSuffix(strings.ToLower(canonicalPath), ".tar.gz") {
+		return "", fmt.Errorf("archive %s must use .tar.gz extension", canonicalPath)
+	}
+
+	info, err := os.Stat(canonicalPath)
+	if err != nil {
+		return "", fmt.Errorf("stat archive %s: %w", canonicalPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("archive %s is not a regular file", canonicalPath)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return "", fmt.Errorf("archive %s must not be group/world-writable", canonicalPath)
+	}
+
+	if !pathWithinAllowedImportDirs(canonicalPath) {
+		return "", fmt.Errorf("archive %s is outside allowed import directories; use the current working directory, the OS temp directory, or set %s", canonicalPath, ImportArchiveAllowlistEnv)
+	}
+	return canonicalPath, nil
+}
+
+func pathWithinAllowedImportDirs(canonicalPath string) bool {
+	for _, base := range allowedImportArchiveDirs() {
+		if pathWithinBase(canonicalPath, base) {
+			return true
+		}
+	}
+	return false
+}
+
+func allowedImportArchiveDirs() []string {
+	dirs := []string{}
+	if cwd, err := os.Getwd(); err == nil {
+		dirs = append(dirs, cwd)
+	}
+	dirs = append(dirs, os.TempDir())
+	if configured := os.Getenv(ImportArchiveAllowlistEnv); configured != "" {
+		dirs = append(dirs, filepath.SplitList(configured)...)
+	}
+
+	allowed := make([]string, 0, len(dirs))
+	seen := make(map[string]struct{}, len(dirs))
+	for _, dir := range dirs {
+		canonicalDir, err := canonicalDirPath(dir)
+		if err != nil {
+			continue
+		}
+		if _, ok := seen[canonicalDir]; ok {
+			continue
+		}
+		seen[canonicalDir] = struct{}{}
+		allowed = append(allowed, canonicalDir)
+	}
+	return allowed
+}
+
+func canonicalDirPath(dir string) (string, error) {
+	if dir == "" {
+		return "", errors.New("empty directory")
+	}
+	absoluteDir, err := filepath.Abs(filepath.Clean(dir))
+	if err != nil {
+		return "", err
+	}
+	canonicalDir, err := filepath.EvalSymlinks(absoluteDir)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(canonicalDir)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", canonicalDir)
+	}
+	return canonicalDir, nil
+}
+
+func pathWithinBase(path, base string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
 // ComputeSHA256 computes the SHA-256 checksum of a file at the given path

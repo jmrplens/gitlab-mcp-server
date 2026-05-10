@@ -177,6 +177,8 @@ import (
 // parameter. This reduces token usage for LLMs while preserving full
 // functionality. Interactive tools cannot be consolidated because they
 // require multi-round MCP elicitation/create exchanges with the client.
+// Returns an error if the action catalog cannot be built or if wiring tools
+// to the MCP server fails.
 func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) error {
 	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise})
 	if err != nil {
@@ -2132,7 +2134,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"broadcast_message_delete":       destructiveVoidAction(client, broadcastmessages.Delete),
 		"feature_list":                   routeAction(client, features.List),
 		"feature_list_definitions":       routeAction(client, features.ListDefinitions),
-		"feature_set":                    routeAction(client, features.Set),
+		"feature_set":                    features.SetRoute(client),
 		"feature_delete":                 destructiveVoidAction(client, features.Delete),
 		"license_get":                    routeAction(client, license.Get),
 		"license_add":                    routeAction(client, license.Add),

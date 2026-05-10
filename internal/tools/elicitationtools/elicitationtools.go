@@ -414,9 +414,10 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	initReadme, err := ec.Confirm(ctx, "Initialize the repository with a README file?")
 	if err != nil {
 		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return projects.Output{}, fmt.Errorf("project creation canceled by user: %w", err)
+			initReadme = false
+		} else {
+			return projects.Output{}, fmt.Errorf("collecting README initialization: %w", err)
 		}
-		return projects.Output{}, fmt.Errorf("collecting README initialization: %w", err)
 	}
 
 	defaultBranch, err := ec.PromptText(ctx, "Enter the default branch name (or leave empty for 'main')", "default_branch")

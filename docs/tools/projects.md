@@ -356,7 +356,7 @@ Download the finished export archive of a project.
 
 ### `gitlab_import_project_from_file`
 
-Import a project from an export archive file. Accepts either a local `file_path` or `content` (base64-encoded).
+Import a project from an export archive file. Accepts either base64-encoded `content_base64` or a local `.tar.gz` `file_path` under the current working directory, OS temp directory, or `GITLAB_MCP_ALLOWED_IMPORT_DIRS` after symlink resolution.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

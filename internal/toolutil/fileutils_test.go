@@ -101,6 +101,91 @@ func TestOpenAndValidateFile_ZeroMaxSize(t *testing.T) {
 	f.Close()
 }
 
+// TestCanonicalImportArchivePath_TempArchive verifies that a canonical .tar.gz
+// archive under the OS temp directory is accepted.
+func TestCanonicalImportArchivePath_TempArchive(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "project-export.tar.gz")
+	if err := os.WriteFile(path, []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := CanonicalImportArchivePath(path)
+	if err != nil {
+		t.Fatalf("CanonicalImportArchivePath() error: %v", err)
+	}
+	if got != path {
+		t.Fatalf("canonical path = %q, want %q", got, path)
+	}
+}
+
+// TestCanonicalImportArchivePath_RejectsWrongExtension verifies local import
+// archives are constrained to GitLab export archive filenames.
+func TestCanonicalImportArchivePath_RejectsWrongExtension(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "project-export.zip")
+	if err := os.WriteFile(path, []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CanonicalImportArchivePath(path)
+	if err == nil {
+		t.Fatal("expected extension validation error")
+	}
+	if !strings.Contains(err.Error(), ".tar.gz") {
+		t.Fatalf("error = %v, want .tar.gz mention", err)
+	}
+}
+
+// TestCanonicalImportArchivePath_RejectsSymlinkEscape verifies that a symlink
+// inside an allowed directory cannot point to an archive outside that directory.
+func TestCanonicalImportArchivePath_RejectsSymlinkEscape(t *testing.T) {
+	allowed := t.TempDir()
+	outside := t.TempDir()
+	t.Setenv("TMPDIR", allowed)
+	t.Chdir(allowed)
+
+	target := filepath.Join(outside, "project-export.tar.gz")
+	if err := os.WriteFile(target, []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(allowed, "linked-export.tar.gz")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	_, err := CanonicalImportArchivePath(link)
+	if err == nil {
+		t.Fatal("expected symlink escape validation error")
+	}
+	if !strings.Contains(err.Error(), "outside allowed import directories") {
+		t.Fatalf("error = %v, want allowed-directory mention", err)
+	}
+}
+
+// TestCanonicalImportArchivePath_AllowsConfiguredDirectory verifies that
+// GITLAB_MCP_ALLOWED_IMPORT_DIRS extends the allowed local archive roots.
+func TestCanonicalImportArchivePath_AllowsConfiguredDirectory(t *testing.T) {
+	cwd := t.TempDir()
+	configured := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv(ImportArchiveAllowlistEnv, configured)
+	t.Chdir(cwd)
+
+	path := filepath.Join(configured, "project-export.tar.gz")
+	if err := os.WriteFile(path, []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := CanonicalImportArchivePath(path)
+	if err != nil {
+		t.Fatalf("CanonicalImportArchivePath() error: %v", err)
+	}
+	if got != path {
+		t.Fatalf("canonical path = %q, want %q", got, path)
+	}
+}
+
 // TestComputeSHA256_KnownHash verifies a known content produces the expected SHA-256.
 func TestComputeSHA256_KnownHash(t *testing.T) {
 	tmp := t.TempDir()

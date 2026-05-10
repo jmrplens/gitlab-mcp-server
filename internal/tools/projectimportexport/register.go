@@ -54,7 +54,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_import_project_from_file",
 		Title:       toolutil.TitleFromName("gitlab_import_project_from_file"),
-		Description: "Import a project from an export archive file. Accepts either a local file_path or base64-encoded content.\n\nReturns: JSON with import status details.\n\nSee also: gitlab_get_project_import_status, gitlab_import_from_github",
+		Description: "Import a project from an export archive file. Accepts either base64-encoded content or a local .tar.gz file_path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.\n\nReturns: JSON with import status details.\n\nSee also: gitlab_get_project_import_status, gitlab_import_from_github",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconImport,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ImportFromFileInput) (*mcp.CallToolResult, ImportStatusOutput, error) {

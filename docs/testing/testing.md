@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,504 |
-| Unit test functions | 9,257 |
+| Total test functions | 9,508 |
+| Unit test functions | 9,261 |
 | E2E test functions | 247 |
 | cmd test functions | 394 |
 | Test files (internal/) | 405 |
@@ -29,13 +29,13 @@
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.5% |
 | Overall coverage (`go test ./internal/...`) | 96.9% |
-| Average package coverage | 94.9% |
+| Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,530 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,534 | 89.8% |
 | `TestFunc` (no underscore) | 696 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 278 | 2.9% |
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,545 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,549 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (165) | 7,085 | 313 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 394 | 13 | server entry point and developer command utilities |
-| **Total** | **9,504** | **527** |  |
+| **Total** | **9,508** | **527** |  |
 
 ### Core Packages
 
@@ -70,9 +70,9 @@
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
 | serverpool | 45 | 99.5% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
-| toolutil | 363 | 93.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
+| toolutil | 367 | 92.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 207 | 83.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,545** |  |  |
+| **Subtotal** | **1,549** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -160,7 +160,7 @@
 | events | 42 | 1 | 100.0% | 3 |
 | externalstatuschecks | 47 | 3 | 100.0% | 8 |
 | featureflags | 37 | 2 | 98.0% | 6 |
-| features | 19 | 1 | 97.6% | 4 |
+| features | 19 | 1 | 90.2% | 4 |
 | ffuserlists | 26 | 2 | 96.6% | 6 |
 | files | 75 | 2 | 93.2% | 8 |
 | freezeperiods | 32 | 2 | 97.5% | 6 |
@@ -170,7 +170,7 @@
 | groupboards | 55 | 2 | 98.9% | 11 |
 | groupcredentials | 35 | 3 | 98.8% | 4 |
 | groupepicboards | 8 | 2 | 100.0% | 2 |
-| groupimportexport | 26 | 1 | 98.4% | 4 |
+| groupimportexport | 26 | 1 | 97.0% | 4 |
 | groupiterations | 19 | 1 | 100.0% | 1 |
 | grouplabels | 49 | 2 | 100.0% | 8 |
 | groupldap | 10 | 2 | 100.0% | 4 |
@@ -232,7 +232,7 @@
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
-| projectimportexport | 31 | 1 | 97.7% | 6 |
+| projectimportexport | 31 | 1 | 95.6% | 6 |
 | projectiterations | 18 | 1 | 100.0% | 1 |
 | projectmirrors | 52 | 1 | 96.6% | 7 |
 | projects | 326 | 3 | 95.6% | 54 |
@@ -315,7 +315,7 @@
 | sampling | 99.5% |
 | serverpool | 99.5% |
 | testutil | 60.9% |
-| toolutil | 93.4% |
+| toolutil | 92.8% |
 | wizard | 83.1% |
 
 ### Tool Sub-Packages
@@ -372,7 +372,7 @@
 | events | 100.0% |
 | externalstatuschecks | 100.0% |
 | featureflags | 98.0% |
-| features | 97.6% |
+| features | 90.2% |
 | ffuserlists | 96.6% |
 | files | 93.2% |
 | freezeperiods | 97.5% |
@@ -382,7 +382,7 @@
 | groupboards | 98.9% |
 | groupcredentials | 98.8% |
 | groupepicboards | 100.0% |
-| groupimportexport | 98.4% |
+| groupimportexport | 97.0% |
 | groupiterations | 100.0% |
 | grouplabels | 100.0% |
 | groupldap | 100.0% |
@@ -444,7 +444,7 @@
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
 | projectdiscovery | 100.0% |
-| projectimportexport | 97.7% |
+| projectimportexport | 95.6% |
 | projectiterations | 100.0% |
 | projectmirrors | 96.6% |
 | projects | 95.6% |

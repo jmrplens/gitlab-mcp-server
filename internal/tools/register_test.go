@@ -1840,19 +1840,20 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 
 // Actions that are destructive but do NOT contain a destructive keyword.
 // These are known edge cases verified manually.
-var knownNonKeywordDestructive = map[string]bool{
-	"merge": true, "erase": true, "stop": true, "ban": true,
-	"block": true, "deactivate": true, "reject": true, "unapprove": true,
-	"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-	"unshare": true, "disable_project": true, "import_from_file": true,
-	"cancel_github": true, "rotate": true, "mirror_force_push": true,
-	"db_migration_mark": true, "terraform_state_unlock": true, "archive": true,
+var knownNonKeywordDestructive = map[string]struct{}{
+	"merge": {}, "erase": {}, "stop": {}, "ban": {},
+	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
+	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
+	"unshare": {}, "disable_project": {}, "import_from_file": {},
+	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
+	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the
 // normal destructive-name heuristic but is accepted by explicit policy.
 func isExactMatchException(action string) bool {
-	return knownNonKeywordDestructive[action]
+	_, ok := knownNonKeywordDestructive[action]
+	return ok
 }
 
 // TestDestructiveRoutes_NameHeuristic_ClassifiesActions scans ALL route definitions across the
@@ -1992,14 +1993,15 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 2: Action with safe keyword MUST NOT be marked destructive,
 		// UNLESS it also contains a destructive keyword or is a known exception.
-		if hasSafeKw && r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+		_, isKnownException := knownNonKeywordDestructive[r.action]
+		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s:%d action %q contains safe keyword but uses destructive wrapper",
 				r.file, r.line, r.action)
 			failures++
 		}
 
 		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
-		if r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+		if r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s:%d action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive",
 				r.file, r.line, r.action)
 			failures++

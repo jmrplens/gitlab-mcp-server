@@ -60,6 +60,12 @@ These are checked by the elicitation subsystem. When the MCP client supports eli
 | --- | --- | --- |
 | `UPLOAD_MAX_FILE_SIZE` | `2GB` | Maximum file size for upload tools. Supports human-friendly suffixes: `KB`, `MB`, `GB` (case-insensitive). Upper bound: 1 TB |
 
+## Optional — Local Import Files
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | *(empty)* | Additional OS path-list-separated directories allowed for `file_path`/`file` project and group import archives. The current working directory and OS temp directory are always allowed. Import archives must resolve inside an allowed directory after symlink resolution and must use the `.tar.gz` extension |
+
 ---
 
 ## Optional — HTTP Mode (Server Pool)

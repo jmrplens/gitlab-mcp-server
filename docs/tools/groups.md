@@ -401,7 +401,7 @@ Download the finished export archive of a group. Returns the archive as base64-e
 
 ### `gitlab_import_group_from_file`
 
-Import a group from an export archive file. Requires a local file path to the .tar.gz archive.
+Import a group from an export archive file. Requires a local `.tar.gz` archive under the current working directory, OS temp directory, or `GITLAB_MCP_ALLOWED_IMPORT_DIRS` after symlink resolution.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

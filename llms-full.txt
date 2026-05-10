@@ -3407,7 +3407,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Project Create**
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.
 
 Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.
 
@@ -3415,13 +3415,13 @@ After invocation, the tool elicits in order:
 - name (string, required) — project display name and (when path is omitted) URL slug.
 - description (string, optional) — leave empty to skip.
 - visibility (enum, required) — one of private, internal, public.
-- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no continues with false, while decline/cancel aborts.
+- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no, decline, or cancel continues with false.
 - default_branch (string, optional) — leave empty to use the GitLab default ('main').
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
 When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.
 
-Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab may initialize a repository and notify project members.
+Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.
 
@@ -10509,7 +10509,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_project_mirror
 
-Create a new remote push mirror for a GitLab project. The mirror URL should include credentials if needed.
+Create a new remote push mirror for a GitLab project. The mirror URL may include credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors.
 
 **Parameters:**
 
@@ -10520,7 +10520,7 @@ Create a new remote push mirror for a GitLab project. The mirror URL should incl
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `only_protected_branches` (): Mirror only protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string) (required): Remote mirror URL (e.g. https://user:token@example.com/repo.git)
+- `url` (string) (required): Remote mirror URL (e.g. https://user:token@example.com/repo.git). Treat embedded credentials as secrets: do not log or s...
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -15448,7 +15448,7 @@ Import a repository from Bitbucket Cloud into GitLab
 
 **Parameters:**
 
-- `bitbucket_app_password` (string) (required): Bitbucket Cloud app password
+- `bitbucket_app_password` (string) (required): Bitbucket Cloud app password. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `bitbucket_username` (string) (required): Bitbucket Cloud username
 - `new_name` (string): New name for the imported project
 - `repo_path` (string) (required): Bitbucket repository path (e.g. owner/repo)
@@ -15468,7 +15468,7 @@ Import a repository from Bitbucket Server into GitLab
 - `bitbucket_server_username` (string) (required): Bitbucket Server username
 - `new_name` (string): New name for the imported project
 - `new_namespace` (string): Target namespace for the imported project
-- `personal_access_token` (string) (required): Bitbucket Server personal access token
+- `personal_access_token` (string) (required): Bitbucket Server personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `timeout_strategy` (string): Timeout strategy (optimistic or pessimistic)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -15481,7 +15481,7 @@ Import a repository from GitHub into GitLab
 
 - `github_hostname` (string): GitHub hostname for GitHub Enterprise
 - `new_name` (string): New name for the imported project
-- `personal_access_token` (string) (required): GitHub personal access token
+- `personal_access_token` (string) (required): GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `repo_id` (integer) (required): GitHub repository ID
 - `target_namespace` (string) (required): Target namespace for the imported project
 - `timeout_strategy` (string): Timeout strategy (optimistic or pessimistic)
@@ -15494,17 +15494,17 @@ Import GitHub gists into GitLab snippets
 
 **Parameters:**
 
-- `personal_access_token` (string) (required): GitHub personal access token
+- `personal_access_token` (string) (required): GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_import_group_from_file
 
-Import a group from an export archive file. Requires a local file path to the .tar.gz archive.
+Import a group from an export archive file. Requires a local .tar.gz archive path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.
 
 **Parameters:**
 
-- `file` (string) (required): Absolute path to a local export archive (.tar.gz) on the MCP server filesystem
+- `file` (string) (required): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP...
 - `name` (string) (required): Name for the imported group
 - `parent_id` (): ID of the parent group to import into
 - `path` (string) (required): URL path for the imported group
@@ -15513,12 +15513,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_import_project_from_file
 
-Import a project from an export archive file. Accepts either a local file_path or base64-encoded content.
+Import a project from an export archive file. Accepts either base64-encoded content or a local .tar.gz file_path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.
 
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.
-- `file_path` (string): Absolute path to a local export archive (.tar.gz) on the MCP server filesystem. Only one of file_path or content_base64 ...
+- `file_path` (string): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP...
 - `name` (string): Name for the imported project
 - `namespace` (string): Namespace to import the project into (user or group path)
 - `overwrite` (): If true, overwrite an existing project with the same path
@@ -15615,7 +15615,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -20453,15 +20453,15 @@ Configure or update pull mirroring for a project. Set the mirror URL, authentica
 
 **Parameters:**
 
-- `auth_password` (string): Authentication password for the mirror URL
-- `auth_user` (string): Authentication username for the mirror URL
+- `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry...
+- `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
 - `enabled` (): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
 - `mirror_overwrites_diverged_branches` (): Overwrite diverged branches on mirror update
 - `mirror_trigger_builds` (): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (): Only mirror protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string): Mirror source URL
+- `url` (string): Mirror source URL. Do not include credentials in the URL; use auth_user and auth_password for authentication
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

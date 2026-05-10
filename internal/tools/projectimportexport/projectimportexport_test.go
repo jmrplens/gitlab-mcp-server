@@ -559,8 +559,8 @@ func TestImportFromFile_FilePathReadError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unreadable file path")
 	}
-	if !strings.Contains(err.Error(), "reading file") {
-		t.Errorf("error = %v, want containing 'reading file'", err)
+	if !strings.Contains(err.Error(), "resolve archive") {
+		t.Errorf("error = %v, want containing 'resolve archive'", err)
 	}
 }
 

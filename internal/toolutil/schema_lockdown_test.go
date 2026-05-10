@@ -42,8 +42,14 @@ func TestLockdownInputSchemas_AddsFalseToRoot(t *testing.T) {
 	if v, ok := schema["additionalProperties"].(bool); !ok || v {
 		t.Fatalf("after lockdown additionalProperties = %v, want false", schema["additionalProperties"])
 	}
-	properties := schema["properties"].(map[string]any)
-	projectID := properties["project_id"].(map[string]any)
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	projectID, ok := properties["project_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("project_id property = %T, want map[string]any", properties["project_id"])
+	}
 	if projectID["description"] != "Project ID" {
 		t.Fatalf("project_id description = %q, want Project ID", projectID["description"])
 	}

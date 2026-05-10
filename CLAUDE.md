@@ -240,7 +240,7 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
-| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; empty by default, matching `--tool-surface`, so it does not override `META_TOOLS` unless set |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; default is an empty string (not set), matching `--tool-surface`, so `TOOL_SURFACE` does not override `META_TOOLS` unless explicitly set to a non-empty value |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps only `gitlab://workspace/roots` and is useful with dynamic mode |
 | `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action JSON Schema is always discoverable via `gitlab://schema/meta/{tool}/{action}` resource |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |

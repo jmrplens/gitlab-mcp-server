@@ -3,6 +3,8 @@ package toolutil
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,10 +76,12 @@ func schemaMap(schema any) map[string]any {
 	}
 	data, err := json.Marshal(schema)
 	if err != nil {
+		slog.Debug("failed to marshal MCP input schema", "error", err, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
 		return nil
 	}
 	var decoded map[string]any
 	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
+		slog.Debug("failed to unmarshal MCP input schema", "error", unmarshalErr, "schema_type", fmt.Sprintf("%T", schema), "schema", schema)
 		return nil
 	}
 	return decoded

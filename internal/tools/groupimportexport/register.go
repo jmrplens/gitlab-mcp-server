@@ -41,7 +41,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_import_group_from_file",
 		Title:       toolutil.TitleFromName("gitlab_import_group_from_file"),
-		Description: "Import a group from an export archive file. Requires a local file path to the .tar.gz archive.\n\nReturns: JSON with the import details.\n\nSee also: gitlab_schedule_group_export, gitlab_start_bulk_import",
+		Description: "Import a group from an export archive file. Requires a local .tar.gz archive path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.\n\nReturns: JSON with the import details.\n\nSee also: gitlab_schedule_group_export, gitlab_start_bulk_import",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconImport,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ImportFileInput) (*mcp.CallToolResult, ImportFileOutput, error) {

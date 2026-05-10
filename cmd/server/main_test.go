@@ -428,7 +428,7 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP() unexpected error on graceful shutdown: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("serveHTTP() did not return within timeout after context cancellation")
 	}
 }

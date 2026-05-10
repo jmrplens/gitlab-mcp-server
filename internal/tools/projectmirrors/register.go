@@ -55,7 +55,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_add_project_mirror",
 		Title:       toolutil.TitleFromName("gitlab_add_project_mirror"),
-		Description: "Create a new remote push mirror for a GitLab project. The mirror URL should include credentials if needed.\n\nReturns: JSON with created mirror details. See also: gitlab_edit_project_mirror.",
+		Description: "Create a new remote push mirror for a GitLab project. The mirror URL may include credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors.\n\nReturns: JSON with created mirror details. See also: gitlab_edit_project_mirror.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconInfra,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AddInput) (*mcp.CallToolResult, Output, error) {
