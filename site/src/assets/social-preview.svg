@@ -22,6 +22,16 @@
       <stop offset="50%" stop-color="#0E0A1F"/>
       <stop offset="100%" stop-color="#0B0618"/>
     </linearGradient>
+    <linearGradient id="metric-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FC6D26" stop-opacity="0.18"/>
+      <stop offset="52%" stop-color="#2d1b69" stop-opacity="0.62"/>
+      <stop offset="100%" stop-color="#34D399" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="metric-line" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FC6D26"/>
+      <stop offset="48%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
     <radialGradient id="aura1" cx="0.18" cy="0.5" r="0.35">
       <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.12"/>
       <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
@@ -96,34 +106,33 @@
   <text x="640" y="460" text-anchor="middle"
         font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
         font-size="26" fill="#A78BFA" opacity="0.92" letter-spacing="0.4">
-    The entire GitLab API as MCP tools for AI assistants
+    Complete GitLab API coverage with tiny MCP context
   </text>
 
-  <!-- Feature pills (centered row) -->
-  <g transform="translate(640 510)" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="600">
-    <!-- Group is centered: total width 840 (180+220+200+180 + 3*20 gaps), so start at x=-420 -->
-    <g transform="translate(-420 0)">
-      <rect x="0"   y="0" width="180" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
-      <text x="90"  y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Single Binary</text>
+  <!-- Dynamic Toolset proof point -->
+  <g transform="translate(640 502)" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+    <rect x="-420" y="-18" width="840" height="102" rx="30" fill="url(#metric-grad)" stroke="#5B3CA6" stroke-width="0.8" opacity="0.95"/>
+    <rect x="-92" y="0" width="184" height="30" rx="15" fill="#1a1145" stroke="#6D5DD3" stroke-width="0.7" opacity="0.92"/>
+    <text x="0" y="21" text-anchor="middle" font-size="13" fill="#C4B5FD" font-weight="800" letter-spacing="1.25">DYNAMIC TOOLSET</text>
 
-      <rect x="200" y="0" width="220" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
-      <text x="310" y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Zero Dependencies</text>
+    <text x="-176" y="58" text-anchor="end" font-size="43" fill="#FC6D26" font-weight="800">550K</text>
+    <text x="-164" y="57" font-size="17" fill="#FDBA74" font-weight="650">tokens</text>
+    <path d="M-48 39H42V31L72 45L42 59V51H-48Z" fill="url(#metric-line)" opacity="0.96"/>
+    <text x="194" y="58" text-anchor="end" font-size="43" fill="#34D399" font-weight="800">2.2K</text>
+    <text x="206" y="57" font-size="17" fill="#A7F3D0" font-weight="650">tokens</text>
 
-      <rect x="440" y="0" width="200" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
-      <text x="540" y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Cross-Platform</text>
-
-      <rect x="660" y="0" width="180" height="44" rx="22" fill="#1a1145" stroke="#3b2780" stroke-width="0.7" opacity="0.85"/>
-      <text x="750" y="29" text-anchor="middle" font-size="18" fill="#8B7FC7" font-weight="500">stdio &amp; HTTP</text>
-    </g>
+    <text x="0" y="78" text-anchor="middle" font-size="16" fill="#C7D2FE" font-weight="650" letter-spacing="0.45">
+      3 visible tools · 855 base / 1010 Enterprise actions
+    </text>
   </g>
 
   <!-- Stats line -->
-  <text x="640" y="592" text-anchor="middle"
+  <text x="640" y="612" text-anchor="middle"
         font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
-        font-size="16" fill="#8B7FC7" opacity="0.85" letter-spacing="2">
-    1011 TOOLS  ·  163 DOMAINS  ·  46 RESOURCES  ·  38 PROMPTS
+        font-size="13" fill="#8B7FC7" opacity="0.8" letter-spacing="1.8">
+    SAME ACTION CATALOG  ·  STDIO &amp; HTTP  ·  SINGLE BINARY
   </text>
 
   <!-- Subtle bottom accent -->
-  <rect x="440" y="615" width="400" height="1" rx="0.5" fill="#A78BFA" opacity="0.15"/>
+  <rect x="440" y="626" width="400" height="1" rx="0.5" fill="#A78BFA" opacity="0.15"/>
 </svg>

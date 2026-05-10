@@ -67,41 +67,64 @@ function rehypeTableAlign() {
 const siteUrl = "https://jmrplens.github.io";
 const basePath = "/gitlab-mcp-server";
 const fullUrl = `${siteUrl}${basePath}`;
+const repositoryUrl = "https://github.com/jmrplens/gitlab-mcp-server";
+const releasesUrl = `${repositoryUrl}/releases`;
+const authorUrl = "https://jmrp.io";
+const socialImageUrl = `${fullUrl}/og-image.png`;
+const authorId = `${authorUrl}/#person`;
+const websiteId = `${fullUrl}/#website`;
+const softwareId = `${repositoryUrl}#software`;
+const sourceCodeId = `${repositoryUrl}#source-code`;
+const siteDescription =
+	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
+const socialImageAlt =
+	"GitLab MCP Server Dynamic Toolset reduces MCP context from 550K to 2.2K tokens";
 
 const jsonLd = JSON.stringify({
 	"@context": "https://schema.org",
 	"@graph": [
 		{
+			"@type": "Person",
+			"@id": authorId,
+			name: "José Manuel Requena Plens",
+			alternateName: "jmrplens",
+			url: authorUrl,
+			sameAs: [
+				"https://github.com/jmrplens",
+				"https://linkedin.com/in/jmrplens",
+				"https://mstdn.jmrp.io/@jmrplens",
+				"https://scholar.google.com/citations?user=9b0kPaUAAAAJ",
+				"https://matrix.to/#/@jmrplens:matrix.jmrp.io",
+				"https://keyoxide.org/0A993B268654DBBA52B7E8D3FCF653391E2C91FC",
+			],
+		},
+		{
 			"@type": "WebSite",
+			"@id": websiteId,
 			name: "GitLab MCP Server",
 			url: `${fullUrl}/`,
-			description:
-				"A Model Context Protocol (MCP) server exposing up to 1011 GitLab operations as AI-accessible tools. Written in Go.",
+			description: siteDescription,
 			inLanguage: ["en", "es"],
-			publisher: {
-				"@type": "Person",
-				name: "José Manuel Requena Plens",
-				alternateName: "jmrplens",
-				url: "https://jmrp.io",
-				sameAs: [
-					"https://github.com/jmrplens",
-					"https://linkedin.com/in/jmrplens",
-					"https://mstdn.jmrp.io/@jmrplens",
-					"https://scholar.google.com/citations?user=9b0kPaUAAAAJ",
-					"https://matrix.to/#/@jmrplens:matrix.jmrp.io",
-					"https://keyoxide.org/0A993B268654DBBA52B7E8D3FCF653391E2C91FC",
-				],
-			},
+			image: socialImageUrl,
+			publisher: { "@id": authorId },
+			mainEntity: { "@id": softwareId },
 		},
 		{
 			"@type": "SoftwareApplication",
+			"@id": softwareId,
 			name: "GitLab MCP Server",
 			applicationCategory: "DeveloperApplication",
 			operatingSystem: "Windows, Linux, macOS",
 			programmingLanguage: "Go",
-			url: "https://github.com/jmrplens/gitlab-mcp-server",
-			downloadUrl: "https://github.com/jmrplens/gitlab-mcp-server/releases",
+			url: repositoryUrl,
+			downloadUrl: releasesUrl,
+			codeRepository: repositoryUrl,
+			image: socialImageUrl,
+			screenshot: socialImageUrl,
 			license: "https://opensource.org/licenses/MIT",
+			isAccessibleForFree: true,
+			keywords:
+				"Model Context Protocol, MCP, GitLab, AI assistants, developer tools, Go",
 			description:
 				"Model Context Protocol server that exposes up to 1011 GitLab operations as AI-accessible tools.",
 			offers: {
@@ -109,11 +132,18 @@ const jsonLd = JSON.stringify({
 				price: "0",
 				priceCurrency: "USD",
 			},
-			author: {
-				"@type": "Person",
-				name: "José Manuel Requena Plens",
-				url: "https://jmrp.io",
-			},
+			author: { "@id": authorId },
+		},
+		{
+			"@type": "SoftwareSourceCode",
+			"@id": sourceCodeId,
+			name: "GitLab MCP Server source code",
+			codeRepository: repositoryUrl,
+			programmingLanguage: "Go",
+			runtimePlatform: "Windows, Linux, macOS",
+			license: "https://opensource.org/licenses/MIT",
+			isPartOf: { "@id": softwareId },
+			author: { "@id": authorId },
 		},
 	],
 });
@@ -135,8 +165,7 @@ export default defineConfig({
 					errorOnFallbackPages: false,
 				}),
 			],
-			description:
-				"A Model Context Protocol (MCP) server exposing up to 1011 GitLab operations as AI-accessible tools. Written in Go.",
+			description: siteDescription,
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
 				light: "./src/assets/logo-light.svg",
@@ -166,16 +195,19 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						property: "og:image",
-						content: `${fullUrl}/og-image.png`,
+						content: socialImageUrl,
 					},
 				},
 				{
 					tag: "meta",
 					attrs: {
 						property: "og:image:alt",
-						content:
-							"GitLab MCP Server — up to 1011 GitLab tools for AI assistants",
+						content: socialImageAlt,
 					},
+				},
+				{
+					tag: "meta",
+					attrs: { property: "og:image:type", content: "image/png" },
 				},
 				{
 					tag: "meta",
@@ -190,7 +222,14 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						name: "twitter:image",
-						content: `${fullUrl}/og-image.png`,
+						content: socialImageUrl,
+					},
+				},
+				{
+					tag: "meta",
+					attrs: {
+						name: "twitter:image:alt",
+						content: socialImageAlt,
 					},
 				},
 				// Author
