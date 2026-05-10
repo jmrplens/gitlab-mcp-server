@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -22,6 +23,15 @@ import (
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+func requireContainsAll(t *testing.T, name, content string, wants []string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(content, want) {
+			t.Fatalf("%s = %q, want content containing %q", name, content, want)
+		}
+	}
+}
 
 // TestParseTasksMarkdown_ParsesTaskRows verifies that ParseTasksMarkdown handles the parses task rows scenario correctly.
 func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
@@ -759,31 +769,23 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	task := evalTask{ID: "MS-002", Prompt: "Investigate a pipeline failure for git remote `git@gitlab.example.com:group/project.git` and summarize the failing job."}
 
 	system := systemPromptForTask(task, config.ToolSurfaceDynamic3)
-	for _, want := range []string{
+	requireContainsAll(t, "systemPromptForTask()", system, []string{
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first.",
 		"If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool.",
 		"Canonical action IDs use domain.action without the gitlab_ tool prefix",
 		"params is always required, even when empty",
 		"runner.delete_registered when the prompt gives numeric runner_id",
-	} {
-		if !strings.Contains(system, want) {
-			t.Fatalf("systemPromptForTask() = %q, want dynamic-3 guidance containing %q", system, want)
-		}
-	}
+	})
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
-	for _, want := range []string{
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool.",
 		"If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool.",
 		"params limited to the described input schema",
 		"Always include top-level params",
 		"Canonical action IDs do not include gitlab_ prefixes",
 		"Never send confirm:false",
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPromptForSurface() = %q, want dynamic-3 override containing %q", prompt, want)
-		}
-	}
+	})
 }
 
 // TestDynamicTaskPrompt_IncludesProviderConfusionGuidance verifies task-level
@@ -873,11 +875,7 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
-			for _, want := range tt.want {
-				if !strings.Contains(prompt, want) {
-					t.Fatalf("taskPromptForSurface() = %q, want guidance containing %q", prompt, want)
-				}
-			}
+			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 		})
 	}
 }
@@ -959,11 +957,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			if overrideIndex >= 0 && exactIndex > overrideIndex {
 				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before dynamic override", prompt)
 			}
-			for _, want := range tt.want {
-				if !strings.Contains(prompt, want) {
-					t.Fatalf("taskPromptForSurface() = %q, want exact call containing %q", prompt, want)
-				}
-			}
+			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 		})
 	}
 }
@@ -977,18 +971,14 @@ func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T)
 	}}
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
-	for _, want := range []string{
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		`"action":"repository.file_create"`,
 		`"file_path":"tmp/eval-crud.txt"`,
 		`"project_id":"my-org/tools/gitlab-mcp-server"`,
 		`"branch":"feature/eval"`,
 		`"content":"Initial content for repository file CRUD"`,
 		`"commit_message":"Evaluation create tmp/eval-crud.txt"`,
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPromptForSurface() = %q, want repository file CRUD guidance containing %q", prompt, want)
-		}
-	}
+	})
 	if strings.Contains(prompt, `"file_path":"my-org/tools/gitlab-mcp-server"`) {
 		t.Fatalf("taskPromptForSurface() = %q, file_path must not use project path", prompt)
 	}
@@ -1066,6 +1056,14 @@ func TestValidateActionToolCall_DynamicConfirmTopLevel(t *testing.T) {
 	})
 	if invalid.Valid || invalid.DestructiveSafe {
 		t.Fatalf("validateActionToolCall(dynamic missing confirm) = %+v, want unsafe invalid", invalid)
+	}
+
+	paramsConfirm := validateActionToolCall(step, dynamicExecuteTool, map[string]any{
+		"action": "project.delete",
+		"params": map[string]any{"project_id": "my-org/project", "confirm": true},
+	})
+	if paramsConfirm.Valid || paramsConfirm.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic params confirm) = %+v, want unsafe invalid", paramsConfirm)
 	}
 }
 
@@ -1643,6 +1641,19 @@ func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) 
 	}, 2, 3)
 	if !strings.Contains(content, "my-org/tools/gitlab-mcp-server") || !strings.Contains(content, "default_branch") {
 		t.Fatalf("successfulSimulatedToolContent() = %s, want project metadata", content)
+	}
+
+	content = successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve"}, modelContentBlock{
+		Name: dynamicExecuteTool,
+		Input: map[string]any{
+			"action": "search.projects",
+			"params": map[string]any{"search": "gitlab-mcp-server"},
+		},
+	}, 2, 3)
+	for _, want := range []string{"my-org/tools/gitlab-mcp-server", `"projects"`, `"environments"`} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("successfulSimulatedToolContent(prelude) = %s, want %q", content, want)
+		}
 	}
 }
 
@@ -3662,6 +3673,9 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 				"properties": map[string]any{
 					"title":     map[string]any{"type": "string"},
 					"confirmed": map[string]any{"type": "boolean"},
+					"count":     map[string]any{"type": "integer"},
+					"enabled":   map[string]any{"type": "boolean"},
+					"selection": map[string]any{"type": "string", "enum": []any{"private", "internal"}},
 				},
 			},
 		})
@@ -3670,6 +3684,15 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 		}
 		if result.Action != "accept" || result.Content["confirmed"] != true {
 			return nil, nil, fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
+		}
+		if _, ok := result.Content["enabled"].(bool); !ok {
+			return nil, nil, fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
+		}
+		if _, ok := result.Content["count"].(string); ok {
+			return nil, nil, errors.New("elicitation count should not be a string")
+		}
+		if result.Content["selection"] != "private" {
+			return nil, nil, fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(result.Content["title"])}}}, nil, nil
 	})
@@ -3693,6 +3716,29 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	}
 	if got := toolResultContent(result); !strings.Contains(got, "Evaluation elicitation test") {
 		t.Fatalf("elicitation result = %q, want evaluator title", got)
+	}
+}
+
+// TestEvalElicitationSchemaValue_TypeAwareDefaults verifies fallback values
+// match schema types, including nested object properties handled outside MCP's
+// elicitation primitive-property subset.
+func TestEvalElicitationSchemaValue_TypeAwareDefaults(t *testing.T) {
+	metadata := evalElicitationSchemaValue("metadata", map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"retries": map[string]any{"type": "integer"},
+			"dry_run": map[string]any{"type": "boolean"},
+		},
+	}).(map[string]any)
+	if metadata["retries"] != 0 || metadata["dry_run"] != false {
+		t.Fatalf("metadata defaults = %#v, want integer and boolean defaults", metadata)
+	}
+
+	if got := evalElicitationSchemaValue("visibility", map[string]any{"enum": []any{"private", "internal"}}); got != "private" {
+		t.Fatalf("enum default = %v, want private", got)
+	}
+	if got := evalElicitationSchemaValue("labels", map[string]any{"type": "array"}); !reflect.DeepEqual(got, []any{}) {
+		t.Fatalf("array default = %#v, want empty array", got)
 	}
 }
 
@@ -3876,7 +3922,7 @@ func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing
 			FirstTool:    dynamicExecuteTool,
 			FirstAction:  "search.projects",
 			FirstPass:    true,
-			FinalSuccess: true,
+			FinalSuccess: false,
 		}
 		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
 		if !toolOK || !actionOK || !firstPassOK {

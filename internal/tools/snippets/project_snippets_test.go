@@ -195,6 +195,20 @@ func TestProjectCreate_MissingContent(t *testing.T) {
 	}
 }
 
+// TestProjectCreate_MissingFileName verifies that project create validates the
+// single-file file name before calling GitLab.
+func TestProjectCreate_MissingFileName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+		ProjectID:   toolutil.StringOrInt("10"),
+		Title:       "Test Snippet",
+		ContentBody: "package main",
+	})
+	if err == nil || !strings.Contains(err.Error(), "file_name is required") {
+		t.Fatalf("expected file name required error, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ProjectUpdate
 // ---------------------------------------------------------------------------.

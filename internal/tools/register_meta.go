@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -176,13 +177,14 @@ import (
 // parameter. This reduces token usage for LLMs while preserving full
 // functionality. Interactive tools cannot be consolidated because they
 // require multi-round MCP elicitation/create exchanges with the client.
-func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
+func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) error {
 	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to build action catalog: %w", err)
 	}
 	RegisterMetaCatalog(server, catalog)
 	registerStandaloneUtilities(server, client)
+	return nil
 }
 
 func registerAllMetaGroups(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {

@@ -141,6 +141,11 @@ func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions
 	return &options
 }
 
+// validateCreateSnippetContent validates the two supported snippet creation
+// modes: single-file snippets require fileName and content when files is empty,
+// while multi-file snippets require FilePath and Content on every file entry.
+// Missing single-file fields return [toolutil.ErrFieldRequired]; invalid
+// multi-file entries include the offending files[index] field in the error.
 func validateCreateSnippetContent(fileName, content string, files []CreateFileInput) error {
 	if len(files) == 0 {
 		if fileName == "" {

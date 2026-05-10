@@ -7,35 +7,45 @@ import (
 )
 
 func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
-	base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(base) error = %v", err)
-	}
-	if base.CountGroups() == 0 || base.CountActions() == 0 {
-		t.Fatalf("base catalog counts = groups %d actions %d, want non-zero", base.CountGroups(), base.CountActions())
-	}
-	if _, ok := base.Action("project.list"); !ok {
-		t.Fatal("base catalog missing project.list")
-	}
-	if _, ok := base.Action("server.status"); ok {
-		t.Fatal("base catalog contains server.status without IncludeMCP")
-	}
+	t.Run("base", func(t *testing.T) {
+		base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(base) error = %v", err)
+		}
+		if base.CountGroups() == 0 || base.CountActions() == 0 {
+			t.Fatalf("base catalog counts = groups %d actions %d, want non-zero", base.CountGroups(), base.CountActions())
+		}
+		if _, ok := base.Action("project.list"); !ok {
+			t.Fatal("base catalog missing project.list")
+		}
+		if _, ok := base.Action("server.status"); ok {
+			t.Fatal("base catalog contains server.status without IncludeMCP")
+		}
+	})
 
-	withMCP, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(with MCP) error = %v", err)
-	}
-	if _, ok := withMCP.Action("server.status"); !ok {
-		t.Fatal("MCP catalog missing server.status")
-	}
+	t.Run("mcp", func(t *testing.T) {
+		withMCP, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(with MCP) error = %v", err)
+		}
+		if _, ok := withMCP.Action("server.status"); !ok {
+			t.Fatal("MCP catalog missing server.status")
+		}
+	})
 
-	enterprise, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
-	}
-	if enterprise.CountActions() <= base.CountActions() {
-		t.Fatalf("enterprise action count = %d, want greater than base %d", enterprise.CountActions(), base.CountActions())
-	}
+	t.Run("enterprise", func(t *testing.T) {
+		base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(base) error = %v", err)
+		}
+		enterprise, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
+		}
+		if enterprise.CountActions() <= base.CountActions() {
+			t.Fatalf("enterprise action count = %d, want greater than base %d", enterprise.CountActions(), base.CountActions())
+		}
+	})
 }
 
 func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
@@ -45,9 +55,11 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 	}
 
 	for _, actionID := range []string{"project.list", "search.code", "runner.list", "analyze.issue_summary"} {
-		if _, ok := catalog.Action(actionregistry.ActionID(actionID)); !ok {
-			t.Fatalf("catalog missing %s", actionID)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if _, ok := catalog.Action(actionregistry.ActionID(actionID)); !ok {
+				t.Fatalf("catalog missing %s", actionID)
+			}
+		})
 	}
 
 	group, ok := catalog.Group("gitlab_analyze")

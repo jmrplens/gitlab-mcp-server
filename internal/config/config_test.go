@@ -198,6 +198,20 @@ func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
 	}
 }
 
+// TestLoad_ToolSurfaceInvalid verifies that Load rejects unsupported explicit
+// tool surface values before falling back to META_TOOLS.
+func TestLoad_ToolSurfaceInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("TOOL_SURFACE", "not-a-surface")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for invalid TOOL_SURFACE, got nil")
+	}
+}
+
 // TestLoad_ToolSurfaceDynamicCandidates verifies that the explicit dynamic
 // candidate selectors are accepted without changing the default surface.
 func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {

@@ -158,7 +158,7 @@ To register the low-token dynamic toolset instead, set:
 TOOL_SURFACE=dynamic
 ```
 
-For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts while leaving dynamic action search, describe, and execute available. Experimental A/B selectors are also available: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
+For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts. Dynamic action search, describe, and execute remain available. Experimental variant selectors are also available for testing dynamic toolset configurations: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
 
 See [Meta-Tools](meta-tools.md) for the full reference.
 
@@ -188,6 +188,8 @@ The host passes these environment variables through to the container:
 | `GITLAB_READ_ONLY`       | No       | Disable mutating tools (default `false`)                 |
 | `GITLAB_SAFE_MODE`       | No       | Preview mutating tool inputs (default `false`)           |
 | `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)        |
+
+`TOOL_SURFACE` takes precedence over `META_TOOLS` when both are set. Prefer `TOOL_SURFACE` for new configurations: `meta` is the default consolidated catalog, `individual` exposes every tool separately, `dynamic`/`dynamic-3` expose the current three-tool low-token search/describe/execute surface, and `dynamic-2` selects the experimental find/execute comparison surface. `META_TOOLS` remains supported for legacy configs (`true` maps to `meta`, `false` maps to `individual`) but should be treated as deprecated in favor of the explicit selector.
 
 The Open Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 

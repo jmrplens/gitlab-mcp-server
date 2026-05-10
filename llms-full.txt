@@ -3367,7 +3367,7 @@ When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic cr
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.
 
-Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid maps GitLab's iid field.
+Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.
 
 See also: gitlab_issue.
 
@@ -3391,13 +3391,13 @@ After invocation, the tool elicits in order:
 - squash (boolean, optional) — yes/no confirmation; default unset.
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
-Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422), so retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
+Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
 
 When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.
 
-Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid maps GitLab's iid field.
+Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.
 
 See also: gitlab_merge_request, gitlab_branch.
 
@@ -3407,7 +3407,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Project Create**
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at required prompts or final confirmation aborts without creating the project.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
 
 Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.
 
@@ -3415,13 +3415,13 @@ After invocation, the tool elicits in order:
 - name (string, required) — project display name and (when path is omitted) URL slug.
 - description (string, optional) — leave empty to skip.
 - visibility (enum, required) — one of private, internal, public.
-- initialize_with_readme (boolean, optional) — yes/no confirmation; defaults to false when declined.
+- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no continues with false, while decline/cancel aborts.
 - default_branch (string, optional) — leave empty to use the GitLab default ('main').
 - confirm (boolean, required) — final yes/no review of the assembled summary.
 
 When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.
 
-Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline aborts with no GitLab API call and no side effects, except at the optional initialize_with_readme prompt where decline/cancel continues with initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.
+Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab may initialize a repository and notify project members.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.
 
@@ -15615,7 +15615,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at required prompts or final confirmation aborts without creating the project.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 

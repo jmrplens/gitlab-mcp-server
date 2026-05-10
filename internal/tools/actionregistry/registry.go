@@ -57,7 +57,9 @@ type Group struct {
 	ActionOrder  []string
 }
 
-// Catalog stores deterministic groups and action lookup indexes.
+// Catalog stores deterministic groups and action lookup indexes. A Catalog is
+// intended to be mutated during single-threaded initialization and then shared
+// read-only; concurrent mutation is not supported.
 type Catalog struct {
 	groups  map[string]Group
 	actions map[ActionID]Action
@@ -90,7 +92,9 @@ func FromActionMaps(routes map[string]toolutil.ActionMap) *Catalog {
 		for _, actionName := range actionNames {
 			group.SetAction(Action{Name: actionName, Route: actions[actionName]})
 		}
-		_ = catalog.AddGroup(group)
+		if err := catalog.AddGroup(group); err != nil {
+			panic(fmt.Sprintf("build action catalog from route maps: %v", err))
+		}
 	}
 	return catalog
 }
@@ -211,9 +215,6 @@ func (c *Catalog) AddAction(toolName string, action Action) error {
 		return errors.New("tool name is required")
 	}
 	next := c.Clone()
-	if next == nil {
-		next = NewCatalog()
-	}
 	group, ok := next.groups[toolName]
 	if !ok {
 		group = NewGroup(GroupOptions{ToolName: toolName})
@@ -328,9 +329,17 @@ func (c *Catalog) Clone() *Catalog {
 	}
 	clone := NewCatalog()
 	for _, group := range c.Groups() {
-		_ = clone.AddGroup(group)
+		mustAddCatalogGroup(clone, group, "clone catalog")
 	}
 	return clone
+}
+
+func mustAddCatalogGroup(catalog *Catalog, group Group, operation string) {
+	// AddGroup should not fail while cloning/filtering already-validated groups;
+	// panic here so future catalog invariant drift is caught immediately.
+	if err := catalog.AddGroup(group); err != nil {
+		panic(fmt.Sprintf("%s: %v", operation, err))
+	}
 }
 
 // Validate verifies that the catalog has a consistent, executable action index.
@@ -388,7 +397,7 @@ func (c *Catalog) FilterExcludedTools(excludeTools []string) *Catalog {
 		if _, ok := excluded[group.ToolName]; ok {
 			continue
 		}
-		_ = filtered.AddGroup(group)
+		mustAddCatalogGroup(filtered, group, "filter excluded tools")
 	}
 	return filtered
 }
@@ -403,7 +412,7 @@ func (c *Catalog) FilterReadOnlyGroups() *Catalog {
 		if !group.ReadOnly {
 			continue
 		}
-		_ = filtered.AddGroup(group)
+		mustAddCatalogGroup(filtered, group, "filter read-only groups")
 	}
 	return filtered
 }
@@ -425,7 +434,7 @@ func (c *Catalog) FilterAllowedToolNames(toolNames []string) *Catalog {
 		if _, ok := allowed[group.ToolName]; !ok {
 			continue
 		}
-		_ = filtered.AddGroup(group)
+		mustAddCatalogGroup(filtered, group, "filter allowed tool names")
 	}
 	return filtered
 }

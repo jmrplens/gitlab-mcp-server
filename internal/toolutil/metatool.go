@@ -241,7 +241,11 @@ func cloneMetaToolDefinition(def MetaToolDefinition) MetaToolDefinition {
 
 func cloneActionMap(routes ActionMap) ActionMap {
 	out := make(ActionMap, len(routes))
-	maps.Copy(out, routes)
+	for action, route := range routes {
+		route.InputSchema = cloneSchemaMap(route.InputSchema)
+		route.OutputSchema = cloneSchemaMap(route.OutputSchema)
+		out[action] = route
+	}
 	return out
 }
 
@@ -284,8 +288,25 @@ func schemaForType(rt reflect.Type) map[string]any {
 	if json.Unmarshal(data, &m) != nil {
 		return nil
 	}
+	normalizeSchemaDescriptions(m)
 	outputSchemaCache.Store(rt, m)
 	return m
+}
+
+func normalizeSchemaDescriptions(node any) {
+	switch typed := node.(type) {
+	case map[string]any:
+		if description, ok := typed["description"].(string); ok {
+			typed["description"] = strings.TrimSuffix(description, ",required")
+		}
+		for _, value := range typed {
+			normalizeSchemaDescriptions(value)
+		}
+	case []any:
+		for _, value := range typed {
+			normalizeSchemaDescriptions(value)
+		}
+	}
 }
 
 func inputSchemaForType(rt reflect.Type) map[string]any {
@@ -1785,6 +1806,24 @@ var (
 func SetMetaParamSchemaMode(mode string) {
 	metaParamSchemaMu.Lock()
 	defer metaParamSchemaMu.Unlock()
+	setMetaParamSchemaModeLocked(mode)
+}
+
+// SetMetaParamSchemaModeScoped selects the meta-tool input schema strategy and
+// returns a restore function for tests that temporarily override the global mode.
+func SetMetaParamSchemaModeScoped(mode string) func() {
+	metaParamSchemaMu.Lock()
+	previous := metaParamSchemaMode
+	setMetaParamSchemaModeLocked(mode)
+	metaParamSchemaMu.Unlock()
+	return func() {
+		metaParamSchemaMu.Lock()
+		defer metaParamSchemaMu.Unlock()
+		metaParamSchemaMode = previous
+	}
+}
+
+func setMetaParamSchemaModeLocked(mode string) {
 	switch mode {
 	case MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull:
 		metaParamSchemaMode = mode

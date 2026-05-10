@@ -5,7 +5,7 @@ This document publishes the current model-evaluation results selected with
 kept in separate managed sections so publishing one surface does not replace the
 other. Raw reports and traces are not committed.
 
-## Meta-Tools Result
+## Meta-Tools Results
 
 <!-- START MODEL EVAL META RESULTS -->
 ### 2026-05-05 Full Docker Economy Run
@@ -28,7 +28,7 @@ other. Raw reports and traces are not committed.
 Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL META RESULTS -->
 
-## Dynamic 3-Tool Result
+## Dynamic 3-Tool Results
 
 <!-- START MODEL EVAL DYNAMIC3 RESULTS -->
 ### Dynamic 3-tool all-provider Docker run 2026-05-09

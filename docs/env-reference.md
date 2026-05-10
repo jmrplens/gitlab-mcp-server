@@ -29,7 +29,7 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), `dynamic` (low-token search/describe/execute surface), `dynamic-3` (explicit current dynamic surface), or experimental `dynamic-2` comparison surface |
+| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), `dynamic` (low-token search/describe/execute surface), experimental `dynamic-2` comparison surface, or `dynamic-3` (explicit current dynamic surface) |
 | `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
 | `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |

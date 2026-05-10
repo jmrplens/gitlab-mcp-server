@@ -101,3 +101,9 @@ var validActionsString = toolutil.ValidActionsString
 func SetMetaParamSchema(mode string) {
 	toolutil.SetMetaParamSchemaMode(mode)
 }
+
+// SetMetaParamSchemaScoped selects the meta-tool input schema strategy and
+// returns a restore function for tests that temporarily override the global mode.
+func SetMetaParamSchemaScoped(mode string) func() {
+	return toolutil.SetMetaParamSchemaModeScoped(mode)
+}

@@ -25,7 +25,7 @@ func TestLockdownInputSchemas_AddsFalseToRoot(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 
 	type In struct {
-		ProjectID string `json:"project_id" jsonschema:"required"`
+		ProjectID string `json:"project_id" jsonschema:"Project ID,required"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "test_tool",
@@ -41,6 +41,11 @@ func TestLockdownInputSchemas_AddsFalseToRoot(t *testing.T) {
 	schema := mustSchemaMap(t, got.InputSchema)
 	if v, ok := schema["additionalProperties"].(bool); !ok || v {
 		t.Fatalf("after lockdown additionalProperties = %v, want false", schema["additionalProperties"])
+	}
+	properties := schema["properties"].(map[string]any)
+	projectID := properties["project_id"].(map[string]any)
+	if projectID["description"] != "Project ID" {
+		t.Fatalf("project_id description = %q, want Project ID", projectID["description"])
 	}
 }
 

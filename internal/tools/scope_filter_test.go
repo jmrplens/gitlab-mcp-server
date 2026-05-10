@@ -92,28 +92,39 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
-	if _, ok := catalog.Group("gitlab_admin"); !ok {
-		t.Fatal("source catalog missing gitlab_admin")
-	}
 
-	filtered := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
-	if _, ok := filtered.Group("gitlab_admin"); ok {
-		t.Fatal("filtered catalog still contains gitlab_admin")
-	}
-	if _, ok := filtered.Group("gitlab_project"); !ok {
-		t.Fatal("filtered catalog removed ungated gitlab_project")
-	}
-	if _, ok := catalog.Group("gitlab_admin"); !ok {
-		t.Fatal("source catalog was mutated")
-	}
+	t.Run("source contains admin", func(t *testing.T) {
+		if _, ok := catalog.Group("gitlab_admin"); !ok {
+			t.Fatal("source catalog missing gitlab_admin")
+		}
+	})
 
-	unfiltered := FilterScopeFilteredCatalog(catalog, nil)
-	if unfiltered == catalog {
-		t.Fatal("nil token scopes should return a cloned catalog")
-	}
-	if unfiltered.CountGroups() != catalog.CountGroups() {
-		t.Fatalf("nil-scope group count = %d, want %d", unfiltered.CountGroups(), catalog.CountGroups())
-	}
+	t.Run("removes admin and preserves project", func(t *testing.T) {
+		filtered := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if _, ok := filtered.Group("gitlab_admin"); ok {
+			t.Fatal("filtered catalog still contains gitlab_admin")
+		}
+		if _, ok := filtered.Group("gitlab_project"); !ok {
+			t.Fatal("filtered catalog removed ungated gitlab_project")
+		}
+	})
+
+	t.Run("source remains unchanged", func(t *testing.T) {
+		_ = FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if _, ok := catalog.Group("gitlab_admin"); !ok {
+			t.Fatal("source catalog was mutated")
+		}
+	})
+
+	t.Run("nil scopes return clone", func(t *testing.T) {
+		unfiltered := FilterScopeFilteredCatalog(catalog, nil)
+		if unfiltered == catalog {
+			t.Fatal("nil token scopes should return a cloned catalog")
+		}
+		if unfiltered.CountGroups() != catalog.CountGroups() {
+			t.Fatalf("nil-scope group count = %d, want %d", unfiltered.CountGroups(), catalog.CountGroups())
+		}
+	})
 }
 
 // TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.
@@ -170,7 +181,9 @@ func newMetaServer(t *testing.T) *mcp.Server {
 	})
 	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAllMeta(server, client, true)
+	if err := RegisterAllMeta(server, client, true); err != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", err)
+	}
 	return server
 }
 

@@ -27,7 +27,7 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Tool catalog selector: `true` for domain meta-tools, `false` for individual tools, `dynamic` for the low-token search/describe/execute surface, or `dynamic-3` for the explicit current dynamic surface. `dynamic-2` is an experimental comparison surface |
+| `META_TOOLS` | `true` | Legacy tool catalog selector: `true` for domain meta-tools, `false` for individual tools, `dynamic` for the recommended current low-token search/describe/execute surface, `dynamic-3` for the same current dynamic surface selected explicitly, or `dynamic-2` for the experimental find/execute comparison surface |
 | `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources and prompts; `minimal` keeps only `gitlab://workspace/roots` and omits optional resource and prompt templates |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
@@ -202,6 +202,8 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | **Dynamic toolset** | `TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, or `META_TOOLS=dynamic` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions. Current candidate for a future default |
 | **Dynamic-2 candidate** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental A/B candidate that combines discovery and schema lookup |
 | **Individual tools** | `META_TOOLS=false` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
+
+`TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, and legacy `META_TOOLS=dynamic` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need an explicit current dynamic selector in reports or pinned configs, and reserve `dynamic-2` for find/execute experiments.
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token search/describe/execute workflow.
 

@@ -35,7 +35,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop issue creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid maps GitLab's iid field.\n\nSee also: gitlab_issue.",
+			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input IssueInput) (*mcp.CallToolResult, issues.Output, error) {
@@ -68,11 +68,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"- remove_source_branch (boolean, optional) — yes/no confirmation; default unset.\n" +
 			"- squash (boolean, optional) — yes/no confirmation; default unset.\n" +
 			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
-			"Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422), so retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\n" +
+			"Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. " +
+			"NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). " +
+			"Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. " +
+			"For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\n" +
 			"When to use: human-in-the-loop MR creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid maps GitLab's iid field.\n\nSee also: gitlab_merge_request, gitlab_branch.",
+			"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_merge_request, gitlab_branch.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, mergerequests.Output, error) {
@@ -127,17 +130,17 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_project_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_project_create"),
-		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at required prompts or final confirmation aborts without creating the project.\n\n" +
+		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
 			"Input: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- name (string, required) — project display name and (when path is omitted) URL slug.\n" +
 			"- description (string, optional) — leave empty to skip.\n" +
 			"- visibility (enum, required) — one of private, internal, public.\n" +
-			"- initialize_with_readme (boolean, optional) — yes/no confirmation; defaults to false when declined.\n" +
+			"- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no continues with false, while decline/cancel aborts.\n" +
 			"- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n" +
 			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
-			"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline aborts with no GitLab API call and no side effects, except at the optional initialize_with_readme prompt where decline/cancel continues with initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
+			"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group.",
 		Annotations: toolutil.CreateAnnotations,

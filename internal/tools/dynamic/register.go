@@ -4,6 +4,7 @@ package dynamic
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sort"
@@ -15,6 +16,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+var searchStopWordsMap = map[string]struct{}{
+	"a": {}, "an": {}, "and": {}, "as": {}, "at": {}, "by": {}, "for": {}, "from": {}, "in": {},
+	"of": {}, "on": {}, "or": {}, "please": {}, "the": {}, "to": {}, "using": {}, "via": {}, "with": {},
+}
 
 const (
 	searchToolName   = "gitlab_search_tools"
@@ -631,10 +637,7 @@ func normalizeSearchTerms(query string) []searchTerm {
 }
 
 func searchStopWords() map[string]struct{} {
-	return map[string]struct{}{
-		"a": {}, "an": {}, "and": {}, "as": {}, "at": {}, "by": {}, "for": {}, "from": {}, "in": {},
-		"of": {}, "on": {}, "or": {}, "please": {}, "the": {}, "to": {}, "using": {}, "via": {}, "with": {},
-	}
+	return searchStopWordsMap
 }
 
 func dedupeStrings(values []string) []string {
@@ -660,77 +663,81 @@ func dedupeSortedStrings(values []string) []string {
 	return out
 }
 
+var searchSynonymsMap = map[string][]string{
+	"access":     {"token", "deploy", "member"},
+	"approve":    {"approval", "review", "feedback"},
+	"approved":   {"approval", "review", "approved"},
+	"artifact":   {"job", "download"},
+	"archive":    {"artifacts", "download"},
+	"assigned":   {"assignee", "assignee_username", "assignee_id", "list"},
+	"assignee":   {"assigned", "assign", "delegate", "list"},
+	"author":     {"creator", "created_by", "owner", "list"},
+	"authored":   {"author", "author_username", "creator", "created_by", "owner", "list"},
+	"ci":         {"pipeline", "job", "variable", "lint"},
+	"closed":     {"close", "list", "filter"},
+	"comment":    {"note", "discussion", "reply"},
+	"current":    {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
+	"deploy":     {"deployment", "environment", "key"},
+	"deployment": {"deploy", "environment"},
+	"details":    {"get"},
+	"discussion": {"comment", "thread", "note"},
+	"draft":      {"wip", "work_in_progress", "proposal"},
+	"env":        {"environment"},
+	"file":       {"repository", "blob", "content"},
+	"filter":     {"search", "query", "find", "list"},
+	"info":       {"get"},
+	"label":      {"tag", "category", "list"},
+	"merged":     {"merge", "integrated", "list"},
+	"metadata":   {"get", "details", "settings"},
+	"me":         {"author", "author_username", "assignee", "assignee_username", "current_user", "self", "list"},
+	"milestone":  {"sprint", "release", "deadline", "list"},
+	"mine":       {"my", "owned", "owner", "author", "list"},
+	"mr":         {"merge", "request", "merge_request"},
+	"my":         {"owned", "owner", "author", "assignee", "list"},
+	"note":       {"comment", "discussion", "reply"},
+	"open":       {"active", "unresolved", "status_open", "list"},
+	"owned":      {"my", "personal", "mine", "owner", "list"},
+	"pending":    {"list", "filter", "todo"},
+	"read":       {"get", "file", "content", "settings"},
+	"refs":       {"ref", "branch", "tag", "compare"},
+	"review":     {"approval", "feedback", "assessment"},
+	"repo":       {"repository", "file", "tree", "branch", "tag"},
+	"secret":     {"variable", "ci_variable", "token", "password"},
+	"show":       {"get"},
+	"state":      {"status", "condition", "filter", "list"},
+	"unresolved": {"open", "active", "list"},
+	"user":       {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
+	"users":      {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
+	"verify":     {"get", "exists"},
+	"webhook":    {"hook"},
+	"webhooks":   {"hook"},
+	"yaml":       {"ci", "lint", "template"},
+	"yml":        {"ci", "lint", "template"},
+}
+
 func searchSynonyms() map[string][]string {
-	return map[string][]string{
-		"access":     {"token", "deploy", "member"},
-		"approve":    {"approval", "review", "feedback"},
-		"approved":   {"approval", "review", "approved"},
-		"artifact":   {"job", "download"},
-		"archive":    {"artifacts", "download"},
-		"assigned":   {"assignee", "assignee_username", "assignee_id", "list"},
-		"assignee":   {"assigned", "assign", "delegate", "list"},
-		"author":     {"creator", "created_by", "owner", "list"},
-		"authored":   {"author", "author_username", "creator", "created_by", "owner", "list"},
-		"ci":         {"pipeline", "job", "variable", "lint"},
-		"closed":     {"close", "list", "filter"},
-		"comment":    {"note", "discussion", "reply"},
-		"current":    {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
-		"deploy":     {"deployment", "environment", "key"},
-		"deployment": {"deploy", "environment"},
-		"details":    {"get"},
-		"discussion": {"comment", "thread", "note"},
-		"draft":      {"wip", "work_in_progress", "proposal"},
-		"env":        {"environment"},
-		"file":       {"repository", "blob", "content"},
-		"filter":     {"search", "query", "find", "list"},
-		"info":       {"get"},
-		"label":      {"tag", "category", "list"},
-		"merged":     {"merge", "integrated", "list"},
-		"metadata":   {"get", "details", "settings"},
-		"me":         {"author", "author_username", "assignee", "assignee_username", "current_user", "self", "list"},
-		"milestone":  {"sprint", "release", "deadline", "list"},
-		"mine":       {"my", "owned", "owner", "author", "list"},
-		"mr":         {"merge", "request", "merge_request"},
-		"my":         {"owned", "owner", "author", "assignee", "list"},
-		"note":       {"comment", "discussion", "reply"},
-		"open":       {"active", "unresolved", "status_open", "list"},
-		"owned":      {"my", "personal", "mine", "owner", "list"},
-		"pending":    {"list", "filter", "todo"},
-		"read":       {"get", "file", "content", "settings"},
-		"refs":       {"ref", "branch", "tag", "compare"},
-		"review":     {"approval", "feedback", "assessment"},
-		"repo":       {"repository", "file", "tree", "branch", "tag"},
-		"secret":     {"variable", "ci_variable", "token", "password"},
-		"show":       {"get"},
-		"state":      {"status", "condition", "filter", "list"},
-		"unresolved": {"open", "active", "list"},
-		"user":       {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
-		"users":      {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
-		"verify":     {"get", "exists"},
-		"webhook":    {"hook"},
-		"webhooks":   {"hook"},
-		"yaml":       {"ci", "lint", "template"},
-		"yml":        {"ci", "lint", "template"},
-	}
+	return searchSynonymsMap
+}
+
+var verbSynonymsMap = map[string][]string{
+	"add":       {"create", "enable", "register"},
+	"cancel":    {"stop"},
+	"close":     {"update", "state_event", "closed"},
+	"disable":   {"delete", "remove", "stop"},
+	"download":  {"artifact", "trace", "raw", "content", "single"},
+	"destroy":   {"delete", "remove"},
+	"enable":    {"add", "create", "register"},
+	"lock":      {"protect"},
+	"remove":    {"delete"},
+	"rerun":     {"retry"},
+	"revoke":    {"delete", "remove"},
+	"run":       {"play", "create", "trigger"},
+	"unlock":    {"unprotect"},
+	"unapprove": {"reset", "approval"},
 }
 
 func verbSynonyms() map[string][]string {
-	return map[string][]string{
-		"add":       {"create", "enable", "register"},
-		"cancel":    {"stop"},
-		"close":     {"update", "state_event", "closed"},
-		"disable":   {"delete", "remove", "stop"},
-		"download":  {"artifact", "trace", "raw", "content", "single"},
-		"destroy":   {"delete", "remove"},
-		"enable":    {"add", "create", "register"},
-		"lock":      {"protect"},
-		"remove":    {"delete"},
-		"rerun":     {"retry"},
-		"revoke":    {"delete", "remove"},
-		"run":       {"play", "create", "trigger"},
-		"unlock":    {"unprotect"},
-		"unapprove": {"reset", "approval"},
-	}
+	return verbSynonymsMap
 }
 
 func actionTags(id, domain, action string, schema map[string]any) []string {
@@ -950,7 +957,15 @@ func normalizedLimit(limit int) int {
 }
 
 func describeEntry(entry actionEntry) ActionDescription {
-	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	inputSchema, ok := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	if !ok {
+		slog.Debug("dynamic action schema lookup failed", "tool", entry.Tool, "action", entry.Action, "id", entry.ID)
+		inputSchema = map[string]any{
+			"type":                 "object",
+			"additionalProperties": true,
+			"description":          "Schema lookup failed for this action; use the action's schema_uri resource for authoritative params.",
+		}
+	}
 	return ActionDescription{
 		ID:             entry.ID,
 		Tool:           entry.Tool,
@@ -1364,7 +1379,7 @@ func placeholderForParam(name string) any {
 		return 123
 	}
 	if strings.Contains(name, "date") {
-		return "2026-05-07"
+		return "YYYY-MM-DD"
 	}
 	return "value"
 }
@@ -1384,34 +1399,6 @@ func hasExplicitConfirm(params map[string]any) bool {
 		}
 	}
 	return false
-}
-
-func cloneSchema(schema map[string]any) map[string]any {
-	if schema == nil {
-		return nil
-	}
-	clone := make(map[string]any, len(schema))
-	for key, value := range schema {
-		clone[key] = cloneSchemaValue(value)
-	}
-	return clone
-}
-
-func cloneSchemaValue(value any) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		return cloneSchema(typed)
-	case []any:
-		clone := make([]any, len(typed))
-		for i, item := range typed {
-			clone[i] = cloneSchemaValue(item)
-		}
-		return clone
-	case []string:
-		return append([]string(nil), typed...)
-	default:
-		return typed
-	}
 }
 
 func formatSearchOutput(output SearchOutput) string {

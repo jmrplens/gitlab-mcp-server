@@ -1,6 +1,7 @@
 package dynamic
 
 import (
+	"log/slog"
 	"slices"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -34,10 +35,12 @@ func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.
 		catalog = catalog.Clone()
 	}
 	if !standaloneExcluded(opts.ExcludeTools, "gitlab_discover_project") {
-		_ = catalog.AddAction("gitlab_discover_project", actionregistry.Action{
+		if err := catalog.AddAction("gitlab_discover_project", actionregistry.Action{
 			Name:  "resolve",
 			Route: toolutil.RouteAction(client, projectdiscovery.Resolve),
-		})
+		}); err != nil {
+			slog.Error("failed to add standalone dynamic action", "tool", "gitlab_discover_project", "action", "resolve", "error", err)
+		}
 	}
 	if opts.ReadOnly || standaloneExcluded(opts.ExcludeTools, "gitlab_interactive") {
 		return catalog
@@ -57,7 +60,9 @@ func AddStandaloneCatalog(catalog *actionregistry.Catalog, client *gitlabclient.
 		interactive.SetAction(actionregistry.Action{Name: "release_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.ReleaseCreate)})
 	}
 	if len(interactive.Actions) > 0 {
-		_ = catalog.AddGroup(interactive)
+		if err := catalog.AddGroup(interactive); err != nil {
+			slog.Error("failed to add standalone dynamic group", "tool", interactive.ToolName, "error", err)
+		}
 	}
 	return catalog
 }

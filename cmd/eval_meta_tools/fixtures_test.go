@@ -107,7 +107,7 @@ func TestFilterTasksByLiveFixtureState_KeepsSeededJobResources(t *testing.T) {
 	filtered := filterTasksByLiveFixtureState(tasks, state)
 
 	if got := taskIDs(filtered); got != "MT-022,MT-064,MT-065,MS-008" {
-		t.Fatalf("filtered IDs = %q, want all job-dependent tasks", got)
+		t.Fatalf("filtered IDs = %q, want MT-022,MT-064,MT-065,MS-008", got)
 	}
 }
 

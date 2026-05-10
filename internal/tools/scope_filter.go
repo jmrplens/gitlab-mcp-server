@@ -49,10 +49,7 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 		return 0
 	}
 
-	scopeSet := make(map[string]struct{}, len(tokenScopes))
-	for _, s := range tokenScopes {
-		scopeSet[s] = struct{}{}
-	}
+	scopeSet := buildScopeSet(tokenScopes)
 
 	var toRemove []string
 	for name, required := range MetaToolScopes {
@@ -88,17 +85,19 @@ func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []s
 		return nil
 	}
 	if tokenScopes == nil {
+		// Return a defensive clone because callers may further filter the returned
+		// catalog; nil scopes mean detection was unavailable, not that the source
+		// catalog may be mutated in place.
 		return catalog.Clone()
 	}
 
-	scopeSet := make(map[string]struct{}, len(tokenScopes))
-	for _, s := range tokenScopes {
-		scopeSet[s] = struct{}{}
-	}
+	scopeSet := buildScopeSet(tokenScopes)
 
 	filtered := actionregistry.NewCatalog()
+	var removed []string
 	for _, group := range catalog.Groups() {
 		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {
+			removed = append(removed, group.ToolName)
 			slog.Debug("catalog group requires missing PAT scope",
 				"tool", group.ToolName,
 				"required", required,
@@ -106,9 +105,26 @@ func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []s
 			)
 			continue
 		}
-		_ = filtered.AddGroup(group)
+		if err := filtered.AddGroup(group); err != nil {
+			slog.Error("failed to add scope-filtered catalog group", "tool", group.ToolName, "error", err)
+		}
+	}
+	if len(removed) > 0 {
+		slog.Info("scope-filtered catalog groups removed",
+			"removed", len(removed),
+			"tools", strings.Join(removed, ", "),
+			"scopes", strings.Join(tokenScopes, ", "),
+		)
 	}
 	return filtered
+}
+
+func buildScopeSet(tokenScopes []string) map[string]struct{} {
+	scopeSet := make(map[string]struct{}, len(tokenScopes))
+	for _, scope := range tokenScopes {
+		scopeSet[scope] = struct{}{}
+	}
+	return scopeSet
 }
 
 // allScopesPresent checks if all required scopes exist in the set.

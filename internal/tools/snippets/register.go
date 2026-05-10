@@ -49,6 +49,9 @@ func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
 	if schema == nil {
 		return
 	}
+	if schema.Properties == nil {
+		schema.Properties = make(map[string]*jsonschema.Schema)
+	}
 	if files := schema.Properties["files"]; files != nil {
 		minItems := 1
 		files.MinItems = &minItems
@@ -59,16 +62,18 @@ func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
 	}
 }
 
-func snippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Create)
-	route.InputSchema = CreateInputSchemaMap()
+func snippetCreateRouteGeneric[T any, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), schema map[string]any) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, fn)
+	route.InputSchema = schema
 	return route
 }
 
+func snippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	return snippetCreateRouteGeneric(client, Create, CreateInputSchemaMap())
+}
+
 func projectSnippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, ProjectCreate)
-	route.InputSchema = ProjectCreateInputSchemaMap()
-	return route
+	return snippetCreateRouteGeneric(client, ProjectCreate, ProjectCreateInputSchemaMap())
 }
 
 // RegisterTools registers all snippet MCP tools (personal + project).

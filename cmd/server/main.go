@@ -255,8 +255,8 @@ FLAGS
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
-	-meta-tools               Enable meta-tools for tool discovery (default true)
-	-tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides -meta-tools
+  -meta-tools               Enable meta-tools for tool discovery (default true)
+  -tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides -meta-tools
   -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
@@ -275,9 +275,9 @@ FLAGS
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
-	GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-	META_TOOLS                Tool surface selector: true|false|dynamic|dynamic-2|dynamic-3 (default true)
-	TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
+  GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
+  META_TOOLS                Tool surface selector: true|false|dynamic|dynamic-2|dynamic-3 (default true)
+  TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
@@ -379,7 +379,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 
 	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
 	if err != nil {
-		return err
+		return fmt.Errorf("parse tool surface: %w", err)
 	}
 
 	cfg := &config.Config{
@@ -1546,7 +1546,9 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
 
 	if metaTools {
-		gitlabtools.RegisterAllMeta(server, nil, enterprise)
+		if err := gitlabtools.RegisterAllMeta(server, nil, enterprise); err != nil {
+			return err
+		}
 	} else {
 		gitlabtools.RegisterAll(server, nil, enterprise)
 	}

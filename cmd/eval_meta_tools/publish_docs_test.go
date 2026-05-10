@@ -206,10 +206,16 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	}
 	resultsPath := filepath.Join(tmp, "model-results.md")
 	readmePath := filepath.Join(tmp, "README.md")
-	if err := os.WriteFile(resultsPath, []byte("# Results\n\n"+modelEvalMetaResultsStart+"\n"+modelEvalMetaResultsEnd+"\n\n"+modelEvalDynamic3ResultsStart+"\nexisting dynamic\n"+modelEvalDynamic3ResultsEnd+"\n"), 0o600); err != nil {
+	resultsDoc := "# Results\n\n" +
+		modelEvalMetaResultsStart + "\n" + modelEvalMetaResultsEnd + "\n\n" +
+		modelEvalDynamic3ResultsStart + "\nexisting dynamic\n" + modelEvalDynamic3ResultsEnd + "\n"
+	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
 		t.Fatalf("write results doc: %v", err)
 	}
-	if err := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalMetaSummaryStart+"\n"+modelEvalMetaSummaryEnd+"\n\n"+modelEvalDynamic3SummaryStart+"\nexisting dynamic summary\n"+modelEvalDynamic3SummaryEnd+"\n"), 0o600); err != nil {
+	readmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
 
@@ -253,7 +259,10 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if publishErr := publishEvaluationDocs(opts); publishErr != nil {
 		t.Fatalf("publishEvaluationDocs(check) error = %v", publishErr)
 	}
-	if writeErr := os.WriteFile(readmePath, []byte("# README\n\n"+modelEvalMetaSummaryStart+"\nstale\n"+modelEvalMetaSummaryEnd+"\n\n"+modelEvalDynamic3SummaryStart+"\nexisting dynamic summary\n"+modelEvalDynamic3SummaryEnd+"\n"), 0o600); writeErr != nil {
+	staleReadmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\nstale\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+	if writeErr := os.WriteFile(readmePath, []byte(staleReadmeDoc), 0o600); writeErr != nil {
 		t.Fatalf("write stale readme: %v", writeErr)
 	}
 	if checkErr := publishEvaluationDocs(opts); checkErr == nil || !strings.Contains(checkErr.Error(), "not up to date") {

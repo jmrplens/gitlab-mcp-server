@@ -397,8 +397,6 @@
         "http://192.168.10.194:8080/redmine/projects.json": true,
         "http://192.168.10.194:8080/redmine": true,
         "http://192.168.10.194:8080": true,
-        "http://*.168.10.194:8080": true,
-        "http://*.10.194:8080": true,
         "http://192.168.10.194:8080/redmine/trackers.json": true,
         "http://192.168.10.194:8080/redmine/issue_statuses.json": true,
         "http://192.168.10.194:8080/redmine/custom_fields.json": true,

@@ -2,11 +2,11 @@ package dynamic
 
 import "testing"
 
-// TestBuildSearchTokens verifies that fuzzy search tokens are normalized,
+// TestBuildSearchTokens_NormalizesAndDeduplicates verifies that fuzzy search tokens are normalized,
 // deduplicated, and omitted when the search text has no word characters.
 // This matters because every dynamic action entry reuses these cached tokens
 // during typo fallback search.
-func TestBuildSearchTokens(t *testing.T) {
+func TestBuildSearchTokens_NormalizesAndDeduplicates(t *testing.T) {
 	tests := []struct {
 		name string
 		text string
@@ -31,10 +31,10 @@ func TestBuildSearchTokens(t *testing.T) {
 	}
 }
 
-// TestBoundedLevenshtein validates the edit-distance helper used by DIY fuzzy
+// TestBoundedLevenshtein_CoversThresholdBranches validates the edit-distance helper used by DIY fuzzy
 // search. It covers exact matches, close typo recovery, distance cutoffs, empty
 // strings, swapped input lengths, final threshold rejection, and Unicode text.
-func TestBoundedLevenshtein(t *testing.T) {
+func TestBoundedLevenshtein_CoversThresholdBranches(t *testing.T) {
 	tests := []struct {
 		name        string
 		a           string
@@ -69,10 +69,10 @@ func TestBoundedLevenshtein(t *testing.T) {
 	}
 }
 
-// TestFuzzyDistanceScore validates the fixed score mapping used after a token
+// TestFuzzyDistanceScore_MapsDistanceToScore validates the fixed score mapping used after a token
 // passes the bounded Levenshtein check. The default branch is covered directly
 // so future scoring changes do not silently accept out-of-range distances.
-func TestFuzzyDistanceScore(t *testing.T) {
+func TestFuzzyDistanceScore_MapsDistanceToScore(t *testing.T) {
 	tests := []struct {
 		distance int
 		want     int
@@ -91,10 +91,10 @@ func TestFuzzyDistanceScore(t *testing.T) {
 	}
 }
 
-// TestFirstRuneString verifies that prefix scoring works with both ASCII and
+// TestFirstRuneString_HandlesUnicodeTokens verifies that prefix scoring works with both ASCII and
 // Unicode tokens. This protects the fuzzy bonus from byte-slicing multibyte
 // runes in non-English project or action terms.
-func TestFirstRuneString(t *testing.T) {
+func TestFirstRuneString_HandlesUnicodeTokens(t *testing.T) {
 	tests := []struct {
 		value string
 		want  string
@@ -112,11 +112,11 @@ func TestFirstRuneString(t *testing.T) {
 	}
 }
 
-// TestFuzzyTokenScore validates scoring for exact tokens, typo tokens,
+// TestFuzzyTokenScore_CoversTokenMatching validates scoring for exact tokens, typo tokens,
 // multi-token typo recovery, ignored short tokens, empty inputs, and non-matches.
 // These are the primitive behaviors that make gitlab_search_tools recover from
 // small spelling mistakes without replacing exact search ranking.
-func TestFuzzyTokenScore(t *testing.T) {
+func TestFuzzyTokenScore_CoversTokenMatching(t *testing.T) {
 	tokens := buildSearchTokens("merge_request list project issue")
 
 	tests := []struct {
@@ -151,10 +151,10 @@ func TestFuzzyTokenScore(t *testing.T) {
 	}
 }
 
-// TestFuzzyScoreEntry validates action-level fuzzy scoring across empty terms,
+// TestFuzzyScoreEntry_CoversActionScoring validates action-level fuzzy scoring across empty terms,
 // no matches, full matches, and N-1 threshold rejection. This is the final gate
 // before typo fallback results are added to the dynamic search result set.
-func TestFuzzyScoreEntry(t *testing.T) {
+func TestFuzzyScoreEntry_CoversActionScoring(t *testing.T) {
 	entry := actionEntry{
 		ID:           "merge_request.list",
 		SearchTokens: buildSearchTokens("merge_request list project author"),

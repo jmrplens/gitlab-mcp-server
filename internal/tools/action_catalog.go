@@ -36,6 +36,10 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 	return catalog, nil
 }
 
+// groupFromMetaToolDefinition converts a captured meta-tool definition into an
+// actionregistry.Group built with actionregistry.NewGroup and populated with
+// group.SetAction. Route names are sorted first so catalog action ordering is
+// deterministic across map iterations.
 func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actionregistry.Group {
 	group := actionregistry.NewGroup(actionregistry.GroupOptions{
 		ToolName:     def.Name,

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -370,11 +372,13 @@ func openAIToolSchema(tool modelTool) any {
 func cloneOpenAISchema(schema map[string]any) map[string]any {
 	data, err := json.Marshal(schema)
 	if err != nil {
-		return map[string]any{}
+		slog.Warn("failed to marshal OpenAI tool schema; using shallow schema fallback", "error", err)
+		return maps.Clone(schema)
 	}
 	var cloned map[string]any
 	if unmarshalErr := json.Unmarshal(data, &cloned); unmarshalErr != nil {
-		return map[string]any{}
+		slog.Warn("failed to unmarshal OpenAI tool schema clone; using shallow schema fallback", "error", unmarshalErr)
+		return maps.Clone(schema)
 	}
 	return cloned
 }

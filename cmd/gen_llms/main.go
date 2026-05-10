@@ -159,10 +159,13 @@ func readVersion() string {
 }
 
 // newSession creates an in-memory MCP server+client session with high page size.
-func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(), err error) {
+func newSession(setupServer func(*mcp.Server) error) (session *mcp.ClientSession, cleanup func(), err error) {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-llms", Version: "0.0.1"}, opts)
-	setupServer(server)
+	if setupErr := setupServer(server); setupErr != nil {
+		return nil, nil, setupErr
+	}
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -189,12 +192,12 @@ func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, clea
 // listTools returns either the enterprise individual catalog or the base
 // meta-tool catalog, depending on meta.
 func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		if meta {
-			tools.RegisterAllMeta(server, client, false)
-		} else {
-			tools.RegisterAll(server, client, true)
+			return tools.RegisterAllMeta(server, client, false)
 		}
+		tools.RegisterAll(server, client, true)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -210,8 +213,8 @@ func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
 
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
-		tools.RegisterAllMeta(server, client, true)
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
+		return tools.RegisterAllMeta(server, client, true)
 	})
 	if err != nil {
 		return nil, err
@@ -233,10 +236,11 @@ func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.Resourc
 		return nil, nil, fmt.Errorf("build meta action catalog: %w", err)
 	}
 	metaRoutes := metaCatalog.ActionMaps()
-	session, cleanup, err := newSession(func(server *mcp.Server) {
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		resources.Register(server, client)
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
+		return nil
 	})
 	if err != nil {
 		return nil, nil, err
@@ -257,8 +261,9 @@ func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.Resourc
 
 // listPrompts returns all registered MCP prompt definitions for llms output.
 func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) {
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		prompts.Register(server, client)
+		return nil
 	})
 	if err != nil {
 		return nil, err

@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface; `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
+| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern for A/B reports, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |
@@ -197,7 +197,7 @@ Keep reports, traces, snapshots, and fixture state under `dist/evaluation/meta-t
 
 Model-backed trace JSON records the normalized prompt flow plus provider HTTP request/response bodies and MCP `CallTool` request/response payloads. Provider authentication headers are not serialized; raw trace artifacts remain local and should not be published or committed.
 
-`--publish-docs` is intentionally separate from normal runs. It consumes reviewed Markdown reports selected with `--publish-from`; full GitLab-backed MCP reports without an explicit preset also read their local `Trace artifacts` JSONL to split the published table by preset and special partitions. It refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
+`--publish-docs` is intentionally separate from normal runs. It consumes reviewed Markdown reports selected with `--publish-from`. Full GitLab-backed MCP reports without an explicit preset also read their local `Trace artifacts` JSONL. That lets the publisher split the table by preset and special partitions. It refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
 
 Docker live reports include a failure-triage section that separates MCP implementation bugs, GitLab CE limitations, model route-selection misses, model parameter-shape misses, fixture setup failures, transient GitLab 5xx responses, timeout/resource exhaustion, destructive safety failures, and not-found results.
 

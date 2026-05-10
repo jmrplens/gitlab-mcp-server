@@ -22,9 +22,10 @@ func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 		"ci variable secret",
 		"project delete",
 		"discover project from remote",
-		"merje requesy", // typo-heavy query for current baseline.
+		"merje requesy", // Known low-signal typo-heavy query kept in the baseline until fuzzy matching handles both misspelled terms.
 	}
 	allowZero := map[string]bool{
+		// TODO(dynamic-search): remove this exception when fuzzy matching can recover both malformed terms.
 		"merje requesy": true,
 	}
 

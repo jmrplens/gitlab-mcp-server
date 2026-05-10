@@ -251,7 +251,10 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 
 	if meta {
-		tools.RegisterAllMeta(server, client, enterprise)
+		if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
+			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
+			os.Exit(1)
+		}
 	} else {
 		tools.RegisterAll(server, client, true)
 	}

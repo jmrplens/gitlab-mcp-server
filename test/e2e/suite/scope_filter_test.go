@@ -109,7 +109,9 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		Name:    "gitlab-mcp-server-e2e-scope",
 		Version: "test",
 	}, nil)
-	tools.RegisterAllMeta(scopeServer, limitedClient, sess.enterprise)
+	if registerErr := tools.RegisterAllMeta(scopeServer, limitedClient, sess.enterprise); registerErr != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+	}
 
 	removed := tools.RemoveScopeFilteredTools(scopeServer, scopes)
 	t.Logf("Scope filter removed %d tools", removed)
@@ -235,7 +237,9 @@ func TestScopeFilter_AdminToken(t *testing.T) {
 		Name:    "gitlab-mcp-server-e2e-scope-admin",
 		Version: "test",
 	}, nil)
-	tools.RegisterAllMeta(server, adminClient, sess.enterprise)
+	if registerErr := tools.RegisterAllMeta(server, adminClient, sess.enterprise); registerErr != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+	}
 
 	removed := tools.RemoveScopeFilteredTools(server, scopes)
 	if removed != 0 {

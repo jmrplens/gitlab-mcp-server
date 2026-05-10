@@ -49,8 +49,8 @@ gitlab-mcp-server --http \
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
 | `--meta-tools` | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
-| `--tool-surface` | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `--meta-tools` when set |
-| `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
+| `--tool-surface` | _(empty)_ | Explicit tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options). Overrides `--meta-tools` when set |
+| `--capability-surface` | `full` | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--read-only` | `false` | Expose only read-only tools |
@@ -68,6 +68,18 @@ gitlab-mcp-server --http \
 | `--rate-limit-burst` | `40` | Token-bucket burst size when `--rate-limit-rps` > 0 |
 
 > **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
+
+### Tool and capability surface options
+
+`--tool-surface` selects the visible MCP tool catalog for every HTTP server-pool entry:
+
+- `meta`: domain-level meta-tools, the default consolidated catalog.
+- `individual`: every GitLab operation is exposed as its own tool.
+- `dynamic`: the current low-token three-tool surface with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
+- `dynamic-3`: explicit selector for the same three-tool dynamic surface, mainly for A/B evaluation and reporting.
+- `dynamic-2`: experimental two-tool comparison surface with `gitlab_find_action` and `gitlab_execute_tool`.
+
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments.
 
 ### Configuration Precedence
 
@@ -413,7 +425,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 | --- | --- | --- |
 | Fixed GitLab URL | `--gitlab-url` | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL` |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
-| Tool surface | `--meta-tools`, `--tool-surface` | Same registration mode for all clients; scope and CE/EE filtering still happen per server entry |
+| Tool surface | `--meta-tools`, `--tool-surface` | Same tool-surface catalog mode for all clients (`meta`/`individual`/`dynamic`); scope and CE/EE filtering still happen per server entry |
 | Upload limits | Compile-time defaults | Max file size |
 
 The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.

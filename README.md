@@ -26,6 +26,22 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 > **Security first**: Continuously monitored on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) with quality gates, coverage, and security scanning. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
 
+## Token Footprint
+
+Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals estimate startup context visible to an MCP client: tool schemas plus shared resources and prompts, using a 200K-token context window as a reference.
+
+**Default configuration**: with `TOOL_SURFACE` unset, `META_TOOLS` unset or `true`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses **base meta-tools**. That means 33 visible tools, 855 reachable actions, and no Enterprise/Premium-only catalog.
+
+| Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens | Context used (200K) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Individual tools (Enterprise/Premium catalog) | 1006 | 1006 | 532,774 | 17,622 | 550,396 | 275.2% |
+| Meta-tools (base catalog + MCP helpers, **default**) | 33 | 855 | 57,018 | 18,198 | 75,216 | 37.6% |
+| Meta-tools (Enterprise/Premium catalog + MCP helpers) | 48 | 1010 | 71,837 | 18,198 | 90,035 | 45.0% |
+| Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 855 / 1010 | 2,029 | 18,198 | 20,227 | 10.1% |
+| Dynamic-3 + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 3 | 855 / 1010 | 2,029 | 184 | 2,213 | 1.1% |
+
+Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 850 / 1005 while the comparable reachable-action count is 855 / 1010. `dynamic` and `dynamic-3` expose the same current three-tool search/describe/execute surface. The experimental `dynamic-2` comparison surface uses two visible tools and measures about **19,521 tokens** with full capabilities or **1,507 tokens** with `CAPABILITY_SURFACE=minimal`.
+
 ## Highlights
 
 - **1006 MCP tools** on self-managed Enterprise/Premium, or **1011 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 163 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, Orbit, and more
@@ -449,65 +465,65 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 650 | 134,257 |
-| Unit tests (`_test.go`) | 412 | 219,088 |
-| End-to-end tests | 110 | 23,718 |
-| **Total** | **1,172** | **377,063** |
+| Source (`.go`, non-test) | 655 | 138,992 |
+| Unit tests (`_test.go`) | 418 | 223,956 |
+| End-to-end tests | 111 | 24,022 |
+| **Total** | **1,184** | **386,970** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,988 |
-| — exported (public) | 2,220 |
-| — unexported (private) | 1,768 |
-| Unit test functions (`TestXxx`) | 9,132 |
-| Subtests (`t.Run(...)`) | 1,956 |
-| End-to-end test functions | 246 |
+| Source functions | 4,199 |
+| — exported (public) | 2,265 |
+| — unexported (private) | 1,934 |
+| Unit test functions (`TestXxx`) | 9,264 |
+| Subtests (`t.Run(...)`) | 2,012 |
+| End-to-end test functions | 248 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.63× more tests than code |
-| Average source file length | ~206 lines |
-| Average test file length | ~531 lines |
-| Comment lines in source | 10,436 (~7.8% of source) |
-| Test functions per source function | 2.3× |
+| Test lines vs source lines | 1.61× more tests than code |
+| Average source file length | ~212 lines |
+| Average test file length | ~535 lines |
+| Comment lines in source | 10,642 (~7.7% of source) |
+| Test functions per source function | 2.2× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,790 |
-| `defer` statements | 728 |
-| `struct` types defined | 2,031 |
-| `//nolint` suppressions | 53 |
-| `TODO` / `FIXME` / `HACK` comments | 0 |
+| `if err != nil` checks | 5,896 |
+| `defer` statements | 732 |
+| `struct` types defined | 2,062 |
+| `//nolint` suppressions | 54 |
+| `TODO` / `FIXME` / `HACK` comments | 1 |
 
 ### Project
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 197 |
+| Go packages | 198 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 103 |
+| Git commits | 122 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 5,759 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 7,136 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,441 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,958 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,527 pages of A4 |
+| Source lines mentioning `"gitlab"` | 11,136 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

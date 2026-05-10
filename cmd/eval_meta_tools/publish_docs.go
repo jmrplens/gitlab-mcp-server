@@ -35,6 +35,10 @@ const (
 	modelEvalSummaryEnd           = "<!-- END MODEL EVAL SUMMARY -->"
 	modelEvalResultsStart         = "<!-- START MODEL EVAL RESULTS -->"
 	modelEvalResultsEnd           = "<!-- END MODEL EVAL RESULTS -->"
+	publishProjectResolveAction   = "discover_project.resolve"
+	publishProjectSearchAction    = "search.projects"
+	publishSamplingContinue       = "sampling_unsupported_continue"
+	publishElicitationContinue    = "elicitation_unsupported_continue"
 
 	publishSectionMeta     = "meta"
 	publishSectionDynamic3 = "dynamic3"
@@ -180,7 +184,7 @@ func publishEvaluationDocs(opts options) error {
 	if opts.CheckDocs {
 		for _, section := range sections {
 			sectionReports := filterPublishReportsBySection(reports, section.Key)
-			sectionLabel := publishSectionLabel(label, section.Key)
+			sectionLabel := publishSectionLabel(label)
 			resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
 			summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
 			if checkErr := checkManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); checkErr != nil {
@@ -194,7 +198,7 @@ func publishEvaluationDocs(opts options) error {
 	}
 	for _, section := range sections {
 		sectionReports := filterPublishReportsBySection(reports, section.Key)
-		sectionLabel := publishSectionLabel(label, section.Key)
+		sectionLabel := publishSectionLabel(label)
 		resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
 		summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
 		if updateErr := updateManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); updateErr != nil {
@@ -270,7 +274,7 @@ func publishDocSectionForKey(sectionKey string) publishDocSection {
 }
 
 // publishSectionLabel returns the snapshot heading used within a managed section.
-func publishSectionLabel(label, _ string) string {
+func publishSectionLabel(label string) string {
 	trimmed := strings.TrimSpace(label)
 	if trimmed == "" {
 		trimmed = strings.TrimSpace(publishSnapshotLabel("", nil))
@@ -346,7 +350,7 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		model := report.Model
 		stats := publishSingleTaskStats(taskStats, model, input.TaskAttempts)
 		usage := publishSingleUsage(input.Usage, stats)
-		return []publishRow{newPublishRow(report, model, stats, metricsFromComparison(input), usage)}, nil
+		return []publishRow{newPublishRow(report, model, report.Preset, stats, metricsFromComparison(input), usage)}, nil
 	}
 
 	models := sortedStringKeys(modelMetrics)
@@ -360,7 +364,7 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 		if len(usage) == 0 {
 			usage = publishSingleUsage(input.Usage, stats)
 		}
-		rows = append(rows, newPublishRow(report, model, stats, modelMetrics[model], usage))
+		rows = append(rows, newPublishRow(report, model, report.Preset, stats, modelMetrics[model], usage))
 	}
 	return rows, nil
 }
@@ -426,8 +430,7 @@ func publishRowsByPresetFromTraces(report publishReport, content string) ([]publ
 	rows := make([]publishRow, 0, len(accumulators))
 	for key, acc := range accumulators {
 		model, preset, _ := strings.Cut(key, "\x00")
-		rows = append(rows, newPublishRow(report, model, acc.Stats, acc.metrics(), acc.usage()))
-		rows[len(rows)-1].Preset = preset
+		rows = append(rows, newPublishRow(report, model, preset, acc.Stats, acc.metrics(), acc.usage()))
 	}
 	return rows, nil
 }
@@ -497,13 +500,13 @@ func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, 
 	if !trace.Summary.FinalSuccess || !isDynamicThreeToolEvalSurface(toolSurface) || !toolOK {
 		return toolOK, actionOK, firstPassOK
 	}
-	if first.Action == "discover_project.resolve" && trace.Summary.FirstAction == "search.projects" {
+	if first.Action == publishProjectResolveAction && trace.Summary.FirstAction == publishProjectSearchAction {
 		return true, true, true
 	}
 	if len(trace.Expected) < 2 {
 		return toolOK, actionOK, firstPassOK
 	}
-	if first.Simulation != "sampling_unsupported_continue" && first.Simulation != "elicitation_unsupported_continue" {
+	if first.Simulation != publishSamplingContinue && first.Simulation != publishElicitationContinue {
 		return toolOK, actionOK, firstPassOK
 	}
 	if trace.Summary.FirstAction == trace.Expected[1].Action {
@@ -603,11 +606,11 @@ func publishSingleUsage(usage map[string]string, stats publishTaskStats) map[str
 }
 
 // newPublishRow is an internal helper for the main package.
-func newPublishRow(report publishReport, model string, stats publishTaskStats, metrics publishModelMetrics, usage map[string]string) publishRow {
+func newPublishRow(report publishReport, model, preset string, stats publishTaskStats, metrics publishModelMetrics, usage map[string]string) publishRow {
 	return publishRow{
 		SourcePath:        report.Path,
 		Model:             cleanReportValue(model),
-		Preset:            report.Preset,
+		Preset:            preset,
 		Backend:           report.Backend,
 		ToolExecution:     report.ToolExecution,
 		Attempts:          firstPositive(stats.Attempts, metrics.Attempts),

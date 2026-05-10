@@ -101,6 +101,8 @@ El host debe proporcionar estas variables antes de habilitar el plugin:
 | `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                             |
 | `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                         |
 
+`TOOL_SURFACE` tiene precedencia sobre `META_TOOLS` cuando ambos están definidos. Usa `TOOL_SURFACE` en configuraciones nuevas: `meta` es el catálogo consolidado por defecto, `individual` expone cada herramienta por separado, `dynamic` y `dynamic-3` seleccionan la superficie actual de bajo consumo con tres herramientas, y `dynamic-2` selecciona la comparación experimental find/execute. `META_TOOLS` sigue funcionando para configuraciones heredadas (`true` equivale a `meta`, `false` equivale a `individual`), pero se recomienda tratarlo como obsoleto frente al selector explícito.
+
 ### ¿Prefieres binario nativo en lugar de Docker?
 
 La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/).

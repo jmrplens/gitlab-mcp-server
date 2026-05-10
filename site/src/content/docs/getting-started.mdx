@@ -101,6 +101,8 @@ The host must provide these variables before enabling the plugin:
 | `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                        |
 | `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                               |
 
+`TOOL_SURFACE` is the preferred current selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=meta` instead of `META_TOOLS=true`, `TOOL_SURFACE=individual` instead of `META_TOOLS=false`, and `TOOL_SURFACE=dynamic`, `dynamic-2`, or `dynamic-3` instead of the same legacy `META_TOOLS` values. `META_TOOLS` remains supported for backward compatibility but should be treated as deprecated in favor of the explicit selector.
+
 ### Prefer a native binary instead of Docker?
 
 The Open Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker stdio for portability. For detached HTTP deployments, do not use a stdio client entry; run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
@@ -488,7 +490,7 @@ This is transparent to you — your AI client handles the routing automatically.
 :::tip
 Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-For the smallest visible stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute A/B candidate.
+For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute option.
 
 Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources and prompts when you need the smallest initial MCP context.
 :::

@@ -3411,12 +3411,62 @@ func evalElicitationHandler(_ context.Context, req *mcp.ElicitRequest) (*mcp.Eli
 				case "selection":
 					content[key] = evalElicitationSelection(prop)
 				default:
-					content[key] = evalElicitationTextValue(key)
+					content[key] = evalElicitationSchemaValue(key, prop)
 				}
 			}
 		}
 	}
 	return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+}
+
+func evalElicitationSchemaValue(fieldName string, prop map[string]any) any {
+	if enumVals, ok := prop["enum"].([]any); ok && len(enumVals) > 0 {
+		return enumVals[0]
+	}
+	switch firstJSONSchemaType(prop["type"]) {
+	case "integer":
+		return 0
+	case "number":
+		return 0.0
+	case "boolean":
+		return false
+	case "array":
+		return []any{}
+	case "object":
+		return evalElicitationObjectValue(prop)
+	default:
+		return evalElicitationTextValue(fieldName)
+	}
+}
+
+func evalElicitationObjectValue(prop map[string]any) map[string]any {
+	content := map[string]any{}
+	properties, ok := prop["properties"].(map[string]any)
+	if !ok {
+		return content
+	}
+	for key, value := range properties {
+		child, childOK := value.(map[string]any)
+		if !childOK {
+			continue
+		}
+		content[key] = evalElicitationSchemaValue(key, child)
+	}
+	return content
+}
+
+func firstJSONSchemaType(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []any:
+		for _, item := range typed {
+			if text, ok := item.(string); ok && text != "null" {
+				return text
+			}
+		}
+	}
+	return "string"
 }
 
 // evalElicitationSelection returns the first enum value from an elicitation select field.
@@ -3663,7 +3713,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 				}
 				result.FinalTool = toolUse.Name
 				result.FinalAction = validation.Action
-				block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: validation.Action}, toolUse, stepIndex+1, len(steps)), nil)
+				block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(steps[stepIndex], toolUse, stepIndex+1, len(steps)), nil)
 				followups = append(followups, block)
 				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
 				continue
@@ -3888,24 +3938,33 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"id":                  42,
 			"path_with_namespace": projectPath,
 			"project_id":          projectPath,
+			"name":                projectNameFromPath(projectPath),
 			"default_branch":      "main",
 			"web_url":             strings.TrimSuffix(remoteURL, ".git"),
 		}
+	case step.ExpectedAction == "discover_project.resolve" && (action == "search.projects" || action == "project.list" || action == "project.get"):
+		project := simulatedProjectFromLookup(toolUse.Input, params)
+		result["project"] = project
+		result["projects"] = []map[string]any{project}
+		result["environments"] = []map[string]any{{
+			"id":             122,
+			"name":           "production",
+			"environment":    "production",
+			"project_id":     project["project_id"],
+			"project_path":   project["path_with_namespace"],
+			"default_branch": project["default_branch"],
+		}}
 	case action == "project.get":
 		projectID, _ := params["project_id"].(string)
 		result["project"] = map[string]any{
 			"id":                  42,
 			"path_with_namespace": projectID,
 			"project_id":          projectID,
+			"name":                projectNameFromPath(projectID),
 			"default_branch":      "main",
 		}
 	case action == "project.list":
-		result["projects"] = []map[string]any{{
-			"id":                  42,
-			"path_with_namespace": "my-org/tools/gitlab-mcp-server",
-			"project_id":          "my-org/tools/gitlab-mcp-server",
-			"default_branch":      "main",
-		}}
+		result["projects"] = []map[string]any{simulatedProjectFromLookup(toolUse.Input, params)}
 	case action == "pipeline.trigger_list":
 		result["triggers"] = []map[string]any{{
 			"id":          119,
@@ -3972,6 +4031,47 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
 	}
 	return string(data)
+}
+
+func simulatedProjectFromLookup(input, params map[string]any) map[string]any {
+	projectPath := simulatedProjectPath(input, params)
+	return map[string]any{
+		"id":                  42,
+		"name":                projectNameFromPath(projectPath),
+		"path":                projectNameFromPath(projectPath),
+		"path_with_namespace": projectPath,
+		"project_id":          projectPath,
+		"default_branch":      "main",
+		"web_url":             "https://gitlab.example.com/" + projectPath,
+	}
+}
+
+func simulatedProjectPath(input, params map[string]any) string {
+	for _, source := range []map[string]any{params, input} {
+		for _, key := range []string{"project_id", "path_with_namespace", "full_path", "remote_url", "search", "query"} {
+			if value, ok := source[key].(string); ok && strings.TrimSpace(value) != "" {
+				candidate := strings.TrimSpace(value)
+				if key == "remote_url" || strings.Contains(candidate, "://") || strings.HasSuffix(candidate, ".git") {
+					return projectPathFromRemoteURL(candidate)
+				}
+				if strings.Contains(candidate, "/") {
+					return candidate
+				}
+			}
+		}
+	}
+	return liveFixtureProjectPath
+}
+
+func projectNameFromPath(projectPath string) string {
+	projectPath = strings.Trim(projectPath, "/")
+	if projectPath == "" {
+		return "gitlab-mcp-server"
+	}
+	if slash := strings.LastIndex(projectPath, "/"); slash >= 0 {
+		return projectPath[slash+1:]
+	}
+	return projectPath
 }
 
 func addSimulatedResourceIDs(result map[string]any, action string, params map[string]any) {
@@ -5501,9 +5601,10 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	}
 	result.DestructiveSafe = true
 	if step.Destructive && result.ToolMatches && result.ActionMatches {
-		result.DestructiveSafe = isTruthy(params["confirm"])
 		if step.ExpectedTool == dynamicExecuteTool {
-			result.DestructiveSafe = result.DestructiveSafe || isTruthy(input["confirm"])
+			result.DestructiveSafe = isTruthy(input["confirm"])
+		} else {
+			result.DestructiveSafe = isTruthy(params["confirm"])
 		}
 		if !result.DestructiveSafe {
 			if step.ExpectedTool == dynamicExecuteTool {
@@ -6987,10 +7088,10 @@ func effectiveFirstOutcome(result taskResult) (toolOK, actionOK, firstPassOK boo
 	toolOK = result.FirstTool == first.ExpectedTool
 	actionOK = result.FirstAction == first.ExpectedAction
 	firstPassOK = result.FirstPass
-	if !result.FinalSuccess || !acceptsAlternativeDynamicFirstPath(result, steps) {
-		return toolOK, actionOK, firstPassOK
+	if acceptsAlternativeDynamicFirstPath(result, steps) {
+		return true, true, true
 	}
-	return true, true, true
+	return toolOK, actionOK, firstPassOK
 }
 
 func acceptsAlternativeDynamicFirstPath(result taskResult, steps []evalStep) bool {

@@ -57,7 +57,7 @@ func run() error {
 		return fmt.Errorf("client: %w", err)
 	}
 
-	// Register both base and enterprise meta-tools and build every route map from the catalog.
+	// Build the action catalog, then register meta catalog routes on the server.
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
 	if err != nil {

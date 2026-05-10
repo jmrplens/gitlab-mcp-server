@@ -101,12 +101,9 @@ func fuzzyScoreEntry(entry actionEntry, terms []searchTerm) int {
 }
 
 func splitWordTokens(value string) []string {
-	parts := strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+	return strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
 	})
-	out := make([]string, 0, len(parts))
-	out = append(out, parts...)
-	return out
 }
 
 func comparableTokenLength(needle, token string) bool {

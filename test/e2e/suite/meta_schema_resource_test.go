@@ -23,8 +23,7 @@ import (
 // real structured shape.
 func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
 	t.Helper()
-	tools.SetMetaParamSchema("full")
-	t.Cleanup(func() { tools.SetMetaParamSchema("opaque") })
+	t.Cleanup(tools.SetMetaParamSchemaScoped("full"))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise})

@@ -465,6 +465,8 @@ func parseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, met
 		if parseErr != nil {
 			return "", false, parseErr
 		}
+		// MetaTools keeps its legacy meaning for callers that only need to know
+		// whether the selected surface is not the individual-tool catalog.
 		return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
 	}
 

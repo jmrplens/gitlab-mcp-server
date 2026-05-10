@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -18,7 +19,10 @@ import (
 // action is available.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
 	catalog := actionregistry.NewCatalog()
-	_ = catalog.AddGroup(BuildMCPActionGroup(client, updater))
+	if err := catalog.AddGroup(BuildMCPActionGroup(client, updater)); err != nil {
+		slog.Error("failed to add MCP meta action group", "error", err)
+		return
+	}
 	RegisterMetaCatalog(server, catalog)
 }
 

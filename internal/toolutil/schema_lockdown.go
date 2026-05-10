@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -10,7 +11,9 @@ import (
 // LockdownInputSchemas registers a receiving middleware that rewrites
 // tools/list responses so every tool's inputSchema declares
 // `additionalProperties: false` at the root and on any nested object schema
-// reachable through "properties", "items", "anyOf", "oneOf", or "allOf".
+// reachable through "properties", "items", "anyOf", "oneOf", or "allOf". It
+// also strips jsonschema tag metadata such as ",required" from property
+// descriptions after the SDK generates schemas.
 //
 // Background. The MCP specification (2025-11-25 §server/tools) requires
 // inputSchema to be a valid JSON Schema object but does not mandate
@@ -49,8 +52,10 @@ func LockdownInputSchemas(server *mcp.Server) {
 			if listResult, ok := result.(*mcp.ListToolsResult); ok && listResult != nil {
 				once.Do(func() {
 					for _, t := range listResult.Tools {
-						if schema, isMap := t.InputSchema.(map[string]any); isMap {
+						if schema := schemaMap(t.InputSchema); schema != nil {
+							normalizeSchemaDescriptions(schema)
 							lockdownSchemaNode(schema)
+							t.InputSchema = schema
 						}
 					}
 				})
@@ -58,6 +63,24 @@ func LockdownInputSchemas(server *mcp.Server) {
 			return result, nil
 		}
 	})
+}
+
+func schemaMap(schema any) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	if typed, ok := schema.(map[string]any); ok {
+		return typed
+	}
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return nil
+	}
+	var decoded map[string]any
+	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
+		return nil
+	}
+	return decoded
 }
 
 // lockdownSchemaNode forces additionalProperties=false on any object schema

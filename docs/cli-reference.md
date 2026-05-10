@@ -162,13 +162,13 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --skip-tls-veri
 # Start HTTP server with individual tools (no meta-tools)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --meta-tools=false
 
-# Start HTTP server with the low-token dynamic toolset
+# Start HTTP server with the dynamic toolset (reduces token usage for LLM context)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
 
-# Start HTTP server with the explicit current dynamic candidate name
+# Start HTTP server with a specific dynamic toolset version (dynamic-3)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic-3
 
-# Start HTTP server with the dynamic toolset and minimal non-tool capabilities
+# Start HTTP server with the dynamic toolset and reduced non-tool capabilities
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
 
 # Start with auto-update in check-only mode
@@ -177,6 +177,8 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check
 # Terminate all running instances (used by external updaters)
 gitlab-mcp-server --shutdown
 ```
+
+See [Dynamic Tools](dynamic-tools.md) for how `dynamic`, `dynamic-2`, and `dynamic-3` relate.
 
 ---
 

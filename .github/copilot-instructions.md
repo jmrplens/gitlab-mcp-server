@@ -150,7 +150,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
 - Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
-- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default three-tool dynamic workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/` after the Docker GitLab setup scripts complete.
+- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default three-tool dynamic workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools

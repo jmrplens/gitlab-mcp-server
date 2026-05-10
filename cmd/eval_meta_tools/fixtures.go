@@ -196,6 +196,9 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.ReleaseSummaryTag == "" {
 		state.ReleaseSummaryTag = liveFixtureCleanupTag
 	}
+	if state.ElicitationReleaseTag == "" {
+		state.ElicitationReleaseTag = liveFixtureElicitationTag
+	}
 	return &state, nil
 }
 
@@ -401,19 +404,15 @@ func (p *liveFixturePreparer) ensureBranches(ctx context.Context) error {
 // ensureInteractiveResources seeds resources used by MCP elicitation evaluation flows.
 func (p *liveFixturePreparer) ensureInteractiveResources(ctx context.Context) error {
 	defaultRef := p.defaultRef()
-	if err := p.ensureBranch(ctx, liveFixtureFeatureRef, defaultRef); err != nil {
-		return err
-	}
 	if err := p.ensureFile(ctx, liveFixtureInteractiveMRFile, liveFixtureFeatureRef, "interactive merge request fixture\n", "Seed interactive merge request evaluation file"); err != nil {
-		return err
-	}
-	if err := p.closeOpenMergeRequestsForBranch(ctx, liveFixtureFeatureRef); err != nil {
 		return err
 	}
 	if err := p.ensureTag(ctx, liveFixtureElicitationTag, defaultRef); err != nil {
 		return err
 	}
-	p.state.ElicitationReleaseTag = liveFixtureElicitationTag
+	if p.state.ElicitationReleaseTag == "" {
+		p.state.ElicitationReleaseTag = liveFixtureElicitationTag
+	}
 	return nil
 }
 

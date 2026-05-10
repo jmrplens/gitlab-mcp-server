@@ -2461,6 +2461,25 @@ func TestSchemaForType_CacheHit(t *testing.T) {
 	}
 }
 
+// TestInputSchemaForType_RequiredSuffixRemoved verifies requiredness is kept in
+// the schema's required array instead of leaking into property descriptions.
+func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {
+	type requiredDescription struct {
+		Name string `json:"name" jsonschema:"Resource name,required"`
+	}
+
+	schema := inputSchemaForType(reflect.TypeFor[requiredDescription]())
+	properties := schema["properties"].(map[string]any)
+	name := properties["name"].(map[string]any)
+	if name["description"] != "Resource name" {
+		t.Fatalf("description = %q, want Resource name", name["description"])
+	}
+	required := schema["required"].([]string)
+	if !reflect.DeepEqual(required, []string{"name"}) {
+		t.Fatalf("required = %v, want [name]", required)
+	}
+}
+
 // TestStripReservedKeys_MultipleKeys verifies that real keys are preserved
 // when reserved keys are also present (covers the "copy" branch).
 func TestStripReservedKeys_MultipleKeys(t *testing.T) {

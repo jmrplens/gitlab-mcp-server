@@ -9,6 +9,9 @@ import (
 
 // RegisterMetaCatalog registers visible meta-tools from a canonical action catalog.
 func RegisterMetaCatalog(server *mcp.Server, catalog *actionregistry.Catalog) {
+	if server == nil || catalog == nil {
+		return
+	}
 	for _, group := range catalog.Groups() {
 		formatResult := group.FormatResult
 		if formatResult == nil {

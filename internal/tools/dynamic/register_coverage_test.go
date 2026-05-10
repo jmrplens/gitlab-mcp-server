@@ -7,11 +7,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestRegistryDefensiveBranches covers small validation and fallback branches
+// TestRegistry_DefensiveBranches covers small validation and fallback branches
 // in the dynamic registry dispatcher. These scenarios matter because the catalog
 // action surface should return helpful tool errors for malformed calls instead
 // of leaking empty or ambiguous execution attempts.
-func TestRegistryDefensiveBranches(t *testing.T) {
+func TestRegistry_DefensiveBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	t.Run("describe requires action", func(t *testing.T) {
@@ -74,11 +74,11 @@ func TestRegistryDefensiveBranches(t *testing.T) {
 	})
 }
 
-// TestRegistryHelperCoverage validates deterministic helper behavior used by
+// TestRegistry_HelperCoverage validates deterministic helper behavior used by
 // search ranking, examples, confirmations, and Markdown formatting. The cases
 // target defensive branches that are easy to regress while refactoring the low
 // token dynamic action surface.
-func TestRegistryHelperCoverage(t *testing.T) {
+func TestRegistry_HelperCoverage(t *testing.T) {
 	t.Run("annotations with nil base", func(t *testing.T) {
 		got := annotationsWithTitle(nil, "Dynamic Search")
 		if got == nil || got.Title != "Dynamic Search" {
@@ -150,10 +150,10 @@ func TestRegistryHelperCoverage(t *testing.T) {
 	})
 }
 
-// TestScoreSearchAlternative covers every ranking branch in the exact search
+// TestScoreSearch_Alternative covers every ranking branch in the exact search
 // scorer. This keeps the weighting contract explicit while fuzzy fallback stays
 // isolated to only zero-result searches.
-func TestScoreSearchAlternative(t *testing.T) {
+func TestScoreSearch_Alternative(t *testing.T) {
 	base := actionEntry{
 		ID:         "project.delete",
 		Domain:     "project",
@@ -191,11 +191,11 @@ func TestScoreSearchAlternative(t *testing.T) {
 	}
 }
 
-// TestNormalizationExampleAndFormattingBranches covers compact helpers that
+// TestNormalization_FormattingBranches covers compact helpers that
 // shape user-facing dynamic tool output. It verifies deduplication of described
 // actions, placeholder selection, confirmation parsing, schema cloning failures,
 // and empty-result Markdown messages.
-func TestNormalizationExampleAndFormattingBranches(t *testing.T) {
+func TestNormalization_FormattingBranches(t *testing.T) {
 	t.Run("normalize describe ids trims and deduplicates", func(t *testing.T) {
 		got := normalizeDescribeIDs(DescribeInput{Action: " Project.Get ", Actions: []string{"project.get", "", "Issue.List"}})
 		want := []string{"project.get", "issue.list"}
@@ -205,8 +205,8 @@ func TestNormalizationExampleAndFormattingBranches(t *testing.T) {
 	})
 
 	t.Run("placeholder selects dates and generic values", func(t *testing.T) {
-		if got := placeholderForParam("due_date"); got != "2026-05-07" {
-			t.Fatalf("placeholderForParam(date) = %v, want date", got)
+		if got := placeholderForParam("due_date"); got != "YYYY-MM-DD" {
+			t.Fatalf("placeholderForParam(date) = %v, want YYYY-MM-DD", got)
 		}
 		if got := placeholderForParam("title"); got != "value" {
 			t.Fatalf("placeholderForParam(title) = %v, want value", got)
@@ -232,37 +232,6 @@ func TestNormalizationExampleAndFormattingBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("clone schema recursively copies maps and slices", func(t *testing.T) {
-		if got := cloneSchema(nil); got != nil {
-			t.Fatalf("cloneSchema(nil) = %v, want nil", got)
-		}
-		schema := map[string]any{
-			"type":     "object",
-			"required": []string{"project_id"},
-			"properties": map[string]any{
-				"labels": []any{"bug", map[string]any{"name": "critical"}},
-			},
-		}
-		cloned := cloneSchema(schema)
-		if cloned == nil || cloned["type"] != "object" {
-			t.Fatalf("cloneSchema(valid) = %v, want cloned schema", cloned)
-		}
-		clonedProperties := cloned["properties"].(map[string]any)
-		clonedLabels := clonedProperties["labels"].([]any)
-		clonedLabels[0] = "changed"
-		clonedRequired := cloned["required"].([]string)
-		clonedRequired[0] = "changed"
-
-		originalLabels := schema["properties"].(map[string]any)["labels"].([]any)
-		if originalLabels[0] != "bug" {
-			t.Fatalf("original labels = %v, want unchanged", originalLabels)
-		}
-		originalRequired := schema["required"].([]string)
-		if originalRequired[0] != "project_id" {
-			t.Fatalf("original required = %v, want unchanged", originalRequired)
-		}
-	})
-
 	t.Run("format empty outputs", func(t *testing.T) {
 		searchText := formatSearchOutput(SearchOutput{Query: "zzzz"})
 		if !strings.Contains(searchText, "No catalog actions matched") {
@@ -275,10 +244,10 @@ func TestNormalizationExampleAndFormattingBranches(t *testing.T) {
 	})
 }
 
-// TestAnnotationsWithTitleCopiesBase verifies that annotation updates do not
+// TestAnnotationsWithTitle_CopiesBase verifies that annotation updates do not
 // mutate the caller's base annotations. The dynamic tool registration uses this
 // when assigning distinct titles to otherwise shared tool metadata.
-func TestAnnotationsWithTitleCopiesBase(t *testing.T) {
+func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
 	base := &mcp.ToolAnnotations{Title: "Original", ReadOnlyHint: true}
 	got := annotationsWithTitle(base, "Updated")
 	if got == nil || got.Title != "Updated" || !got.ReadOnlyHint {

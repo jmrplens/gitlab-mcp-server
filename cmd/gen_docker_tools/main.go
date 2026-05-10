@@ -91,9 +91,13 @@ func run() error {
 	case *individual:
 		tools.RegisterAll(server, client, true)
 	case *enterprise:
-		tools.RegisterAllMeta(server, client, true)
+		if registerErr := tools.RegisterAllMeta(server, client, true); registerErr != nil {
+			return fmt.Errorf("register meta tools: %w", registerErr)
+		}
 	default:
-		tools.RegisterAllMeta(server, client, false)
+		if registerErr := tools.RegisterAllMeta(server, client, false); registerErr != nil {
+			return fmt.Errorf("register meta tools: %w", registerErr)
+		}
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

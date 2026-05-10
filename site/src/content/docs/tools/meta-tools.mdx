@@ -287,4 +287,6 @@ You can check which tools your server has registered by looking at the startup l
 
 See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for the three-tool search, describe, execute surface.
 
+`dynamic` is the recommended low-token dynamic surface for normal use. `dynamic-3` explicitly selects that same current three-tool surface for A/B reports and pinned configurations. `dynamic-2` is an experimental find/execute comparison surface and may change. `TOOL_SURFACE` can select any of these values explicitly and overrides `META_TOOLS` when both are set.
+
 Meta-tools and dynamic mode consume the same canonical action catalog. Meta-tools expose that catalog as domain dispatchers with an `action` parameter; dynamic mode exposes it through search, describe, and execute tools. Both modes therefore share the same schemas, destructive-action protections, read-only filtering, safe-mode previews, token-scope filtering, and result formatting.

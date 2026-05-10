@@ -185,7 +185,9 @@ func TestMain(m *testing.M) {
 		Name:    "gitlab-mcp-server-e2e-meta",
 		Version: "test",
 	}, nil)
-	tools.RegisterAllMeta(metaServer, glClient, enterprise)
+	if registerErr := tools.RegisterAllMeta(metaServer, glClient, enterprise); registerErr != nil {
+		log.Fatalf("e2e: register meta tools: %v", registerErr)
+	}
 
 	metaServerTransport, metaClientTransport := mcp.NewInMemoryTransports()
 

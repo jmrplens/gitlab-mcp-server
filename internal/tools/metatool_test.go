@@ -255,7 +255,9 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, client, false)
+	if err := RegisterAllMeta(server, client, false); err != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", err)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -300,7 +302,7 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 // SetMetaParamSchema toggles the global mode read by toolutil.MetaToolSchema,
 // so all sub-package meta-tool registrations honor the configured mode.
 func TestSetMetaParamSchema_PropagatesToMetaToolSchema(t *testing.T) {
-	t.Cleanup(func() { SetMetaParamSchema("opaque") })
+	t.Cleanup(SetMetaParamSchemaScoped("opaque"))
 
 	routes := actionMap{
 		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -340,8 +342,7 @@ func keysOf(m map[string]any) []string {
 // resets the mode on cleanup so other tests see the default (opaque).
 func metaSessionWithMode(t *testing.T, mode string, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
-	SetMetaParamSchema(mode)
-	t.Cleanup(func() { SetMetaParamSchema("opaque") })
+	t.Cleanup(SetMetaParamSchemaScoped(mode))
 	return newMetaMCPSession(t, handler, false)
 }
 

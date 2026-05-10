@@ -121,21 +121,30 @@ func main() {
 	dynamic3EntTotal := totalTokens(dynamic3EnterpriseInfo)
 	dynamic2Total := totalTokens(dynamic2BaseInfo)
 	dynamic2EntTotal := totalTokens(dynamic2EnterpriseInfo)
+	metaBaseCatalogActions := countActions(metaBaseRoutes)
+	metaEnterpriseCatalogActions := countActions(metaEnterpriseRoutes)
+	baseReachableActions := countActions(dynamicBaseRoutes)
+	enterpriseReachableActions := countActions(dynamicEnterpriseRoutes)
 
 	fmt.Println("## Mode Comparison")
 	fmt.Println()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "  Mode\tTools\tCatalog actions\tTokens\tBytes\n")
+	fmt.Fprintf(tw, "  Mode\tTools\tReachable actions\tTokens\tBytes\n")
 	fmt.Fprintf(tw, "  ────\t─────\t──────────────\t──────\t─────\n")
-	fmt.Fprintf(tw, "  Individual (all)\t%d\t0\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), countActions(metaBaseRoutes), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), countActions(metaEnterpriseRoutes), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-3 (base)\t%d\t%d\t%s\t%s\n", len(dynamic3BaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamic3Total), fmtNum(dynamic3Total*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-3 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic3EnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamic3EntTotal), fmtNum(dynamic3EntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-2 (base)\t%d\t%d\t%s\t%s\n", len(dynamic2BaseInfo), countActions(dynamicBaseRoutes), fmtNum(dynamic2Total), fmtNum(dynamic2Total*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-2 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic2EnterpriseInfo), countActions(dynamicEnterpriseRoutes), fmtNum(dynamic2EntTotal), fmtNum(dynamic2EntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-3 (base)\t%d\t%d\t%s\t%s\n", len(dynamic3BaseInfo), baseReachableActions, fmtNum(dynamic3Total), fmtNum(dynamic3Total*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-3 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic3EnterpriseInfo), enterpriseReachableActions, fmtNum(dynamic3EntTotal), fmtNum(dynamic3EntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-2 (base)\t%d\t%d\t%s\t%s\n", len(dynamic2BaseInfo), baseReachableActions, fmtNum(dynamic2Total), fmtNum(dynamic2Total*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic-2 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic2EnterpriseInfo), enterpriseReachableActions, fmtNum(dynamic2EntTotal), fmtNum(dynamic2EntTotal*bytesPerTok))
 	_ = tw.Flush()
 	fmt.Println()
+	if addedStandalone := baseReachableActions - metaBaseCatalogActions; addedStandalone > 0 {
+		fmt.Printf("  Reachable action counts include %d standalone utility actions (project discovery + interactive flows) that are visible tools in meta mode and folded into the dynamic catalog.\n", addedStandalone)
+		fmt.Printf("  Catalog-only meta route counts: base %s / enterprise %s.\n", fmtNum(metaBaseCatalogActions), fmtNum(metaEnterpriseCatalogActions))
+		fmt.Println()
+	}
 
 	if indTotal > 0 {
 		savings := float64(indTotal-metaTotal) / float64(indTotal) * 100
@@ -228,7 +237,10 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 
 	switch toolSurface {
 	case config.ToolSurfaceMeta:
-		tools.RegisterAllMeta(server, client, enterprise)
+		if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
+			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
+			os.Exit(1)
+		}
 		tools.RegisterMCPMeta(server, client, nil)
 	case config.ToolSurfaceIndividual:
 		tools.RegisterAll(server, client, enterprise)
@@ -236,29 +248,7 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 		fmt.Fprintf(os.Stderr, "unknown tool surface %q\n", toolSurface)
 		os.Exit(1)
 	}
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return result.Tools
+	return listToolsFromServer(server)
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
@@ -277,7 +267,7 @@ func listDynamic2Tools(catalog *actionregistry.Catalog) []*mcp.Tool {
 	return listToolsFromServer(server)
 }
 
-// buildMetaRoutes builds the action route catalog that backs both
+// buildMetaActionMaps builds the action route catalog that backs both
 // meta-schema resources and the dynamic toolset.
 func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})

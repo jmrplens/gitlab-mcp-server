@@ -54,6 +54,7 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	RegisterAll(server, client, ent)
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -80,7 +81,10 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 	client := newTestClient(t, handler)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, client, enterprise)
+	if err := RegisterAllMeta(server, client, enterprise); err != nil {
+		t.Fatalf("RegisterAllMeta() error = %v", err)
+	}
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -238,7 +242,9 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
 			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-			RegisterAllMeta(server, client, tt.enterprise)
+			if registerErr := RegisterAllMeta(server, client, tt.enterprise); registerErr != nil {
+				t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+			}
 			if gotOrbit := slices.Contains(toolNamesFromServer(t, server), "gitlab_orbit"); gotOrbit != tt.wantOrbit {
 				t.Fatalf("RegisterAllMeta() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
 			}
@@ -1832,17 +1838,21 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
 }
 
+// Actions that are destructive but do NOT contain a destructive keyword.
+// These are known edge cases verified manually.
+var knownNonKeywordDestructive = map[string]bool{
+	"merge": true, "erase": true, "stop": true, "ban": true,
+	"block": true, "deactivate": true, "reject": true, "unapprove": true,
+	"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
+	"unshare": true, "disable_project": true, "import_from_file": true,
+	"cancel_github": true, "rotate": true, "mirror_force_push": true,
+	"db_migration_mark": true, "terraform_state_unlock": true, "archive": true,
+}
+
 // isExactMatchException reports whether an action name is too generic for the
 // normal destructive-name heuristic but is accepted by explicit policy.
 func isExactMatchException(action string) bool {
-	exceptions := map[string]bool{
-		"merge": true, "erase": true, "stop": true, "ban": true,
-		"block": true, "deactivate": true, "reject": true, "unapprove": true,
-		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"unshare": true, "disable_project": true,
-		"cancel_github": true, "rotate": true, "import_from_file": true,
-	}
-	return exceptions[action]
+	return knownNonKeywordDestructive[action]
 }
 
 // TestDestructiveRoutes_NameHeuristic_ClassifiesActions scans ALL route definitions across the
@@ -1966,17 +1976,6 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 			}
 		}
 		return false
-	}
-
-	// Actions that are destructive but do NOT contain a destructive keyword.
-	// These are known edge cases verified manually.
-	knownNonKeywordDestructive := map[string]bool{
-		"merge": true, "erase": true, "stop": true, "ban": true,
-		"block": true, "deactivate": true, "reject": true, "unapprove": true,
-		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"unshare": true, "disable_project": true, "import_from_file": true,
-		"cancel_github": true, "rotate": true, "mirror_force_push": true,
-		"db_migration_mark": true, "terraform_state_unlock": true, "archive": true,
 	}
 
 	var failures int

@@ -578,6 +578,9 @@ func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Clien
 	if input.ArtifactPath == "" {
 		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: artifact_path is required")
 	}
+	if input.JobName == "" {
+		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: job name is required")
+	}
 
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFileByTagOrBranch(
 		string(input.ProjectID), input.RefName, input.ArtifactPath,

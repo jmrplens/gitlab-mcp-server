@@ -98,7 +98,10 @@ func run() error {
 func listMetaTools(client *gitlabclient.Client, enterprise bool) []*mcp.Tool {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-readme", Version: "0.0.1"}, opts)
-	tools.RegisterAllMeta(server, client, enterprise)
+	if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
+		fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
+		os.Exit(1)
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
