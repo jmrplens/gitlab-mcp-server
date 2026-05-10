@@ -151,6 +151,10 @@ const jsonLd = JSON.stringify({
 export default defineConfig({
 	site: siteUrl,
 	base: basePath,
+	experimental: {
+		clientPrerender: true,
+		contentIntellisense: true,
+	},
 	integrations: [
 		mermaid({
 			theme: "default",
