@@ -74,7 +74,8 @@ func loadExistingConfigFromPath(path string) (ServerConfig, bool) {
 	cfg.LogLevel = firstNonEmpty(vars["LOG_LEVEL"], cfg.LogLevel)
 	cfg.YoloMode = envBool(vars, "YOLO_MODE", false)
 
-	return cfg, cfg.GitLabURL != "" || cfg.GitLabToken != ""
+	found := strings.TrimSpace(vars["GITLAB_URL"]) != "" || strings.TrimSpace(vars["GITLAB_TOKEN"]) != ""
+	return cfg, found
 }
 
 func envBool(vars map[string]string, key string, defaultValue bool) bool {

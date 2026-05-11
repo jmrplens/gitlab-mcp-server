@@ -251,7 +251,15 @@ func (m tuiModel) Init() tea.Cmd {
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			m.aborted = true
+			return m, tea.Quit
+		case "esc":
+			if m.step == tuiStepOptions && m.optEditing {
+				m.optEditing = false
+				m.optEditInput.Blur()
+				return m, nil
+			}
 			m.aborted = true
 			return m, tea.Quit
 		}

@@ -72,7 +72,7 @@ On **Windows**, double-click the `.exe` — if no `GITLAB_TOKEN` is set, the wiz
 
 The wizard supports 10 MCP clients: VS Code (GitHub Copilot), Claude Desktop, Claude Code (CLI), Cursor, Windsurf (Codeium), JetBrains IDEs, Copilot CLI, OpenCode, Crush (Charm), and Zed.
 
-**Secure secret storage**: The wizard writes the stdio server configuration, including `GITLAB_URL`, `GITLAB_TOKEN`, TLS, catalog, safety, upload, rate-limit, and auto-update options, to `~/.gitlab-mcp-server.env` (with `0600` permissions on Unix). Client config files only contain non-secret launch preferences and references to that env file where supported — tokens never appear in JSON. VS Code additionally gets a native `envFile` reference for direct loading.
+**Secure secret storage**: The wizard writes the stdio server configuration, including `GITLAB_URL`, `GITLAB_TOKEN`, TLS, catalog, safety, upload, rate-limit, and auto-update options, to `~/.gitlab-mcp-server.env` (with `0600` permissions on Unix). Most client config files only contain non-secret launch preferences and references to that env file where supported. `GenerateEntry(ClientJetBrains, ...)` is the compatibility exception: JetBrains cannot reference the shared env file, so the display-only JSON snippet includes the full env map, including secrets. Prefer an auto-written client config when possible; if you use the JetBrains snippet, store it with local-only permissions and rotate the token if the snippet is exposed.
 
 ---
 

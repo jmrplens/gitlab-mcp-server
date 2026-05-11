@@ -34,7 +34,7 @@ func TestWizard_FullFlow(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(), // Step 1: install path
 		"https://gitlab.example.com",                                // Step 2: GitLab URL (overriding default)
-		"glpat-xxxxxxxxxxxxxxxxxxxx",                                // Step 2: token
+		"test-token-xxxxxxxxxxxxxxxxxxxx",                           // Step 2: token
 		"n",                                                         // Skip advanced options (uses defaults)
 		"a",                                                         // Step 3: select all clients
 	}, "\n") + "\n"
@@ -84,7 +84,7 @@ func TestWizard_FullFlow_AdvancedOptions(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(), // Step 1: install path
 		"https://gitlab.example.com",                                // Step 2: GitLab URL
-		"glpat-xxxxxxxxxxxxxxxxxxxx",                                // Step 2: token
+		"test-token-xxxxxxxxxxxxxxxxxxxx",                           // Step 2: token
 		"y",                                                         // Yes, configure advanced options
 		"y",                                                         // Advanced: skip TLS
 		"y",                                                         // Advanced: meta-tools
@@ -119,8 +119,8 @@ func TestMaskToken_Various(t *testing.T) {
 		want  string
 	}{
 		{"short", "****"},
-		{"glpat-xx", "****"},
-		{"glpat-xxxxxxxxxxxxxxxxxxxx", "glpat-xx******************"},
+		{"token-xx", "****"},
+		{"abcdefghij12345", "abcdefgh*******"},
 	}
 	for _, tt := range tests {
 		got := MaskToken(tt.token)
@@ -151,7 +151,7 @@ func TestApply_EmptySelection(t *testing.T) {
 		Config: ServerConfig{
 			BinaryPath:  "/bin/test",
 			GitLabURL:   "https://gitlab.example.com",
-			GitLabToken: "glpat-xxx",
+			GitLabToken: "test-token-xxx",
 		},
 		SelectedClients: []int{},
 	}
@@ -176,7 +176,7 @@ func TestApply_InvalidIndex(t *testing.T) {
 		Config: ServerConfig{
 			BinaryPath:  "/bin/test",
 			GitLabURL:   "https://gitlab.example.com",
-			GitLabToken: "glpat-xxx",
+			GitLabToken: "test-token-xxx",
 		},
 		SelectedClients: []int{-1, 999},
 	}
@@ -217,7 +217,7 @@ func TestApply_DisplayOnlyClient(t *testing.T) {
 		Config: ServerConfig{
 			BinaryPath:  "/bin/test",
 			GitLabURL:   "https://gitlab.example.com",
-			GitLabToken: "glpat-xxx",
+			GitLabToken: "test-token-xxx",
 		},
 		SelectedClients: []int{jbIdx},
 	}
@@ -247,7 +247,7 @@ func TestApply_WritesConfigFile(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/bin/test",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-xxx",
+		GitLabToken: "test-token-xxx",
 	}
 
 	entry := GenerateEntry(ClientVSCode, cfg)
@@ -299,7 +299,7 @@ func TestApply_MergeFailure(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/bin/fake",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-test",
+		GitLabToken: "test-token-test",
 	}
 	entry := GenerateEntry(clients[vsCodeIdx].ID, cfg)
 	err := MergeServerEntry(blockedPath, RootKey(clients[vsCodeIdx].ID), ServerEntryName, entry)
@@ -347,7 +347,7 @@ func TestRunCLI_InvalidURL(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"not-a-valid-url", // invalid URL — no scheme
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 	}, "\n") + "\n"
 
 	r := strings.NewReader(input)
@@ -374,7 +374,7 @@ func TestRunCLI_SelectSingleClient(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"n",   // no advanced
 		"1\n", // select only client 1 (VS Code)
 	}, "\n") + "\n"
@@ -407,7 +407,7 @@ func TestRun_CLIMode(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"n",
 		"a",
 	}, "\n") + "\n"
@@ -433,7 +433,7 @@ func TestRunCLI_WithExistingConfig(t *testing.T) {
 	stubWriteEnvFile(t)
 	stubLoadExistingConfigWith(t, ServerConfig{
 		GitLabURL:   "https://old.example.com",
-		GitLabToken: "glpat-existing-token",
+		GitLabToken: "test-token-existing-token",
 	})
 
 	tmpDir := t.TempDir()
@@ -442,7 +442,7 @@ func TestRunCLI_WithExistingConfig(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"n",
 		"a",
 	}, "\n") + "\n"

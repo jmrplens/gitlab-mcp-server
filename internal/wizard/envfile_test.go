@@ -18,7 +18,7 @@ func TestWriteEnvFile_CreatesFile(t *testing.T) {
 
 	cfg := ServerConfig{
 		GitLabURL:     "https://gitlab.example.com",
-		GitLabToken:   "glpat-abc123",
+		GitLabToken:   "test-token-abc123",
 		SkipTLSVerify: true,
 	}
 
@@ -39,7 +39,7 @@ func TestWriteEnvFile_CreatesFile(t *testing.T) {
 	if !strings.Contains(content, "GITLAB_URL=https://gitlab.example.com") {
 		t.Error("missing GITLAB_URL")
 	}
-	if !strings.Contains(content, "GITLAB_TOKEN=glpat-abc123") {
+	if !strings.Contains(content, "GITLAB_TOKEN=test-token-abc123") {
 		t.Error("missing GITLAB_TOKEN")
 	}
 	if !strings.Contains(content, "GITLAB_SKIP_TLS_VERIFY=true") {
@@ -55,7 +55,7 @@ func TestWriteEnvFile_WritesFalseSkipTLS(t *testing.T) {
 
 	cfg := ServerConfig{
 		GitLabURL:     "https://gitlab.example.com",
-		GitLabToken:   "glpat-abc123",
+		GitLabToken:   "test-token-abc123",
 		SkipTLSVerify: false,
 	}
 
@@ -77,7 +77,7 @@ func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
 
 	cfg := ServerConfig{
 		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "glpat-abc123",
+		GitLabToken:       "test-token-abc123",
 		SkipTLSVerify:     true,
 		MetaTools:         true,
 		ToolSurface:       "dynamic",
@@ -112,7 +112,7 @@ func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
 
 	expected := []string{
 		"GITLAB_URL=https://gitlab.example.com",
-		"GITLAB_TOKEN=glpat-abc123",
+		"GITLAB_TOKEN=test-token-abc123",
 		"GITLAB_SKIP_TLS_VERIFY=true",
 		"META_TOOLS=true",
 		"TOOL_SURFACE=dynamic",
@@ -162,7 +162,7 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 
 	content := "# gitlab-mcp-server config\n" +
 		"GITLAB_URL=https://gitlab.example.com\n" +
-		"GITLAB_TOKEN=glpat-abc123def456\n" +
+		"GITLAB_TOKEN=test-token-abc123def456\n" +
 		"GITLAB_SKIP_TLS_VERIFY=true\n" +
 		"TOOL_SURFACE=dynamic\n" +
 		"CAPABILITY_SURFACE=minimal\n" +
@@ -193,8 +193,8 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	if cfg.GitLabURL != "https://gitlab.example.com" {
 		t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, "https://gitlab.example.com")
 	}
-	if cfg.GitLabToken != "glpat-abc123def456" {
-		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "glpat-abc123def456")
+	if cfg.GitLabToken != "test-token-abc123def456" {
+		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "test-token-abc123def456")
 	}
 	if !cfg.SkipTLSVerify {
 		t.Error("SkipTLSVerify should be true")
@@ -255,6 +255,26 @@ func TestLoadExistingConfigFromPath_OnlyComments(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_OnlyPreferences verifies preference-only env
+// files are parsed but do not count as an existing GitLab connection.
+func TestLoadExistingConfigFromPath_OnlyPreferences(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	content := "LOG_LEVEL=debug\nTOOL_SURFACE=dynamic\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg, found := loadExistingConfigFromPath(path)
+	if found {
+		t.Error("expected found=false when URL and token are absent")
+	}
+	if cfg.LogLevel != "debug" || cfg.ToolSurface != "dynamic" {
+		t.Errorf("preferences not parsed: %#v", cfg)
+	}
+}
+
 // TestLoadExistingConfigFromPath_SkipTLSFalse verifies loadExistingConfigFromPath
 // parses GITLAB_SKIP_TLS_VERIFY=false into SkipTLSVerify=false.
 func TestLoadExistingConfigFromPath_SkipTLSFalse(t *testing.T) {
@@ -308,7 +328,7 @@ func TestWriteEnvFile_Wrapper(t *testing.T) {
 
 	cfg := ServerConfig{
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-wrapper-test",
+		GitLabToken: "test-token-wrapper-test",
 	}
 
 	path, err := WriteEnvFile(cfg)
@@ -322,7 +342,7 @@ func TestWriteEnvFile_Wrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading file: %v", err)
 	}
-	if !strings.Contains(string(data), "glpat-wrapper-test") {
+	if !strings.Contains(string(data), "test-token-wrapper-test") {
 		t.Error("written file does not contain expected token")
 	}
 }

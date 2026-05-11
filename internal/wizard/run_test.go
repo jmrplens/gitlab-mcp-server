@@ -32,7 +32,7 @@ func TestRun_CLIMode_Dispatch(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-test123",
+		"test-token-test123",
 		"n",
 		"a",
 	}, "\n") + "\n"

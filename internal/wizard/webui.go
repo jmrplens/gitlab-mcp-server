@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -98,7 +99,6 @@ type defaultsResponse struct {
 	HasExisting       bool             `json:"has_existing"`
 	MaskedToken       string           `json:"masked_token,omitempty"`
 	SkipTLSVerify     bool             `json:"skip_tls_verify"`
-	MetaTools         bool             `json:"meta_tools"`
 	ToolSurface       string           `json:"tool_surface"`
 	CapabilitySurface string           `json:"capability_surface"`
 	MetaParamSchema   string           `json:"meta_param_schema"`
@@ -152,7 +152,6 @@ func handleDefaults(version string) http.HandlerFunc {
 			HasExisting:       hasExisting,
 			MaskedToken:       maskedToken,
 			SkipTLSVerify:     cfg.SkipTLSVerify,
-			MetaTools:         cfg.MetaTools,
 			ToolSurface:       cfg.ToolSurface,
 			CapabilitySurface: cfg.CapabilitySurface,
 			MetaParamSchema:   cfg.MetaParamSchema,
@@ -191,7 +190,6 @@ type configureRequest struct {
 	GitLabURL         string `json:"gitlab_url"`
 	GitLabToken       string `json:"gitlab_token"`
 	SkipTLSVerify     bool   `json:"skip_tls_verify"`
-	MetaTools         bool   `json:"meta_tools"`
 	ToolSurface       string `json:"tool_surface"`
 	CapabilitySurface string `json:"capability_surface"`
 	MetaParamSchema   string `json:"meta_param_schema"`
@@ -248,10 +246,9 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			return
 		}
 
-		// Validate log level
-		validLevel := slices.Contains(LogLevelOptions, req.LogLevel)
-		if !validLevel {
-			req.LogLevel = "info"
+		if err := normalizeConfigureRequest(&req); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		// Install binary
@@ -278,7 +275,7 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			GitLabURL:         req.GitLabURL,
 			GitLabToken:       req.GitLabToken,
 			SkipTLSVerify:     req.SkipTLSVerify,
-			MetaTools:         req.MetaTools,
+			MetaTools:         req.ToolSurface != "individual",
 			ToolSurface:       req.ToolSurface,
 			CapabilitySurface: req.CapabilitySurface,
 			MetaParamSchema:   req.MetaParamSchema,
@@ -298,9 +295,6 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			YoloMode:          req.YoloMode,
 			LogLevel:          req.LogLevel,
 		}.withDefaults()
-		cfg.BinaryPath = binaryPath
-		cfg.GitLabURL = req.GitLabURL
-		cfg.GitLabToken = req.GitLabToken
 
 		result := &Result{
 			InstallDir:      installDir,
@@ -334,6 +328,47 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 
 		onDone(applyErr)
 	}
+}
+
+func normalizeConfigureRequest(req *configureRequest) error {
+	defaults := DefaultServerConfig()
+	req.ToolSurface = firstNonEmpty(req.ToolSurface, defaults.ToolSurface)
+	if !slices.Contains(ToolSurfaceOptions, req.ToolSurface) {
+		return fmt.Errorf("invalid tool_surface: %s", req.ToolSurface)
+	}
+
+	req.CapabilitySurface = firstNonEmpty(req.CapabilitySurface, defaults.CapabilitySurface)
+	if !slices.Contains(CapabilitySurfaceOptions, req.CapabilitySurface) {
+		return fmt.Errorf("invalid capability_surface: %s", req.CapabilitySurface)
+	}
+
+	req.MetaParamSchema = firstNonEmpty(req.MetaParamSchema, defaults.MetaParamSchema)
+	if !slices.Contains(MetaParamSchemaOptions, req.MetaParamSchema) {
+		return fmt.Errorf("invalid meta_param_schema: %s", req.MetaParamSchema)
+	}
+
+	req.AutoUpdateMode = firstNonEmpty(req.AutoUpdateMode, defaults.AutoUpdateMode)
+	if !slices.Contains(AutoUpdateModeOptions, req.AutoUpdateMode) {
+		return fmt.Errorf("invalid auto_update_mode: %s", req.AutoUpdateMode)
+	}
+	req.AutoUpdate = req.AutoUpdateMode != "false"
+
+	req.RateLimitRPS = firstNonEmpty(req.RateLimitRPS, defaults.RateLimitRPS)
+	rateLimitRPS, err := strconv.ParseFloat(req.RateLimitRPS, 64)
+	if err != nil || rateLimitRPS < 0 {
+		return fmt.Errorf("invalid rate_limit_rps: %s", req.RateLimitRPS)
+	}
+
+	req.RateLimitBurst = firstNonEmpty(req.RateLimitBurst, defaults.RateLimitBurst)
+	rateLimitBurst, err := strconv.Atoi(req.RateLimitBurst)
+	if err != nil || rateLimitBurst < 0 {
+		return fmt.Errorf("invalid rate_limit_burst: %s", req.RateLimitBurst)
+	}
+
+	if !slices.Contains(LogLevelOptions, req.LogLevel) {
+		req.LogLevel = defaults.LogLevel
+	}
+	return nil
 }
 
 // handlePickDirectory returns an HTTP handler that asks the host OS to choose

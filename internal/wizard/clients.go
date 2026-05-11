@@ -147,7 +147,7 @@ func (cfg ServerConfig) withDefaults() ServerConfig {
 	defaults.Enterprise = cfg.Enterprise
 	defaults.ReadOnly = cfg.ReadOnly
 	defaults.SafeMode = cfg.SafeMode
-	defaults.EmbeddedResources = cfg.EmbeddedResources || cfg.EmbeddedResources == defaults.EmbeddedResources
+	defaults.EmbeddedResources = cfg.EmbeddedResources
 	defaults.ExcludeTools = cfg.ExcludeTools
 	defaults.IgnoreScopes = cfg.IgnoreScopes
 	defaults.UploadMaxFileSize = firstNonEmpty(cfg.UploadMaxFileSize, defaults.UploadMaxFileSize)
@@ -183,7 +183,7 @@ func autoUpdateMode(cfg ServerConfig) string {
 	if cfg.AutoUpdate {
 		return "true"
 	}
-	return "true"
+	return "false"
 }
 
 func boolString(value bool) string {

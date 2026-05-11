@@ -123,7 +123,7 @@ func TestHandleConfigure_InvalidURL(t *testing.T) {
 	doneCh := make(chan error, 1)
 	handler := handleConfigure(&output, func(err error) { doneCh <- err })
 
-	body := `{"gitlab_url":"not-a-valid-url","gitlab_token":"glpat-xxx","selected_clients":[]}`
+	body := `{"gitlab_url":"not-a-valid-url","gitlab_token":"test-token-xxx","selected_clients":[]}`
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestHandleConfigure_DefaultsEmptyURL(t *testing.T) {
 			reqBody := configureRequest{
 				InstallPath:     t.TempDir(),
 				GitLabURL:       tt.gitLabURL,
-				GitLabToken:     "glpat-xxx",
+				GitLabToken:     "test-token-xxx",
 				LogLevel:        "info",
 				SelectedClients: []int{},
 			}
@@ -226,7 +226,7 @@ func TestHandleConfigure_MissingToken(t *testing.T) {
 func TestHandleConfigure_EmptyTokenFallsBackToExisting(t *testing.T) {
 	stubLoadExistingConfigWith(t, ServerConfig{
 		GitLabURL:   "https://existing.example.com",
-		GitLabToken: "glpat-existing-token-xxx",
+		GitLabToken: "test-token-existing-token-xxx",
 	})
 	stubWriteEnvFile(t)
 
@@ -301,7 +301,7 @@ func TestHandleConfigure_InvalidLogLevel(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:     t.TempDir(),
 		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:     "test-token-xxxxxxxxxxxxxxxxxxxx",
 		LogLevel:        "invalid-level",
 		SelectedClients: []int{},
 	}
@@ -345,9 +345,8 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:       t.TempDir(),
 		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:       "test-token-xxxxxxxxxxxxxxxxxxxx",
 		SkipTLSVerify:     true,
-		MetaTools:         true,
 		ToolSurface:       "dynamic",
 		CapabilitySurface: "minimal",
 		MetaParamSchema:   "compact",
@@ -404,6 +403,7 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
+		"META_TOOLS=true",
 		"TOOL_SURFACE=dynamic",
 		"CAPABILITY_SURFACE=minimal",
 		"META_PARAM_SCHEMA=compact",
@@ -418,6 +418,166 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 		if !strings.Contains(content, want+"\n") {
 			t.Errorf("generated env file missing %q\ncontent:\n%s", want, content)
 		}
+	}
+}
+
+// TestHandleConfigure_DerivesMetaToolsFromToolSurface verifies meta-tools are
+// derived from tool_surface server-side instead of trusting a client flag.
+func TestHandleConfigure_DerivesMetaToolsFromToolSurface(t *testing.T) {
+	tests := []struct {
+		name        string
+		toolSurface string
+		wantLine    string
+	}{
+		{name: "individual disables meta tools", toolSurface: "individual", wantLine: "META_TOOLS=false"},
+		{name: "dynamic enables meta tools", toolSurface: "dynamic", wantLine: "META_TOOLS=true"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			envPath := stubWriteEnvFile(t)
+			var output bytes.Buffer
+			doneCh := make(chan error, 1)
+			handler := handleConfigure(&output, func(err error) { doneCh <- err })
+
+			reqBody := configureRequest{
+				InstallPath:     t.TempDir(),
+				GitLabURL:       "https://gitlab.example.com",
+				GitLabToken:     "test-token-placeholder",
+				ToolSurface:     tt.toolSurface,
+				LogLevel:        "info",
+				SelectedClients: []int{},
+			}
+			body, mErr := json.Marshal(reqBody)
+			if mErr != nil {
+				t.Fatalf("marshal request: %v", mErr)
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			select {
+			case err = <-doneCh:
+				if err != nil {
+					t.Fatalf("onDone returned unexpected error: %v", err)
+				}
+			default:
+				t.Fatal("onDone callback was not called")
+			}
+
+			data, err := os.ReadFile(envPath)
+			if err != nil {
+				t.Fatalf("reading generated env file: %v", err)
+			}
+			if !strings.Contains(string(data), tt.wantLine+"\n") {
+				t.Fatalf("generated env file missing %q\ncontent:\n%s", tt.wantLine, string(data))
+			}
+		})
+	}
+}
+
+// TestNormalizeConfigureRequest_RejectsInvalidAdvancedOptions verifies the
+// web API validates advanced configuration values before persisting them.
+func TestNormalizeConfigureRequest_RejectsInvalidAdvancedOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(*configureRequest)
+		want string
+	}{
+		{name: "tool surface", edit: func(req *configureRequest) { req.ToolSurface = "unknown" }, want: "invalid tool_surface"},
+		{name: "capability surface", edit: func(req *configureRequest) { req.CapabilitySurface = "tiny" }, want: "invalid capability_surface"},
+		{name: "meta param schema", edit: func(req *configureRequest) { req.MetaParamSchema = "verbose" }, want: "invalid meta_param_schema"},
+		{name: "auto update mode", edit: func(req *configureRequest) { req.AutoUpdateMode = "sometimes" }, want: "invalid auto_update_mode"},
+		{name: "rate limit rps", edit: func(req *configureRequest) { req.RateLimitRPS = "fast" }, want: "invalid rate_limit_rps"},
+		{name: "negative rate limit rps", edit: func(req *configureRequest) { req.RateLimitRPS = "-1" }, want: "invalid rate_limit_rps"},
+		{name: "rate limit burst", edit: func(req *configureRequest) { req.RateLimitBurst = "many" }, want: "invalid rate_limit_burst"},
+		{name: "negative rate limit burst", edit: func(req *configureRequest) { req.RateLimitBurst = "-1" }, want: "invalid rate_limit_burst"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := configureRequest{
+				ToolSurface:       "dynamic",
+				CapabilitySurface: "minimal",
+				MetaParamSchema:   "compact",
+				AutoUpdateMode:    "check",
+				RateLimitRPS:      "3.5",
+				RateLimitBurst:    "12",
+				LogLevel:          "debug",
+			}
+			tt.edit(&req)
+
+			err := normalizeConfigureRequest(&req)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want to contain %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
+// TestHandleConfigure_InvalidAdvancedOption verifies validation errors from
+// advanced Web UI fields are returned as HTTP 400 responses.
+func TestHandleConfigure_InvalidAdvancedOption(t *testing.T) {
+	var output bytes.Buffer
+	handler := handleConfigure(&output, func(error) {})
+	reqBody := configureRequest{
+		InstallPath:     t.TempDir(),
+		GitLabURL:       "https://gitlab.example.com",
+		GitLabToken:     "test-token-placeholder",
+		ToolSurface:     "not-valid",
+		LogLevel:        "info",
+		SelectedClients: []int{},
+	}
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid tool_surface") {
+		t.Fatalf("body = %q, want invalid tool_surface", rec.Body.String())
+	}
+}
+
+// TestNormalizeConfigureRequest_DefaultsAndLogLevel verifies blank advanced
+// fields receive defaults and invalid log levels are normalized to info.
+func TestNormalizeConfigureRequest_DefaultsAndLogLevel(t *testing.T) {
+	req := configureRequest{LogLevel: "verbose"}
+	if err := normalizeConfigureRequest(&req); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+	if req.ToolSurface != "meta" || req.CapabilitySurface != "full" || req.MetaParamSchema != "opaque" {
+		t.Errorf("catalog defaults not applied: %#v", req)
+	}
+	if req.AutoUpdateMode != "true" || !req.AutoUpdate {
+		t.Errorf("auto-update defaults not applied: %#v", req)
+	}
+	if req.RateLimitRPS != "0" || req.RateLimitBurst != "40" {
+		t.Errorf("rate-limit defaults not applied: %#v", req)
+	}
+	if req.LogLevel != "info" {
+		t.Errorf("LogLevel = %q, want info", req.LogLevel)
 	}
 }
 
@@ -470,7 +630,7 @@ func TestHandleConfigure_WithJetBrainsClient(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:     t.TempDir(),
 		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:     "test-token-xxxxxxxxxxxxxxxxxxxx",
 		LogLevel:        "info",
 		SelectedClients: []int{jbIdx},
 	}
@@ -525,7 +685,7 @@ func TestHandleConfigure_WithOutOfRangeClient(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:     t.TempDir(),
 		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:     "test-token-xxxxxxxxxxxxxxxxxxxx",
 		LogLevel:        "info",
 		SelectedClients: []int{-1, 999},
 	}
@@ -582,7 +742,7 @@ func TestHandleConfigure_InstallPathWithBinaryName(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:     installWithBinary,
 		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:     "test-token-xxxxxxxxxxxxxxxxxxxx",
 		LogLevel:        "info",
 		SelectedClients: []int{},
 	}
@@ -642,7 +802,7 @@ func TestHandleConfigure_WithRegularClient(t *testing.T) {
 	reqBody := configureRequest{
 		InstallPath:     tmpDir,
 		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken:     "test-token-xxxxxxxxxxxxxxxxxxxx",
 		LogLevel:        "info",
 		SelectedClients: []int{vsCodeIdx},
 	}
@@ -754,7 +914,7 @@ func TestServeIndex_ContainsHTML(t *testing.T) {
 func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 	stubLoadExistingConfigWith(t, ServerConfig{
 		GitLabURL:         "https://existing.example.com",
-		GitLabToken:       "glpat-existing-token",
+		GitLabToken:       "test-token-existing-token",
 		SkipTLSVerify:     true,
 		ToolSurface:       "dynamic",
 		CapabilitySurface: "minimal",
@@ -798,7 +958,7 @@ func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 	if !resp.SkipTLSVerify {
 		t.Error("expected SkipTLSVerify=true")
 	}
-	wantMasked := MaskToken("glpat-existing-token")
+	wantMasked := MaskToken("test-token-existing-token")
 	if resp.MaskedToken != wantMasked {
 		t.Errorf("MaskedToken = %q, want %q", resp.MaskedToken, wantMasked)
 	}

@@ -99,7 +99,7 @@ func TestStepInstall_InstallBinaryFails(t *testing.T) {
 // TestStepGitLabConfig_ValidInput verifies stepGitLabConfig returns a
 // properly configured ServerConfig for valid URL and token.
 func TestStepGitLabConfig_ValidInput(t *testing.T) {
-	input := "https://gitlab.example.com\nglpat-xxxxxxxxxxxxxxxxxxxx\n"
+	input := "https://gitlab.example.com\ntest-token-xxxxxxxxxxxxxxxxxxxx\n"
 	r := strings.NewReader(input)
 	var w bytes.Buffer
 	p := NewPrompter(r, &w)
@@ -112,7 +112,7 @@ func TestStepGitLabConfig_ValidInput(t *testing.T) {
 	if cfg.GitLabURL != "https://gitlab.example.com" {
 		t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, "https://gitlab.example.com")
 	}
-	if cfg.GitLabToken != "glpat-xxxxxxxxxxxxxxxxxxxx" {
+	if cfg.GitLabToken != "test-token-xxxxxxxxxxxxxxxxxxxx" {
 		t.Errorf("GitLabToken = %q, want masked value", cfg.GitLabToken)
 	}
 	if cfg.SkipTLSVerify {
@@ -130,8 +130,8 @@ func TestStepGitLabConfig_DefaultURL(t *testing.T) {
 		name  string
 		input string
 	}{
-		{name: "enter", input: "\nglpat-xxxxxxxxxxxxxxxxxxxx\n"},
-		{name: "whitespace", input: "   \nglpat-xxxxxxxxxxxxxxxxxxxx\n"},
+		{name: "enter", input: "\ntest-token-xxxxxxxxxxxxxxxxxxxx\n"},
+		{name: "whitespace", input: "   \ntest-token-xxxxxxxxxxxxxxxxxxxx\n"},
 	}
 
 	for _, tt := range tests {
@@ -162,7 +162,7 @@ func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {
 
 	existing := ServerConfig{
 		GitLabURL:   "https://existing.gitlab.com",
-		GitLabToken: "glpat-existingtoken12345678",
+		GitLabToken: "test-token-existingtoken12345678",
 	}
 
 	cfg, err := stepGitLabConfig(p, &w, existing, true)
@@ -173,8 +173,8 @@ func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {
 	if cfg.GitLabURL != "https://existing.gitlab.com" {
 		t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, "https://existing.gitlab.com")
 	}
-	if cfg.GitLabToken != "glpat-existingtoken12345678" {
-		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "glpat-existingtoken12345678")
+	if cfg.GitLabToken != "test-token-existingtoken12345678" {
+		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "test-token-existingtoken12345678")
 	}
 }
 
@@ -188,7 +188,7 @@ func TestStepGitLabConfig_WithExistingAdvancedOptions(t *testing.T) {
 
 	existing := ServerConfig{
 		GitLabURL:         "https://existing.gitlab.com",
-		GitLabToken:       "glpat-existingtoken12345678",
+		GitLabToken:       "test-token-existingtoken12345678",
 		SkipTLSVerify:     true,
 		ToolSurface:       "dynamic",
 		CapabilitySurface: "minimal",
@@ -228,7 +228,7 @@ func TestStepGitLabConfig_WithExistingAdvancedOptions(t *testing.T) {
 // TestStepGitLabConfig_URLError verifies stepGitLabConfig returns an
 // "invalid URL" error when the user enters a malformed URL.
 func TestStepGitLabConfig_URLError(t *testing.T) {
-	input := "not-a-valid-url\nglpat-xxx\n"
+	input := "not-a-valid-url\ntest-token-xxx\n"
 	r := strings.NewReader(input)
 	var w bytes.Buffer
 	p := NewPrompter(r, &w)
@@ -401,6 +401,49 @@ func TestStepOptions_EOFOnLogLevel(t *testing.T) {
 	}
 }
 
+// TestStepOptions_EOFAtEveryAdvancedPrompt verifies each advanced prompt
+// returns EOF cleanly when the input stream stops at that point.
+func TestStepOptions_EOFAtEveryAdvancedPrompt(t *testing.T) {
+	answers := []string{
+		"n", // skip TLS
+		"1", // tool surface
+		"1", // capability surface
+		"1", // meta parameter schema
+		"n", // enterprise
+		"n", // read-only
+		"n", // safe mode
+		"y", // embedded resources
+		"n", // ignore scopes
+		"",  // exclude tools
+		"",  // upload max file size
+		"1", // auto-update mode
+		"",  // auto-update repo
+		"",  // auto-update timeout
+		"",  // rate limit RPS
+		"",  // rate limit burst
+		"n", // yolo
+		"2", // log level
+	}
+
+	for answered := range answers {
+		t.Run(fmt.Sprintf("after_%02d_answers", answered), func(t *testing.T) {
+			input := ""
+			if answered > 0 {
+				input = strings.Join(answers[:answered], "\n") + "\n"
+			}
+			r := strings.NewReader(input)
+			var w bytes.Buffer
+			p := NewPrompter(r, &w)
+
+			cfg := DefaultServerConfig()
+			err := stepOptions(p, &w, &cfg)
+			if err == nil {
+				t.Fatalf("expected EOF after %d answered prompt(s)", answered)
+			}
+		})
+	}
+}
+
 // TestStepClients_EOF verifies stepClients returns an error when input
 // reaches EOF during the client selection prompt.
 func TestStepClients_EOF(t *testing.T) {
@@ -411,7 +454,7 @@ func TestStepClients_EOF(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/bin/test",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-test",
+		GitLabToken: "test-token-test",
 	}
 	err := stepClients(p, &w, cfg)
 	if err == nil {
@@ -432,7 +475,7 @@ func TestStepClients_SelectAll(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  filepath.Join(t.TempDir(), "test-binary"),
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-xxxxxxxxxxxxxxxxxxxx",
+		GitLabToken: "test-token-xxxxxxxxxxxxxxxxxxxx",
 	}
 	err := stepClients(p, &w, cfg)
 	// Some clients may fail to write config (paths are real), but the
@@ -463,7 +506,7 @@ func TestRunCLI_AdvancedOptions(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"y",            // yes to advanced options
 		"y",            // skip TLS
 		"3",            // tool surface = dynamic
@@ -539,7 +582,7 @@ func TestRunCLI_AdvancedOptionsEOF(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"y", // yes to advanced → triggers stepOptions
 		// EOF here — no answers for stepOptions
 	}, "\n") + "\n"
@@ -566,7 +609,7 @@ func TestRunCLI_AskAdvancedEOF(t *testing.T) {
 	input := strings.Join([]string{
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
-		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		// EOF here — no answer for "Configure advanced options?"
 	}, "\n") + "\n"
 

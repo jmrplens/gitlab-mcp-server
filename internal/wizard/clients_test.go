@@ -16,7 +16,7 @@ func TestGenerateEntry_VSCode(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:    "/usr/bin/gitlab-mcp-server",
 		GitLabURL:     "https://gitlab.example.com",
-		GitLabToken:   "glpat-abc123",
+		GitLabToken:   "test-token-abc123",
 		SkipTLSVerify: true,
 		MetaTools:     true,
 	}
@@ -56,7 +56,7 @@ func TestGenerateEntry_CopilotCLI(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientCopilotCLI, cfg)
@@ -81,7 +81,7 @@ func TestGenerateEntry_OpenCode(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientOpenCode, cfg)
@@ -111,7 +111,7 @@ func TestGenerateEntry_ClaudeDesktop(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientClaudeDesktop, cfg)
@@ -367,7 +367,7 @@ func TestGenerateEntry_Crush(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientCrush, cfg)
@@ -389,7 +389,7 @@ func TestGenerateEntry_Zed(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientZed, cfg)
@@ -482,7 +482,7 @@ func TestGenerateEntry_AllClients_HaveCommand(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-xxx",
+		GitLabToken: "test-token-xxx",
 	}
 
 	clients := AllClients()
@@ -542,7 +542,7 @@ func TestGenerateEntry_NoSecretsInEnv(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:    "/usr/bin/gitlab-mcp-server",
 		GitLabURL:     "https://gitlab.example.com",
-		GitLabToken:   "glpat-secret",
+		GitLabToken:   "test-token-secret",
 		SkipTLSVerify: true,
 		MetaTools:     true,
 	}
@@ -589,7 +589,7 @@ func TestGenerateEntry_JetBrains_HasSecrets(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:    "/usr/bin/gitlab-mcp-server",
 		GitLabURL:     "https://gitlab.example.com",
-		GitLabToken:   "glpat-secret",
+		GitLabToken:   "test-token-secret",
 		SkipTLSVerify: true,
 	}
 
@@ -612,7 +612,7 @@ func TestGenerateEntry_VSCode_HasEnvFile(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
 		GitLabURL:   "https://gitlab.example.com",
-		GitLabToken: "glpat-abc123",
+		GitLabToken: "test-token-abc123",
 	}
 
 	entry := GenerateEntry(ClientVSCode, cfg)
@@ -630,7 +630,7 @@ func TestGenerateEntry_VSCode_HasEnvFile(t *testing.T) {
 func TestEnvMapPreferences_NoSecrets(t *testing.T) {
 	cfg := ServerConfig{
 		GitLabURL:     "https://example.com",
-		GitLabToken:   "glpat-secret",
+		GitLabToken:   "test-token-secret",
 		SkipTLSVerify: true,
 		MetaTools:     true,
 		AutoUpdate:    true,
@@ -652,5 +652,78 @@ func TestEnvMapPreferences_NoSecrets(t *testing.T) {
 	}
 	if env["LOG_LEVEL"] != "debug" {
 		t.Error("missing LOG_LEVEL")
+	}
+}
+
+// TestWithDefaults_AutoUpdateFalseWithoutMode verifies a legacy config with
+// AutoUpdate=false and no explicit AutoUpdateMode keeps auto-update disabled.
+func TestWithDefaults_AutoUpdateFalseWithoutMode(t *testing.T) {
+	cfg := ServerConfig{AutoUpdate: false}.withDefaults()
+	if cfg.AutoUpdateMode != "false" {
+		t.Errorf("AutoUpdateMode = %q, want false", cfg.AutoUpdateMode)
+	}
+	if cfg.AutoUpdate {
+		t.Error("AutoUpdate should remain false")
+	}
+}
+
+// TestWithDefaults_EmbeddedResourcesPreservesFalse verifies EmbeddedResources
+// uses the selected value directly instead of re-applying the default.
+func TestWithDefaults_EmbeddedResourcesPreservesFalse(t *testing.T) {
+	cfg := ServerConfig{EmbeddedResources: false}.withDefaults()
+	if cfg.EmbeddedResources {
+		t.Error("EmbeddedResources should remain false")
+	}
+}
+
+// TestWithDefaults_MetaToolsWithoutToolSurface verifies legacy MetaTools=true
+// still selects the meta tool surface when TOOL_SURFACE is absent.
+func TestWithDefaults_MetaToolsWithoutToolSurface(t *testing.T) {
+	cfg := ServerConfig{MetaTools: true}.withDefaults()
+	if cfg.ToolSurface != "meta" {
+		t.Errorf("ToolSurface = %q, want meta", cfg.ToolSurface)
+	}
+	if !cfg.MetaTools {
+		t.Error("MetaTools should remain enabled")
+	}
+}
+
+// TestAutoUpdateMode_ExplicitValueWins verifies explicit modes take precedence
+// over the legacy AutoUpdate boolean.
+func TestAutoUpdateMode_ExplicitValueWins(t *testing.T) {
+	if got := autoUpdateMode(ServerConfig{AutoUpdateMode: "check", AutoUpdate: false}); got != "check" {
+		t.Errorf("autoUpdateMode = %q, want check", got)
+	}
+}
+
+// TestAutoUpdateMode_LegacyTrue verifies legacy AutoUpdate=true maps to the
+// explicit true mode when AutoUpdateMode is absent.
+func TestAutoUpdateMode_LegacyTrue(t *testing.T) {
+	if got := autoUpdateMode(ServerConfig{AutoUpdate: true}); got != "true" {
+		t.Errorf("autoUpdateMode = %q, want true", got)
+	}
+}
+
+// TestToolSurfaceFromMetaTools_Disabled verifies legacy MetaTools=false maps
+// to the individual tool surface.
+func TestToolSurfaceFromMetaTools_Disabled(t *testing.T) {
+	if got := toolSurfaceFromMetaTools(false); got != "individual" {
+		t.Errorf("toolSurfaceFromMetaTools(false) = %q, want individual", got)
+	}
+}
+
+// TestChoiceIndex_InvalidDefaultFallsBackToZero verifies choiceIndex clamps an
+// out-of-range default to the first option.
+func TestChoiceIndex_InvalidDefaultFallsBackToZero(t *testing.T) {
+	if got := choiceIndex([]string{"a", "b"}, "missing", 99); got != 0 {
+		t.Errorf("choiceIndex = %d, want 0", got)
+	}
+}
+
+// TestChoiceIndex_ValidDefault verifies a valid default is returned when the
+// requested value is not present.
+func TestChoiceIndex_ValidDefault(t *testing.T) {
+	if got := choiceIndex([]string{"a", "b"}, "missing", 1); got != 1 {
+		t.Errorf("choiceIndex = %d, want 1", got)
 	}
 }
