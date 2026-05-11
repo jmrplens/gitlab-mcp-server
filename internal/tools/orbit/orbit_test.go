@@ -70,6 +70,28 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 	}
 }
 
+// TestSchema_ResponseFormatAlias_ForwardsFormat verifies that Schema accepts
+// response_format as a compatibility alias while forwarding GitLab's format query parameter.
+func TestSchema_ResponseFormatAlias_ForwardsFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
+		testutil.AssertQueryParam(t, r, "format", "llm")
+		if got := r.URL.Query().Get("response_format"); got != "" {
+			t.Fatalf("response_format query parameter = %q, want empty", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
+	}))
+
+	out, err := Schema(context.Background(), client, SchemaInput{ResponseFormat: "llm"})
+	if err != nil {
+		t.Fatalf("Schema() error: %v", err)
+	}
+	if out.SchemaVersion != "1.0" {
+		t.Fatalf("Schema() = %+v, want schema version 1.0", out)
+	}
+}
+
 // TestTools_Success_ExpectedOutput verifies that Tools decodes the Orbit tools
 // catalog returned by the GitLab API.
 func TestTools_Success_ExpectedOutput(t *testing.T) {
@@ -226,6 +248,14 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 			want: "use raw or llm",
 		},
 		{
+			name: "conflicting schema formats",
+			call: func() error {
+				_, err := Schema(context.Background(), client, SchemaInput{Format: "raw", ResponseFormat: "llm"})
+				return err
+			},
+			want: "must match",
+		},
+		{
 			name: "invalid query response format",
 			call: func() error {
 				_, err := Query(context.Background(), client, QueryInput{
@@ -307,6 +337,16 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 				return err
 			},
 			want: "check the Orbit query",
+		},
+		{
+			name:   "rate limited",
+			path:   "/api/v4/orbit/query",
+			status: http.StatusTooManyRequests,
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+				return err
+			},
+			want: "rate-limited",
 		},
 		{
 			name:   "service unavailable",
