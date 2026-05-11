@@ -178,6 +178,53 @@ func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {
 	}
 }
 
+// TestStepGitLabConfig_WithExistingAdvancedOptions verifies existing advanced
+// settings remain loaded when the user accepts the URL and token defaults.
+func TestStepGitLabConfig_WithExistingAdvancedOptions(t *testing.T) {
+	input := "\n\n"
+	r := strings.NewReader(input)
+	var w bytes.Buffer
+	p := NewPrompter(r, &w)
+
+	existing := ServerConfig{
+		GitLabURL:         "https://existing.gitlab.com",
+		GitLabToken:       "glpat-existingtoken12345678",
+		SkipTLSVerify:     true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/repo",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		YoloMode:          true,
+	}
+
+	cfg, err := stepGitLabConfig(p, &w, existing, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.ToolSurface != "dynamic" || cfg.CapabilitySurface != "minimal" || cfg.MetaParamSchema != "compact" {
+		t.Errorf("catalog options not preserved: %#v", cfg)
+	}
+	if !cfg.SkipTLSVerify || !cfg.Enterprise || !cfg.ReadOnly || !cfg.SafeMode || cfg.EmbeddedResources || !cfg.IgnoreScopes || !cfg.YoloMode {
+		t.Errorf("boolean advanced options not preserved: %#v", cfg)
+	}
+	if cfg.ExcludeTools != "gitlab_admin" || cfg.AutoUpdateMode != "check" || cfg.RateLimitRPS != "3.5" {
+		t.Errorf("text/mode advanced options not preserved: %#v", cfg)
+	}
+}
+
 // TestStepGitLabConfig_URLError verifies stepGitLabConfig returns an
 // "invalid URL" error when the user enters a malformed URL.
 func TestStepGitLabConfig_URLError(t *testing.T) {
@@ -222,11 +269,29 @@ func TestStepGitLabConfig_TokenEOF(t *testing.T) {
 	}
 }
 
-// TestStepOptions_AllAnswered verifies stepOptions configures all options
-// correctly when the user provides explicit answers.
+// TestStepOptions_AllAnswered verifies stepOptions configures all advanced
+// options correctly when the user provides explicit answers.
 func TestStepOptions_AllAnswered(t *testing.T) {
-	// n=no TLS skip, y=meta-tools, y=auto-update, n=yolo, 2=info log level
-	input := "n\ny\ny\nn\n2\n"
+	input := strings.Join([]string{
+		"n",            // skip TLS
+		"3",            // tool surface = dynamic
+		"2",            // capability surface = minimal
+		"2",            // meta parameter schema = compact
+		"y",            // enterprise
+		"y",            // read-only
+		"y",            // safe mode
+		"n",            // embedded resources
+		"y",            // ignore scopes
+		"gitlab_admin", // exclude tools
+		"500MB",        // upload max file size
+		"2",            // auto-update mode = check
+		"example/repo", // auto-update repo
+		"90s",          // auto-update timeout
+		"3.5",          // rate limit RPS
+		"12",           // rate limit burst
+		"n",            // yolo
+		"2",            // log level = info
+	}, "\n") + "\n"
 	r := strings.NewReader(input)
 	var w bytes.Buffer
 	p := NewPrompter(r, &w)
@@ -240,11 +305,23 @@ func TestStepOptions_AllAnswered(t *testing.T) {
 	if cfg.SkipTLSVerify {
 		t.Error("SkipTLSVerify should be false (answered n)")
 	}
-	if !cfg.MetaTools {
-		t.Error("MetaTools should be true (answered y)")
+	if cfg.ToolSurface != "dynamic" || !cfg.MetaTools {
+		t.Errorf("ToolSurface = %q, MetaTools = %v; want dynamic/true", cfg.ToolSurface, cfg.MetaTools)
 	}
-	if !cfg.AutoUpdate {
-		t.Error("AutoUpdate should be true (answered y)")
+	if cfg.CapabilitySurface != "minimal" || cfg.MetaParamSchema != "compact" {
+		t.Errorf("catalog options not set: %#v", cfg)
+	}
+	if !cfg.Enterprise || !cfg.ReadOnly || !cfg.SafeMode || cfg.EmbeddedResources || !cfg.IgnoreScopes {
+		t.Errorf("boolean options not set: %#v", cfg)
+	}
+	if cfg.ExcludeTools != "gitlab_admin" || cfg.UploadMaxFileSize != "500MB" {
+		t.Errorf("text options not set: %#v", cfg)
+	}
+	if cfg.AutoUpdateMode != "check" || !cfg.AutoUpdate {
+		t.Errorf("AutoUpdateMode = %q, AutoUpdate = %v; want check/true", cfg.AutoUpdateMode, cfg.AutoUpdate)
+	}
+	if cfg.RateLimitRPS != "3.5" || cfg.RateLimitBurst != "12" {
+		t.Errorf("rate options not set: %#v", cfg)
 	}
 	if cfg.YoloMode {
 		t.Error("YoloMode should be false (answered n)")
@@ -377,7 +454,7 @@ func TestStepClients_SelectAll(t *testing.T) {
 // options enabled, covering the stepOptions branch.
 func TestRunCLI_AdvancedOptions(t *testing.T) {
 	useFakeClients(t)
-	stubWriteEnvFile(t)
+	envPath := stubWriteEnvFile(t)
 	stubLoadExistingConfig(t)
 
 	tmpDir := t.TempDir()
@@ -387,13 +464,26 @@ func TestRunCLI_AdvancedOptions(t *testing.T) {
 		installDir + string(os.PathSeparator) + DefaultBinaryName(),
 		"https://gitlab.example.com",
 		"glpat-xxxxxxxxxxxxxxxxxxxx",
-		"y", // yes to advanced options
-		"y", // skip TLS = yes
-		"y", // meta-tools = yes
-		"y", // auto-update = yes
-		"n", // yolo = no
-		"2", // log level = info
-		"a", // all clients
+		"y",            // yes to advanced options
+		"y",            // skip TLS
+		"3",            // tool surface = dynamic
+		"2",            // capability surface = minimal
+		"2",            // meta parameter schema = compact
+		"y",            // enterprise
+		"y",            // read-only
+		"y",            // safe mode
+		"n",            // embedded resources
+		"y",            // ignore scopes
+		"gitlab_admin", // exclude tools
+		"500MB",        // upload max file size
+		"2",            // auto-update mode = check
+		"example/repo", // auto-update repo
+		"90s",          // auto-update timeout
+		"3.5",          // rate limit RPS
+		"12",           // rate limit burst
+		"n",            // yolo
+		"2",            // log level = info
+		"a",            // all clients
 	}, "\n") + "\n"
 
 	r := strings.NewReader(input)
@@ -410,6 +500,28 @@ func TestRunCLI_AdvancedOptions(t *testing.T) {
 	}
 	if !strings.Contains(output, "Setup Complete") {
 		t.Error("expected 'Setup Complete' in output")
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("reading generated env file: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"TOOL_SURFACE=dynamic",
+		"CAPABILITY_SURFACE=minimal",
+		"META_PARAM_SCHEMA=compact",
+		"GITLAB_ENTERPRISE=true",
+		"GITLAB_READ_ONLY=true",
+		"GITLAB_SAFE_MODE=true",
+		"EMBEDDED_RESOURCES=false",
+		"EXCLUDE_TOOLS=gitlab_admin",
+		"AUTO_UPDATE=check",
+		"RATE_LIMIT_RPS=3.5",
+	} {
+		if !strings.Contains(content, want+"\n") {
+			t.Errorf("generated env file missing %q\ncontent:\n%s", want, content)
+		}
 	}
 }
 

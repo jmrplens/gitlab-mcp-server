@@ -150,49 +150,125 @@ func stepGitLabConfig(p *Prompter, w io.Writer, existing ServerConfig, hasExisti
 	fmt.Fprintln(w, "    Client config files will NOT contain your token.")
 	fmt.Fprintln(w)
 
-	skipTLS := false
+	cfg := DefaultServerConfig()
 	if hasExisting {
-		skipTLS = existing.SkipTLSVerify
+		cfg = existing.withDefaults()
 	}
+	cfg.GitLabURL = gitlabURL
+	cfg.GitLabToken = token
 
-	return &ServerConfig{
-		GitLabURL:     gitlabURL,
-		GitLabToken:   token,
-		SkipTLSVerify: skipTLS,
-		MetaTools:     true,
-		AutoUpdate:    true,
-		LogLevel:      "info",
-	}, nil
+	return &cfg, nil
 }
 
 func stepOptions(p *Prompter, w io.Writer, cfg *ServerConfig) error {
 	printSection(w, "Advanced Options")
+	*cfg = cfg.withDefaults()
 
-	skipTLS, err := p.AskYesNo("Skip TLS verification?", false)
+	skipTLS, err := p.AskYesNo("Skip TLS verification?", cfg.SkipTLSVerify)
 	if err != nil {
 		return err
 	}
 	cfg.SkipTLSVerify = skipTLS
 
-	metaTools, err := p.AskYesNo("Enable meta-tools?", true)
+	toolSurfaceIdx, err := p.AskChoiceDefault("Tool surface", ToolSurfaceOptions, choiceIndex(ToolSurfaceOptions, cfg.ToolSurface, 0))
 	if err != nil {
 		return err
 	}
-	cfg.MetaTools = metaTools
+	cfg.ToolSurface = ToolSurfaceOptions[toolSurfaceIdx]
+	cfg.MetaTools = cfg.ToolSurface != "individual"
 
-	autoUpdate, err := p.AskYesNo("Enable auto-update?", true)
+	capabilitySurfaceIdx, err := p.AskChoiceDefault("Capability surface", CapabilitySurfaceOptions, choiceIndex(CapabilitySurfaceOptions, cfg.CapabilitySurface, 0))
 	if err != nil {
 		return err
 	}
-	cfg.AutoUpdate = autoUpdate
+	cfg.CapabilitySurface = CapabilitySurfaceOptions[capabilitySurfaceIdx]
 
-	yolo, err := p.AskYesNo("Enable YOLO mode?", false)
+	metaParamSchemaIdx, err := p.AskChoiceDefault("Meta parameter schema", MetaParamSchemaOptions, choiceIndex(MetaParamSchemaOptions, cfg.MetaParamSchema, 0))
+	if err != nil {
+		return err
+	}
+	cfg.MetaParamSchema = MetaParamSchemaOptions[metaParamSchemaIdx]
+
+	enterprise, err := p.AskYesNo("Enable Enterprise/Premium catalog?", cfg.Enterprise)
+	if err != nil {
+		return err
+	}
+	cfg.Enterprise = enterprise
+
+	readOnly, err := p.AskYesNo("Enable read-only mode?", cfg.ReadOnly)
+	if err != nil {
+		return err
+	}
+	cfg.ReadOnly = readOnly
+
+	safeMode, err := p.AskYesNo("Enable safe mode previews?", cfg.SafeMode)
+	if err != nil {
+		return err
+	}
+	cfg.SafeMode = safeMode
+
+	embeddedResources, err := p.AskYesNo("Embed resource links in get results?", cfg.EmbeddedResources)
+	if err != nil {
+		return err
+	}
+	cfg.EmbeddedResources = embeddedResources
+
+	ignoreScopes, err := p.AskYesNo("Ignore PAT scope detection?", cfg.IgnoreScopes)
+	if err != nil {
+		return err
+	}
+	cfg.IgnoreScopes = ignoreScopes
+
+	excludeTools, err := p.AskStringDefault("Exclude tools (comma-separated)", cfg.ExcludeTools)
+	if err != nil {
+		return err
+	}
+	cfg.ExcludeTools = excludeTools
+
+	uploadMaxFileSize, err := p.AskStringDefault("Upload max file size", cfg.UploadMaxFileSize)
+	if err != nil {
+		return err
+	}
+	cfg.UploadMaxFileSize = uploadMaxFileSize
+
+	autoUpdateIdx, err := p.AskChoiceDefault("Auto-update mode", AutoUpdateModeOptions, choiceIndex(AutoUpdateModeOptions, cfg.AutoUpdateMode, 0))
+	if err != nil {
+		return err
+	}
+	cfg.AutoUpdateMode = AutoUpdateModeOptions[autoUpdateIdx]
+	cfg.AutoUpdate = cfg.AutoUpdateMode != "false"
+
+	autoUpdateRepo, err := p.AskStringDefault("Auto-update repository", cfg.AutoUpdateRepo)
+	if err != nil {
+		return err
+	}
+	cfg.AutoUpdateRepo = autoUpdateRepo
+
+	autoUpdateTimeout, err := p.AskStringDefault("Auto-update timeout", cfg.AutoUpdateTimeout)
+	if err != nil {
+		return err
+	}
+	cfg.AutoUpdateTimeout = autoUpdateTimeout
+
+	rateLimitRPS, err := p.AskStringDefault("Rate limit RPS", cfg.RateLimitRPS)
+	if err != nil {
+		return err
+	}
+	cfg.RateLimitRPS = rateLimitRPS
+
+	rateLimitBurst, err := p.AskStringDefault("Rate limit burst", cfg.RateLimitBurst)
+	if err != nil {
+		return err
+	}
+	cfg.RateLimitBurst = rateLimitBurst
+
+	yolo, err := p.AskYesNo("Enable YOLO mode?", cfg.YoloMode)
 	if err != nil {
 		return err
 	}
 	cfg.YoloMode = yolo
 
-	logIdx, err := p.AskChoice("Log level", LogLevelOptions)
+	logIdx, err := p.AskChoiceDefault("Log level", LogLevelOptions, choiceIndex(LogLevelOptions, cfg.LogLevel, 1))
 	if err != nil {
 		return err
 	}

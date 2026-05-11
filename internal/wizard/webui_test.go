@@ -7,13 +7,47 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
+
+// jsonTagsFromStruct extracts all JSON field names from a struct type using
+// reflection. It strips tag options such as ",omitempty".
+func jsonTagsFromStruct(t *testing.T, v any) map[string]bool {
+	t.Helper()
+	rt := reflect.TypeOf(v)
+	tags := make(map[string]bool)
+	for f := range rt.Fields() {
+		tag := f.Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		tags[name] = true
+	}
+	return tags
+}
+
+// loadEmbeddedHTML returns the embedded index.html content as a string.
+func loadEmbeddedHTML(t *testing.T) string {
+	t.Helper()
+	data, err := webAssets.ReadFile("webui_assets/index.html")
+	if err != nil {
+		t.Fatalf("reading embedded HTML: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("embedded HTML is empty")
+	}
+	return string(data)
+}
 
 // TestServeIndex verifies that the embedded index.html is served with the
 // correct content type and a non-empty HTML body.
@@ -302,21 +336,36 @@ func TestHandleConfigure_InvalidLogLevel(t *testing.T) {
 // TestHandleConfigure_ValidRequest verifies successful configure flow with
 // empty selected_clients (no file writes needed).
 func TestHandleConfigure_ValidRequest(t *testing.T) {
-	stubWriteEnvFile(t)
+	envPath := stubWriteEnvFile(t)
 
 	var output bytes.Buffer
 	doneCh := make(chan error, 1)
 	handler := handleConfigure(&output, func(err error) { doneCh <- err })
 
 	reqBody := configureRequest{
-		InstallPath:     t.TempDir(),
-		GitLabURL:       "https://gitlab.example.com",
-		GitLabToken:     "glpat-xxxxxxxxxxxxxxxxxxxx",
-		SkipTLSVerify:   true,
-		MetaTools:       true,
-		AutoUpdate:      true,
-		LogLevel:        "debug",
-		SelectedClients: []int{},
+		InstallPath:       t.TempDir(),
+		GitLabURL:         "https://gitlab.example.com",
+		GitLabToken:       "glpat-xxxxxxxxxxxxxxxxxxxx",
+		SkipTLSVerify:     true,
+		MetaTools:         true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdate:        true,
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/repo",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		SelectedClients:   []int{},
 	}
 	body, mErr := json.Marshal(reqBody)
 	if mErr != nil {
@@ -347,6 +396,28 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 		}
 	default:
 		t.Error("onDone callback was not called")
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("reading generated env file: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"TOOL_SURFACE=dynamic",
+		"CAPABILITY_SURFACE=minimal",
+		"META_PARAM_SCHEMA=compact",
+		"GITLAB_ENTERPRISE=true",
+		"GITLAB_READ_ONLY=true",
+		"GITLAB_SAFE_MODE=true",
+		"EMBEDDED_RESOURCES=false",
+		"EXCLUDE_TOOLS=gitlab_admin",
+		"AUTO_UPDATE=check",
+		"RATE_LIMIT_RPS=3.5",
+	} {
+		if !strings.Contains(content, want+"\n") {
+			t.Errorf("generated env file missing %q\ncontent:\n%s", want, content)
+		}
 	}
 }
 
@@ -682,9 +753,26 @@ func TestServeIndex_ContainsHTML(t *testing.T) {
 // masked token when a previous configuration is loaded.
 func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 	stubLoadExistingConfigWith(t, ServerConfig{
-		GitLabURL:     "https://existing.example.com",
-		GitLabToken:   "glpat-existing-token",
-		SkipTLSVerify: true,
+		GitLabURL:         "https://existing.example.com",
+		GitLabToken:       "glpat-existing-token",
+		SkipTLSVerify:     true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/repo",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		YoloMode:          true,
 	})
 	stubGetInstalledVersion(t, "")
 	handler := handleDefaults("2.0.0-test")
@@ -713,6 +801,15 @@ func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 	wantMasked := MaskToken("glpat-existing-token")
 	if resp.MaskedToken != wantMasked {
 		t.Errorf("MaskedToken = %q, want %q", resp.MaskedToken, wantMasked)
+	}
+	if resp.ToolSurface != "dynamic" || resp.CapabilitySurface != "minimal" || resp.MetaParamSchema != "compact" {
+		t.Errorf("catalog defaults not returned from existing config: %#v", resp)
+	}
+	if !resp.Enterprise || !resp.ReadOnly || !resp.SafeMode || resp.EmbeddedResources || !resp.IgnoreScopes || !resp.YoloMode {
+		t.Errorf("boolean defaults not returned from existing config: %#v", resp)
+	}
+	if resp.ExcludeTools != "gitlab_admin" || resp.AutoUpdateMode != "check" || resp.RateLimitRPS != "3.5" {
+		t.Errorf("text/mode defaults not returned from existing config: %#v", resp)
 	}
 }
 
@@ -832,5 +929,319 @@ func TestHandleDefaults_VersionTrimPrefix(t *testing.T) {
 
 	if resp.Version != "2.0.0" {
 		t.Errorf("Version = %q, want %q (v prefix should be stripped)", resp.Version, "2.0.0")
+	}
+}
+
+// TestWebUI_ElementIDs_ReferencedInJS_ExistInHTML verifies that every
+// document.getElementById call in the JavaScript has a matching id attribute
+// in the HTML markup.
+func TestWebUI_ElementIDs_ReferencedInJS_ExistInHTML(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	jsIDPattern := regexp.MustCompile(`getElementById\(['"]([^'"]+)['"]\)`)
+	jsMatches := jsIDPattern.FindAllStringSubmatch(html, -1)
+	if len(jsMatches) == 0 {
+		t.Fatal("no getElementById calls found in HTML")
+	}
+
+	jsIDs := make(map[string]bool)
+	for _, match := range jsMatches {
+		jsIDs[match[1]] = true
+	}
+
+	htmlIDPattern := regexp.MustCompile(`id="([^"]+)"`)
+	htmlMatches := htmlIDPattern.FindAllStringSubmatch(html, -1)
+	htmlIDs := make(map[string]bool)
+	for _, match := range htmlMatches {
+		htmlIDs[match[1]] = true
+	}
+
+	var missing []string
+	for id := range jsIDs {
+		if !htmlIDs[id] {
+			missing = append(missing, id)
+		}
+	}
+	sort.Strings(missing)
+
+	if len(missing) > 0 {
+		t.Errorf("JavaScript references %d element ID(s) not found in HTML: %v", len(missing), missing)
+	}
+}
+
+// TestWebUI_APIEndpoints_InJS_MatchGoHandlers verifies every fetch('/api/...')
+// call in JavaScript targets an endpoint registered by RunWebUI.
+func TestWebUI_APIEndpoints_InJS_MatchGoHandlers(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	fetchPattern := regexp.MustCompile(`fetch\(['"](/api/[^'"]+)['"]\s*[,)]`)
+	fetchMatches := fetchPattern.FindAllStringSubmatch(html, -1)
+	if len(fetchMatches) == 0 {
+		t.Fatal("no fetch('/api/...') calls found in HTML")
+	}
+
+	jsEndpoints := make(map[string]bool)
+	for _, match := range fetchMatches {
+		jsEndpoints[match[1]] = true
+	}
+
+	goEndpoints := map[string]bool{
+		"/api/defaults":       true,
+		"/api/pick-directory": true,
+		"/api/configure":      true,
+	}
+
+	for endpoint := range jsEndpoints {
+		if !goEndpoints[endpoint] {
+			t.Errorf("JavaScript fetches %q but no Go handler is registered for it", endpoint)
+		}
+	}
+
+	for endpoint := range goEndpoints {
+		if !jsEndpoints[endpoint] {
+			t.Errorf("Go handler %q is registered but never called from JavaScript", endpoint)
+		}
+	}
+}
+
+// TestWebUI_DefaultsJSONFields_UsedInJS verifies JavaScript reads only JSON
+// fields defined by defaultsResponse and clientResponse.
+func TestWebUI_DefaultsJSONFields_UsedInJS(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	scriptStart := strings.Index(html, "<script")
+	scriptEnd := strings.LastIndex(html, "</script>")
+	if scriptStart < 0 || scriptEnd < 0 {
+		t.Fatal("cannot find <script> block in HTML")
+	}
+	jsCode := html[scriptStart:scriptEnd]
+
+	fieldPattern := regexp.MustCompile(`defaults\.([a-z_]+)`)
+	fieldMatches := fieldPattern.FindAllStringSubmatch(jsCode, -1)
+	if len(fieldMatches) == 0 {
+		t.Fatal("no defaults.X field accesses found in JavaScript")
+	}
+
+	jsFields := make(map[string]bool)
+	for _, match := range fieldMatches {
+		jsFields[match[1]] = true
+	}
+
+	goFields := jsonTagsFromStruct(t, defaultsResponse{})
+	maps.Copy(goFields, jsonTagsFromStruct(t, clientResponse{}))
+
+	var unknown []string
+	for field := range jsFields {
+		if !goFields[field] {
+			unknown = append(unknown, field)
+		}
+	}
+	sort.Strings(unknown)
+
+	if len(unknown) > 0 {
+		t.Errorf("JavaScript reads %d defaults field(s) not in Go struct: %v", len(unknown), unknown)
+	}
+}
+
+// TestWebUI_ConfigureRequestFields_InJS_MatchGoStruct verifies the JSON body
+// sent by configure() contains exactly the fields expected by configureRequest.
+func TestWebUI_ConfigureRequestFields_InJS_MatchGoStruct(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	bodyStart := strings.Index(html, "const body = {")
+	if bodyStart < 0 {
+		t.Fatal("cannot find 'const body = {' in HTML")
+	}
+
+	depth := 0
+	bodyEnd := -1
+	for i := bodyStart + len("const body = "); i < len(html); i++ {
+		switch html[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				bodyEnd = i + 1
+			}
+		}
+		if bodyEnd > 0 {
+			break
+		}
+	}
+	if bodyEnd < 0 {
+		t.Fatal("cannot find closing brace for body object in configure()")
+	}
+
+	bodyBlock := html[bodyStart:bodyEnd]
+	jsFieldPattern := regexp.MustCompile(`(?m)^\s+([a-z_]+)\s*:`)
+	jsFieldMatches := jsFieldPattern.FindAllStringSubmatch(bodyBlock, -1)
+	if len(jsFieldMatches) == 0 {
+		t.Fatal("no fields found in JavaScript body object")
+	}
+
+	jsFields := make(map[string]bool)
+	for _, match := range jsFieldMatches {
+		jsFields[match[1]] = true
+	}
+
+	goFields := jsonTagsFromStruct(t, configureRequest{})
+
+	var jsOnly []string
+	for field := range jsFields {
+		if !goFields[field] {
+			jsOnly = append(jsOnly, field)
+		}
+	}
+	sort.Strings(jsOnly)
+	if len(jsOnly) > 0 {
+		t.Errorf("JavaScript sends %d field(s) not in Go configureRequest: %v", len(jsOnly), jsOnly)
+	}
+
+	var goOnly []string
+	for field := range goFields {
+		if !jsFields[field] {
+			goOnly = append(goOnly, field)
+		}
+	}
+	sort.Strings(goOnly)
+	if len(goOnly) > 0 {
+		t.Errorf("Go configureRequest has %d field(s) not sent by JavaScript: %v", len(goOnly), goOnly)
+	}
+}
+
+// TestWebUI_Buttons_HaveProperStructure verifies every JavaScript-bound button
+// has the expected id, class, closing tag, and visible text content.
+func TestWebUI_Buttons_HaveProperStructure(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	requiredButtons := []struct {
+		id    string
+		class string
+	}{
+		{id: "browseBtn", class: "btn-browse"},
+		{id: "selectAllBtn", class: "select-all-btn"},
+		{id: "configureBtn", class: "btn-primary"},
+		{id: "closeBtn", class: "btn-primary"},
+	}
+
+	for _, button := range requiredButtons {
+		t.Run(button.id, func(t *testing.T) {
+			idAttr := `id="` + button.id + `"`
+			if !strings.Contains(html, idAttr) {
+				t.Fatalf("button id=%q not found in HTML", button.id)
+			}
+
+			buttonPattern := regexp.MustCompile(`<button[^>]*id="` + regexp.QuoteMeta(button.id) + `"[^>]*>(.*?)</button>`)
+			match := buttonPattern.FindStringSubmatch(html)
+			if match == nil {
+				t.Fatalf("button id=%q is missing closing </button> tag or has malformed markup", button.id)
+			}
+
+			textContent := strings.TrimSpace(match[1])
+			if textContent == "" {
+				t.Errorf("button id=%q has no visible text content", button.id)
+			}
+
+			fullTag := match[0]
+			if !strings.Contains(fullTag, button.class) {
+				t.Errorf("button id=%q missing expected class %q in: %s", button.id, button.class, fullTag)
+			}
+		})
+	}
+}
+
+// TestWebUI_InstalledVersion_ElementExists verifies the HTML contains the
+// installedVersion element that JavaScript populates with version info.
+func TestWebUI_InstalledVersion_ElementExists(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+
+	if !strings.Contains(html, `id="installedVersion"`) {
+		t.Error("HTML is missing the installedVersion element needed for showing the installed binary version")
+	}
+}
+
+// TestWebUI_StdioWizard_HidesHTTPOnlyOptions verifies the setup wizard does
+// not expose options that only affect HTTP transport mode.
+func TestWebUI_StdioWizard_HidesHTTPOnlyOptions(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+	httpOnlyIDs := []string{
+		"optMaxHttpClients",
+		"optSessionTimeout",
+		"optRevalidateInterval",
+		"optAutoUpdateInterval",
+		"optAuthMode",
+		"optOauthCacheTTL",
+	}
+	for _, id := range httpOnlyIDs {
+		if strings.Contains(html, `id="`+id+`"`) || strings.Contains(html, `getElementById('`+id+`')`) {
+			t.Errorf("web wizard should not expose HTTP-only option %q", id)
+		}
+	}
+
+	httpOnlyFields := []string{
+		"max_http_clients",
+		"session_timeout",
+		"revalidate_interval",
+		"auto_update_interval",
+		"auth_mode",
+		"oauth_cache_ttl",
+	}
+	defaultsFields := jsonTagsFromStruct(t, defaultsResponse{})
+	configureFields := jsonTagsFromStruct(t, configureRequest{})
+	for _, field := range httpOnlyFields {
+		if defaultsFields[field] {
+			t.Errorf("defaultsResponse should not expose HTTP-only field %q", field)
+		}
+		if configureFields[field] {
+			t.Errorf("configureRequest should not accept HTTP-only field %q", field)
+		}
+	}
+}
+
+// TestWebUI_AdvancedOptions_HaveHelpButtons verifies every visible advanced
+// option has a question-mark help button with a tooltip description.
+func TestWebUI_AdvancedOptions_HaveHelpButtons(t *testing.T) {
+	html := loadEmbeddedHTML(t)
+	if !strings.Contains(html, `id="advancedTooltip"`) || !strings.Contains(html, `role="tooltip"`) {
+		t.Fatal("HTML is missing the shared advanced tooltip element")
+	}
+	if !strings.Contains(html, "function initTooltips()") {
+		t.Fatal("HTML is missing custom tooltip initialization")
+	}
+
+	expectedHelp := []string{
+		"Skip TLS verification help",
+		"Tool surface help",
+		"Capability surface help",
+		"Meta parameter schema help",
+		"Enterprise/Premium catalog help",
+		"Read-only mode help",
+		"Safe mode previews help",
+		"Embedded resources help",
+		"Ignore PAT scopes help",
+		"Excluded tools help",
+		"Upload max file size help",
+		"Auto-update mode help",
+		"Auto-update repository help",
+		"Auto-update timeout help",
+		"Rate limit RPS help",
+		"Rate limit burst help",
+		"YOLO mode help",
+		"Log level help",
+	}
+	for _, label := range expectedHelp {
+		if !strings.Contains(html, `aria-label="`+label+`"`) {
+			t.Errorf("advanced option missing help button %q", label)
+		}
+	}
+	if strings.Count(html, `class="help-btn"`) != len(expectedHelp) {
+		t.Errorf("help button count = %d, want %d", strings.Count(html, `class="help-btn"`), len(expectedHelp))
+	}
+	if strings.Count(html, `class="help-btn"`) != strings.Count(html, `data-tooltip="`) {
+		t.Error("each help button should carry a custom data-tooltip description")
+	}
+	if strings.Contains(html, `class="help-btn"`) && strings.Contains(html, `title="`) {
+		t.Error("help buttons should not rely on native title tooltips")
 	}
 }

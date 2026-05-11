@@ -47,9 +47,9 @@ func TestWriteEnvFile_CreatesFile(t *testing.T) {
 	}
 }
 
-// TestWriteEnvFile_OmitsSkipTLS verifies writeEnvFileToPath does not emit
-// a GITLAB_SKIP_TLS_VERIFY line when SkipTLSVerify is false.
-func TestWriteEnvFile_OmitsSkipTLS(t *testing.T) {
+// TestWriteEnvFile_WritesFalseSkipTLS verifies writeEnvFileToPath records
+// GITLAB_SKIP_TLS_VERIFY=false so the generated env file is explicit.
+func TestWriteEnvFile_WritesFalseSkipTLS(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
 
@@ -64,8 +64,79 @@ func TestWriteEnvFile_OmitsSkipTLS(t *testing.T) {
 	}
 
 	data, _ := os.ReadFile(path)
-	if strings.Contains(string(data), "GITLAB_SKIP_TLS_VERIFY") {
-		t.Error("should not contain GITLAB_SKIP_TLS_VERIFY when false")
+	if !strings.Contains(string(data), "GITLAB_SKIP_TLS_VERIFY=false") {
+		t.Error("should contain GITLAB_SKIP_TLS_VERIFY=false when false")
+	}
+}
+
+// TestWriteEnvFile_WritesAdvancedOptions verifies every advanced wizard
+// setting selected by a user is persisted to the generated env file.
+func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	cfg := ServerConfig{
+		GitLabURL:         "https://gitlab.example.com",
+		GitLabToken:       "glpat-abc123",
+		SkipTLSVerify:     true,
+		MetaTools:         true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin,gitlab_runner",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdate:        true,
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/gitlab-mcp-server",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		YoloMode:          true,
+	}
+
+	if _, err := writeEnvFileToPath(path, cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading file: %v", err)
+	}
+	content := string(data)
+
+	expected := []string{
+		"GITLAB_URL=https://gitlab.example.com",
+		"GITLAB_TOKEN=glpat-abc123",
+		"GITLAB_SKIP_TLS_VERIFY=true",
+		"META_TOOLS=true",
+		"TOOL_SURFACE=dynamic",
+		"CAPABILITY_SURFACE=minimal",
+		"META_PARAM_SCHEMA=compact",
+		"GITLAB_ENTERPRISE=true",
+		"GITLAB_READ_ONLY=true",
+		"GITLAB_SAFE_MODE=true",
+		"EMBEDDED_RESOURCES=false",
+		"EXCLUDE_TOOLS=gitlab_admin,gitlab_runner",
+		"GITLAB_IGNORE_SCOPES=true",
+		"UPLOAD_MAX_FILE_SIZE=500MB",
+		"AUTO_UPDATE=check",
+		"AUTO_UPDATE_REPO=example/gitlab-mcp-server",
+		"AUTO_UPDATE_TIMEOUT=90s",
+		"RATE_LIMIT_RPS=3.5",
+		"RATE_LIMIT_BURST=12",
+		"LOG_LEVEL=debug",
+		"YOLO_MODE=true",
+	}
+	for _, line := range expected {
+		if !strings.Contains(content, line+"\n") {
+			t.Errorf("env file missing line %q\ncontent:\n%s", line, content)
+		}
 	}
 }
 
@@ -92,7 +163,24 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	content := "# gitlab-mcp-server config\n" +
 		"GITLAB_URL=https://gitlab.example.com\n" +
 		"GITLAB_TOKEN=glpat-abc123def456\n" +
-		"GITLAB_SKIP_TLS_VERIFY=true\n"
+		"GITLAB_SKIP_TLS_VERIFY=true\n" +
+		"TOOL_SURFACE=dynamic\n" +
+		"CAPABILITY_SURFACE=minimal\n" +
+		"META_PARAM_SCHEMA=full\n" +
+		"GITLAB_ENTERPRISE=true\n" +
+		"GITLAB_READ_ONLY=true\n" +
+		"GITLAB_SAFE_MODE=true\n" +
+		"EMBEDDED_RESOURCES=false\n" +
+		"EXCLUDE_TOOLS=gitlab_admin\n" +
+		"GITLAB_IGNORE_SCOPES=true\n" +
+		"UPLOAD_MAX_FILE_SIZE=500MB\n" +
+		"AUTO_UPDATE=check\n" +
+		"AUTO_UPDATE_REPO=example/repo\n" +
+		"AUTO_UPDATE_TIMEOUT=90s\n" +
+		"RATE_LIMIT_RPS=3.5\n" +
+		"RATE_LIMIT_BURST=12\n" +
+		"LOG_LEVEL=debug\n" +
+		"YOLO_MODE=true\n"
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatalf("writing test file: %v", err)
@@ -110,6 +198,18 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	}
 	if !cfg.SkipTLSVerify {
 		t.Error("SkipTLSVerify should be true")
+	}
+	if cfg.ToolSurface != "dynamic" || cfg.CapabilitySurface != "minimal" || cfg.MetaParamSchema != "full" {
+		t.Errorf("catalog options not parsed: %#v", cfg)
+	}
+	if !cfg.Enterprise || !cfg.ReadOnly || !cfg.SafeMode || cfg.EmbeddedResources || !cfg.IgnoreScopes || !cfg.YoloMode {
+		t.Errorf("boolean advanced options not parsed: %#v", cfg)
+	}
+	if cfg.ExcludeTools != "gitlab_admin" || cfg.UploadMaxFileSize != "500MB" {
+		t.Errorf("text advanced options not parsed: %#v", cfg)
+	}
+	if cfg.AutoUpdateMode != "check" || cfg.AutoUpdateRepo != "example/repo" || cfg.RateLimitRPS != "3.5" {
+		t.Errorf("mode advanced options not parsed: %#v", cfg)
 	}
 }
 

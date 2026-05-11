@@ -5,6 +5,7 @@ package wizard
 import (
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,6 +50,48 @@ func TestNewTUIModel_DefaultGitLabURL(t *testing.T) {
 	m := newTestModel(t)
 	if m.urlInput.Value() != DefaultGitLabURL {
 		t.Fatalf("urlInput value = %q, want %q", m.urlInput.Value(), DefaultGitLabURL)
+	}
+}
+
+// TestNewTUIModel_WithExistingAdvancedOptions verifies the TUI initializes
+// advanced controls from a previously saved wizard configuration.
+func TestNewTUIModel_WithExistingAdvancedOptions(t *testing.T) {
+	stubLoadExistingConfigWith(t, ServerConfig{
+		GitLabURL:         "https://existing.gitlab.com",
+		GitLabToken:       "glpat-existingtoken12345678",
+		SkipTLSVerify:     true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/repo",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		YoloMode:          true,
+	})
+
+	m := newTUIModel("1.0.0", io.Discard)
+
+	if m.urlInput.Value() != "https://existing.gitlab.com" || m.tokenInput.Value() != "glpat-existingtoken12345678" {
+		t.Errorf("connection fields not prefilled: url=%q token=%q", m.urlInput.Value(), m.tokenInput.Value())
+	}
+	if ToolSurfaceOptions[m.optToolSurface] != "dynamic" || CapabilitySurfaceOptions[m.optCapabilitySurface] != "minimal" || MetaParamSchemaOptions[m.optMetaParamSchema] != "compact" {
+		t.Errorf("catalog controls not prefilled: %#v", m)
+	}
+	if !m.optSkipTLS || !m.optEnterprise || !m.optReadOnly || !m.optSafeMode || m.optEmbeddedResources || !m.optIgnoreScopes || !m.optYolo {
+		t.Errorf("boolean controls not prefilled: %#v", m)
+	}
+	if m.optExcludeTools != "gitlab_admin" || m.optAutoUpdateRepo != "example/repo" || m.optRateLimitRPS != "3.5" {
+		t.Errorf("text/mode controls not prefilled: %#v", m)
 	}
 }
 
@@ -453,17 +496,17 @@ func TestUpdateOptions_Navigation(t *testing.T) {
 }
 
 // TestUpdateOptions_ToggleAll uses table-driven subtests to verify Space
-// toggles each advanced option (skipTLS, meta-tools, auto-update, YOLO).
+// toggles representative boolean advanced options.
 func TestUpdateOptions_ToggleAll(t *testing.T) {
 	tests := []struct {
 		cursor int
 		field  func(tuiModel) bool
 		name   string
 	}{
-		{0, func(m tuiModel) bool { return m.optSkipTLS }, "skipTLS"},
-		{1, func(m tuiModel) bool { return m.optMeta }, "meta"},
-		{2, func(m tuiModel) bool { return m.optAutoUpd }, "autoUpdate"},
-		{3, func(m tuiModel) bool { return m.optYolo }, "yolo"},
+		{tuiOptSkipTLS, func(m tuiModel) bool { return m.optSkipTLS }, "skipTLS"},
+		{tuiOptEnterprise, func(m tuiModel) bool { return m.optEnterprise }, "enterprise"},
+		{tuiOptSafeMode, func(m tuiModel) bool { return m.optSafeMode }, "safeMode"},
+		{tuiOptYolo, func(m tuiModel) bool { return m.optYolo }, "yolo"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -485,7 +528,7 @@ func TestUpdateOptions_ToggleAll(t *testing.T) {
 func TestUpdateOptions_LogLevelCycles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 4
+	m.optCursor = tuiOptLogLevel
 	m.optLogLevel = 0
 
 	result, _ := m.Update(keyMsg(tea.KeySpace))
@@ -532,7 +575,7 @@ func TestUpdateOptions_KJ_NavigatesUpDown(t *testing.T) {
 func TestUpdateOptions_X_Toggles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 3 // YOLO
+	m.optCursor = tuiOptYolo
 	before := m.optYolo
 
 	result, _ := m.Update(runeMsg('x'))
@@ -547,12 +590,12 @@ func TestUpdateOptions_X_Toggles(t *testing.T) {
 func TestUpdateOptions_DownAtMax_StaysAtMax(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 4
+	m.optCursor = tuiOptionCount - 1
 
 	result, _ := m.Update(keyMsg(tea.KeyDown))
 	final := result.(tuiModel)
-	if final.optCursor != 4 {
-		t.Errorf("expected optCursor=4 at max, got %d", final.optCursor)
+	if final.optCursor != tuiOptionCount-1 {
+		t.Errorf("expected optCursor=%d at max, got %d", tuiOptionCount-1, final.optCursor)
 	}
 }
 
@@ -930,8 +973,8 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 		t.Error("expected showAdvanced=true")
 	}
 
-	// Toggle YOLO (cursor → 3, then space)
-	m.optCursor = 3
+	// Toggle YOLO, then continue.
+	m.optCursor = tuiOptYolo
 	result, _ = m.Update(keyMsg(tea.KeySpace))
 	m = result.(tuiModel)
 	if !m.optYolo {
@@ -953,6 +996,55 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Error("expected tea.Quit")
+	}
+}
+
+// TestBuildResult_PreservesAdvancedOptions verifies the TUI result carries
+// every advanced option into the shared ServerConfig used by Apply.
+func TestBuildResult_PreservesAdvancedOptions(t *testing.T) {
+	stubInstallBinary(t)
+
+	m := newTestModel(t)
+	m.installInput.SetValue(filepath.Join(t.TempDir(), DefaultBinaryName()))
+	m.urlInput.SetValue("https://gitlab.example.com")
+	m.tokenInput.SetValue("glpat-tui-test")
+	m.optSkipTLS = true
+	m.optToolSurface = 2
+	m.optMeta = true
+	m.optCapabilitySurface = 1
+	m.optMetaParamSchema = 1
+	m.optEnterprise = true
+	m.optReadOnly = true
+	m.optSafeMode = true
+	m.optEmbeddedResources = false
+	m.optExcludeTools = "gitlab_admin"
+	m.optIgnoreScopes = true
+	m.optUploadMaxFileSize = "500MB"
+	m.optAutoUpd = true
+	m.optAutoUpdateMode = 1
+	m.optAutoUpdateRepo = "example/repo"
+	m.optAutoUpdateTimeout = "90s"
+	m.optRateLimitRPS = "3.5"
+	m.optRateLimitBurst = "12"
+	m.optYolo = true
+	m.optLogLevel = 0
+
+	m.buildResult()
+	if m.result == nil {
+		t.Fatal("expected buildResult to set result")
+	}
+	cfg := m.result.Config
+	if cfg.ToolSurface != "dynamic" || cfg.CapabilitySurface != "minimal" || cfg.MetaParamSchema != "compact" {
+		t.Errorf("catalog options not preserved: %#v", cfg)
+	}
+	if !cfg.SkipTLSVerify || !cfg.Enterprise || !cfg.ReadOnly || !cfg.SafeMode || cfg.EmbeddedResources || !cfg.IgnoreScopes || !cfg.YoloMode {
+		t.Errorf("boolean advanced options not preserved: %#v", cfg)
+	}
+	if cfg.ExcludeTools != "gitlab_admin" || cfg.UploadMaxFileSize != "500MB" {
+		t.Errorf("text advanced options not preserved: %#v", cfg)
+	}
+	if cfg.AutoUpdateMode != "check" || cfg.RateLimitRPS != "3.5" || cfg.RateLimitBurst != "12" {
+		t.Errorf("mode/rate options not preserved: %#v", cfg)
 	}
 }
 
