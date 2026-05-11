@@ -18,26 +18,26 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,525 |
-| Unit test functions | 9,278 |
+| Total test functions | 9,531 |
+| Unit test functions | 9,284 |
 | E2E test functions | 247 |
 | cmd test functions | 398 |
-| Test files (internal/) | 405 |
+| Test files (internal/) | 404 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 165 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.4% |
-| Overall coverage (`go test ./internal/...`) | 96.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.3% |
+| Overall coverage (`go test ./internal/...`) | 96.7% |
 | Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,547 | 89.7% |
+| `TestFunc_Scenario` (2-part) | 8,551 | 89.7% |
 | `TestFunc` (no underscore) | 696 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 282 | 3.0% |
+| `TestFunc_Scenario_Expected` (3+ part) | 284 | 3.0% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,553 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,559 | 83 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (165) | 7,094 | 313 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 398 | 13 | server entry point and developer command utilities |
-| **Total** | **9,525** | **527** |  |
+| **Total** | **9,531** | **526** |  |
 
 ### Core Packages
 
@@ -71,8 +71,8 @@
 | serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 369 | 92.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
-| wizard | 207 | 83.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,553** |  |  |
+| wizard | 213 | 81.2% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
+| **Subtotal** | **1,559** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -316,7 +316,7 @@
 | serverpool | 99.6% |
 | testutil | 60.9% |
 | toolutil | 92.7% |
-| wizard | 83.1% |
+| wizard | 81.2% |
 
 ### Tool Sub-Packages
 
@@ -503,7 +503,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (77.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **wizard** (83.1%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
+- **wizard** (81.2%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.
 
 <!-- END TESTING STATS -->
