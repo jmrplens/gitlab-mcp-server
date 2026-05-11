@@ -26,8 +26,8 @@
 A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as MCP tools, resources, and prompts for AI assistants. Single static binary — zero dependencies.
 
 > **Security first**: Continuously monitored on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) with quality gates, coverage, and security scanning. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
-
-**Repository mirror**: GitHub is the canonical repository. A read-only mirror is available on [GitLab.com](https://gitlab.com/jmrp/gitlab-mcp-server) for discoverability; please open code contributions on GitHub.
+>
+> **Repository mirror**: GitHub is the canonical repository. A read-only mirror of the code and releases is available on [GitLab.com](https://gitlab.com/jmrp/gitlab-mcp-server) for discoverability; please open code contributions on GitHub.
 
 ## Token Footprint
 

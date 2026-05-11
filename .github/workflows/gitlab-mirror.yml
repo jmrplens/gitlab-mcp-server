@@ -28,6 +28,8 @@ concurrency:
 env:
   GITLAB_MIRROR_REPO: git@gitlab.com:jmrp/gitlab-mcp-server.git
   GITLAB_PROJECT_ID: "82077663"
+  # Pinned from https://docs.gitlab.com/user/gitlab_com/#ssh-known_hosts-entries
+  GITLAB_KNOWN_HOSTS: "gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfuCHKVTjquxvt6CM6tdG4SLp1Btn/nOeHHE5UOzRdf"
 
 jobs:
   repository:
@@ -40,11 +42,20 @@ jobs:
           GITLAB_MIRROR_SSH_KEY: ${{ secrets.GITLAB_MIRROR_SSH_KEY }}
         run: |
           set -euo pipefail
+          if [ -z "$GITLAB_MIRROR_SSH_KEY" ]; then
+            echo "::error::GITLAB_MIRROR_SSH_KEY secret is empty or missing"
+            exit 1
+          fi
+          if [ -z "$GITLAB_KNOWN_HOSTS" ]; then
+            echo "::error::GITLAB_KNOWN_HOSTS is empty or missing"
+            exit 1
+          fi
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
           printf '%s\n' "$GITLAB_MIRROR_SSH_KEY" > "$HOME/.ssh/gitlab_mirror"
           chmod 600 "$HOME/.ssh/gitlab_mirror"
-          ssh-keyscan -H gitlab.com >> "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$GITLAB_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
 
       - name: Push branches and tags to GitLab
         env:
@@ -76,6 +87,11 @@ jobs:
       - name: Sync GitHub releases to GitLab links
         run: |
           set -euo pipefail
+
+          if [ -z "$GITLAB_API_TOKEN" ]; then
+            echo "::error::GITLAB_API_TOKEN secret is empty or missing"
+            exit 1
+          fi
 
           gitlab_api="https://gitlab.com/api/v4/projects/${GITLAB_PROJECT_ID}"
 
@@ -127,7 +143,39 @@ jobs:
             fi
           }
 
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
+          delete_stale_links() {
+            local tag_encoded="$1"
+            local desired_links="$2"
+            local current_links
+            local link
+            local link_id
+            local link_name
+            declare -A desired_names=()
+            declare -A seen_names=()
+
+            while IFS= read -r link_name; do
+              desired_names["$link_name"]=1
+            done < <(jq -r '.[].name' <<<"$desired_links")
+
+            current_links=$(curl --fail --show-error --silent \
+              --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+              "${gitlab_api}/releases/${tag_encoded}/assets/links")
+
+            while IFS= read -r link; do
+              link_id=$(jq -r '.id' <<<"$link")
+              link_name=$(jq -r '.name' <<<"$link")
+              if [ -z "${desired_names[$link_name]+x}" ] || [ -n "${seen_names[$link_name]+x}" ]; then
+                curl --fail --show-error --silent \
+                  --request DELETE \
+                  --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+                  "${gitlab_api}/releases/${tag_encoded}/assets/links/${link_id}" >/dev/null
+              else
+                seen_names["$link_name"]=1
+              fi
+            done < <(jq -c '.[]' <<<"$current_links")
+          }
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft == false) | .tag_name' |
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
             release_json=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
@@ -163,15 +211,17 @@ jobs:
             existing_links=$(curl --fail --show-error --silent \
               --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
               "${gitlab_api}/releases/${tag_encoded}/assets/links")
-            sync_link "$tag_encoded" "$existing_links" "GitHub Release" "$(jq -r '.url' <<<"$release_json")" "other"
+            desired_links=$(jq -c '[{name: "GitHub Release", url: .url, link_type: "other"}] + [.assets[]? | {name: .name, url: .url, link_type: "package"}]' <<<"$release_json")
 
-            jq -c '.assets[]?' <<<"$release_json" |
-            while IFS= read -r asset; do
-              asset_name=$(jq -r '.name' <<<"$asset")
-              asset_url=$(jq -r '.url' <<<"$asset")
-              [ -n "$asset_name" ] && [ -n "$asset_url" ] || continue
-              sync_link "$tag_encoded" "$existing_links" "$asset_name" "$asset_url" "package"
+            jq -c '.[]' <<<"$desired_links" |
+            while IFS= read -r link; do
+              link_name=$(jq -r '.name' <<<"$link")
+              link_url=$(jq -r '.url' <<<"$link")
+              link_type=$(jq -r '.link_type' <<<"$link")
+              [ -n "$link_name" ] && [ -n "$link_url" ] || continue
+              sync_link "$tag_encoded" "$existing_links" "$link_name" "$link_url" "$link_type"
             done
+            delete_stale_links "$tag_encoded" "$desired_links"
 
             echo "Synced GitLab release links for ${tag}"
           done
