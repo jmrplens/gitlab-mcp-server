@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -91,14 +92,31 @@ func serveIndex(rw http.ResponseWriter, _ *http.Request) {
 
 // defaultsResponse is the JSON payload returned by GET /api/defaults.
 type defaultsResponse struct {
-	Version          string           `json:"version"`
-	InstalledVersion string           `json:"installed_version,omitempty"`
-	InstallPath      string           `json:"install_path"`
-	GitLabURL        string           `json:"gitlab_url"`
-	HasExisting      bool             `json:"has_existing"`
-	MaskedToken      string           `json:"masked_token,omitempty"`
-	SkipTLSVerify    bool             `json:"skip_tls_verify"`
-	Clients          []clientResponse `json:"clients"`
+	Version           string           `json:"version"`
+	InstalledVersion  string           `json:"installed_version,omitempty"`
+	InstallPath       string           `json:"install_path"`
+	GitLabURL         string           `json:"gitlab_url"`
+	HasExisting       bool             `json:"has_existing"`
+	MaskedToken       string           `json:"masked_token,omitempty"`
+	SkipTLSVerify     bool             `json:"skip_tls_verify"`
+	ToolSurface       string           `json:"tool_surface"`
+	CapabilitySurface string           `json:"capability_surface"`
+	MetaParamSchema   string           `json:"meta_param_schema"`
+	Enterprise        bool             `json:"enterprise"`
+	ReadOnly          bool             `json:"read_only"`
+	SafeMode          bool             `json:"safe_mode"`
+	EmbeddedResources bool             `json:"embedded_resources"`
+	ExcludeTools      string           `json:"exclude_tools"`
+	IgnoreScopes      bool             `json:"ignore_scopes"`
+	UploadMaxFileSize string           `json:"upload_max_file_size"`
+	AutoUpdateMode    string           `json:"auto_update_mode"`
+	AutoUpdateRepo    string           `json:"auto_update_repo"`
+	AutoUpdateTimeout string           `json:"auto_update_timeout"`
+	RateLimitRPS      string           `json:"rate_limit_rps"`
+	RateLimitBurst    string           `json:"rate_limit_burst"`
+	YoloMode          bool             `json:"yolo_mode"`
+	LogLevel          string           `json:"log_level"`
+	Clients           []clientResponse `json:"clients"`
 }
 
 // clientResponse describes one configurable MCP client in /api/defaults.
@@ -115,13 +133,9 @@ func handleDefaults(version string) http.HandlerFunc {
 	return func(rw http.ResponseWriter, _ *http.Request) {
 		existing, hasExisting := loadExistingConfigFn()
 
-		gitlabURL := DefaultGitLabURL
-		skipTLS := false
+		cfg := DefaultServerConfig()
 		if hasExisting {
-			if existing.GitLabURL != "" {
-				gitlabURL = existing.GitLabURL
-			}
-			skipTLS = existing.SkipTLSVerify
+			cfg = existing.withDefaults()
 		}
 
 		var maskedToken string
@@ -131,14 +145,31 @@ func handleDefaults(version string) http.HandlerFunc {
 
 		clients := allClientsFn()
 		resp := defaultsResponse{
-			Version:          strings.TrimPrefix(version, "v"),
-			InstalledVersion: getInstalledVersionFn(),
-			InstallPath:      filepath.Join(DefaultInstallDir(), DefaultBinaryName()),
-			GitLabURL:        gitlabURL,
-			HasExisting:      hasExisting,
-			MaskedToken:      maskedToken,
-			SkipTLSVerify:    skipTLS,
-			Clients:          make([]clientResponse, len(clients)),
+			Version:           strings.TrimPrefix(version, "v"),
+			InstalledVersion:  getInstalledVersionFn(),
+			InstallPath:       filepath.Join(DefaultInstallDir(), DefaultBinaryName()),
+			GitLabURL:         cfg.GitLabURL,
+			HasExisting:       hasExisting,
+			MaskedToken:       maskedToken,
+			SkipTLSVerify:     cfg.SkipTLSVerify,
+			ToolSurface:       cfg.ToolSurface,
+			CapabilitySurface: cfg.CapabilitySurface,
+			MetaParamSchema:   cfg.MetaParamSchema,
+			Enterprise:        cfg.Enterprise,
+			ReadOnly:          cfg.ReadOnly,
+			SafeMode:          cfg.SafeMode,
+			EmbeddedResources: cfg.EmbeddedResources,
+			ExcludeTools:      cfg.ExcludeTools,
+			IgnoreScopes:      cfg.IgnoreScopes,
+			UploadMaxFileSize: cfg.UploadMaxFileSize,
+			AutoUpdateMode:    cfg.AutoUpdateMode,
+			AutoUpdateRepo:    cfg.AutoUpdateRepo,
+			AutoUpdateTimeout: cfg.AutoUpdateTimeout,
+			RateLimitRPS:      cfg.RateLimitRPS,
+			RateLimitBurst:    cfg.RateLimitBurst,
+			YoloMode:          cfg.YoloMode,
+			LogLevel:          cfg.LogLevel,
+			Clients:           make([]clientResponse, len(clients)),
 		}
 		for i, c := range clients {
 			resp.Clients[i] = clientResponse{
@@ -155,15 +186,29 @@ func handleDefaults(version string) http.HandlerFunc {
 
 // configureRequest is the JSON body accepted by POST /api/configure.
 type configureRequest struct {
-	InstallPath     string `json:"install_path"`
-	GitLabURL       string `json:"gitlab_url"`
-	GitLabToken     string `json:"gitlab_token"`
-	SkipTLSVerify   bool   `json:"skip_tls_verify"`
-	MetaTools       bool   `json:"meta_tools"`
-	AutoUpdate      bool   `json:"auto_update"`
-	YoloMode        bool   `json:"yolo_mode"`
-	LogLevel        string `json:"log_level"`
-	SelectedClients []int  `json:"selected_clients"`
+	InstallPath       string `json:"install_path"`
+	GitLabURL         string `json:"gitlab_url"`
+	GitLabToken       string `json:"gitlab_token"`
+	SkipTLSVerify     bool   `json:"skip_tls_verify"`
+	ToolSurface       string `json:"tool_surface"`
+	CapabilitySurface string `json:"capability_surface"`
+	MetaParamSchema   string `json:"meta_param_schema"`
+	Enterprise        bool   `json:"enterprise"`
+	ReadOnly          bool   `json:"read_only"`
+	SafeMode          bool   `json:"safe_mode"`
+	EmbeddedResources bool   `json:"embedded_resources"`
+	ExcludeTools      string `json:"exclude_tools"`
+	IgnoreScopes      bool   `json:"ignore_scopes"`
+	UploadMaxFileSize string `json:"upload_max_file_size"`
+	AutoUpdate        bool   `json:"auto_update"`
+	AutoUpdateMode    string `json:"auto_update_mode"`
+	AutoUpdateRepo    string `json:"auto_update_repo"`
+	AutoUpdateTimeout string `json:"auto_update_timeout"`
+	RateLimitRPS      string `json:"rate_limit_rps"`
+	RateLimitBurst    string `json:"rate_limit_burst"`
+	YoloMode          bool   `json:"yolo_mode"`
+	LogLevel          string `json:"log_level"`
+	SelectedClients   []int  `json:"selected_clients"`
 }
 
 // configureResponse is the JSON result returned after applying selected client
@@ -201,10 +246,9 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			return
 		}
 
-		// Validate log level
-		validLevel := slices.Contains(LogLevelOptions, req.LogLevel)
-		if !validLevel {
-			req.LogLevel = "info"
+		if err := normalizeConfigureRequest(&req); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		// Install binary
@@ -226,19 +270,36 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			}
 		}
 
+		cfg := ServerConfig{
+			BinaryPath:        binaryPath,
+			GitLabURL:         req.GitLabURL,
+			GitLabToken:       req.GitLabToken,
+			SkipTLSVerify:     req.SkipTLSVerify,
+			MetaTools:         req.ToolSurface != "individual",
+			ToolSurface:       req.ToolSurface,
+			CapabilitySurface: req.CapabilitySurface,
+			MetaParamSchema:   req.MetaParamSchema,
+			Enterprise:        req.Enterprise,
+			ReadOnly:          req.ReadOnly,
+			SafeMode:          req.SafeMode,
+			EmbeddedResources: req.EmbeddedResources,
+			ExcludeTools:      req.ExcludeTools,
+			IgnoreScopes:      req.IgnoreScopes,
+			UploadMaxFileSize: req.UploadMaxFileSize,
+			AutoUpdate:        req.AutoUpdate,
+			AutoUpdateMode:    req.AutoUpdateMode,
+			AutoUpdateRepo:    req.AutoUpdateRepo,
+			AutoUpdateTimeout: req.AutoUpdateTimeout,
+			RateLimitRPS:      req.RateLimitRPS,
+			RateLimitBurst:    req.RateLimitBurst,
+			YoloMode:          req.YoloMode,
+			LogLevel:          req.LogLevel,
+		}.withDefaults()
+
 		result := &Result{
-			InstallDir: installDir,
-			BinaryPath: binaryPath,
-			Config: ServerConfig{
-				BinaryPath:    binaryPath,
-				GitLabURL:     req.GitLabURL,
-				GitLabToken:   req.GitLabToken,
-				SkipTLSVerify: req.SkipTLSVerify,
-				MetaTools:     req.MetaTools,
-				AutoUpdate:    req.AutoUpdate,
-				YoloMode:      req.YoloMode,
-				LogLevel:      req.LogLevel,
-			},
+			InstallDir:      installDir,
+			BinaryPath:      binaryPath,
+			Config:          cfg,
 			SelectedClients: req.SelectedClients,
 		}
 
@@ -267,6 +328,47 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 
 		onDone(applyErr)
 	}
+}
+
+func normalizeConfigureRequest(req *configureRequest) error {
+	defaults := DefaultServerConfig()
+	req.ToolSurface = firstNonEmpty(req.ToolSurface, defaults.ToolSurface)
+	if !slices.Contains(ToolSurfaceOptions, req.ToolSurface) {
+		return fmt.Errorf("invalid tool_surface: %s", req.ToolSurface)
+	}
+
+	req.CapabilitySurface = firstNonEmpty(req.CapabilitySurface, defaults.CapabilitySurface)
+	if !slices.Contains(CapabilitySurfaceOptions, req.CapabilitySurface) {
+		return fmt.Errorf("invalid capability_surface: %s", req.CapabilitySurface)
+	}
+
+	req.MetaParamSchema = firstNonEmpty(req.MetaParamSchema, defaults.MetaParamSchema)
+	if !slices.Contains(MetaParamSchemaOptions, req.MetaParamSchema) {
+		return fmt.Errorf("invalid meta_param_schema: %s", req.MetaParamSchema)
+	}
+
+	req.AutoUpdateMode = firstNonEmpty(req.AutoUpdateMode, defaults.AutoUpdateMode)
+	if !slices.Contains(AutoUpdateModeOptions, req.AutoUpdateMode) {
+		return fmt.Errorf("invalid auto_update_mode: %s", req.AutoUpdateMode)
+	}
+	req.AutoUpdate = req.AutoUpdateMode != "false"
+
+	req.RateLimitRPS = firstNonEmpty(req.RateLimitRPS, defaults.RateLimitRPS)
+	rateLimitRPS, err := strconv.ParseFloat(req.RateLimitRPS, 64)
+	if err != nil || rateLimitRPS < 0 {
+		return fmt.Errorf("invalid rate_limit_rps: %s", req.RateLimitRPS)
+	}
+
+	req.RateLimitBurst = firstNonEmpty(req.RateLimitBurst, defaults.RateLimitBurst)
+	rateLimitBurst, err := strconv.Atoi(req.RateLimitBurst)
+	if err != nil || rateLimitBurst < 0 {
+		return fmt.Errorf("invalid rate_limit_burst: %s", req.RateLimitBurst)
+	}
+
+	if !slices.Contains(LogLevelOptions, req.LogLevel) {
+		req.LogLevel = defaults.LogLevel
+	}
+	return nil
 }
 
 // handlePickDirectory returns an HTTP handler that asks the host OS to choose

@@ -4,7 +4,9 @@ package wizard
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,6 +51,48 @@ func TestNewTUIModel_DefaultGitLabURL(t *testing.T) {
 	m := newTestModel(t)
 	if m.urlInput.Value() != DefaultGitLabURL {
 		t.Fatalf("urlInput value = %q, want %q", m.urlInput.Value(), DefaultGitLabURL)
+	}
+}
+
+// TestNewTUIModel_WithExistingAdvancedOptions verifies the TUI initializes
+// advanced controls from a previously saved wizard configuration.
+func TestNewTUIModel_WithExistingAdvancedOptions(t *testing.T) {
+	stubLoadExistingConfigWith(t, ServerConfig{
+		GitLabURL:         "https://existing.gitlab.com",
+		GitLabToken:       "test-token-existingtoken12345678",
+		SkipTLSVerify:     true,
+		ToolSurface:       "dynamic",
+		CapabilitySurface: "minimal",
+		MetaParamSchema:   "compact",
+		Enterprise:        true,
+		ReadOnly:          true,
+		SafeMode:          true,
+		EmbeddedResources: false,
+		ExcludeTools:      "gitlab_admin",
+		IgnoreScopes:      true,
+		UploadMaxFileSize: "500MB",
+		AutoUpdateMode:    "check",
+		AutoUpdateRepo:    "example/repo",
+		AutoUpdateTimeout: "90s",
+		RateLimitRPS:      "3.5",
+		RateLimitBurst:    "12",
+		LogLevel:          "debug",
+		YoloMode:          true,
+	})
+
+	m := newTUIModel("1.0.0", io.Discard)
+
+	if m.urlInput.Value() != "https://existing.gitlab.com" || m.tokenInput.Value() != "test-token-existingtoken12345678" {
+		t.Errorf("connection fields not prefilled: url=%q token=%q", m.urlInput.Value(), m.tokenInput.Value())
+	}
+	if ToolSurfaceOptions[m.optToolSurface] != "dynamic" || CapabilitySurfaceOptions[m.optCapabilitySurface] != "minimal" || MetaParamSchemaOptions[m.optMetaParamSchema] != "compact" {
+		t.Errorf("catalog controls not prefilled: %#v", m)
+	}
+	if !m.optSkipTLS || !m.optEnterprise || !m.optReadOnly || !m.optSafeMode || m.optEmbeddedResources || !m.optIgnoreScopes || !m.optYolo {
+		t.Errorf("boolean controls not prefilled: %#v", m)
+	}
+	if m.optExcludeTools != "gitlab_admin" || m.optAutoUpdateRepo != "example/repo" || m.optRateLimitRPS != "3.5" {
+		t.Errorf("text/mode controls not prefilled: %#v", m)
 	}
 }
 
@@ -233,13 +277,13 @@ func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 		{
 			name:     "empty URL uses default",
 			url:      "",
-			token:    "glpat-test",
+			token:    "test-token-test",
 			wantStep: tuiStepClients,
 		},
 		{
 			name:      "invalid URL format",
 			url:       "not-a-valid-url",
-			token:     "glpat-test",
+			token:     "test-token-test",
 			wantStep:  tuiStepGitLab,
 			wantError: "Invalid URL",
 		},
@@ -253,7 +297,7 @@ func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 		{
 			name:     "valid input",
 			url:      "https://gitlab.example.com",
-			token:    "glpat-abc123",
+			token:    "test-token-abc123",
 			wantStep: tuiStepClients,
 		},
 	}
@@ -298,14 +342,14 @@ func TestUpdateGitLab_CtrlO_OpensAdvancedOptions(t *testing.T) {
 		{
 			name:     "valid from token field",
 			url:      "https://gitlab.example.com",
-			token:    "glpat-abc123",
+			token:    "test-token-abc123",
 			focus:    1,
 			wantStep: tuiStepOptions,
 		},
 		{
 			name:     "empty URL from token field uses default",
 			url:      "",
-			token:    "glpat-abc123",
+			token:    "test-token-abc123",
 			focus:    1,
 			wantStep: tuiStepOptions,
 		},
@@ -320,7 +364,7 @@ func TestUpdateGitLab_CtrlO_OpensAdvancedOptions(t *testing.T) {
 		{
 			name:     "from URL field — ignored",
 			url:      "https://gitlab.example.com",
-			token:    "glpat-abc123",
+			token:    "test-token-abc123",
 			focus:    0,
 			wantStep: tuiStepGitLab,
 		},
@@ -351,7 +395,7 @@ func TestUpdateGitLab_PrintableO_DoesNotOpenAdvanced(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
 	m.urlInput.SetValue("https://gitlab.example.com")
-	m.tokenInput.SetValue("glpat-partial")
+	m.tokenInput.SetValue("test-token-partial")
 	m.gitlabFocus = 1
 	m.tokenInput.Focus()
 
@@ -378,7 +422,7 @@ func TestUpdateGitLab_PastedText_DoesNotTriggerShortcuts(t *testing.T) {
 	m.tokenInput.Focus()
 
 	// Simulate bracketed paste of a token containing 'o'
-	result, _ := m.Update(pasteMsg("glpat-xyzABCo123"))
+	result, _ := m.Update(pasteMsg("test-token-xyzABCo123"))
 	final := result.(tuiModel)
 	if final.step != tuiStepGitLab {
 		t.Error("pasted text should not change step")
@@ -394,7 +438,7 @@ func TestUpdateGitLab_PastedEnter_DoesNotAdvance(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
 	m.urlInput.SetValue("https://gitlab.example.com")
-	m.tokenInput.SetValue("glpat-test")
+	m.tokenInput.SetValue("test-token-test")
 	m.gitlabFocus = 1
 
 	// In v2, paste events are tea.PasteMsg — they won't match tea.KeyPressMsg
@@ -453,17 +497,17 @@ func TestUpdateOptions_Navigation(t *testing.T) {
 }
 
 // TestUpdateOptions_ToggleAll uses table-driven subtests to verify Space
-// toggles each advanced option (skipTLS, meta-tools, auto-update, YOLO).
+// toggles representative boolean advanced options.
 func TestUpdateOptions_ToggleAll(t *testing.T) {
 	tests := []struct {
 		cursor int
 		field  func(tuiModel) bool
 		name   string
 	}{
-		{0, func(m tuiModel) bool { return m.optSkipTLS }, "skipTLS"},
-		{1, func(m tuiModel) bool { return m.optMeta }, "meta"},
-		{2, func(m tuiModel) bool { return m.optAutoUpd }, "autoUpdate"},
-		{3, func(m tuiModel) bool { return m.optYolo }, "yolo"},
+		{tuiOptSkipTLS, func(m tuiModel) bool { return m.optSkipTLS }, "skipTLS"},
+		{tuiOptEnterprise, func(m tuiModel) bool { return m.optEnterprise }, "enterprise"},
+		{tuiOptSafeMode, func(m tuiModel) bool { return m.optSafeMode }, "safeMode"},
+		{tuiOptYolo, func(m tuiModel) bool { return m.optYolo }, "yolo"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -485,7 +529,7 @@ func TestUpdateOptions_ToggleAll(t *testing.T) {
 func TestUpdateOptions_LogLevelCycles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 4
+	m.optCursor = tuiOptLogLevel
 	m.optLogLevel = 0
 
 	result, _ := m.Update(keyMsg(tea.KeySpace))
@@ -532,7 +576,7 @@ func TestUpdateOptions_KJ_NavigatesUpDown(t *testing.T) {
 func TestUpdateOptions_X_Toggles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 3 // YOLO
+	m.optCursor = tuiOptYolo
 	before := m.optYolo
 
 	result, _ := m.Update(runeMsg('x'))
@@ -547,12 +591,269 @@ func TestUpdateOptions_X_Toggles(t *testing.T) {
 func TestUpdateOptions_DownAtMax_StaysAtMax(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
-	m.optCursor = 4
+	m.optCursor = tuiOptionCount - 1
 
 	result, _ := m.Update(keyMsg(tea.KeyDown))
 	final := result.(tuiModel)
-	if final.optCursor != 4 {
-		t.Errorf("expected optCursor=4 at max, got %d", final.optCursor)
+	if final.optCursor != tuiOptionCount-1 {
+		t.Errorf("expected optCursor=%d at max, got %d", tuiOptionCount-1, final.optCursor)
+	}
+}
+
+// TestUpdateOptions_EscCancelsInlineEdit verifies Esc cancels text editing
+// instead of aborting the wizard while an advanced option input is active.
+func TestUpdateOptions_EscCancelsInlineEdit(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput.SetValue("gitlab_admin")
+	m.optEditInput.Focus()
+
+	result, cmd := m.Update(keyMsg(tea.KeyEsc))
+	final := result.(tuiModel)
+	if cmd != nil {
+		t.Error("Esc during text editing should not quit")
+	}
+	if final.aborted {
+		t.Error("Esc during text editing should not abort the wizard")
+	}
+	if final.optEditing {
+		t.Error("Esc should leave text editing mode")
+	}
+}
+
+// TestUpdateOptions_DirectEscCancelsInlineEdit covers the options-step handler
+// branch used when Esc reaches the inline editor directly.
+func TestUpdateOptions_DirectEscCancelsInlineEdit(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput.SetValue("gitlab_admin")
+
+	result, cmd := m.updateOptions(keyMsg(tea.KeyEsc))
+	final := result.(tuiModel)
+	if cmd != nil {
+		t.Error("direct Esc should not return a command")
+	}
+	if final.optEditing {
+		t.Error("direct Esc should leave text editing mode")
+	}
+}
+
+// TestUpdateOptions_TextEditForwardsInput covers non-command input while the
+// inline text editor is active.
+func TestUpdateOptions_TextEditForwardsInput(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput.SetValue("")
+	m.optEditInput.Focus()
+
+	result, _ := m.updateOptions(runeMsg('a'))
+	final := result.(tuiModel)
+	if final.optEditInput.Value() != "a" {
+		t.Errorf("edit input value = %q, want a", final.optEditInput.Value())
+	}
+}
+
+// TestUpdateOptions_StartsTextEdit verifies Space on a text option opens the
+// inline text editor with the option's current value.
+func TestUpdateOptions_StartsTextEdit(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optExcludeTools = "gitlab_admin"
+
+	result, cmd := m.Update(keyMsg(tea.KeySpace))
+	final := result.(tuiModel)
+	if !final.optEditing {
+		t.Fatal("expected text editing mode")
+	}
+	if final.optEditInput.Value() != "gitlab_admin" {
+		t.Errorf("edit value = %q, want gitlab_admin", final.optEditInput.Value())
+	}
+	if cmd == nil {
+		t.Error("expected blink command")
+	}
+}
+
+// TestUpdateOptions_EnterSavesTextEdit verifies Enter trims and persists the
+// inline text editor value.
+func TestUpdateOptions_EnterSavesTextEdit(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput.SetValue("  gitlab_admin  ")
+
+	result, _ := m.Update(keyMsg(tea.KeyEnter))
+	final := result.(tuiModel)
+	if final.optEditing {
+		t.Error("Enter should leave text editing mode")
+	}
+	if final.optExcludeTools != "gitlab_admin" {
+		t.Errorf("optExcludeTools = %q, want gitlab_admin", final.optExcludeTools)
+	}
+}
+
+// TestTextOptionHelpers covers the text option helpers for every editable row,
+// including blank-value fallback defaults where applicable.
+func TestTextOptionHelpers(t *testing.T) {
+	m := newTestModel(t)
+	m.optExcludeTools = "gitlab_admin"
+	m.optUploadMaxFileSize = "500MB"
+	m.optAutoUpdateRepo = "example/repo"
+	m.optAutoUpdateTimeout = "90s"
+	m.optRateLimitRPS = "3.5"
+	m.optRateLimitBurst = "12"
+
+	tests := []struct {
+		cursor       int
+		currentValue string
+		newValue     string
+		blankDefault string
+		readBack     func(tuiModel) string
+	}{
+		{cursor: tuiOptExcludeTools, currentValue: "gitlab_admin", newValue: "gitlab_runner", blankDefault: "", readBack: func(m tuiModel) string { return m.optExcludeTools }},
+		{cursor: tuiOptUploadMaxFileSize, currentValue: "500MB", newValue: "700MB", blankDefault: defaultUploadMaxFileSize, readBack: func(m tuiModel) string { return m.optUploadMaxFileSize }},
+		{cursor: tuiOptAutoUpdateRepo, currentValue: "example/repo", newValue: "owner/repo", blankDefault: DefaultServerConfig().AutoUpdateRepo, readBack: func(m tuiModel) string { return m.optAutoUpdateRepo }},
+		{cursor: tuiOptAutoUpdateTimeout, currentValue: "90s", newValue: "120s", blankDefault: defaultAutoUpdateTimeout, readBack: func(m tuiModel) string { return m.optAutoUpdateTimeout }},
+		{cursor: tuiOptRateLimitRPS, currentValue: "3.5", newValue: "4", blankDefault: defaultRateLimitRPS, readBack: func(m tuiModel) string { return m.optRateLimitRPS }},
+		{cursor: tuiOptRateLimitBurst, currentValue: "12", newValue: "20", blankDefault: defaultRateLimitBurst, readBack: func(m tuiModel) string { return m.optRateLimitBurst }},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("cursor_%d", tt.cursor), func(t *testing.T) {
+			model := m
+			model.optCursor = tt.cursor
+			if !model.isCurrentTextOption() {
+				t.Fatal("expected cursor to be a text option")
+			}
+			if got := model.currentTextOption(); got != tt.currentValue {
+				t.Fatalf("currentTextOption = %q, want %q", got, tt.currentValue)
+			}
+
+			model.setCurrentTextOption("  " + tt.newValue + "  ")
+			if got := tt.readBack(model); got != tt.newValue {
+				t.Fatalf("saved value = %q, want %q", got, tt.newValue)
+			}
+
+			model.setCurrentTextOption("   ")
+			if got := tt.readBack(model); got != tt.blankDefault {
+				t.Fatalf("blank fallback = %q, want %q", got, tt.blankDefault)
+			}
+		})
+	}
+
+	m.optCursor = tuiOptSkipTLS
+	if m.isCurrentTextOption() {
+		t.Error("boolean option should not be a text option")
+	}
+	if got := m.currentTextOption(); got != "" {
+		t.Errorf("currentTextOption for boolean = %q, want empty", got)
+	}
+}
+
+// TestUpdateOptions_CyclesAdvancedChoices verifies the enum and boolean rows
+// all mutate the expected option state.
+func TestUpdateOptions_CyclesAdvancedChoices(t *testing.T) {
+	tests := []struct {
+		name   string
+		cursor int
+		check  func(t *testing.T, before, after tuiModel)
+	}{
+		{name: "tool surface", cursor: tuiOptToolSurface, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optToolSurface == before.optToolSurface || after.optMeta != (ToolSurfaceOptions[after.optToolSurface] != "individual") {
+				t.Fatalf("tool surface did not cycle correctly: before=%#v after=%#v", before, after)
+			}
+		}},
+		{name: "capability surface", cursor: tuiOptCapabilitySurface, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optCapabilitySurface == before.optCapabilitySurface {
+				t.Fatal("capability surface did not cycle")
+			}
+		}},
+		{name: "meta param schema", cursor: tuiOptMetaParamSchema, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optMetaParamSchema == before.optMetaParamSchema {
+				t.Fatal("meta parameter schema did not cycle")
+			}
+		}},
+		{name: "embedded resources", cursor: tuiOptEmbeddedResources, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optEmbeddedResources == before.optEmbeddedResources {
+				t.Fatal("embedded resources did not toggle")
+			}
+		}},
+		{name: "read only", cursor: tuiOptReadOnly, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optReadOnly == before.optReadOnly {
+				t.Fatal("read-only mode did not toggle")
+			}
+		}},
+		{name: "ignore scopes", cursor: tuiOptIgnoreScopes, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optIgnoreScopes == before.optIgnoreScopes {
+				t.Fatal("ignore scopes did not toggle")
+			}
+		}},
+		{name: "auto update mode", cursor: tuiOptAutoUpdateMode, check: func(t *testing.T, before, after tuiModel) {
+			t.Helper()
+			if after.optAutoUpdateMode == before.optAutoUpdateMode || after.optAutoUpd != (AutoUpdateModeOptions[after.optAutoUpdateMode] != "false") {
+				t.Fatalf("auto-update mode did not cycle correctly: before=%#v after=%#v", before, after)
+			}
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel(t)
+			m.step = tuiStepOptions
+			m.optCursor = tt.cursor
+			before := m
+			result, _ := m.Update(keyMsg(tea.KeySpace))
+			after := result.(tuiModel)
+			tt.check(t, before, after)
+		})
+	}
+}
+
+// TestOptionRowsAndLabels verifies rendered option row values use stable labels
+// for booleans and empty text values.
+func TestOptionRowsAndLabels(t *testing.T) {
+	m := newTestModel(t)
+	m.optSkipTLS = true
+	m.optExcludeTools = ""
+	rows := m.optionRows()
+	if rows[tuiOptSkipTLS].value != "on" {
+		t.Errorf("skip TLS row = %q, want on", rows[tuiOptSkipTLS].value)
+	}
+	if rows[tuiOptReadOnly].value != "off" {
+		t.Errorf("read-only row = %q, want off", rows[tuiOptReadOnly].value)
+	}
+	if rows[tuiOptExcludeTools].value != "(none)" {
+		t.Errorf("empty exclude row = %q, want (none)", rows[tuiOptExcludeTools].value)
+	}
+	if got := emptyLabel(" gitlab_admin "); got != " gitlab_admin " {
+		t.Errorf("emptyLabel non-empty = %q", got)
+	}
+}
+
+// TestViewOptions_EditingHelp verifies the options view switches help text
+// while editing an inline text option.
+func TestViewOptions_EditingHelp(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput.SetValue("gitlab_admin")
+	view := m.View().Content
+	if !strings.Contains(view, "Enter save") || !strings.Contains(view, "Esc cancel") {
+		t.Error("expected editing help text in options view")
 	}
 }
 
@@ -675,7 +976,7 @@ func TestUpdateClients_Enter_AdvancesToDone(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
 	m.urlInput.SetValue("https://gitlab.example.com")
-	m.tokenInput.SetValue("glpat-test")
+	m.tokenInput.SetValue("test-token-test")
 
 	result, cmd := m.Update(keyMsg(tea.KeyEnter))
 	final := result.(tuiModel)
@@ -805,6 +1106,18 @@ func TestViewGitLab_ShowsError(t *testing.T) {
 	}
 }
 
+// TestViewGitLab_TokenFocusRendersCursor verifies the token-focused branch is
+// rendered when gitlabFocus points at the token field.
+func TestViewGitLab_TokenFocusRendersCursor(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepGitLab
+	m.gitlabFocus = 1
+	view := m.View().Content
+	if !strings.Contains(view, "Personal Access Token") {
+		t.Error("expected token label in view")
+	}
+}
+
 // TestView_ContainsHeader verifies every view includes the wizard header
 // "gitlab-mcp-server Setup Wizard".
 func TestView_ContainsHeader(t *testing.T) {
@@ -874,7 +1187,7 @@ func TestFullFlow_InstallToGitLabToClients(t *testing.T) {
 	}
 
 	// Type token
-	m.tokenInput.SetValue("glpat-full-flow-test")
+	m.tokenInput.SetValue("test-token-full-flow-test")
 
 	// Press Enter to continue
 	result, _ = m.Update(keyMsg(tea.KeyEnter))
@@ -918,7 +1231,7 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 	m.urlInput.SetValue("https://gitlab.example.com")
 	result, _ = m.Update(keyMsg(tea.KeyTab))
 	m = result.(tuiModel)
-	m.tokenInput.SetValue("glpat-adv-test")
+	m.tokenInput.SetValue("test-token-adv-test")
 
 	// Ctrl+O for advanced options
 	result, _ = m.Update(ctrlMsg('o'))
@@ -930,8 +1243,8 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 		t.Error("expected showAdvanced=true")
 	}
 
-	// Toggle YOLO (cursor → 3, then space)
-	m.optCursor = 3
+	// Toggle YOLO, then continue.
+	m.optCursor = tuiOptYolo
 	result, _ = m.Update(keyMsg(tea.KeySpace))
 	m = result.(tuiModel)
 	if !m.optYolo {
@@ -956,6 +1269,55 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 	}
 }
 
+// TestBuildResult_PreservesAdvancedOptions verifies the TUI result carries
+// every advanced option into the shared ServerConfig used by Apply.
+func TestBuildResult_PreservesAdvancedOptions(t *testing.T) {
+	stubInstallBinary(t)
+
+	m := newTestModel(t)
+	m.installInput.SetValue(filepath.Join(t.TempDir(), DefaultBinaryName()))
+	m.urlInput.SetValue("https://gitlab.example.com")
+	m.tokenInput.SetValue("test-token-tui-test")
+	m.optSkipTLS = true
+	m.optToolSurface = 2
+	m.optMeta = true
+	m.optCapabilitySurface = 1
+	m.optMetaParamSchema = 1
+	m.optEnterprise = true
+	m.optReadOnly = true
+	m.optSafeMode = true
+	m.optEmbeddedResources = false
+	m.optExcludeTools = "gitlab_admin"
+	m.optIgnoreScopes = true
+	m.optUploadMaxFileSize = "500MB"
+	m.optAutoUpd = true
+	m.optAutoUpdateMode = 1
+	m.optAutoUpdateRepo = "example/repo"
+	m.optAutoUpdateTimeout = "90s"
+	m.optRateLimitRPS = "3.5"
+	m.optRateLimitBurst = "12"
+	m.optYolo = true
+	m.optLogLevel = 0
+
+	m.buildResult()
+	if m.result == nil {
+		t.Fatal("expected buildResult to set result")
+	}
+	cfg := m.result.Config
+	if cfg.ToolSurface != "dynamic" || cfg.CapabilitySurface != "minimal" || cfg.MetaParamSchema != "compact" {
+		t.Errorf("catalog options not preserved: %#v", cfg)
+	}
+	if !cfg.SkipTLSVerify || !cfg.Enterprise || !cfg.ReadOnly || !cfg.SafeMode || cfg.EmbeddedResources || !cfg.IgnoreScopes || !cfg.YoloMode {
+		t.Errorf("boolean advanced options not preserved: %#v", cfg)
+	}
+	if cfg.ExcludeTools != "gitlab_admin" || cfg.UploadMaxFileSize != "500MB" {
+		t.Errorf("text advanced options not preserved: %#v", cfg)
+	}
+	if cfg.AutoUpdateMode != "check" || cfg.RateLimitRPS != "3.5" || cfg.RateLimitBurst != "12" {
+		t.Errorf("mode/rate options not preserved: %#v", cfg)
+	}
+}
+
 // Paste safety (regression tests for the reported bugs).
 
 // TestPasteSafety_TokenWithO_DoesNotOpenAdvanced is a regression test that
@@ -970,7 +1332,7 @@ func TestPasteSafety_TokenWithO_DoesNotOpenAdvanced(t *testing.T) {
 	m.tokenInput.Focus()
 
 	// Simulate pasting a token character by character — 'o' must NOT trigger advanced
-	for _, r := range "glpat-xoY9zO" {
+	for _, r := range "test-token-xoY9zO" {
 		result, _ := m.Update(runeMsg(r))
 		m = result.(tuiModel)
 		if m.step != tuiStepGitLab {
@@ -994,7 +1356,7 @@ func TestPasteSafety_BracketedPaste_NoShortcuts(t *testing.T) {
 	m.tokenInput.Focus()
 
 	// Bracketed paste — entire string at once, Paste=true
-	result, _ := m.Update(pasteMsg("glpat-test-OXYGEN-token"))
+	result, _ := m.Update(pasteMsg("test-token-test-OXYGEN-token"))
 	final := result.(tuiModel)
 	if final.step != tuiStepGitLab {
 		t.Errorf("bracketed paste should not change step, got %d", final.step)

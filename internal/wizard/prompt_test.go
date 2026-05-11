@@ -144,6 +144,69 @@ func TestPrompter_AskChoice_InvalidThenValid(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskChoiceDefault_UsesDefault verifies pressing Enter selects
+// the configured default option.
+func TestPrompter_AskChoiceDefault_UsesDefault(t *testing.T) {
+	r := strings.NewReader("\n")
+	w := &bytes.Buffer{}
+	p := NewPrompter(r, w)
+
+	got, err := p.AskChoiceDefault("Pick", []string{"A", "B", "C"}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("got index %d, want 1", got)
+	}
+}
+
+// TestPrompter_AskChoiceDefault_InvalidDefaultClampsToZero verifies invalid
+// default indices are treated as the first option.
+func TestPrompter_AskChoiceDefault_InvalidDefaultClampsToZero(t *testing.T) {
+	r := strings.NewReader("\n")
+	w := &bytes.Buffer{}
+	p := NewPrompter(r, w)
+
+	got, err := p.AskChoiceDefault("Pick", []string{"A", "B"}, 9)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 0 {
+		t.Errorf("got index %d, want 0", got)
+	}
+}
+
+// TestPrompter_AskChoiceDefault_InvalidThenValid verifies invalid choices are
+// rejected before accepting a valid numbered selection.
+func TestPrompter_AskChoiceDefault_InvalidThenValid(t *testing.T) {
+	r := strings.NewReader("x\n4\n2\n")
+	w := &bytes.Buffer{}
+	p := NewPrompter(r, w)
+
+	got, err := p.AskChoiceDefault("Pick", []string{"A", "B"}, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("got index %d, want 1", got)
+	}
+	if !strings.Contains(w.String(), "Please enter a number") || !strings.Contains(w.String(), "Please enter a number between") {
+		t.Error("expected validation warnings in output")
+	}
+}
+
+// TestPrompter_AskChoiceDefault_EOF verifies EOF is surfaced as an error.
+func TestPrompter_AskChoiceDefault_EOF(t *testing.T) {
+	r := strings.NewReader("")
+	w := &bytes.Buffer{}
+	p := NewPrompter(r, w)
+
+	_, err := p.AskChoiceDefault("Pick", []string{"A", "B"}, 0)
+	if err == nil {
+		t.Fatal("expected error for EOF input, got nil")
+	}
+}
+
 // TestPrompter_AskMultiChoice_SpaceSeparated verifies AskMultiChoice parses
 // space-separated 1-based indices into a boolean selection slice.
 func TestPrompter_AskMultiChoice_SpaceSeparated(t *testing.T) {
@@ -184,7 +247,7 @@ func TestPrompter_AskMultiChoice_All(t *testing.T) {
 // TestPrompter_AskPassword_ValidInput verifies AskPassword returns the
 // trimmed password string when the user provides non-empty input.
 func TestPrompter_AskPassword_ValidInput(t *testing.T) {
-	r := strings.NewReader("glpat-secret123\n")
+	r := strings.NewReader("test-token-secret123\n")
 	w := &bytes.Buffer{}
 	p := NewPrompter(r, w)
 
@@ -192,8 +255,8 @@ func TestPrompter_AskPassword_ValidInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "glpat-secret123" {
-		t.Errorf("got %q, want %q", got, "glpat-secret123")
+	if got != "test-token-secret123" {
+		t.Errorf("got %q, want %q", got, "test-token-secret123")
 	}
 }
 
@@ -371,14 +434,14 @@ func TestPrompter_AskPasswordDefault_ReturnsDefaultOnEmpty(t *testing.T) {
 	w := &bytes.Buffer{}
 	p := NewPrompter(r, w)
 
-	got, err := p.AskPasswordDefault("Token", "glpat-abc123def456ghi")
+	got, err := p.AskPasswordDefault("Token", "test-token-abc123def456ghi")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "glpat-abc123def456ghi" {
+	if got != "test-token-abc123def456ghi" {
 		t.Errorf("got %q, want default value", got)
 	}
-	if !strings.Contains(w.String(), MaskToken("glpat-abc123def456ghi")) {
+	if !strings.Contains(w.String(), MaskToken("test-token-abc123def456ghi")) {
 		t.Error("expected masked token hint in output")
 	}
 }
@@ -387,16 +450,16 @@ func TestPrompter_AskPasswordDefault_ReturnsDefaultOnEmpty(t *testing.T) {
 // AskPasswordDefault returns a user-supplied password instead of the
 // default when provided.
 func TestPrompter_AskPasswordDefault_OverridesDefault(t *testing.T) {
-	r := strings.NewReader("glpat-newtoken789\n")
+	r := strings.NewReader("test-token-newtoken789\n")
 	w := &bytes.Buffer{}
 	p := NewPrompter(r, w)
 
-	got, err := p.AskPasswordDefault("Token", "glpat-oldtoken123")
+	got, err := p.AskPasswordDefault("Token", "test-token-oldtoken123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "glpat-newtoken789" {
-		t.Errorf("got %q, want %q", got, "glpat-newtoken789")
+	if got != "test-token-newtoken789" {
+		t.Errorf("got %q, want %q", got, "test-token-newtoken789")
 	}
 }
 

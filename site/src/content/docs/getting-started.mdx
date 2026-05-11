@@ -56,21 +56,21 @@ sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 
 ## Setup wizard
 
-The easiest way to configure the server is the built-in setup wizard:
+The easiest way to configure local stdio clients is the built-in setup wizard:
 
 ```bash
-./gitlab-mcp-server setup-wizard
+gitlab-mcp-server --setup
 ```
 
 The wizard will:
 
 - Prompt for your GitLab URL and token
-- Test the connection
-- Auto-detect your AI client
-- Generate the correct configuration file
+- Load any existing configuration so you can keep or change previous values
+- Configure supported MCP clients
+- Write `~/.gitlab-mcp-server.env` without placing secrets in client JSON files
 
 :::note
-The setup wizard supports VS Code, Claude Desktop, Cursor, and Claude Code. For other clients, use the manual configuration below.
+The setup wizard configures stdio clients only. It offers Web, TUI, and CLI interfaces. See [Setup Wizard](/gitlab-mcp-server/setup-wizard/) for modes, supported clients, advanced options, and reconfiguration behavior.
 :::
 
 ## Install as an Open Plugin (Cursor / Claude Code)

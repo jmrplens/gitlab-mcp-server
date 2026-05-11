@@ -75,6 +75,28 @@ const (
 	tuiStepDone
 )
 
+const (
+	tuiOptSkipTLS = iota
+	tuiOptToolSurface
+	tuiOptCapabilitySurface
+	tuiOptMetaParamSchema
+	tuiOptEnterprise
+	tuiOptReadOnly
+	tuiOptSafeMode
+	tuiOptEmbeddedResources
+	tuiOptIgnoreScopes
+	tuiOptExcludeTools
+	tuiOptUploadMaxFileSize
+	tuiOptAutoUpdateMode
+	tuiOptAutoUpdateRepo
+	tuiOptAutoUpdateTimeout
+	tuiOptRateLimitRPS
+	tuiOptRateLimitBurst
+	tuiOptYolo
+	tuiOptLogLevel
+	tuiOptionCount
+)
+
 // tuiModel stores all Bubble Tea state for the terminal wizard, including
 // focused inputs, option selections, client selections, and the final result.
 type tuiModel struct { //nolint:recvcheck // buildResult needs pointer receiver, Bubble Tea interface requires value receivers
@@ -93,12 +115,29 @@ type tuiModel struct { //nolint:recvcheck // buildResult needs pointer receiver,
 	hasExistingToken bool
 
 	// Step 3: options
-	optCursor   int
-	optSkipTLS  bool
-	optMeta     bool
-	optAutoUpd  bool
-	optYolo     bool
-	optLogLevel int // index into LogLevelOptions
+	optCursor            int
+	optEditing           bool
+	optEditInput         textinput.Model
+	optSkipTLS           bool
+	optMeta              bool
+	optToolSurface       int
+	optCapabilitySurface int
+	optMetaParamSchema   int
+	optEnterprise        bool
+	optReadOnly          bool
+	optSafeMode          bool
+	optEmbeddedResources bool
+	optExcludeTools      string
+	optIgnoreScopes      bool
+	optUploadMaxFileSize string
+	optAutoUpd           bool
+	optAutoUpdateMode    int
+	optAutoUpdateRepo    string
+	optAutoUpdateTimeout string
+	optRateLimitRPS      string
+	optRateLimitBurst    string
+	optYolo              bool
+	optLogLevel          int // index into LogLevelOptions
 
 	// Step 4: clients
 	clients      []ClientInfo
@@ -147,10 +186,14 @@ func newTUIModel(version string, w io.Writer) tuiModel {
 	tokenInput.CharLimit = 256
 	tokenInput.SetWidth(60)
 
-	skipTLS := false
+	cfg := DefaultServerConfig()
 	if hasExisting {
-		skipTLS = existing.SkipTLSVerify
+		cfg = existing.withDefaults()
 	}
+
+	optEditInput := textinput.New()
+	optEditInput.CharLimit = 256
+	optEditInput.SetWidth(42)
 
 	clients := AllClients()
 	sel := make([]bool, len(clients))
@@ -166,12 +209,33 @@ func newTUIModel(version string, w io.Writer) tuiModel {
 		urlInput:         urlInput,
 		tokenInput:       tokenInput,
 		hasExistingToken: hasExisting && existing.GitLabToken != "",
-		optSkipTLS:       skipTLS,
-		optMeta:          true,
-		optAutoUpd:       true,
-		optLogLevel:      1, // "info"
-		clients:          clients,
-		clientSel:        sel,
+		optEditInput:     optEditInput,
+		optSkipTLS:       cfg.SkipTLSVerify,
+		optMeta:          cfg.MetaTools,
+		optToolSurface:   choiceIndex(ToolSurfaceOptions, cfg.ToolSurface, 0),
+		optCapabilitySurface: choiceIndex(
+			CapabilitySurfaceOptions,
+			cfg.CapabilitySurface,
+			0,
+		),
+		optMetaParamSchema:   choiceIndex(MetaParamSchemaOptions, cfg.MetaParamSchema, 0),
+		optEnterprise:        cfg.Enterprise,
+		optReadOnly:          cfg.ReadOnly,
+		optSafeMode:          cfg.SafeMode,
+		optEmbeddedResources: cfg.EmbeddedResources,
+		optExcludeTools:      cfg.ExcludeTools,
+		optIgnoreScopes:      cfg.IgnoreScopes,
+		optUploadMaxFileSize: cfg.UploadMaxFileSize,
+		optAutoUpd:           cfg.AutoUpdate,
+		optAutoUpdateMode:    choiceIndex(AutoUpdateModeOptions, cfg.AutoUpdateMode, 0),
+		optAutoUpdateRepo:    cfg.AutoUpdateRepo,
+		optAutoUpdateTimeout: cfg.AutoUpdateTimeout,
+		optRateLimitRPS:      cfg.RateLimitRPS,
+		optRateLimitBurst:    cfg.RateLimitBurst,
+		optYolo:              cfg.YoloMode,
+		optLogLevel:          choiceIndex(LogLevelOptions, cfg.LogLevel, 1),
+		clients:              clients,
+		clientSel:            sel,
 	}
 }
 
@@ -187,7 +251,15 @@ func (m tuiModel) Init() tea.Cmd {
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			m.aborted = true
+			return m, tea.Quit
+		case "esc":
+			if m.step == tuiStepOptions && m.optEditing {
+				m.optEditing = false
+				m.optEditInput.Blur()
+				return m, nil
+			}
 			m.aborted = true
 			return m, tea.Quit
 		}
@@ -295,6 +367,25 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateOptions handles keyboard navigation and toggles for advanced wizard
 // settings such as TLS verification, meta-tools, auto-update, and log level.
 func (m tuiModel) updateOptions(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.optEditing {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch keyMsg.String() {
+			case "enter":
+				m.setCurrentTextOption(m.optEditInput.Value())
+				m.optEditing = false
+				m.optEditInput.Blur()
+				return m, nil
+			case "esc":
+				m.optEditing = false
+				m.optEditInput.Blur()
+				return m, nil
+			}
+		}
+		var cmd tea.Cmd
+		m.optEditInput, cmd = m.optEditInput.Update(msg)
+		return m, cmd
+	}
+
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "up", "k":
@@ -302,28 +393,101 @@ func (m tuiModel) updateOptions(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.optCursor--
 			}
 		case "down", "j":
-			if m.optCursor < 4 { // 5 options: 0-4
+			if m.optCursor < tuiOptionCount-1 {
 				m.optCursor++
 			}
 		case "space", "x":
-			switch m.optCursor {
-			case 0:
-				m.optSkipTLS = !m.optSkipTLS
-			case 1:
-				m.optMeta = !m.optMeta
-			case 2:
-				m.optAutoUpd = !m.optAutoUpd
-			case 3:
-				m.optYolo = !m.optYolo
-			case 4:
-				m.optLogLevel = (m.optLogLevel + 1) % len(LogLevelOptions)
+			if m.isCurrentTextOption() {
+				m.optEditInput.SetValue(m.currentTextOption())
+				m.optEditInput.Focus()
+				m.optEditing = true
+				return m, textinput.Blink
 			}
+			m.toggleOrCycleCurrentOption()
 		case "enter":
 			m.step = tuiStepClients
 			return m, nil
 		}
 	}
 	return m, nil
+}
+
+func (m *tuiModel) toggleOrCycleCurrentOption() {
+	switch m.optCursor {
+	case tuiOptSkipTLS:
+		m.optSkipTLS = !m.optSkipTLS
+	case tuiOptToolSurface:
+		m.optToolSurface = (m.optToolSurface + 1) % len(ToolSurfaceOptions)
+		m.optMeta = ToolSurfaceOptions[m.optToolSurface] != "individual"
+	case tuiOptCapabilitySurface:
+		m.optCapabilitySurface = (m.optCapabilitySurface + 1) % len(CapabilitySurfaceOptions)
+	case tuiOptMetaParamSchema:
+		m.optMetaParamSchema = (m.optMetaParamSchema + 1) % len(MetaParamSchemaOptions)
+	case tuiOptEnterprise:
+		m.optEnterprise = !m.optEnterprise
+	case tuiOptReadOnly:
+		m.optReadOnly = !m.optReadOnly
+	case tuiOptSafeMode:
+		m.optSafeMode = !m.optSafeMode
+	case tuiOptEmbeddedResources:
+		m.optEmbeddedResources = !m.optEmbeddedResources
+	case tuiOptIgnoreScopes:
+		m.optIgnoreScopes = !m.optIgnoreScopes
+	case tuiOptAutoUpdateMode:
+		m.optAutoUpdateMode = (m.optAutoUpdateMode + 1) % len(AutoUpdateModeOptions)
+		m.optAutoUpd = AutoUpdateModeOptions[m.optAutoUpdateMode] != "false"
+	case tuiOptYolo:
+		m.optYolo = !m.optYolo
+	case tuiOptLogLevel:
+		m.optLogLevel = (m.optLogLevel + 1) % len(LogLevelOptions)
+	}
+}
+
+func (m tuiModel) isCurrentTextOption() bool {
+	switch m.optCursor {
+	case tuiOptExcludeTools, tuiOptUploadMaxFileSize, tuiOptAutoUpdateRepo,
+		tuiOptAutoUpdateTimeout, tuiOptRateLimitRPS, tuiOptRateLimitBurst:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m tuiModel) currentTextOption() string {
+	switch m.optCursor {
+	case tuiOptExcludeTools:
+		return m.optExcludeTools
+	case tuiOptUploadMaxFileSize:
+		return m.optUploadMaxFileSize
+	case tuiOptAutoUpdateRepo:
+		return m.optAutoUpdateRepo
+	case tuiOptAutoUpdateTimeout:
+		return m.optAutoUpdateTimeout
+	case tuiOptRateLimitRPS:
+		return m.optRateLimitRPS
+	case tuiOptRateLimitBurst:
+		return m.optRateLimitBurst
+	default:
+		return ""
+	}
+}
+
+func (m *tuiModel) setCurrentTextOption(value string) {
+	value = strings.TrimSpace(value)
+	switch m.optCursor {
+	case tuiOptExcludeTools:
+		m.optExcludeTools = value
+	case tuiOptUploadMaxFileSize:
+		m.optUploadMaxFileSize = firstNonEmpty(value, defaultUploadMaxFileSize)
+	case tuiOptAutoUpdateRepo:
+		m.optAutoUpdateRepo = firstNonEmpty(value, DefaultServerConfig().AutoUpdateRepo)
+	case tuiOptAutoUpdateTimeout:
+		m.optAutoUpdateTimeout = firstNonEmpty(value, defaultAutoUpdateTimeout)
+	case tuiOptRateLimitRPS:
+		m.optRateLimitRPS = firstNonEmpty(value, defaultRateLimitRPS)
+	case tuiOptRateLimitBurst:
+		m.optRateLimitBurst = firstNonEmpty(value, defaultRateLimitBurst)
+	}
 }
 
 // updateClients handles client selection, select-all behavior, and completion
@@ -397,14 +561,29 @@ func (m *tuiModel) buildResult() {
 		InstallDir: installDir,
 		BinaryPath: binaryPath,
 		Config: ServerConfig{
-			BinaryPath:    binaryPath,
-			GitLabURL:     m.urlInput.Value(),
-			GitLabToken:   m.tokenInput.Value(),
-			SkipTLSVerify: m.optSkipTLS,
-			MetaTools:     m.optMeta,
-			AutoUpdate:    m.optAutoUpd,
-			YoloMode:      m.optYolo,
-			LogLevel:      LogLevelOptions[m.optLogLevel],
+			BinaryPath:        binaryPath,
+			GitLabURL:         m.urlInput.Value(),
+			GitLabToken:       m.tokenInput.Value(),
+			SkipTLSVerify:     m.optSkipTLS,
+			MetaTools:         m.optMeta,
+			ToolSurface:       ToolSurfaceOptions[m.optToolSurface],
+			CapabilitySurface: CapabilitySurfaceOptions[m.optCapabilitySurface],
+			MetaParamSchema:   MetaParamSchemaOptions[m.optMetaParamSchema],
+			Enterprise:        m.optEnterprise,
+			ReadOnly:          m.optReadOnly,
+			SafeMode:          m.optSafeMode,
+			EmbeddedResources: m.optEmbeddedResources,
+			ExcludeTools:      m.optExcludeTools,
+			IgnoreScopes:      m.optIgnoreScopes,
+			UploadMaxFileSize: m.optUploadMaxFileSize,
+			AutoUpdate:        m.optAutoUpd,
+			AutoUpdateMode:    AutoUpdateModeOptions[m.optAutoUpdateMode],
+			AutoUpdateRepo:    m.optAutoUpdateRepo,
+			AutoUpdateTimeout: m.optAutoUpdateTimeout,
+			RateLimitRPS:      m.optRateLimitRPS,
+			RateLimitBurst:    m.optRateLimitBurst,
+			YoloMode:          m.optYolo,
+			LogLevel:          LogLevelOptions[m.optLogLevel],
 		},
 		SelectedClients: selected,
 	}
@@ -535,37 +714,73 @@ func (m tuiModel) viewGitLab(width int) string {
 // viewOptions renders the advanced options step.
 func (m tuiModel) viewOptions(width int) string {
 	var content strings.Builder
-	content.WriteString(tuiSectionTitle.Render("⚙ Advanced Options") + "\n\n")
+	content.WriteString(tuiSectionTitle.Render("Advanced Options") + "\n\n")
 
-	opts := []struct {
-		name string
-		on   bool
-	}{
-		{"Skip TLS verification", m.optSkipTLS},
-		{"Enable meta-tools", m.optMeta},
-		{"Enable auto-update", m.optAutoUpd},
-		{"Enable YOLO mode", m.optYolo},
-	}
-	for i, opt := range opts {
+	rows := m.optionRows()
+	for i, row := range rows {
 		cursor := "  "
 		if m.optCursor == i {
 			cursor = tuiCursorStyle.Render("▸ ")
 		}
-		check := tuiMutedStyle.Render("[ ]")
-		if opt.on {
-			check = tuiSuccessStyle.Render("[✓]")
+		value := row.value
+		if m.optEditing && m.optCursor == i {
+			value = m.optEditInput.View()
 		}
-		fmt.Fprintf(&content, "%s%s %s\n", cursor, check, tuiListItemStyle.Render(opt.name))
+		fmt.Fprintf(&content, "%s%s: %s\n", cursor, tuiListItemStyle.Render(row.name), tuiAccentStyle.Render(value))
 	}
 
-	cursor := "  "
-	if m.optCursor == 4 {
-		cursor = tuiCursorStyle.Render("▸ ")
+	help := "↑↓ navigate · Space edit/cycle · Enter continue"
+	if m.optEditing {
+		help = "Enter save · Esc cancel"
 	}
-	fmt.Fprintf(&content, "%s    Log level: %s\n", cursor, tuiAccentStyle.Render(LogLevelOptions[m.optLogLevel]))
-
-	content.WriteString("\n" + tuiHelpStyle.Render("↑↓ navigate · Space toggle · Enter continue"))
+	if m.optCursor < len(rows) {
+		content.WriteString("\n" + tuiHelpStyle.Render(rows[m.optCursor].description))
+	}
+	content.WriteString("\n" + tuiHelpStyle.Render(help))
 	return tuiActivePanelStyle.Width(width).Render(content.String())
+}
+
+type tuiOptionRow struct {
+	name        string
+	value       string
+	description string
+}
+
+func (m tuiModel) optionRows() []tuiOptionRow {
+	return []tuiOptionRow{
+		{"Skip TLS verification", boolLabel(m.optSkipTLS), "Allow GitLab instances with self-signed or private CA certificates."},
+		{"Tool surface", ToolSurfaceOptions[m.optToolSurface], "Choose the stdio tool catalog exposed to MCP clients."},
+		{"Capability surface", CapabilitySurfaceOptions[m.optCapabilitySurface], "Use minimal with dynamic mode to keep startup context small."},
+		{"Meta parameter schema", MetaParamSchemaOptions[m.optMetaParamSchema], "Controls how much schema detail meta-tools advertise."},
+		{"Enterprise/Premium catalog", boolLabel(m.optEnterprise), "Expose Enterprise/Premium tools when your GitLab instance supports them."},
+		{"Read-only mode", boolLabel(m.optReadOnly), "Register only tools that do not mutate GitLab state."},
+		{"Safe mode previews", boolLabel(m.optSafeMode), "Return previews for mutating calls instead of executing them."},
+		{"Embedded resources", boolLabel(m.optEmbeddedResources), "Include canonical MCP resource links in get_* tool results."},
+		{"Ignore PAT scopes", boolLabel(m.optIgnoreScopes), "Skip token scope detection and register tools without scope filtering."},
+		{"Excluded tools", emptyLabel(m.optExcludeTools), "Comma-separated tool names to omit from registration."},
+		{"Upload max file size", m.optUploadMaxFileSize, "Maximum file size accepted by upload and file tools."},
+		{"Auto-update mode", AutoUpdateModeOptions[m.optAutoUpdateMode], "true applies pre-start updates, check logs only, false disables."},
+		{"Auto-update repository", m.optAutoUpdateRepo, "GitHub owner/repo used for release update checks."},
+		{"Auto-update timeout", m.optAutoUpdateTimeout, "Maximum time spent on the stdio pre-start update check."},
+		{"Rate limit RPS", m.optRateLimitRPS, "Global stdio tools/call limit; 0 disables the limiter."},
+		{"Rate limit burst", m.optRateLimitBurst, "Token-bucket burst size when rate limiting is enabled."},
+		{"YOLO mode", boolLabel(m.optYolo), "Enable less restrictive local execution safeguards."},
+		{"Log level", LogLevelOptions[m.optLogLevel], "Controls stderr logging verbosity."},
+	}
+}
+
+func boolLabel(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
+func emptyLabel(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "(none)"
+	}
+	return value
 }
 
 // viewClients renders the MCP client selection step.

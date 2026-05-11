@@ -52,7 +52,7 @@
   .header {
     text-align: center; margin-bottom: 2rem; padding: 2rem 1.5rem;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); backdrop-filter: blur(12px);
+    border-radius: var(--radius); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     box-shadow: var(--shadow);
   }
   .header-icon {
@@ -93,7 +93,7 @@
   .section {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 1.5rem;
-    margin-bottom: 0.75rem; backdrop-filter: blur(12px);
+    margin-bottom: 0.75rem; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     box-shadow: var(--shadow-sm);
     transition: border-color 0.2s;
   }
@@ -123,6 +123,30 @@
   .field .hint a { color: var(--accent); text-decoration: none; }
   .field .hint a:hover { text-decoration: underline; }
   .field .hint strong { color: var(--text-muted); }
+  .env-file-code {
+    color: var(--text-muted); background: var(--input-bg);
+    padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.7rem;
+  }
+  .advanced-field { margin-top: 0.8rem; }
+  .option-heading { display: flex; align-items: center; gap: 0.35rem; }
+  .option-heading label { margin-bottom: 0; }
+  .help-btn {
+    width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--input-bg); color: var(--text-muted); font-size: 0.72rem;
+    line-height: 1; padding: 0; cursor: help;
+  }
+  .help-btn:hover, .help-btn:focus-visible {
+    color: var(--accent); border-color: var(--accent); outline: none;
+  }
+  .tooltip-bubble {
+    position: fixed; z-index: 1000; max-width: min(18rem, calc(100vw - 1.5rem));
+    padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: 6px;
+    background: rgba(15, 23, 42, 0.98); color: #f8fafc; font-size: 0.74rem;
+    line-height: 1.35; text-align: left; box-shadow: var(--shadow); pointer-events: none;
+    opacity: 0; visibility: hidden; transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
+  }
+  .tooltip-bubble.visible { opacity: 1; visibility: visible; transform: translateY(0); }
 
   .checkbox-group { display: flex; flex-direction: column; gap: 0.15rem; }
   .checkbox-group label {
@@ -201,7 +225,7 @@
   .result {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 2rem 1.5rem;
-    display: none; text-align: center; backdrop-filter: blur(12px);
+    display: none; text-align: center; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     box-shadow: var(--shadow);
     animation: fadeIn 0.4s ease-out;
   }
@@ -279,6 +303,21 @@
     margin-top: 0.3rem; padding: 0.3rem 0.5rem;
     background: var(--accent-glow); border-radius: 4px;
   }
+  .installed-version {
+    display: none; margin-top: 0.35rem; font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .client-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .client-title {
+    margin-bottom: 0; font-size: 0.8rem; color: var(--text-muted);
+    font-weight: 500; letter-spacing: 0.01em;
+  }
+  .configure-btn { margin-top: 0.75rem; }
+  .close-row { text-align: center; margin-top: 1.25rem; }
+  .close-btn { width: auto; padding: 0.6rem 2rem; }
 </style>
 </head>
 <body>
@@ -290,7 +329,7 @@
     <h1>Setup Wizard</h1>
     <div class="subtitle">gitlab-mcp-server</div>
     <div class="version" id="version">loading...</div>
-    <div class="installed-version" id="installedVersion" style="display:none;margin-top:0.35rem;font-size:0.72rem;color:var(--text-muted);"></div>
+    <div class="installed-version" id="installedVersion"></div>
   </div>
 
   <div id="formPanel">
@@ -321,7 +360,7 @@
           Need a token? <a id="tokenLink" href="#" target="_blank">Create one on your GitLab instance</a>
         </div>
         <div class="hint">Required scope: <strong>api</strong> (full access to the GitLab API)</div>
-        <div class="hint">Token stored securely in <code style="color:var(--text-muted);background:var(--input-bg);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">~/.gitlab-mcp-server.env</code></div>
+        <div class="hint">Token stored securely in <code class="env-file-code">~/.gitlab-mcp-server.env</code></div>
         <div class="error-msg" id="tokenError">Token is required</div>
       </div>
     </div>
@@ -329,8 +368,8 @@
     <div class="section">
       <div class="step-indicator"><span class="step-number">3</span><span class="step-title">MCP Clients</span></div>
       <div class="field">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-          <span style="margin-bottom:0;font-size:0.8rem;color:var(--text-muted);font-weight:500;letter-spacing:0.01em;">Select clients to configure</span>
+        <div class="client-header">
+          <span class="client-title">Select clients to configure</span>
           <button class="select-all-btn" id="selectAllBtn">Select all</button>
         </div>
         <div class="checkbox-group" id="clientList"></div>
@@ -341,23 +380,146 @@
       <summary>Advanced Options</summary>
       <div>
         <div class="toggle-row">
-          <label for="optSkipTLS">Skip TLS verification</label>
+          <div class="option-heading">
+            <label for="optSkipTLS">Skip TLS verification</label>
+            <button type="button" class="help-btn" aria-label="Skip TLS verification help" data-tooltip="Allow HTTPS connections to GitLab instances with self-signed or private CA certificates.">?</button>
+          </div>
           <label class="toggle" aria-label="Skip TLS verification"><input type="checkbox" id="optSkipTLS"><span class="slider"></span></label>
         </div>
-        <div class="toggle-row">
-          <label for="optMetaTools">Enable meta-tools</label>
-          <label class="toggle" aria-label="Enable meta-tools"><input type="checkbox" id="optMetaTools" checked><span class="slider"></span></label>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optToolSurface">Tool surface</label>
+            <button type="button" class="help-btn" aria-label="Tool surface help" data-tooltip="Choose the stdio tool catalog exposed to MCP clients: grouped meta-tools, every individual tool, or a low-token dynamic surface.">?</button>
+          </div>
+          <select id="optToolSurface">
+            <option value="meta" selected>meta</option>
+            <option value="individual">individual</option>
+            <option value="dynamic">dynamic</option>
+            <option value="dynamic-2">dynamic-2</option>
+            <option value="dynamic-3">dynamic-3</option>
+          </select>
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optCapabilitySurface">Capability surface</label>
+            <button type="button" class="help-btn" aria-label="Capability surface help" data-tooltip="Use full to expose resources and prompts, or minimal with dynamic mode to keep startup context small.">?</button>
+          </div>
+          <select id="optCapabilitySurface">
+            <option value="full" selected>full</option>
+            <option value="minimal">minimal</option>
+          </select>
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optMetaParamSchema">Meta parameter schema</label>
+            <button type="button" class="help-btn" aria-label="Meta parameter schema help" data-tooltip="Controls how much parameter schema detail meta-tools advertise in tools/list.">?</button>
+          </div>
+          <select id="optMetaParamSchema">
+            <option value="opaque" selected>opaque</option>
+            <option value="compact">compact</option>
+            <option value="full">full</option>
+          </select>
         </div>
         <div class="toggle-row">
-          <label for="optAutoUpdate">Enable auto-update</label>
-          <label class="toggle" aria-label="Enable auto-update"><input type="checkbox" id="optAutoUpdate" checked><span class="slider"></span></label>
+          <div class="option-heading">
+            <label for="optEnterprise">Enterprise/Premium catalog</label>
+            <button type="button" class="help-btn" aria-label="Enterprise/Premium catalog help" data-tooltip="Expose Enterprise/Premium tools when your GitLab instance supports them.">?</button>
+          </div>
+          <label class="toggle" aria-label="Enterprise/Premium catalog"><input type="checkbox" id="optEnterprise"><span class="slider"></span></label>
         </div>
         <div class="toggle-row">
-          <label for="optYoloMode">Enable YOLO mode</label>
-          <label class="toggle" aria-label="Enable YOLO mode" aria-label="Enable YOLO mode"><input type="checkbox" id="optYoloMode"><span class="slider"></span></label>
+          <div class="option-heading">
+            <label for="optReadOnly">Read-only mode</label>
+            <button type="button" class="help-btn" aria-label="Read-only mode help" data-tooltip="Register only tools that do not mutate GitLab state.">?</button>
+          </div>
+          <label class="toggle" aria-label="Read-only mode"><input type="checkbox" id="optReadOnly"><span class="slider"></span></label>
         </div>
-        <div class="field" style="margin-top:0.8rem;">
-          <label for="optLogLevel">Log level</label>
+        <div class="toggle-row">
+          <div class="option-heading">
+            <label for="optSafeMode">Safe mode previews</label>
+            <button type="button" class="help-btn" aria-label="Safe mode previews help" data-tooltip="Return previews for mutating calls instead of executing them.">?</button>
+          </div>
+          <label class="toggle" aria-label="Safe mode previews"><input type="checkbox" id="optSafeMode"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="option-heading">
+            <label for="optEmbeddedResources">Embedded resources</label>
+            <button type="button" class="help-btn" aria-label="Embedded resources help" data-tooltip="Include canonical MCP resource links in get_* tool results.">?</button>
+          </div>
+          <label class="toggle" aria-label="Embedded resources"><input type="checkbox" id="optEmbeddedResources" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="option-heading">
+            <label for="optIgnoreScopes">Ignore PAT scopes</label>
+            <button type="button" class="help-btn" aria-label="Ignore PAT scopes help" data-tooltip="Skip token scope detection and register tools without scope filtering.">?</button>
+          </div>
+          <label class="toggle" aria-label="Ignore PAT scopes"><input type="checkbox" id="optIgnoreScopes"><span class="slider"></span></label>
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optExcludeTools">Excluded tools</label>
+            <button type="button" class="help-btn" aria-label="Excluded tools help" data-tooltip="Comma-separated tool names to omit from registration, such as gitlab_admin.">?</button>
+          </div>
+          <input type="text" id="optExcludeTools" placeholder="gitlab_admin,gitlab_runner">
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optUploadMaxFileSize">Upload max file size</label>
+            <button type="button" class="help-btn" aria-label="Upload max file size help" data-tooltip="Maximum file size accepted by upload and file tools, for example 500MB or 2GB.">?</button>
+          </div>
+          <input type="text" id="optUploadMaxFileSize" value="2GB">
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optAutoUpdateMode">Auto-update mode</label>
+            <button type="button" class="help-btn" aria-label="Auto-update mode help" data-tooltip="true applies pre-start updates in stdio mode, check only logs availability, false disables updates.">?</button>
+          </div>
+          <select id="optAutoUpdateMode">
+            <option value="true" selected>true</option>
+            <option value="check">check</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optAutoUpdateRepo">Auto-update repository</label>
+            <button type="button" class="help-btn" aria-label="Auto-update repository help" data-tooltip="GitHub owner/repo used for release update checks.">?</button>
+          </div>
+          <input type="text" id="optAutoUpdateRepo" value="jmrplens/gitlab-mcp-server">
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optAutoUpdateTimeout">Auto-update timeout</label>
+            <button type="button" class="help-btn" aria-label="Auto-update timeout help" data-tooltip="Maximum time spent on the stdio pre-start update check.">?</button>
+          </div>
+          <input type="text" id="optAutoUpdateTimeout" value="60s">
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optRateLimitRps">Rate limit RPS</label>
+            <button type="button" class="help-btn" aria-label="Rate limit RPS help" data-tooltip="Global stdio tools/call rate limit; 0 disables the limiter.">?</button>
+          </div>
+          <input type="text" id="optRateLimitRps" value="0">
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optRateLimitBurst">Rate limit burst</label>
+            <button type="button" class="help-btn" aria-label="Rate limit burst help" data-tooltip="Token-bucket burst size used when RPS is greater than 0.">?</button>
+          </div>
+          <input type="text" id="optRateLimitBurst" value="40">
+        </div>
+        <div class="toggle-row">
+          <div class="option-heading">
+            <label for="optYoloMode">Enable YOLO mode</label>
+            <button type="button" class="help-btn" aria-label="YOLO mode help" data-tooltip="Enable less restrictive local execution safeguards for trusted use.">?</button>
+          </div>
+          <label class="toggle" aria-label="Enable YOLO mode"><input type="checkbox" id="optYoloMode"><span class="slider"></span></label>
+        </div>
+        <div class="field advanced-field">
+          <div class="option-heading">
+            <label for="optLogLevel">Log level</label>
+            <button type="button" class="help-btn" aria-label="Log level help" data-tooltip="Controls stderr logging verbosity for the stdio server process.">?</button>
+          </div>
           <select id="optLogLevel">
             <option value="debug">debug</option>
             <option value="info" selected>info</option>
@@ -368,7 +530,7 @@
       </div>
     </details>
 
-    <button class="btn btn-primary" id="configureBtn" style="margin-top:0.75rem;">Configure</button>
+    <button class="btn btn-primary configure-btn" id="configureBtn">Configure</button>
   </div>
 
   <div class="result" id="resultPanel">
@@ -382,11 +544,13 @@
     <p class="reconfigure">
       To reconfigure later, run: <code>gitlab-mcp-server --setup</code>
     </p>
-    <div style="text-align:center;margin-top:1.25rem;">
-      <button class="btn btn-primary" id="closeBtn" style="width:auto;padding:0.6rem 2rem;">Close</button>
+    <div class="close-row">
+      <button class="btn btn-primary close-btn" id="closeBtn">Close</button>
     </div>
   </div>
 </div>
+
+<div id="advancedTooltip" class="tooltip-bubble" role="tooltip" aria-hidden="true"></div>
 
 <script type="module">
 let defaults = {};
@@ -413,6 +577,83 @@ function updateTokenLink(gitlabUrl) {
   }
 }
 
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (el && value !== undefined && value !== null) el.value = value;
+}
+
+function setChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el && typeof value === 'boolean') el.checked = value;
+}
+
+function initTooltips() {
+  const tooltip = document.getElementById('advancedTooltip');
+  if (!tooltip) return;
+  let activeTarget = null;
+
+  function hideTooltip() {
+    activeTarget = null;
+    tooltip.classList.remove('visible');
+    tooltip.setAttribute('aria-hidden', 'true');
+  }
+
+  function positionTooltip(target) {
+    const margin = 10;
+    const gap = 8;
+    const targetRect = target.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    let left = targetRect.left + ((targetRect.width - tooltipRect.width) / 2);
+    let top = targetRect.bottom + gap;
+
+    left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+    if (top + tooltipRect.height > window.innerHeight - margin) {
+      top = targetRect.top - tooltipRect.height - gap;
+    }
+    top = Math.max(margin, top);
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+  }
+
+  function showTooltip(target) {
+    const text = target.dataset.tooltip;
+    if (!text) return;
+    activeTarget = target;
+    tooltip.textContent = text;
+    tooltip.classList.add('visible');
+    tooltip.setAttribute('aria-hidden', 'false');
+    positionTooltip(target);
+  }
+
+  document.querySelectorAll('.help-btn').forEach(function(btn) {
+    btn.addEventListener('mouseenter', function() { showTooltip(btn); });
+    btn.addEventListener('focus', function() { showTooltip(btn); });
+    btn.addEventListener('mouseleave', hideTooltip);
+    btn.addEventListener('blur', hideTooltip);
+    btn.addEventListener('click', function(event) {
+      event.preventDefault();
+      if (activeTarget === btn && tooltip.classList.contains('visible')) {
+        hideTooltip();
+      } else {
+        showTooltip(btn);
+      }
+    });
+  });
+
+  window.addEventListener('resize', function() {
+    if (activeTarget) positionTooltip(activeTarget);
+  });
+  window.addEventListener('scroll', function() {
+    if (activeTarget) positionTooltip(activeTarget);
+  }, true);
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') hideTooltip();
+  });
+}
+
+initTooltips();
+
 try {
   const resp = await fetch('/api/defaults');
   defaults = await resp.json();
@@ -435,9 +676,24 @@ try {
     document.getElementById('gitlabToken').placeholder = defaults.masked_token + ' (leave empty to keep)';
     document.getElementById('tokenExistingHint').style.display = 'block';
   }
-  if (typeof defaults.skip_tls_verify === 'boolean') {
-    document.getElementById('optSkipTLS').checked = defaults.skip_tls_verify;
-  }
+  setChecked('optSkipTLS', defaults.skip_tls_verify);
+  setValue('optToolSurface', defaults.tool_surface || 'meta');
+  setValue('optCapabilitySurface', defaults.capability_surface || 'full');
+  setValue('optMetaParamSchema', defaults.meta_param_schema || 'opaque');
+  setChecked('optEnterprise', defaults.enterprise);
+  setChecked('optReadOnly', defaults.read_only);
+  setChecked('optSafeMode', defaults.safe_mode);
+  setChecked('optEmbeddedResources', defaults.embedded_resources);
+  setChecked('optIgnoreScopes', defaults.ignore_scopes);
+  setValue('optExcludeTools', defaults.exclude_tools || '');
+  setValue('optUploadMaxFileSize', defaults.upload_max_file_size || '2GB');
+  setValue('optAutoUpdateMode', defaults.auto_update_mode || 'true');
+  setValue('optAutoUpdateRepo', defaults.auto_update_repo || 'jmrplens/gitlab-mcp-server');
+  setValue('optAutoUpdateTimeout', defaults.auto_update_timeout || '60s');
+  setValue('optRateLimitRps', defaults.rate_limit_rps || '0');
+  setValue('optRateLimitBurst', defaults.rate_limit_burst || '40');
+  setChecked('optYoloMode', defaults.yolo_mode);
+  setValue('optLogLevel', defaults.log_level || 'info');
   document.getElementById('gitlabUrl').addEventListener('input', function() {
     updateTokenLink(this.value.trim());
   });
@@ -524,14 +780,29 @@ async function configure() {
   document.querySelectorAll('.client-cb').forEach(function(cb) {
     if (cb.checked) selectedIndices.push(Number.parseInt(cb.dataset.index, 10));
   });
+  const autoUpdateMode = document.getElementById('optAutoUpdateMode').value;
 
   const body = {
     install_path: document.getElementById('installPath').value.trim(),
     gitlab_url: url,
     gitlab_token: token,
     skip_tls_verify: document.getElementById('optSkipTLS').checked,
-    meta_tools: document.getElementById('optMetaTools').checked,
-    auto_update: document.getElementById('optAutoUpdate').checked,
+    tool_surface: document.getElementById('optToolSurface').value,
+    capability_surface: document.getElementById('optCapabilitySurface').value,
+    meta_param_schema: document.getElementById('optMetaParamSchema').value,
+    enterprise: document.getElementById('optEnterprise').checked,
+    read_only: document.getElementById('optReadOnly').checked,
+    safe_mode: document.getElementById('optSafeMode').checked,
+    embedded_resources: document.getElementById('optEmbeddedResources').checked,
+    exclude_tools: document.getElementById('optExcludeTools').value.trim(),
+    ignore_scopes: document.getElementById('optIgnoreScopes').checked,
+    upload_max_file_size: document.getElementById('optUploadMaxFileSize').value.trim(),
+    auto_update: autoUpdateMode !== 'false',
+    auto_update_mode: autoUpdateMode,
+    auto_update_repo: document.getElementById('optAutoUpdateRepo').value.trim(),
+    auto_update_timeout: document.getElementById('optAutoUpdateTimeout').value.trim(),
+    rate_limit_rps: document.getElementById('optRateLimitRps').value.trim(),
+    rate_limit_burst: document.getElementById('optRateLimitBurst').value.trim(),
     yolo_mode: document.getElementById('optYoloMode').checked,
     log_level: document.getElementById('optLogLevel').value,
     selected_clients: selectedIndices,

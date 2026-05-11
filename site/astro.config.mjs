@@ -348,6 +348,11 @@ export default defineConfig({
 							translations: { es: "Inicio rápido" },
 						},
 						{
+							slug: "setup-wizard",
+							label: "Setup Wizard",
+							translations: { es: "Asistente de configuración" },
+						},
+						{
 							slug: "configuration",
 							label: "Configuration",
 							translations: { es: "Configuración" },

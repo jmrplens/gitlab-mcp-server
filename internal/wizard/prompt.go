@@ -134,6 +134,38 @@ func (p *Prompter) AskChoice(prompt string, options []string) (int, error) {
 	}
 }
 
+// AskChoiceDefault presents numbered options and returns defaultIndex when the
+// user presses Enter without typing a value.
+func (p *Prompter) AskChoiceDefault(prompt string, options []string, defaultIndex int) (int, error) {
+	if defaultIndex < 0 || defaultIndex >= len(options) {
+		defaultIndex = 0
+	}
+	for i, opt := range options {
+		marker := " "
+		if i == defaultIndex {
+			marker = "*"
+		}
+		fmt.Fprintf(p.writer, "  [%d] %s %s\n", i+1, marker, opt)
+	}
+	for {
+		fmt.Fprintf(p.writer, "%s [1-%d, default %d]: ", prompt, len(options), defaultIndex+1)
+		line, err := p.reader.ReadString('\n')
+		if err != nil {
+			return 0, fmt.Errorf(errReadInput, err)
+		}
+		val := strings.TrimSpace(line)
+		if val == "" {
+			return defaultIndex, nil
+		}
+		n, err := strconv.Atoi(val)
+		if err != nil || n < 1 || n > len(options) {
+			fmt.Fprintf(p.writer, "  Please enter a number between 1 and %d.\n", len(options))
+			continue
+		}
+		return n - 1, nil
+	}
+}
+
 // AskMultiChoice presents checkboxes for multi-select. Returns a boolean
 // slice indicating which options were selected. Accepts space-separated
 // numbers or "a" for all.

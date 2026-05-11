@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -49,16 +50,40 @@ func loadExistingConfigFromPath(path string) (ServerConfig, bool) {
 		return ServerConfig{}, false
 	}
 
-	cfg := ServerConfig{
-		GitLabURL:     vars["GITLAB_URL"],
-		GitLabToken:   vars["GITLAB_TOKEN"],
-		SkipTLSVerify: strings.EqualFold(vars["GITLAB_SKIP_TLS_VERIFY"], "true"),
-		MetaTools:     true,
-		AutoUpdate:    true,
-		LogLevel:      "info",
-	}
+	cfg := DefaultServerConfig()
+	cfg.GitLabURL = firstNonEmpty(vars["GITLAB_URL"], cfg.GitLabURL)
+	cfg.GitLabToken = vars["GITLAB_TOKEN"]
+	cfg.SkipTLSVerify = envBool(vars, "GITLAB_SKIP_TLS_VERIFY", false)
+	cfg.MetaTools = envBool(vars, "META_TOOLS", true)
+	cfg.ToolSurface = firstNonEmpty(vars["TOOL_SURFACE"], toolSurfaceFromMetaTools(cfg.MetaTools))
+	cfg.CapabilitySurface = firstNonEmpty(vars["CAPABILITY_SURFACE"], cfg.CapabilitySurface)
+	cfg.MetaParamSchema = firstNonEmpty(vars["META_PARAM_SCHEMA"], cfg.MetaParamSchema)
+	cfg.Enterprise = envBool(vars, "GITLAB_ENTERPRISE", false)
+	cfg.ReadOnly = envBool(vars, "GITLAB_READ_ONLY", false)
+	cfg.SafeMode = envBool(vars, "GITLAB_SAFE_MODE", false)
+	cfg.EmbeddedResources = envBool(vars, "EMBEDDED_RESOURCES", true)
+	cfg.ExcludeTools = vars["EXCLUDE_TOOLS"]
+	cfg.IgnoreScopes = envBool(vars, "GITLAB_IGNORE_SCOPES", false)
+	cfg.UploadMaxFileSize = firstNonEmpty(vars["UPLOAD_MAX_FILE_SIZE"], cfg.UploadMaxFileSize)
+	cfg.AutoUpdateMode = firstNonEmpty(vars["AUTO_UPDATE"], cfg.AutoUpdateMode)
+	cfg.AutoUpdate = cfg.AutoUpdateMode != "false"
+	cfg.AutoUpdateRepo = firstNonEmpty(vars["AUTO_UPDATE_REPO"], cfg.AutoUpdateRepo)
+	cfg.AutoUpdateTimeout = firstNonEmpty(vars["AUTO_UPDATE_TIMEOUT"], cfg.AutoUpdateTimeout)
+	cfg.RateLimitRPS = firstNonEmpty(vars["RATE_LIMIT_RPS"], cfg.RateLimitRPS)
+	cfg.RateLimitBurst = firstNonEmpty(vars["RATE_LIMIT_BURST"], cfg.RateLimitBurst)
+	cfg.LogLevel = firstNonEmpty(vars["LOG_LEVEL"], cfg.LogLevel)
+	cfg.YoloMode = envBool(vars, "YOLO_MODE", false)
 
-	return cfg, cfg.GitLabURL != "" || cfg.GitLabToken != ""
+	found := strings.TrimSpace(vars["GITLAB_URL"]) != "" || strings.TrimSpace(vars["GITLAB_TOKEN"]) != ""
+	return cfg, found
+}
+
+func envBool(vars map[string]string, key string, defaultValue bool) bool {
+	value, ok := vars[key]
+	if !ok || strings.TrimSpace(value) == "" {
+		return defaultValue
+	}
+	return strings.EqualFold(value, "true") || value == "1" || strings.EqualFold(value, "yes")
 }
 
 // WriteEnvFile writes the GitLab secrets to the env file at EnvFilePath().
@@ -70,12 +95,11 @@ func WriteEnvFile(cfg ServerConfig) (string, error) {
 
 // writeEnvFileToPath writes the env file to a specific path.
 func writeEnvFileToPath(path string, cfg ServerConfig) (string, error) {
+	cfg = cfg.withDefaults()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# gitlab-mcp-server environment — managed by setup wizard\n")
-	fmt.Fprintf(&b, "GITLAB_URL=%s\n", cfg.GitLabURL)
-	fmt.Fprintf(&b, "GITLAB_TOKEN=%s\n", cfg.GitLabToken)
-	if cfg.SkipTLSVerify {
-		fmt.Fprintf(&b, "GITLAB_SKIP_TLS_VERIFY=true\n")
+	for _, entry := range envFileEntries(cfg) {
+		fmt.Fprintf(&b, "%s=%s\n", entry.key, entry.value)
 	}
 
 	perm := os.FileMode(0o644)
@@ -88,4 +112,38 @@ func writeEnvFileToPath(path string, cfg ServerConfig) (string, error) {
 	}
 
 	return path, nil
+}
+
+type envFileEntry struct {
+	key   string
+	value string
+}
+
+func envFileEntries(cfg ServerConfig) []envFileEntry {
+	entries := []envFileEntry{
+		{"GITLAB_URL", cfg.GitLabURL},
+		{"GITLAB_TOKEN", cfg.GitLabToken},
+		{"GITLAB_SKIP_TLS_VERIFY", boolString(cfg.SkipTLSVerify)},
+		{"META_TOOLS", boolString(cfg.MetaTools)},
+		{"TOOL_SURFACE", cfg.ToolSurface},
+		{"CAPABILITY_SURFACE", cfg.CapabilitySurface},
+		{"META_PARAM_SCHEMA", cfg.MetaParamSchema},
+		{"GITLAB_ENTERPRISE", boolString(cfg.Enterprise)},
+		{"GITLAB_READ_ONLY", boolString(cfg.ReadOnly)},
+		{"GITLAB_SAFE_MODE", boolString(cfg.SafeMode)},
+		{"EMBEDDED_RESOURCES", boolString(cfg.EmbeddedResources)},
+		{"EXCLUDE_TOOLS", cfg.ExcludeTools},
+		{"GITLAB_IGNORE_SCOPES", boolString(cfg.IgnoreScopes)},
+		{"UPLOAD_MAX_FILE_SIZE", cfg.UploadMaxFileSize},
+		{"AUTO_UPDATE", cfg.AutoUpdateMode},
+		{"AUTO_UPDATE_REPO", cfg.AutoUpdateRepo},
+		{"AUTO_UPDATE_TIMEOUT", cfg.AutoUpdateTimeout},
+		{"RATE_LIMIT_RPS", cfg.RateLimitRPS},
+		{"RATE_LIMIT_BURST", cfg.RateLimitBurst},
+		{"LOG_LEVEL", cfg.LogLevel},
+		{"YOLO_MODE", boolString(cfg.YoloMode)},
+	}
+	return slices.DeleteFunc(entries, func(entry envFileEntry) bool {
+		return strings.TrimSpace(entry.value) == ""
+	})
 }
