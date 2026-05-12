@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Packages, Container Registry & Package Protection Rules
 > **Individual tools**: 28
-> **Meta-tools**: `gitlab_package`, `gitlab_registry`, `gitlab_registry_protection` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_package` (when `META_TOOLS=true`, default)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The packages domain covers the GitLab Generic Package Registry (publish, download, list, delete packages and files) and the Container Registry (repositories, tags, protection rules). It also includes composite operations like publish-and-link (publish a file and create a release asset link in one step) and publish-directory (batch-publish files from a local directory).
 
-When `META_TOOLS=true` (the default), 24 of the 28 package-domain tools below are consolidated into three meta-tools: `gitlab_package` (12 actions including 4 protection rules), `gitlab_registry` (8 actions), and `gitlab_registry_protection` (4 actions). The 4 dependency tools remain exposed individually because they are Enterprise/Premium-only tools gated by `GITLAB_ENTERPRISE=true`.
+When `META_TOOLS=true` (the default), the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_ENTERPRISE=true`.
 
 ### Common Questions
 
