@@ -63,8 +63,9 @@ func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	fmt.Fprintf(&b, "- **Merge Access Level**: %d\n", pb.MergeAccessLevel)
 	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
 	toolutil.WriteHints(&b,
-		"Use action 'list_protected' to see all protected branches",
-		"Use action 'unprotect' to remove branch protection",
+		"Use the selected tool surface's get protected-branch action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",
+		"Use the selected tool surface's update protected-branch action with the same project_id and branch_name to change protection settings",
+		"Use the selected tool surface's unprotect action with the same project_id, branch_name, and explicit confirm=true to remove branch protection",
 	)
 	return b.String()
 }
@@ -85,8 +86,8 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use action 'get_protected' with a branch name for full details",
-		"Use action 'protect' to add branch protection",
+		"Use the selected tool surface's get protected-branch action with the same project_id and branch_name for full details before update/unprotect workflows",
+		"Use the selected tool surface's protect action with project_id and branch_name to add branch protection",
 	)
 	return b.String()
 }

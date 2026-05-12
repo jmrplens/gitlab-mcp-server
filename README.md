@@ -248,7 +248,7 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
 
-Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the fuzzy search ranking model, MCP response shapes, search/describe/execute workflow, diagrams, and migration guidance.
+Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware search ranking model, fuzzy fallback, response shapes, search/describe/execute workflow, diagrams, and migration guidance.
 
 Meta-tool summary:
 

@@ -51,6 +51,41 @@ func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 	}
 }
 
+// BenchmarkSearch_FieldAwareIndex compares indexed candidate scoring against
+// the previous full-scan scoring path for representative lexical queries.
+func BenchmarkSearch_FieldAwareIndex(b *testing.B) {
+	registry := benchmarkRegistry(b)
+	queries := []string{
+		"merge request list open author project",
+		"list open issues",
+		"project delete",
+	}
+
+	for _, query := range queries {
+		terms := normalizeSearchTerms(query)
+		b.Run(benchmarkName(query)+"/indexed", func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				matches := sortAndLimitMatches(registry.scoredMatches(terms, scoreEntryWithExplanation), 20)
+				if len(matches) == 0 {
+					b.Fatalf("indexed search returned no matches for %q", query)
+				}
+			}
+		})
+		b.Run(benchmarkName(query)+"/full_scan", func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				matches := sortAndLimitMatches(fullScanScoredMatches(registry.entries, terms, scoreEntryWithExplanation), 20)
+				if len(matches) == 0 {
+					b.Fatalf("full scan returned no matches for %q", query)
+				}
+			}
+		})
+	}
+}
+
 func benchmarkRegistry(b *testing.B) *Registry {
 	b.Helper()
 

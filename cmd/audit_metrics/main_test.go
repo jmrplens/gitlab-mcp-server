@@ -84,3 +84,35 @@ func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 		t.Fatalf("countActionRoutes() = %d, want 3", got)
 	}
 }
+
+// TestDynamicSearchMetrics_ReportsIndexAndAliasCounts verifies static dynamic
+// search metrics are available without adding visible MCP tools.
+func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_repository": {
+			"tree": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
+		},
+		"gitlab_project": {
+			"delete":   {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }, Destructive: true},
+			"hook_add": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
+		},
+	}
+	catalog := actionregistry.FromActionMaps(routes)
+
+	metrics := dynamicSearchMetrics(catalog)
+	if metrics.ActionCount != 3 {
+		t.Fatalf("ActionCount = %d, want 3", metrics.ActionCount)
+	}
+	if metrics.IndexTokenCount == 0 || metrics.IndexPostingCount == 0 {
+		t.Fatalf("metrics = %+v, want populated search index metrics", metrics)
+	}
+	if metrics.AliasCount == 0 || metrics.SearchableAliasCount == 0 {
+		t.Fatalf("metrics = %+v, want alias metrics", metrics)
+	}
+	if metrics.UnsearchableAliasCount == 0 {
+		t.Fatalf("metrics = %+v, want repository_tree unsearchable alias counted", metrics)
+	}
+	if len(listDynamicTools(catalog)) != 3 {
+		t.Fatal("dynamic metrics changed advertised dynamic tool count")
+	}
+}

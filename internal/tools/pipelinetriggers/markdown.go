@@ -25,9 +25,9 @@ func FormatTriggerMarkdown(out Output) string {
 		b.WriteString("| Last Used | " + out.LastUsed + " |\n")
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'update' to modify this trigger",
-		"Use action 'run' to execute a pipeline with this trigger",
-		"Use action 'delete' to remove this trigger",
+		"Use the selected tool surface's pipeline-trigger update action with the same project_id and this trigger_id to modify this trigger",
+		"Use the selected tool surface's pipeline-trigger run action with the same project_id, ref, and this trigger token to execute a pipeline",
+		"Use the selected tool surface's pipeline-trigger delete action with the same project_id, this trigger_id, and explicit confirm=true to remove this trigger",
 	)
 	return b.String()
 }
@@ -52,8 +52,8 @@ func FormatListTriggersMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use action 'get' with trigger_id for full details",
-		"Use action 'create' to add a new pipeline trigger",
+		"Use the selected tool surface's pipeline-trigger get action with the same project_id and trigger_id for full details",
+		"Use the selected tool surface's pipeline-trigger create action with project_id to add a new pipeline trigger",
 	)
 	return b.String()
 }

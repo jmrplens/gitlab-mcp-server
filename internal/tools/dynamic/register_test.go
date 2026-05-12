@@ -37,6 +37,101 @@ func TestSearch_RanksMatchingActions(t *testing.T) {
 	}
 }
 
+// TestSearch_ExplainIsOptIn verifies that ranking explanations are omitted by
+// default and returned only when requested by the caller.
+func TestSearch_ExplainIsOptIn(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	defaultResult, defaultOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 3})
+	if err != nil {
+		t.Fatalf("Search(default) error = %v", err)
+	}
+	if defaultResult == nil || defaultResult.IsError {
+		t.Fatalf("Search(default) result = %+v, want non-error", defaultResult)
+	}
+	if defaultOutput.Count == 0 {
+		t.Fatal("Search(default) returned no matches")
+	}
+	if defaultOutput.Results[0].Explanation != nil {
+		t.Fatalf("Search(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
+	}
+	if strings.Contains(textContent(defaultResult), "| Why |") {
+		t.Fatalf("Search(default) markdown includes Why column: %s", textContent(defaultResult))
+	}
+
+	explainResult, explainOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 3, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(explain) error = %v", err)
+	}
+	if explainResult == nil || explainResult.IsError {
+		t.Fatalf("Search(explain) result = %+v, want non-error", explainResult)
+	}
+	if explainOutput.Count == 0 {
+		t.Fatal("Search(explain) returned no matches")
+	}
+	explanation := explainOutput.Results[0].Explanation
+	if explanation == nil {
+		t.Fatal("Search(explain) explanation is nil")
+	}
+	if explanation.TotalScore != explainOutput.Results[0].Score {
+		t.Fatalf("explanation TotalScore = %d, want result score %d", explanation.TotalScore, explainOutput.Results[0].Score)
+	}
+	if explanation.MatchedTerms == 0 || explanation.RequiredTerms == 0 || len(explanation.Reasons) == 0 {
+		t.Fatalf("Search(explain) explanation = %+v, want matched terms and reasons", explanation)
+	}
+	if explanation.Reasons[0].Field == "" || explanation.Reasons[0].QueryTerm == "" || explanation.Reasons[0].MatchedValue == "" {
+		t.Fatalf("Search(explain) first reason = %+v, want field, query term, and matched value", explanation.Reasons[0])
+	}
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
+	}
+}
+
+// TestSearch_IncludesCuratedRelatedActions verifies compact search results keep
+// workflow hints in structured fields without enabling scoring explanations.
+func TestSearch_IncludesCuratedRelatedActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "analyze.release_notes", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 1 || output.Results[0].ID != "analyze.release_notes" {
+		t.Fatalf("Search() output = %+v, want analyze.release_notes", output)
+	}
+	if !slices.Contains(output.Results[0].RelatedActions, "repository.compare") {
+		t.Fatalf("RelatedActions = %v, want repository.compare", output.Results[0].RelatedActions)
+	}
+	if output.Results[0].Explanation != nil {
+		t.Fatalf("Explanation = %+v, want nil by default", output.Results[0].Explanation)
+	}
+}
+
+// TestSearch_NoMatchSuggestsNearbyTokens verifies empty searches still return a
+// small recovery hint instead of dumping the full catalog.
+func TestSearch_NoMatchSuggestsNearbyTokens(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "nonsenseonlyzz", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 0 {
+		t.Fatalf("Search() Count = %d, want 0", output.Count)
+	}
+	if len(output.Suggestions) == 0 || len(output.Suggestions) > 6 {
+		t.Fatalf("Suggestions = %v, want 1..6 values", output.Suggestions)
+	}
+	if !strings.Contains(textContent(result), "Try:") {
+		t.Fatalf("Search() markdown = %q, want no-match suggestions", textContent(result))
+	}
+}
+
 // TestSearch_RequiresQuery verifies that Search returns an MCP tool error when
 // the caller omits the query text.
 func TestSearch_RequiresQuery(t *testing.T) {
@@ -113,6 +208,146 @@ func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 	}
 	if output.Count == 0 || output.Results[0].ID != "project.list" {
 		t.Fatalf("top result = %+v, want project.list", output.Results)
+	}
+}
+
+// TestSearch_CurrentHighConfidenceQueriesRemainStable protects the current
+// production-catalog top results before the ranker is refactored.
+func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name         string
+		query        string
+		limit        int
+		wantTop      string
+		wantContains string
+	}{
+		{name: "merge request list", query: "merge request list open author project", wantTop: "merge_request.list"},
+		{name: "open issues", query: "list open issues", limit: 10},
+		{name: "pipeline trigger", query: "pipeline run trigger", wantContains: "pipeline.trigger_create"},
+		{name: "ci variable secret", query: "ci variable secret", wantTop: "ci_variable.create"},
+		{name: "project delete", query: "project delete", wantTop: "project.delete"},
+		{name: "project discovery", query: "discover project from remote", wantTop: "discover_project.resolve"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limit := tt.limit
+			if limit == 0 {
+				limit = 5
+			}
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: limit})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if output.Count == 0 {
+				t.Fatalf("Search(%q) returned no matches", tt.query)
+			}
+			if tt.wantTop != "" && output.Results[0].ID != tt.wantTop {
+				t.Fatalf("Search(%q) top result = %+v, want %s", tt.query, output.Results, tt.wantTop)
+			}
+			if tt.wantContains != "" && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == tt.wantContains }) {
+				t.Fatalf("Search(%q) results = %+v, want %s", tt.query, output.Results, tt.wantContains)
+			}
+		})
+	}
+}
+
+// TestSearchIndex_CandidateGenerationPreservesFullScanTopResults verifies that
+// the lightweight index narrows candidate entries without changing the top
+// lexical results for the baseline query set.
+func TestSearchIndex_CandidateGenerationPreservesFullScanTopResults(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	queries := []string{
+		"merge request list open author project",
+		"list open issues",
+		"pipeline run trigger",
+		"ci variable secret",
+		"project delete",
+		"discover project from remote",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			terms := normalizeSearchTerms(query)
+			indexed := sortAndLimitMatches(registry.scoredMatches(terms, scoreEntryWithExplanation), 5)
+			fullScan := sortAndLimitMatches(fullScanScoredMatches(registry.entries, terms, scoreEntryWithExplanation), 5)
+			if len(fullScan) == 0 {
+				t.Fatalf("full scan returned no lexical matches for %q", query)
+			}
+			if !slices.Equal(scoredActionIDs(indexed), scoredActionIDs(fullScan)) {
+				t.Fatalf("indexed matches = %v, full scan = %v", scoredActionIDs(indexed), scoredActionIDs(fullScan))
+			}
+		})
+	}
+}
+
+// TestSearch_AnnotatesAmbiguousAlias verifies that exact ambiguous aliases are
+// surfaced in search results before the model reaches describe or execute.
+func TestSearch_AnnotatesAmbiguousAlias(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "danger.delete", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	annotated := 0
+	for _, searchResult := range output.Results {
+		if slices.Contains(searchResult.AmbiguousWith, "project.delete") && slices.Contains(searchResult.AmbiguousWith, "package.delete") {
+			annotated++
+		}
+	}
+	if annotated == 0 {
+		t.Fatalf("Search() results = %+v, want ambiguous alias annotations", output.Results)
+	}
+	text := textContent(result)
+	if !strings.Contains(text, "Use one canonical action ID explicitly") || !strings.Contains(text, "`project.delete`") || !strings.Contains(text, "`package.delete`") {
+		t.Fatalf("Search() markdown = %q, want ambiguous alias guidance", text)
+	}
+}
+
+// TestSearch_ConfidenceAnnotations verifies close-score low confidence and a
+// clear high-confidence top result. The thresholds are score >= 80 and margin >= 15.
+func TestSearch_ConfidenceAnnotations(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	lowResult, lowOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(low) error = %v", err)
+	}
+	if lowResult == nil || lowResult.IsError || lowOutput.Count == 0 {
+		t.Fatalf("Search(low) result/output = %+v %+v, want matches", lowResult, lowOutput)
+	}
+	if !lowOutput.Results[0].LowConfidence {
+		t.Fatalf("Search(project) top result = %+v, want low confidence", lowOutput.Results[0])
+	}
+	if lowOutput.Results[0].Explanation == nil || !lowOutput.Results[0].Explanation.LowConfidence {
+		t.Fatalf("Search(project) explanation = %+v, want low confidence", lowOutput.Results[0].Explanation)
+	}
+
+	highResult, highOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(high) error = %v", err)
+	}
+	if highResult == nil || highResult.IsError || highOutput.Count == 0 {
+		t.Fatalf("Search(high) result/output = %+v %+v, want matches", highResult, highOutput)
+	}
+	if highOutput.Results[0].ID != "project.delete" || highOutput.Results[0].LowConfidence {
+		t.Fatalf("Search(project delete) top result = %+v, want high-confidence project.delete", highOutput.Results[0])
 	}
 }
 
@@ -443,6 +678,50 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	}
 }
 
+// TestFind_ExplainIsOptIn verifies that find keeps its default payload compact
+// and exposes scoring reasons only when explicitly requested.
+func TestFind_ExplainIsOptIn(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	defaultResult, defaultOutput, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 3})
+	if err != nil {
+		t.Fatalf("Find(default) error = %v", err)
+	}
+	if defaultResult == nil || defaultResult.IsError {
+		t.Fatalf("Find(default) result = %+v, want non-error", defaultResult)
+	}
+	if defaultOutput.Count == 0 {
+		t.Fatal("Find(default) returned no matches")
+	}
+	if defaultOutput.Results[0].Explanation != nil {
+		t.Fatalf("Find(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
+	}
+	if strings.Contains(textContent(defaultResult), "| Why |") {
+		t.Fatalf("Find(default) markdown includes Why column: %s", textContent(defaultResult))
+	}
+
+	explainResult, explainOutput, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 3, Explain: true})
+	if err != nil {
+		t.Fatalf("Find(explain) error = %v", err)
+	}
+	if explainResult == nil || explainResult.IsError {
+		t.Fatalf("Find(explain) result = %+v, want non-error", explainResult)
+	}
+	if explainOutput.Count == 0 {
+		t.Fatal("Find(explain) returned no matches")
+	}
+	explanation := explainOutput.Results[0].Explanation
+	if explanation == nil {
+		t.Fatal("Find(explain) explanation is nil")
+	}
+	if explanation.TotalScore != explainOutput.Results[0].Score || len(explanation.Reasons) == 0 {
+		t.Fatalf("Find(explain) explanation = %+v, want score and reasons", explanation)
+	}
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Find(explain) markdown missing Why explanation: %s", textContent(explainResult))
+	}
+}
+
 // TestFind_RequiresQuery verifies that Find returns an MCP tool error and empty
 // output when the query is omitted.
 func TestFind_RequiresQuery(t *testing.T) {
@@ -524,6 +803,41 @@ func TestDescribe_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+// TestUnsearchableAlias_CanonicalizesWithoutRanking verifies compatibility
+// aliases can remain valid for describe/execute without influencing search.
+func TestUnsearchableAlias_CanonicalizesWithoutRanking(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "hidden.lookup", Canonical: "project.get", Source: aliasSourceCompatibility, Searchable: false, Notes: "test-only hidden alias"},
+	})
+
+	describeResult, describeOutput, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "hidden.lookup"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if describeResult == nil || describeResult.IsError || describeOutput.Count != 1 || describeOutput.Actions[0].ID != "project.get" {
+		t.Fatalf("Describe() result/output = %+v %+v, want project.get", describeResult, describeOutput)
+	}
+
+	executeResult, executeOutput, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "hidden.lookup", Params: map[string]any{"project_id": 123}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if executeResult == nil || executeResult.IsError || executeOutput == nil {
+		t.Fatalf("Execute() result/output = %+v %+v, want non-error output", executeResult, executeOutput)
+	}
+
+	searchResult, searchOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "hidden lookup", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if searchResult == nil || searchResult.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", searchResult)
+	}
+	if slices.ContainsFunc(searchOutput.Results, func(result SearchResult) bool { return result.ID == "project.get" }) {
+		t.Fatalf("Search() results = %+v, want hidden alias not to rank project.get", searchOutput.Results)
+	}
+}
+
 // TestRequiredParams_IncludesPreferredAlternative verifies that schemas using
 // anyOf still produce a useful example branch for search and describe output.
 func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
@@ -541,6 +855,71 @@ func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
 	}
 }
 
+// TestBuildSearchDocument_CapturesTypedFields verifies that the dynamic ranker
+// builds typed metadata fields while preserving the flat text compatibility
+// fallback used by the current scorer.
+func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id"},
+		"properties": map[string]any{
+			"project_id":      map[string]any{"type": "string", "description": "Project path or numeric identifier"},
+			"author_username": map[string]any{"type": "string"},
+			"state":           map[string]any{"type": "string", "enum": []any{"opened", "closed"}},
+		},
+	}
+
+	document := buildSearchDocument(
+		"repository.tree",
+		"gitlab_repository",
+		"repository",
+		"tree",
+		[]string{"repository_tree", "repo.files"},
+		[]string{"read", "tree"},
+		schema,
+	)
+
+	if document.CanonicalID != "repository.tree" {
+		t.Fatalf("CanonicalID = %q, want repository.tree", document.CanonicalID)
+	}
+	for _, want := range []string{"repository", "tree"} {
+		if !slices.Contains(document.IDWords, want) {
+			t.Fatalf("IDWords = %v, want %q", document.IDWords, want)
+		}
+	}
+	if document.Tool != "gitlab_repository" || document.Domain != "repository" || document.Action != "tree" {
+		t.Fatalf("document identity fields = %+v", document)
+	}
+	if document.Backend != "gitlab" || document.Capability != "source_control" || document.Resource != "repository" || document.Operation != "tree" || document.Scope != "project" {
+		t.Fatalf("document cross-backend fields = %+v", document)
+	}
+	if !slices.Contains(document.Aliases, "repository_tree") || !slices.Contains(document.Aliases, "repo.files") {
+		t.Fatalf("Aliases = %v, want hidden and visible aliases", document.Aliases)
+	}
+	if !strings.Contains(document.FlatText, "repository_tree") {
+		t.Fatalf("FlatText = %q, want explicitly supplied aliases to be searchable", document.FlatText)
+	}
+	for _, want := range []string{"gitlab", "source_control", "project", "repo.files", "read", "project_id", "author_username", "author username", "opened", "closed", "project path or numeric identifier"} {
+		if !strings.Contains(document.FlatText, want) {
+			t.Fatalf("FlatText = %q, want %q", document.FlatText, want)
+		}
+	}
+	if !slices.Contains(document.Tags, "read") || !slices.Contains(document.RequiredParams, "project_id") {
+		t.Fatalf("document tags/required params = %+v", document)
+	}
+	if strings.Join(document.OptionalParams, ",") != "author_username,state" {
+		t.Fatalf("OptionalParams = %v, want sorted author_username,state", document.OptionalParams)
+	}
+	if strings.Join(document.SchemaProperties, ",") != "author_username,project_id,state" {
+		t.Fatalf("SchemaProperties = %v, want sorted author_username,project_id,state", document.SchemaProperties)
+	}
+	if strings.Join(document.SchemaEnums, ",") != "closed,opened" {
+		t.Fatalf("SchemaEnums = %v, want closed,opened", document.SchemaEnums)
+	}
+	if strings.Join(document.SchemaDescTerms, ",") != "project path or numeric identifier" {
+		t.Fatalf("SchemaDescTerms = %v, want project path or numeric identifier", document.SchemaDescTerms)
+	}
+}
+
 // TestDescribe_CanonicalizesObservedModelAliases verifies aliases observed in
 // model output so dynamic execution remains tolerant of alternate naming.
 func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
@@ -554,6 +933,8 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"merge_request.changes":                     "mr_review.changes_get",
 		"merge_request.accept":                      "merge_request.merge",
 		"project.hooks.list":                        "project.hook_list",
+		"merge_request.emoji_award_create":          "merge_request.emoji_mr_create",
+		"merge_request.emoji_award_delete":          "merge_request.emoji_mr_delete",
 		"project.status_check_list":                 "external_status_check.list_project",
 		"project.status_checks.list":                "external_status_check.list_project",
 		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
@@ -563,8 +944,13 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"release.generate_notes":                    "analyze.release_notes",
 		"deploy_token.create":                       "access.deploy_token_create_project",
 		"deploy_key.create":                         "access.deploy_key_add",
+		"deploy_key.delete":                         "access.deploy_key_delete",
+		"deploy_key.get":                            "access.deploy_key_get",
+		"deploy_key.update":                         "access.deploy_key_update",
 		"branch.protected_list":                     "branch.get_protected",
 		"branch.update_protection":                  "branch.update_protected",
+		"issue.close":                               "issue.update",
+		"issue.reopen":                              "issue.update",
 		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
 		"merge_request.time_estimate":               "merge_request.time_estimate_set",
 		"merge_request.time_spent_add":              "merge_request.spent_time_add",
@@ -605,25 +991,36 @@ func TestDescribe_CanonicalizesProviderSpecificAliases(t *testing.T) {
 	tests := map[string]string{
 		"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
 		"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
+		"feature_flags.feature_flag_user_list":       "feature_flags.ff_user_list_list",
+		"feature_flags.feature_flag_user_list_list":  "feature_flags.ff_user_list_list",
 		"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
 		"gitlab_issue.create":                        "issue.create",
 		"gitlab_server.health_check":                 "server.health_check",
 		"job.artifact_download":                      "job.download_single_artifact",
 		"issue.link":                                 "issue.link_create",
 		"issue.note.create":                          "issue.note_create",
+		"issue.note.delete":                          "issue.note_delete",
+		"issue.note.get":                             "issue.note_get",
+		"issue.note.list":                            "issue.note_list",
+		"issue.note.update":                          "issue.note_update",
 		"issue_note.get":                             "issue.note_get",
 		"issue_note.list":                            "issue.note_list",
 		"repository_tree":                            "repository.tree",
+		"repository_tree.list":                       "repository.tree",
 		"repository_file.get":                        "repository.file_get",
 		"repository_file.read":                       "repository.file_get",
 		"repository_files.get_raw_file":              "repository.file_raw",
 		"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
+		"pipeline.schedule_variable_delete":          "pipeline.schedule_delete_variable",
 		"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
 		"project.badge_update":                       "project.badge_edit",
 		"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
 		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
+		"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
 		"generic_package.list":                       "package.list",
 		"issue_note.create":                          "issue.note_create",
+		"issue_note.delete":                          "issue.note_delete",
+		"issue_note.update":                          "issue.note_update",
 		"release_link.link_list":                     "release.link_list",
 		"wiki.show":                                  "wiki.get",
 		"gitlab_interactive_issue.create":            "interactive.issue_create",
@@ -672,6 +1069,12 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 			description := actionDescriptionByID(t, output, actionID)
 			if !strings.Contains(description.Usage, wantSubstring) {
 				t.Fatalf("usage = %q, want substring %q", description.Usage, wantSubstring)
+			}
+			if actionID == "repository.compare" && !slices.Contains(description.RelatedActions, "analyze.release_notes") {
+				t.Fatalf("RelatedActions = %v, want analyze.release_notes", description.RelatedActions)
+			}
+			if actionID == "repository.compare" && !strings.Contains(textContent(result), "Related actions") {
+				t.Fatalf("Describe() markdown = %q, want related actions", textContent(result))
 			}
 		})
 	}
@@ -879,6 +1282,42 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			},
 		},
 		{
+			name:  "issue close alias injects state event",
+			input: ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["state_event"] != "close" {
+					t.Fatalf("output = %#v, want state_event close", output)
+				}
+			},
+		},
+		{
+			name:  "issue reopen alias injects state event",
+			input: ExecuteInput{Action: "issue.reopen", Params: map[string]any{"project_id": 123, "issue_iid": 1}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["state_event"] != "reopen" {
+					t.Fatalf("output = %#v, want state_event reopen", output)
+				}
+			},
+		},
+		{
+			name:  "pipeline schedule name to description",
+			input: ExecuteInput{Action: "pipeline.schedule_create", Params: map[string]any{"project_id": 123, "name": "nightly", "ref": "main", "cron": "0 1 * * *"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["description"] != "nightly" {
+					t.Fatalf("output = %#v, want description nightly", output)
+				}
+				if _, ok := data["name"]; ok {
+					t.Fatalf("output = %#v, want name alias removed", output)
+				}
+			},
+		},
+		{
 			name: "branch protect role access levels",
 			input: ExecuteInput{Action: "branch.protect", Params: map[string]any{
 				"project_id":         123,
@@ -910,6 +1349,110 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			},
 		},
 		{
+			name:  "feature flag version alias",
+			input: ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["version"] != "new_version_flag" {
+					t.Fatalf("output = %#v, want version new_version_flag", output)
+				}
+			},
+		},
+		{
+			name:  "feature flag user list drops feature flag name",
+			input: ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if _, ok := data["name"]; ok {
+					t.Fatalf("output = %#v, want name removed", output)
+				}
+				if data["per_page"] != 20 {
+					t.Fatalf("output = %#v, want per_page 20", output)
+				}
+			},
+		},
+		{
+			name:  "release link tag alias",
+			input: ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["tag_name"] != "v1.0.0" {
+					t.Fatalf("output = %#v, want tag_name v1.0.0", output)
+				}
+			},
+		},
+		{
+			name: "snippet create drops file action",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"files": []any{map[string]any{
+					"action":    "create",
+					"file_path": "snippet.md",
+					"content":   "body",
+				}},
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if _, ok := file["action"]; ok {
+					t.Fatalf("output = %#v, want files[0].action removed", output)
+				}
+			},
+		},
+		{
+			name: "snippet create builds files from single file params",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"file_name":  "snippet.md",
+				"content":    "body",
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if file["file_path"] != "snippet.md" || file["content"] != "body" {
+					t.Fatalf("output = %#v, want files[0] with file_path and content", output)
+				}
+				if _, ok := data["file_name"]; ok {
+					t.Fatalf("output = %#v, want top-level file_name removed", output)
+				}
+				if _, ok := data["content"]; ok {
+					t.Fatalf("output = %#v, want top-level content removed", output)
+				}
+			},
+		},
+		{
+			name: "snippet create normalizes nested file name",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"files": []any{map[string]any{
+					"file_name": "snippet.md",
+					"content":   "body",
+				}},
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if file["file_path"] != "snippet.md" {
+					t.Fatalf("output = %#v, want files[0].file_path snippet.md", output)
+				}
+				if _, ok := file["file_name"]; ok {
+					t.Fatalf("output = %#v, want files[0].file_name removed", output)
+				}
+			},
+		},
+		{
 			name:  "runner paused string to bool",
 			input: ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
 			assert: func(t *testing.T, output any) {
@@ -933,6 +1476,191 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			}
 			tt.assert(t, output)
 		})
+	}
+}
+
+// TestNormalizeActionScopedParamsWithExplanation verifies debug metadata is
+// deterministic and records parameter names only.
+func TestNormalizeActionScopedParamsWithExplanation(t *testing.T) {
+	schema := map[string]any{
+		"type":     "object",
+		"required": []any{"project_id", "file_path", "ref"},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "integer"},
+			"file_path":  map[string]any{"type": "string"},
+			"ref":        map[string]any{"type": "string"},
+		},
+	}
+	params := map[string]any{"project_id": 123, "file_path": "README.md", "branch": "main"}
+
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("repository.file_get", params, schema)
+	if normalized["ref"] != "main" {
+		t.Fatalf("normalized = %#v, want ref main", normalized)
+	}
+	if _, ok := normalized["branch"]; ok {
+		t.Fatalf("normalized = %#v, want branch removed", normalized)
+	}
+	if len(explanations) != 1 {
+		t.Fatalf("explanations = %+v, want one explanation", explanations)
+	}
+	if explanations[0].Alias != "branch" || explanations[0].Canonical != "ref" || explanations[0].Source != "dynamic_action_scoped" {
+		t.Fatalf("explanations = %+v, want branch -> ref action-scoped explanation", explanations)
+	}
+}
+
+// TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParams
+// verifies snippet create keeps top-level file_name/content when the selected
+// schema already accepts them.
+func TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParams(t *testing.T) {
+	schema := map[string]any{
+		"type":     "object",
+		"required": []any{"project_id", "title", "file_name", "content"},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"title":      map[string]any{"type": "string"},
+			"file_name":  map[string]any{"type": "string"},
+			"content":    map[string]any{"type": "string"},
+			"files":      map[string]any{"type": "array"},
+		},
+	}
+	params := map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "title": "snippet", "file_name": "snippet.md", "content": "body"}
+
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("snippet.project_create", params, schema)
+	if normalized["file_name"] != "snippet.md" || normalized["content"] != "body" {
+		t.Fatalf("normalized = %#v, want top-level file_name/content preserved", normalized)
+	}
+	if _, ok := normalized["files"]; ok {
+		t.Fatalf("normalized = %#v, want files not synthesized", normalized)
+	}
+	if len(explanations) != 0 {
+		t.Fatalf("explanations = %+v, want no normalization explanation", explanations)
+	}
+}
+
+// TestActionScopedParamAliases_CoversDocumentedActions verifies the declarative
+// metadata includes every action currently normalized by dynamic execute.
+func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
+	aliases := actionScopedParamAliases()
+	wantActions := []string{
+		"job.list",
+		"repository.file_get",
+		"issue.link_create",
+		"issue.update",
+		"pipeline.schedule_create",
+		"pipeline.schedule_update",
+		"branch.protect",
+		"feature_flags.feature_flag_create",
+		"feature_flags.ff_user_list_list",
+		"group.group_label_update",
+		"project.member_add",
+		"project.member_edit",
+		"release.link_create",
+		"release.link_delete",
+		"release.link_get",
+		"release.link_list",
+		"release.link_update",
+		"runner.update",
+		"snippet.project_create",
+	}
+	for _, actionID := range wantActions {
+		if !slices.ContainsFunc(aliases, func(alias actionScopedParamAlias) bool { return alias.ActionID == actionID }) {
+			t.Fatalf("actionScopedParamAliases() = %+v, want action %s", aliases, actionID)
+		}
+	}
+}
+
+// TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch verifies dynamic
+// execute gives schema-aware repair guidance before route validation.
+func TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "repository.file_get", Params: map[string]any{"project_id": 123, "file_path": "README.md", "reff": "main"}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	text := textContent(result)
+	for _, want := range []string{"Unknown params: reff", "Did you mean reff -> ref", "Missing required params: ref", "Valid params: file_path, project_id, ref"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Execute() error text = %q, want %q", text, want)
+		}
+	}
+}
+
+// TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields verifies
+// dynamic execute does not silently drop user-supplied security intent.
+func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "pipeline.schedule_create_variable", Params: map[string]any{
+		"project_id":  123,
+		"schedule_id": 109,
+		"key":         "SCHEDULE_CRUD_TOKEN",
+		"value":       "secret",
+		"masked":      true,
+		"protected":   true,
+	}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	text := textContent(result)
+	for _, want := range []string{"Unknown params: masked, protected", "Valid params: key, project_id, schedule_id, value, variable_type"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Execute() error text = %q, want %q", text, want)
+		}
+	}
+}
+
+// TestExecute_RejectsIssueLifecycleAliasStateConflict verifies shorthand issue
+// lifecycle aliases cannot execute the opposite state transition.
+func TestExecute_RejectsIssueLifecycleAliasStateConflict(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1, "state_event": "reopen"}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	if text := textContent(result); !strings.Contains(text, "implies state_event") || !strings.Contains(text, "issue.update") {
+		t.Fatalf("Execute() error text = %q, want conflict guidance", text)
+	}
+}
+
+// TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives verifies execute
+// validation accepts either single-file or multi-file snippet creation shapes.
+func TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id", "title"},
+		"anyOf": []any{
+			map[string]any{"required": []any{"file_name", "content"}},
+			map[string]any{"required": []any{"files"}},
+		},
+	}
+
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md", "content": "body"}); len(got) != 0 {
+		t.Fatalf("missingDynamicRequiredParams(single-file) = %v, want none", got)
+	}
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "files": []any{map[string]any{"file_path": "a.md", "content": "body"}}}); len(got) != 0 {
+		t.Fatalf("missingDynamicRequiredParams(files) = %v, want none", got)
+	}
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md"}); !slices.Equal(got, []string{"content"}) {
+		t.Fatalf("missingDynamicRequiredParams(partial) = %v, want content", got)
 	}
 }
 
@@ -1000,6 +1728,30 @@ func TestDescribe_RejectsAmbiguousAlias(t *testing.T) {
 	}
 }
 
+// TestDescribe_CurrentAmbiguousAliasBehaviorRemainsStable protects the current
+// contract that ambiguous aliases are reported with canonical repair targets.
+func TestDescribe_CurrentAmbiguousAliasBehaviorRemainsStable(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "resource.remove", Canonical: "project.delete"},
+		{Alias: "resource.remove", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "resource.remove"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Describe() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Actions) != 0 {
+		t.Fatalf("Describe() output = %+v, want empty output", output)
+	}
+	text := textContent(result)
+	if !strings.Contains(text, "ambiguous") || !strings.Contains(text, "`project.delete`") || !strings.Contains(text, "`package.delete`") {
+		t.Fatalf("Describe() text = %q, want ambiguous canonical repair guidance", text)
+	}
+}
+
 // TestExecute_DestructiveActionRequiresConfirm verifies that destructive actions
 // are blocked until the caller explicitly sets confirm=true.
 func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
@@ -1038,6 +1790,48 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 	}
 	if data["confirm"] != true {
 		t.Fatalf("confirm = %v, want true", data["confirm"])
+	}
+}
+
+// TestExecute_CurrentDestructiveSafetyRemainsStable protects the current
+// destructive-action confirmation contract before ranker internals change.
+func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	blocked, blockedOutput, blockedErr := registry.Execute(t.Context(), nil, ExecuteInput{
+		Action: "project.delete",
+		Params: map[string]any{"project_id": 123},
+	})
+	if blockedErr != nil {
+		t.Fatalf("Execute(blocked) error = %v", blockedErr)
+	}
+	if blocked == nil || !blocked.IsError {
+		t.Fatalf("Execute(blocked) result = %+v, want tool error", blocked)
+	}
+	if blockedOutput != nil {
+		t.Fatalf("Execute(blocked) output = %+v, want nil", blockedOutput)
+	}
+	if !strings.Contains(textContent(blocked), "confirm=true") {
+		t.Fatalf("Execute(blocked) text = %q, want confirm guidance", textContent(blocked))
+	}
+
+	allowed, allowedOutput, allowedErr := registry.Execute(t.Context(), nil, ExecuteInput{
+		Action:  "project.delete",
+		Params:  map[string]any{"project_id": 123},
+		Confirm: true,
+	})
+	if allowedErr != nil {
+		t.Fatalf("Execute(allowed) error = %v", allowedErr)
+	}
+	if allowed == nil || allowed.IsError {
+		t.Fatalf("Execute(allowed) result = %+v, want non-error", allowed)
+	}
+	data, ok := allowedOutput.(map[string]any)
+	if !ok {
+		t.Fatalf("Execute(allowed) output = %T, want map[string]any", allowedOutput)
+	}
+	if data["confirm"] != true {
+		t.Fatalf("Execute(allowed) confirm = %v, want true", data["confirm"])
 	}
 }
 
@@ -1229,6 +2023,120 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 	}
 }
 
+// TestSearch_FuzzyRecoveryQueriesReturnExpectedCandidates verifies typo recovery
+// for common GitLab resource and workflow phrases.
+func TestSearch_FuzzyRecoveryQueriesReturnExpectedCandidates(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		query      string
+		want       string
+		wantPrefix string
+	}{
+		{query: "merje request", wantPrefix: "merge_request."},
+		{query: "merge requesy", wantPrefix: "merge_request."},
+		{query: "pipline retry", want: "pipeline.retry"},
+		{query: "brnch protect", want: "branch.protect"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10, Explain: true})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if tt.want != "" {
+				assertSearchResultsContain(t, output.Results, tt.want)
+			}
+			if tt.wantPrefix != "" && !strings.HasPrefix(output.Results[0].ID, tt.wantPrefix) {
+				t.Fatalf("Search(%q) top result = %+v, want prefix %s", tt.query, output.Results[0], tt.wantPrefix)
+			}
+		})
+	}
+}
+
+// TestSearch_FuzzyRecoveryIncludesReasonMetadata verifies fuzzy explanations
+// include fuzzy=true and edit distance metadata when fuzzy fallback supplies a result.
+func TestSearch_FuzzyRecoveryIncludesReasonMetadata(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merje requesy", Limit: 10, Explain: true})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	for _, searchResult := range output.Results {
+		if searchResult.Explanation == nil {
+			continue
+		}
+		for _, reason := range searchResult.Explanation.Reasons {
+			if reason.Fuzzy && reason.Distance > 0 {
+				return
+			}
+		}
+	}
+	t.Fatalf("Search() results = %+v, want at least one fuzzy reason with edit distance", output.Results)
+}
+
+// TestSearch_FuzzyRecoveryDoesNotElevateWeakDestructiveTypo verifies typo-only
+// destructive-looking queries cannot push a destructive action above safer matches.
+func TestSearch_FuzzyRecoveryDoesNotElevateWeakDestructiveTypo(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "projec list delet", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	if output.Results[0].ID == "project.delete" {
+		t.Fatalf("Search() top result = %+v, want non-destructive candidate above project.delete", output.Results[0])
+	}
+}
+
+// TestSearch_DomainVerbParameterIntentSignals_ReturnExpectedActions verifies
+// semantic intent signals for confusing cross-domain GitLab task phrasing.
+func TestSearch_DomainVerbParameterIntentSignals_ReturnExpectedActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "release link create", want: "release.link_create"},
+		{query: "package list project", want: "package.list"},
+		{query: "pipeline jobs", want: "job.list"},
+		{query: "project member remove", want: "project.member_delete"},
+		{query: "group variable create", want: "ci_variable.group_create"},
+		{query: "repository file read", want: "repository.file_get"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10, Explain: true})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want)
+		})
+	}
+}
+
 // TestSearch_ProviderConfusionQueries_ReturnExpectedActions locks in the
 // production catalog ranking for phrases that confused evaluated models.
 func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
@@ -1259,6 +2167,39 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 				t.Fatalf("Search() result = %+v, want non-error", result)
 			}
 			assertSearchResultsContain(t, output.Results, tt.want...)
+		})
+	}
+}
+
+// TestSearch_CrossBackendTermsStayGitLabOnly verifies non-GitLab vocabulary is
+// normalized to current GitLab capabilities without exposing foreign action IDs.
+func TestSearch_CrossBackendTermsStayGitLabOnly(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "github pull request", query: "github pr list open", want: "merge_request.list"},
+		{name: "jira ticket", query: "jira ticket list open", want: "issue.list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want)
+			for _, searchResult := range output.Results {
+				if strings.HasPrefix(searchResult.ID, "github.") || strings.HasPrefix(searchResult.ID, "jira.") {
+					t.Fatalf("Search() results = %+v, want GitLab-only action IDs", output.Results)
+				}
+			}
 		})
 	}
 }
@@ -1395,6 +2336,25 @@ func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...st
 	if !slices.Equal(gotIDs, wantIDs) {
 		t.Fatalf("Search() result IDs = %v, want exactly %v", gotIDs, wantIDs)
 	}
+}
+
+func fullScanScoredMatches(entries []actionEntry, terms []searchTerm, scorer searchScorer) []scoredActionEntry {
+	matches := make([]scoredActionEntry, 0)
+	for _, entry := range entries {
+		score, explanation := scorer(entry, terms)
+		if score > 0 {
+			matches = append(matches, scoredActionEntry{entry: entry, score: score, explanation: explanation})
+		}
+	}
+	return matches
+}
+
+func scoredActionIDs(matches []scoredActionEntry) []string {
+	ids := make([]string, 0, len(matches))
+	for _, match := range matches {
+		ids = append(ids, match.entry.ID)
+	}
+	return ids
 }
 
 func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...string) {
@@ -1592,6 +2552,17 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"spent": "added"}, nil
 				},
 			},
+			"emoji_mr_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"name": params["name"]}, nil
+				},
+			},
+			"emoji_mr_delete": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"award_id": params["award_id"]}, nil
+				},
+				Destructive: true,
+			},
 		},
 		"gitlab_issue": {
 			"note_list": {
@@ -1698,6 +2669,56 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 		},
+		"gitlab_pipeline": {
+			"schedule_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "description", "ref", "cron"},
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"description": map[string]any{"type": "string"},
+						"ref":         map[string]any{"type": "string"},
+						"cron":        map[string]any{"type": "string"},
+						"active":      map[string]any{"type": "boolean"},
+					},
+				},
+			},
+			"schedule_create_variable": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "schedule_id", "key", "value"},
+					"properties": map[string]any{
+						"project_id":    map[string]any{"type": "integer"},
+						"schedule_id":   map[string]any{"type": "integer"},
+						"key":           map[string]any{"type": "string"},
+						"value":         map[string]any{"type": "string"},
+						"variable_type": map[string]any{"type": "string"},
+					},
+				},
+			},
+			"schedule_edit_variable": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "schedule_id", "key", "value"},
+					"properties": map[string]any{
+						"project_id":    map[string]any{"type": "integer"},
+						"schedule_id":   map[string]any{"type": "integer"},
+						"key":           map[string]any{"type": "string"},
+						"value":         map[string]any{"type": "string"},
+						"variable_type": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
 		"gitlab_repository": {
 			"file_get": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
@@ -1718,6 +2739,22 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			"deploy_key_add": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"deploy_key": "added"}, nil
+				},
+			},
+			"deploy_key_delete": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
+				},
+				Destructive: true,
+			},
+			"deploy_key_get": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
+				},
+			},
+			"deploy_key_update": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
 				},
 			},
 			"token_project_create": {
@@ -1844,8 +2881,72 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 			"link_create": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"link": "created"}, nil
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "tag_name", "name", "url"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"tag_name":   map[string]any{"type": "string"},
+						"name":       map[string]any{"type": "string"},
+						"url":        map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+		"gitlab_feature_flags": {
+			"feature_flag_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"version": params["version"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "name", "version"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"name":       map[string]any{"type": "string"},
+						"version":    map[string]any{"type": "string"},
+					},
+				},
+			},
+			"ff_user_list_list": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"page":       map[string]any{"type": "integer"},
+						"per_page":   map[string]any{"type": "integer"},
+					},
+				},
+			},
+		},
+		"gitlab_snippet": {
+			"project_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"files": params["files"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "title"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"title":      map[string]any{"type": "string"},
+						"files": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "object",
+								"properties": map[string]any{
+									"file_path": map[string]any{"type": "string"},
+									"content":   map[string]any{"type": "string"},
+								},
+							},
+						},
+					},
 				},
 			},
 		},

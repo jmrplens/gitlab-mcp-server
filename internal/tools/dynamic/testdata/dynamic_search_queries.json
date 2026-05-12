@@ -1,0 +1,134 @@
+[
+    {
+        "category": "exact_canonical_id",
+        "query": "project.get",
+        "want_top": "project.get",
+        "notes": "Exact canonical action IDs should rank first."
+    },
+    {
+        "category": "alias",
+        "query": "repository_file.get",
+        "want_top": "repository.file_get",
+        "notes": "Compatibility aliases should canonicalize for discovery."
+    },
+    {
+        "category": "provider_invented_alias",
+        "query": "pipeline jobs",
+        "want_top": "job.list",
+        "notes": "Observed provider alias phrasing should resolve to the canonical job list action."
+    },
+    {
+        "category": "natural_language",
+        "query": "list open issues assigned to me",
+        "want_top_n": [
+            "issue.list"
+        ],
+        "limit": 5,
+        "notes": "Natural language issue filters should find issue.list."
+    },
+    {
+        "category": "typo",
+        "query": "brnch protect",
+        "want_top": "branch.protect",
+        "notes": "Fuzzy recovery should repair important typos for non-destructive workflow actions."
+    },
+    {
+        "category": "ambiguous_alias",
+        "query": "danger.delete",
+        "want_top_n": [
+            "project.delete",
+            "package.delete"
+        ],
+        "limit": 5,
+        "custom_aliases": [
+            {
+                "alias": "danger.delete",
+                "canonical": "project.delete"
+            },
+            {
+                "alias": "danger.delete",
+                "canonical": "package.delete"
+            }
+        ],
+        "expect_ambiguous": true,
+        "notes": "Ambiguous compatibility aliases should annotate all matching canonical targets."
+    },
+    {
+        "category": "long_multi_intent",
+        "query": "discover project from remote url merge request list current user open authored",
+        "want_top_n": [
+            "discover_project.resolve",
+            "merge_request.list"
+        ],
+        "limit": 10,
+        "notes": "Segmented search should preserve distinct actions from long prompts."
+    },
+    {
+        "category": "destructive_prompt",
+        "query": "delete project",
+        "want_top": "project.delete",
+        "expect_destructive_top": true,
+        "notes": "Explicit destructive intent may discover destructive actions; execution still requires confirm=true."
+    },
+    {
+        "category": "destructive_typo_safety",
+        "query": "projevt deleet",
+        "limit": 5,
+        "forbid_destructive_top": true,
+        "notes": "Weak fuzzy destructive typos should not elevate destructive actions."
+    },
+    {
+        "category": "schema_param_prompt",
+        "query": "merge request list author_username state project_id",
+        "want_top": "merge_request.list",
+        "notes": "Schema parameter names should help identify the action without overpowering resource intent."
+    },
+    {
+        "category": "current_user_phrase",
+        "query": "current authenticated user show",
+        "want_top": "user.current",
+        "notes": "Observed eval query should prefer the current authenticated user endpoint over user.list."
+    },
+    {
+        "category": "interactive_project_flow",
+        "query": "guided project creation flow start",
+        "want_top": "interactive.project_create",
+        "notes": "Guided project creation wording should resolve to the elicitation workflow, not project CRUD helpers."
+    },
+    {
+        "category": "interactive_issue_flow",
+        "query": "guided issue creation start for project",
+        "want_top": "interactive.issue_create",
+        "notes": "Guided issue creation wording should resolve to the elicitation workflow, not work item creation."
+    },
+    {
+        "category": "repository_tree_phrase",
+        "query": "repository tree list at main",
+        "want_top": "repository.tree",
+        "notes": "Repository inventory wording should find the repository tree action."
+    },
+    {
+        "category": "repository_tree_alias_phrase",
+        "query": "repository_tree.list",
+        "want_top": "repository.tree",
+        "notes": "Provider-invented repository_tree.list should resolve to the repository tree action."
+    },
+    {
+        "category": "provider_invented_alias",
+        "query": "pipeline.schedule_variable_delete",
+        "want_top": "pipeline.schedule_delete_variable",
+        "notes": "Observed pipeline schedule variable delete spelling should resolve to the canonical action."
+    },
+    {
+        "category": "provider_invented_alias",
+        "query": "issue.close",
+        "want_top": "issue.update",
+        "notes": "Issue lifecycle shorthand should resolve to issue.update; execute injects the state_event."
+    },
+    {
+        "category": "no_match",
+        "query": "zzzzzzzz",
+        "expect_zero": true,
+        "notes": "Nonsense queries should remain zero-result."
+    }
+]

@@ -102,7 +102,7 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 			"url":         map[string]any{},
 		}}
 		got := actionTags("repository.file_create", "repository", "file_create", schema)
-		for _, want := range []string{"repository file", "branch", "webhook", "close"} {
+		for _, want := range []string{"repository file", "branch", "url", "close"} {
 			if !stringInSlice(got, want) {
 				t.Fatalf("actionTags() = %v, want %q", got, want)
 			}
@@ -188,6 +188,159 @@ func TestScoreSearch_Alternative(t *testing.T) {
 				t.Fatalf("scoreSearchAlternative() = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestScoreSearchAlternative_WeightOrdering documents the intended precedence
+// between exact metadata fields so future tuning can change weights deliberately.
+func TestScoreSearchAlternative_WeightOrdering(t *testing.T) {
+	entry := actionEntry{
+		ID:         "project.delete",
+		Domain:     "project",
+		Action:     "delete",
+		Aliases:    []string{"project.destroy"},
+		Tags:       []string{"danger"},
+		SearchText: "project delete owner",
+	}
+
+	scores := []int{
+		scoreSearchAlternative(entry, "project.delete", "project.delete"),
+		scoreSearchAlternative(entry, "project.destroy", "project.destroy"),
+		scoreSearchAlternative(entry, "danger", "danger"),
+		scoreSearchAlternative(entry, "delete", "delete"),
+		scoreSearchAlternative(entry, "owner", "owner"),
+	}
+	for index := 1; index < len(scores); index++ {
+		if scores[index-1] <= scores[index] {
+			t.Fatalf("scores = %v, want strictly descending precedence", scores)
+		}
+	}
+}
+
+// TestScoreSearchAlternative_ReturnsReason verifies that explanation metadata
+// is stable enough for structured search debugging.
+func TestScoreSearchAlternative_ReturnsReason(t *testing.T) {
+	entry := actionEntry{
+		ID:         "issue.list",
+		Domain:     "issue",
+		Action:     "list",
+		SearchText: "issue list author_username",
+	}
+
+	score, reason := scoreSearchAlternativeWithReason(entry, "author", "author_username")
+	if score == 0 {
+		t.Fatal("scoreSearchAlternativeWithReason() score = 0, want match")
+	}
+	if reason.Field == "" || reason.QueryTerm == "" || reason.MatchedValue == "" {
+		t.Fatalf("reason = %+v, want non-empty field, query term, and matched value", reason)
+	}
+	if reason.QueryTerm != "author" || reason.Alternative != "author_username" {
+		t.Fatalf("reason = %+v, want original term and synonym alternative", reason)
+	}
+}
+
+// TestScoreSearchAlternative_SchemaParamWeights verifies schema-aware ranking
+// prefers required params over optional params while still considering enum and
+// description values as weak repair signals.
+func TestScoreSearchAlternative_SchemaParamWeights(t *testing.T) {
+	document := searchDocument{
+		CanonicalID:    "issue.list",
+		Domain:         "issue",
+		Action:         "list",
+		RequiredParams: []string{"project_id"},
+		OptionalParams: []string{"state"},
+		SchemaEnums:    []string{"opened"},
+		SchemaDescTerms: []string{
+			"filter issues by assignee username",
+		},
+		FlatText: "issue list project_id state opened filter issues by assignee username",
+	}
+	entry := actionEntry{ID: "issue.list", Domain: "issue", Action: "list", Document: document}
+
+	required := scoreSearchAlternative(entry, "project_id", "project_id")
+	optional := scoreSearchAlternative(entry, "state", "state")
+	enumValue := scoreSearchAlternative(entry, "opened", "opened")
+	description := scoreSearchAlternative(entry, "assignee", "assignee")
+
+	if required <= enumValue || enumValue <= optional || optional <= description {
+		t.Fatalf("scores required=%d enum=%d optional=%d description=%d, want required > enum > optional > description", required, enumValue, optional, description)
+	}
+}
+
+// TestComputeConfidence_Thresholds documents the current high-confidence gates:
+// score must be at least 80 and the top-result margin must be at least 15.
+func TestComputeConfidence_Thresholds(t *testing.T) {
+	tests := []struct {
+		name    string
+		matches []scoredActionEntry
+		wantLow bool
+	}{
+		{
+			name: "high confidence at thresholds",
+			matches: []scoredActionEntry{
+				{score: minimumHighConfidenceScore},
+				{score: minimumHighConfidenceScore - minimumHighConfidenceMargin},
+			},
+		},
+		{
+			name: "low score",
+			matches: []scoredActionEntry{
+				{score: minimumHighConfidenceScore - 1},
+			},
+			wantLow: true,
+		},
+		{
+			name: "close margin",
+			matches: []scoredActionEntry{
+				{score: 100},
+				{score: 100 - minimumHighConfidenceMargin + 1},
+			},
+			wantLow: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeConfidence(tt.matches)
+			if got[0].lowConfidence != tt.wantLow {
+				t.Fatalf("lowConfidence = %t, want %t", got[0].lowConfidence, tt.wantLow)
+			}
+			if got[0].explanation.LowConfidence != tt.wantLow {
+				t.Fatalf("explanation.LowConfidence = %t, want %t", got[0].explanation.LowConfidence, tt.wantLow)
+			}
+		})
+	}
+}
+
+// TestSearchRuntimeMetrics_RecordQualitySignals verifies process-local search
+// counters capture quality events without storing query text.
+func TestSearchRuntimeMetrics_RecordQualitySignals(t *testing.T) {
+	ResetSearchRuntimeMetrics()
+	t.Cleanup(ResetSearchRuntimeMetrics)
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	registry.searchMatches("zzzzzzzz", 5, false)
+	registry.searchMatches("merje requesy", 5, false)
+	registry.searchMatches("danger.delete", 5, false)
+
+	metrics := SearchRuntimeMetricsSnapshot()
+	if metrics.Searches != 3 {
+		t.Fatalf("Searches = %d, want 3", metrics.Searches)
+	}
+	if metrics.ZeroResultSearches == 0 {
+		t.Fatalf("metrics = %+v, want zero-result search recorded", metrics)
+	}
+	if metrics.FuzzyFallbackSearches == 0 {
+		t.Fatalf("metrics = %+v, want fuzzy fallback recorded", metrics)
+	}
+	if metrics.AmbiguousAliasQueries == 0 {
+		t.Fatalf("metrics = %+v, want ambiguous alias query recorded", metrics)
+	}
+	if metrics.LowConfidenceSearches == 0 {
+		t.Fatalf("metrics = %+v, want low-confidence search recorded", metrics)
 	}
 }
 

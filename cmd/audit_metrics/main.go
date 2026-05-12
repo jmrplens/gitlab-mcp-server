@@ -81,6 +81,8 @@ func main() {
 	dynamicBase := listDynamicTools(actionregistry.FromActionMaps(dynamicBaseRoutes))
 	dynamicEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
 	dynamicGitLabComEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
+	dynamicBaseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicBaseRoutes))
+	dynamicEnterpriseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -125,6 +127,13 @@ func main() {
 	printRow("Dynamic catalog actions (base)", countActionRoutes(dynamicBaseRoutes))
 	printRow("Dynamic catalog actions (self-managed enterprise)", countActionRoutes(dynamicEnterpriseRoutes))
 	printRow("Dynamic catalog actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
+	printRow("Dynamic search index tokens (base)", dynamicBaseMetrics.IndexTokenCount)
+	printRow("Dynamic search index tokens (self-managed enterprise)", dynamicEnterpriseMetrics.IndexTokenCount)
+	printRow("Dynamic search index postings (base)", dynamicBaseMetrics.IndexPostingCount)
+	printRow("Dynamic aliases (base)", dynamicBaseMetrics.AliasCount)
+	printRow("Dynamic aliases searchable (base)", dynamicBaseMetrics.SearchableAliasCount)
+	printRow("Dynamic aliases unsearchable (base)", dynamicBaseMetrics.UnsearchableAliasCount)
+	printRow("Dynamic aliases ambiguous (base)", dynamicBaseMetrics.AmbiguousAliasCount)
 	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
 	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
 	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
@@ -187,6 +196,12 @@ func main() {
 			fmt.Printf(toolListFormat, t.Name)
 		}
 	}
+}
+
+// dynamicSearchMetrics builds the dynamic registry and returns static search
+// index and alias metrics without changing the advertised MCP tool count.
+func dynamicSearchMetrics(catalog *actionregistry.Catalog) dynamictools.RegistryMetrics {
+	return dynamictools.NewRegistryFromCatalog(catalog).Metrics()
 }
 
 // dynamicActionRoutes builds the dynamic action catalog from canonical action

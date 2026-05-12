@@ -351,6 +351,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	if !contains(md, "admin") {
 		t.Error("expected admin in markdown")
 	}
+	if !contains(md, "explicit confirm=true") {
+		t.Error("expected destructive confirmation hint in markdown")
+	}
 }
 
 // TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.

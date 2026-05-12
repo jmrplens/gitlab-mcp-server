@@ -28,9 +28,9 @@ func FormatOutputMarkdown(o Output) string {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
 	toolutil.WriteHints(&b,
-		"If the workflow asks to fetch/get this key before update or delete, call action 'get' with key_id next",
-		"Use action 'enable' to grant this key to another project",
-		"Use action 'delete' to remove this deploy key",
+		"If the workflow asks to fetch/get this key before update or delete, use the selected tool surface's deploy-key get action with the same project_id and this deploy_key_id next",
+		"Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this key to another project",
+		"Use the selected tool surface's deploy-key delete action with the same project_id, this deploy_key_id, and explicit confirm=true to remove this deploy key",
 	)
 	return b.String()
 }
@@ -54,8 +54,8 @@ func FormatListMarkdown(o ListOutput) string {
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with key_id for full details",
-		"Use action 'add' to create a new deploy key",
+		"Use the selected tool surface's deploy-key get action with the same project_id and deploy_key_id for full details",
+		"Use the selected tool surface's deploy-key add action with project_id to create a new deploy key",
 	)
 	return b.String()
 }

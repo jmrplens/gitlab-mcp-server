@@ -4911,7 +4911,7 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. The unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. The delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. Never put confirm beside action as a top-level field.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
-		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require params.confirm=true.`
+		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use description, not name, for the schedule display label. Schedule variables accept params.key, params.value, and optional params.variable_type only; never send masked or protected. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface.`
 	}
 	if len(steps) == 9 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "get" && strings.Contains(strings.ToLower(task.Prompt), "broad read-only docker inventory") {
 		retryGuidance += ` For broad read-only Docker inventory, follow exactly this order: gitlab_project/get, gitlab_branch/list, gitlab_tag/list, gitlab_release/list, gitlab_repository/tree, gitlab_ci_variable/list, gitlab_access/deploy_key_list_project, gitlab_access/deploy_token_list_project, gitlab_package/list. After tag list, call gitlab_release/list before repository tree. After release list, call repository tree with params.ref="main". Use params.per_page=1 on list/tree/package steps to keep responses small; one page is enough for this evaluation.`
@@ -5412,6 +5412,12 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 	if step.ExpectedAction != "" && toolName == step.ExpectedTool {
 		if toolRoutes, routesOK := routes[step.ExpectedTool]; routesOK {
 			if action, actionOK := input["action"].(string); actionOK {
+				if step.ExpectedTool == dynamicExecuteTool {
+					if normalized, ok := dynamictools.NormalizeCompatibilityActionAlias(action); ok {
+						input = cloneToolInputWithAction(input, normalized)
+						action = normalized
+					}
+				}
 				if normalized := toolutil.NormalizeActionAlias(action, toolRoutes); normalized != action {
 					input = cloneToolInputWithAction(input, normalized)
 				}
@@ -5419,23 +5425,26 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 		}
 	}
 	route, ok := routes[step.ExpectedTool][step.ExpectedAction]
+	validationInput := input
+	schemaInput := input
 	if step.ExpectedAction != "" && toolName == step.ExpectedTool && ok && route.InputSchema != nil {
 		if params, paramsOK := input["params"].(map[string]any); paramsOK {
 			normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
 			if step.ExpectedTool == dynamicExecuteTool {
 				normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
 			}
-			input = cloneToolInputWithParams(input, normalizedParams)
+			validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(params, normalizedParams))
+			schemaInput = cloneToolInputWithParams(input, normalizedParams)
 		}
 	}
-	result := validateStepCall(step, toolName, input)
+	result := validateStepCall(step, toolName, validationInput)
 	if step.ExpectedAction == "" || toolName != step.ExpectedTool || result.Action != step.ExpectedAction {
 		return result
 	}
 	if !ok || route.InputSchema == nil {
 		return result
 	}
-	params, _ := input["params"].(map[string]any)
+	params, _ := schemaInput["params"].(map[string]any)
 	unknown, missing := schemaValidationIssues(route.InputSchema, params, "")
 	if len(unknown) == 0 && len(missing) == 0 {
 		return result
@@ -5473,6 +5482,19 @@ func cloneToolInputWithParams(input, params map[string]any) map[string]any {
 	maps.Copy(out, input)
 	out["params"] = params
 	return out
+}
+
+func mergeOriginalAndNormalizedParams(original, normalized map[string]any) map[string]any {
+	if len(original) == 0 {
+		return normalized
+	}
+	if len(normalized) == 0 {
+		return original
+	}
+	merged := make(map[string]any, len(original)+len(normalized))
+	maps.Copy(merged, original)
+	maps.Copy(merged, normalized)
+	return merged
 }
 
 // schemaAllowsParam is an internal helper for the main package.
@@ -6403,7 +6425,7 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 // selected tool surface.
 func failureDiagnosticCategories(opts options) []string {
 	if isDynamicEvalSurface(opts.ToolSurface) {
-		return []string{"alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_or_sampling_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
+		return []string{"ranker_miss", "alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_or_sampling_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
 	}
 	return []string{"mcp_implementation_bug", "gitlab_ce_limitation", "model_provider_auth", "model_provider_model_unavailable", "model_route_selection_miss", "model_parameter_shape_miss", "fixture_setup_failure", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
 }
@@ -6436,6 +6458,8 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "ce_or_sampling_limitation"
 	case strings.Contains(text, "expected tool gitlab_discover_project") || strings.Contains(text, "expected tool gitlab_interactive_") || strings.Contains(text, "standalone tool"):
 		return "standalone_unavailable"
+	case dynamicRankerMiss(text):
+		return "ranker_miss"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
 	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, "unexpected top-level parameter"):
@@ -6453,6 +6477,21 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 	default:
 		return "other"
 	}
+}
+
+func dynamicRankerMiss(text string) bool {
+	rankerMarkers := []string{
+		"dynamic ranker miss",
+		"ranker miss",
+		"expected top action",
+		"search corpus",
+	}
+	for _, marker := range rankerMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func dynamicAliasMiss(text string) bool {

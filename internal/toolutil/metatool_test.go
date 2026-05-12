@@ -341,6 +341,34 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation verifies schema-led alias
+// explanations report parameter names without exposing parameter values.
+func TestNormalizeParamAliasesForSchemaWithExplanation(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"query":             map[string]any{"type": "string"},
+			"merge_request_iid": map[string]any{"type": "integer"},
+		},
+	}
+	params := map[string]any{"search": "private text", "mr_iid": 7}
+
+	normalized, explanations := NormalizeParamAliasesForSchemaWithExplanation(params, schema)
+	if normalized["query"] != "private text" || normalized["merge_request_iid"] != 7 {
+		t.Fatalf("normalized = %#v, want query and merge_request_iid", normalized)
+	}
+	if len(explanations) != 2 {
+		t.Fatalf("explanations = %+v, want two explanations", explanations)
+	}
+	for _, explanation := range explanations {
+		if explanation.Source != "schema_common" {
+			t.Fatalf("explanation = %+v, want schema_common source", explanation)
+		}
+		if strings.Contains(explanation.Notes, "private") || explanation.Alias == "private text" || explanation.Canonical == "private text" {
+			t.Fatalf("explanation = %+v, leaked parameter value", explanation)
+		}
+	}
+}
+
 // TestNormalizeParamAliasesForSchema_CanonicalWins verifies aliases are
 // dropped when the canonical parameter is already present and the schema does
 // not accept the alias.
@@ -391,6 +419,11 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			params: map[string]any{"branch": "main"},
 			want:   map[string]any{"branch_name": "main"},
 		},
+		"branch to ref": {
+			schema: map[string]any{"properties": map[string]any{"ref": map[string]any{"type": "string"}}},
+			params: map[string]any{"branch": "main"},
+			want:   map[string]any{"ref": "main"},
+		},
 		"feature_flag_name to name": {
 			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
 			params: map[string]any{"feature_flag_name": "eval-flag"},
@@ -399,6 +432,11 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 		"emoji_name to name": {
 			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
 			params: map[string]any{"emoji_name": "eyes"},
+			want:   map[string]any{"name": "eyes"},
+		},
+		"award_emoji to name": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"award_emoji": "eyes"},
 			want:   map[string]any{"name": "eyes"},
 		},
 		"award to name": {
@@ -844,64 +882,97 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"ci_variable.create":                 {},
 		"ci_variable.group_create":           {},
 		"access.deploy_key_add":              {},
+		"branch.update_protected":            {},
 		"release.link_create":                {},
 		"feature_flags.ff_user_list_create":  {},
 		"feature_flags.ff_user_list_delete":  {},
+		"feature_flags.ff_user_list_list":    {},
 		"issue.create":                       {},
 		"server.health_check":                {},
 		"job.download_single_artifact":       {},
 		"issue.link_create":                  {},
+		"issue.note_delete":                  {},
+		"issue.note_get":                     {},
+		"issue.note_list":                    {},
+		"issue.note_update":                  {},
 		"repository.tree":                    {},
 		"repository.file_get":                {},
+		"repository.file_raw":                {},
 		"pipeline.schedule_create_variable":  {},
+		"pipeline.schedule_delete_variable":  {},
+		"pipeline.schedule_edit_variable":    {},
 		"project.badge_edit":                 {},
+		"release.link_list":                  {},
+		"merge_request.emoji_mr_create":      {},
+		"merge_request.emoji_mr_delete":      {},
 		"merge_request.spent_time_reset":     {},
 		"issue.note_create":                  {},
 		"interactive.issue_create":           {},
 	}
 
 	tests := map[string]string{
-		"project.schedule_storage_move":             "storage_move.schedule_project",
-		"merge_request.changes":                     "mr_review.changes_get",
-		"project.hooks.list":                        "project.hook_list",
-		"project.status_check_list":                 "external_status_check.list_project",
-		"project.status_checks.list":                "external_status_check.list_project",
-		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
-		"deploy_token.create":                       "access.deploy_token_create_project",
-		"deploy_key.create":                         "access.deploy_key_add",
-		"project_member.update":                     "project.member_edit",
-		"project_member.edit":                       "project.member_edit",
-		"project.member_remove":                     "project.member_delete",
-		"project_member.remove":                     "project.member_delete",
-		"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
-		"mr_review.publish":                         "mr_review.draft_note_publish_all",
-		"package.list_generic":                      "package.list",
-		"package.files":                             "package.file_list",
-		"group.audit_events":                        "audit_event.list_group",
-		"project.releases.list":                     "release.list",
-		"release.generate_notes":                    "analyze.release_notes",
-		"release.asset_link.create":                 "release.link_create",
-		"variable.create":                           "ci_variable.create",
-		"group.variable.create":                     "ci_variable.group_create",
-		"merge_request.add_spent_time":              "merge_request.spent_time_add",
-		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
-		"merge_request.time_estimate":               "merge_request.time_estimate_set",
-		"merge_request.time_spent_add":              "merge_request.spent_time_add",
-		"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
-		"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
-		"gitlab_issue.create":                       "issue.create",
-		"gitlab_server.health_check":                "server.health_check",
-		"job.artifact_download":                     "job.download_single_artifact",
-		"issue.link":                                "issue.link_create",
-		"repository_tree":                           "repository.tree",
-		"repository_file.get":                       "repository.file_get",
-		"repository_file.read":                      "repository.file_get",
-		"pipeline.schedule_variable_create":         "pipeline.schedule_create_variable",
-		"project.badge_update":                      "project.badge_edit",
-		"merge_request.time_spent_reset":            "merge_request.spent_time_reset",
-		"generic_package.list":                      "package.list",
-		"issue_note.create":                         "issue.note_create",
-		"gitlab_interactive_issue.create":           "interactive.issue_create",
+		"project.schedule_storage_move":              "storage_move.schedule_project",
+		"merge_request.changes":                      "mr_review.changes_get",
+		"project.hooks.list":                         "project.hook_list",
+		"project.status_check_list":                  "external_status_check.list_project",
+		"project.status_checks.list":                 "external_status_check.list_project",
+		"ci_job_token_scope.inbound_allowlist.list":  "job.token_scope_list_inbound",
+		"deploy_token.create":                        "access.deploy_token_create_project",
+		"deploy_key.create":                          "access.deploy_key_add",
+		"branch.update_protection":                   "branch.update_protected",
+		"project_member.update":                      "project.member_edit",
+		"project_member.edit":                        "project.member_edit",
+		"project.member_remove":                      "project.member_delete",
+		"project_member.remove":                      "project.member_delete",
+		"mr_review.draft_notes_publish":              "mr_review.draft_note_publish_all",
+		"mr_review.publish":                          "mr_review.draft_note_publish_all",
+		"package.list_generic":                       "package.list",
+		"package.files":                              "package.file_list",
+		"group.audit_events":                         "audit_event.list_group",
+		"project.releases.list":                      "release.list",
+		"release.generate_notes":                     "analyze.release_notes",
+		"release.asset_link.create":                  "release.link_create",
+		"variable.create":                            "ci_variable.create",
+		"group.variable.create":                      "ci_variable.group_create",
+		"merge_request.add_spent_time":               "merge_request.spent_time_add",
+		"merge_request.set_time_estimate":            "merge_request.time_estimate_set",
+		"merge_request.time_estimate":                "merge_request.time_estimate_set",
+		"merge_request.time_spent_add":               "merge_request.spent_time_add",
+		"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
+		"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
+		"feature_flags.feature_flag_user_list":       "feature_flags.ff_user_list_list",
+		"feature_flags.feature_flag_user_list_list":  "feature_flags.ff_user_list_list",
+		"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
+		"gitlab_issue.create":                        "issue.create",
+		"gitlab_server.health_check":                 "server.health_check",
+		"job.artifact_download":                      "job.download_single_artifact",
+		"issue.link":                                 "issue.link_create",
+		"issue.note.create":                          "issue.note_create",
+		"issue.note.delete":                          "issue.note_delete",
+		"issue.note.get":                             "issue.note_get",
+		"issue.note.list":                            "issue.note_list",
+		"issue.note.update":                          "issue.note_update",
+		"repository_tree":                            "repository.tree",
+		"repository_tree.list":                       "repository.tree",
+		"repository_file.get":                        "repository.file_get",
+		"repository_file.read":                       "repository.file_get",
+		"repository_files.get_raw_file":              "repository.file_raw",
+		"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
+		"pipeline.schedule_variable_delete":          "pipeline.schedule_delete_variable",
+		"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
+		"project.badge_update":                       "project.badge_edit",
+		"release.create_link":                        "release.link_create",
+		"release_link.link_list":                     "release.link_list",
+		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
+		"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
+		"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
+		"generic_package.list":                       "package.list",
+		"issue_note.create":                          "issue.note_create",
+		"issue_note.delete":                          "issue.note_delete",
+		"issue_note.get":                             "issue.note_get",
+		"issue_note.list":                            "issue.note_list",
+		"issue_note.update":                          "issue.note_update",
+		"gitlab_interactive_issue.create":            "interactive.issue_create",
 	}
 	for alias, want := range tests {
 		t.Run(alias, func(t *testing.T) {

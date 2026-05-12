@@ -37,9 +37,10 @@ func FormatMarkdown(v Output) string {
 		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(v.UpdatedAt))
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'group_milestone_update' to modify this milestone",
-		"Use action 'group_milestone_issues' or 'group_milestone_merge_requests' to list associated items",
-		"Use action 'group_milestone_delete' to remove this milestone",
+		"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-milestone get action with the same group_id and this milestone_id next",
+		"Use the selected tool surface's group-milestone update action with the same group_id and this milestone_id to modify this milestone",
+		"Use the selected tool surface's group-milestone issues or merge-requests action with the same group_id and milestone_id to list associated items",
+		"Use the selected tool surface's group-milestone delete action with the same group_id, this milestone_id, and explicit confirm=true to remove this milestone",
 	)
 	return b.String()
 }
@@ -61,8 +62,8 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use action 'group_milestone_get' with milestone_id for full details",
-		"Use action 'group_milestone_create' to add a new group milestone",
+		"Use the selected tool surface's group-milestone get action with the same group_id and milestone_id for full details before update/delete workflows",
+		"Use the selected tool surface's group-milestone create action with group_id to add a new group milestone",
 	)
 	return b.String()
 }

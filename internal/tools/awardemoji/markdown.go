@@ -26,7 +26,7 @@ func FormatListMarkdownString(out ListOutput) string {
 		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) — %s\n", e.Name, e.Username, e.ID, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
-	toolutil.WriteHints(&b, "Use action 'create' to add an emoji reaction, 'delete' to remove one")
+	toolutil.WriteHints(&b, "Use the selected tool surface's matching award emoji actions for this resource; delete actions require explicit confirm=true plus the same resource identifiers and award_id")
 	return b.String()
 }
 
@@ -45,7 +45,7 @@ func FormatMarkdownString(out Output) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b, "Use action 'delete' with award_id to remove this emoji")
+	toolutil.WriteHints(&b, "Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true")
 	return b.String()
 }
 
