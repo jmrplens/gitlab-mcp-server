@@ -684,7 +684,11 @@ func TestScoreSearchAlternativeWithReason_Branches(t *testing.T) {
 		t.Fatalf("scoreSearchAlternativeWithReason(flat synonym) = %d, %+v; want flat text", score, reason)
 	}
 
-	if score := scoreSearchAlternative(actionEntry{Document: searchDocument{CanonicalID: "project.get", SchemaProperties: []string{"visibility_level"}}}, "visibility", "visibility_level"); score == 0 {
+	schemaPropertyEntry := actionEntry{Document: searchDocument{
+		CanonicalID:      "project.get",
+		SchemaProperties: []string{"visibility_level"},
+	}}
+	if scoreSearchAlternative(schemaPropertyEntry, "visibility", "visibility_level") == 0 {
 		t.Fatal("scoreSearchAlternative(schema property) = 0, want match")
 	}
 	if score := scoreFieldContainsFor("field", "field_extra"); score != scoreSynonymContains {

@@ -12,7 +12,8 @@ import (
 func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	catalog := actionregistry.NewCatalog()
 	group := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_project"})
-	group.SetAction(actionregistry.Action{Name: "get", Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })})
+	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
+	group.SetAction(actionregistry.Action{Name: "get", Route: route})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
