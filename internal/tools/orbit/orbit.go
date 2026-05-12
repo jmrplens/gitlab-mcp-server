@@ -29,8 +29,9 @@ type StatusInput struct {
 
 // SchemaInput holds parameters for retrieving the Orbit graph schema.
 type SchemaInput struct {
-	Expand []string `json:"expand,omitempty" jsonschema:"Node names to expand with full properties and relationships."`
-	Format string   `json:"format,omitempty" jsonschema:"Schema response format to request: raw or llm. Defaults to raw."`
+	Expand         []string `json:"expand,omitempty" jsonschema:"Node names to expand with full properties and relationships."`
+	Format         string   `json:"format,omitempty" jsonschema:"Schema response format to request: raw or llm. Defaults to raw."`
+	ResponseFormat string   `json:"response_format,omitempty" jsonschema:"Alias for format, accepted for compatibility with GitLab's public Orbit API documentation."`
 }
 
 // ToolsInput is the input for listing Orbit MCP tool manifests.
@@ -183,7 +184,7 @@ func Schema(ctx context.Context, client *gitlabclient.Client, input SchemaInput)
 	if err := ctx.Err(); err != nil {
 		return SchemaOutput{}, err
 	}
-	format, err := responseFormat(input.Format, "format")
+	format, err := schemaResponseFormat(input)
 	if err != nil {
 		return SchemaOutput{}, err
 	}
@@ -252,6 +253,18 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 		return GraphStatusOutput{}, wrapOrbitErr("orbit_graph_status", err)
 	}
 	return convertGraphStatus(status), nil
+}
+
+func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, error) {
+	format := strings.TrimSpace(input.Format)
+	responseFormatAlias := strings.TrimSpace(input.ResponseFormat)
+	if format != "" && responseFormatAlias != "" && !strings.EqualFold(format, responseFormatAlias) {
+		return nil, errors.New("format and response_format must match when both are set")
+	}
+	if format != "" {
+		return responseFormat(format, "format")
+	}
+	return responseFormat(responseFormatAlias, "response_format")
 }
 
 func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, error) {
@@ -331,6 +344,10 @@ func wrapOrbitErr(op string, err error) error {
 	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 		return toolutil.WrapErrWithHint(op, err,
 			"check the Orbit query, response_format, and graph_status scope parameters")
+	}
+	if toolutil.IsHTTPStatus(err, http.StatusTooManyRequests) {
+		return toolutil.WrapErrWithHint(op, err,
+			"Orbit request was rate-limited; retry later with a smaller query or lower request volume")
 	}
 	if toolutil.IsHTTPStatus(err, http.StatusServiceUnavailable) {
 		return toolutil.WrapErrWithHint(op, err,

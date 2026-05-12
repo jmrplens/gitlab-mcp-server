@@ -18877,6 +18877,7 @@ Get the experimental GitLab Orbit Knowledge Graph ontology. This tool is registe
 
 - `expand` (): Node names to expand with full properties and relationships.
 - `format` (string): Schema response format to request: raw or llm. Defaults to raw.
+- `response_format` (string): Alias for format, accepted for compatibility with GitLab's public Orbit API documentation.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
