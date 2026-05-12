@@ -3,6 +3,8 @@ package tools
 import (
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
@@ -71,6 +73,22 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 	}
 	if group.FormatResult == nil {
 		t.Fatal("gitlab_analyze group should preserve its custom formatter")
+	}
+}
+
+func TestBuildActionCatalog_DoesNotRegisterMCPTools(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if catalog.CountGroups() == 0 || catalog.CountActions() == 0 {
+		t.Fatalf("catalog counts = groups %d actions %d, want non-zero", catalog.CountGroups(), catalog.CountActions())
+	}
+
+	if names := toolNamesFromServer(t, server); len(names) != 0 {
+		t.Fatalf("BuildActionCatalog() registered MCP tools as a side effect: %v", names)
 	}
 }
 

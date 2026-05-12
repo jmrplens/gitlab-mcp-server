@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,565 |
-| Unit test functions | 9,318 |
+| Total test functions | 9,566 |
+| Unit test functions | 9,319 |
 | E2E test functions | 247 |
 | cmd test functions | 409 |
 | Test files (internal/) | 407 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,572 | 89.6% |
+| `TestFunc_Scenario` (2-part) | 8,573 | 89.6% |
 | `TestFunc` (no underscore) | 705 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 288 | 3.0% |
 
@@ -46,11 +46,11 @@
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
 | Core packages | 1,592 | 83 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tools orchestration | 234 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (165) | 7,084 | 316 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 409 | 14 | server entry point and developer command utilities |
-| **Total** | **9,565** | **530** |  |
+| **Total** | **9,566** | **530** |  |
 
 ### Core Packages
 
