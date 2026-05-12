@@ -173,7 +173,7 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
 
 ### `gitlab_execute_tool`
 
-Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters. Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, applies a small set of action-scoped compatibility conversions, and moves top-level `confirm: true` into action params for destructive calls. Compatibility conversions cover observed low-token model patterns such as issue lifecycle aliases (`issue.close` and `issue.reopen`), pipeline schedule variable spellings, project snippet single-file params, deploy-key ID aliases, and feature-flag user-list list filters that should stay project-scoped.
+Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters. Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, applies a small set of action-scoped compatibility conversions, and moves top-level `confirm: true` into action params for destructive calls. Compatibility conversions cover observed low-token model patterns such as issue lifecycle aliases (`issue.close` and `issue.reopen`), pipeline schedule action spellings, project snippet single-file params, deploy-key ID aliases, and feature-flag user-list list filters that should stay project-scoped. Unknown parameters, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected before dispatch rather than silently removed.
 
 ```json
 {
@@ -247,7 +247,7 @@ Dynamic mode is designed for repairable failures. Models should treat `isError: 
 | Unknown action ID | Error result, often with `Did you mean ...?` canonical IDs | Search or describe the suggested canonical action ID |
 | Ambiguous alias | Error result listing the valid canonical targets | Pick one listed `domain.action` ID and describe it |
 | Invalid params | Backing handler validation error | Call `gitlab_describe_tools` and rebuild `params` from `input_schema` |
-| Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with confirmation only if approved |
+| Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with top-level `confirm: true` only if approved |
 
 ## Destructive Actions
 
@@ -272,9 +272,9 @@ Without confirmation, destructive execution returns `isError: true` with guidanc
   "tool": "gitlab_execute_tool",
   "arguments": {
     "action": "project.delete",
+    "confirm": true,
     "params": {
-      "project_id": "my-group/my-project",
-      "confirm": true
+      "project_id": "my-group/my-project"
     }
   }
 }
@@ -407,7 +407,7 @@ Use `dynamic-3` when you need an explicit name for the current three-tool candid
 | Search returns many broad list actions | Query is too generic | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me` |
 | Execute says the action is unknown | The model invented an action ID or the action was excluded | Search again and execute the canonical action ID from the result |
 | Execute rejects parameters | Params do not match the described schema | Call `gitlab_describe_tools` for that action and retry with the exact field names and types |
-| Destructive action returns an error | Confirmation is missing or policy blocks mutation | Add `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
+| Destructive action returns an error | Confirmation is missing or policy blocks mutation | Add top-level `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
 | Resources and prompts still use context | Capability surface is still full | Set `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal` |
 
 ## See Also

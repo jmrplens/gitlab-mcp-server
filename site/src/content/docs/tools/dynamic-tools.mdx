@@ -185,13 +185,13 @@ The assistant should execute the canonical action ID returned by search or descr
 
 Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should use the message as feedback and retry the right step.
 
-| Failure                       | Recovery                                                                |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Search query is empty         | Retry search with a domain, resource, verb, and useful filters          |
-| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message  |
-| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                      |
-| Params are rejected           | Describe the action and rebuild `params` from `input_schema`            |
-| Destructive action is blocked | Ask the user for explicit approval before retrying with `confirm: true` |
+| Failure                       | Recovery                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| Search query is empty         | Retry search with a domain, resource, verb, and useful filters                    |
+| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message            |
+| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                                |
+| Params are rejected           | Describe the action and rebuild `params` from `input_schema`                      |
+| Destructive action is blocked | Ask the user for explicit approval before retrying with top-level `confirm: true` |
 
 ## Destructive actions stay protected
 
@@ -209,7 +209,22 @@ Dynamic mode reuses the same safety model as meta-tools. Destructive actions sti
 }
 ```
 
-Without confirmation, the server returns an error result instead of deleting the project. To run the action intentionally, pass `confirm: true` in the action params.
+Without confirmation, the server returns an error result instead of deleting the project. To run the action intentionally, pass `confirm: true` at the top level of the `gitlab_execute_tool` arguments:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"confirm": true,
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+Dynamic execution validates parameters before dispatch. Unknown fields, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected with repair guidance instead of being silently removed.
 
 For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or `GITLAB_SAFE_MODE=true` to preview mutations without applying them.
 

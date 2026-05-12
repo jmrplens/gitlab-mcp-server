@@ -354,16 +354,16 @@ No Dynamic 2-tool evaluation summary has been published yet.
 <!-- END MODEL EVAL DYNAMIC2 SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC3 SUMMARY -->
-Current published result: **Dynamic 3-tool all-provider Docker run 2026-05-09**.
+Current published result: **2026-05-12 Dynamic all-models hardening**.
 
 | Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
 | --- | --- | --- | ---: | ---: | --- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 44.4% (4/9) | 100.0% final across 256 ops |
-| Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 8.3% (1/12) | 100.0% final across 256 ops |
-| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 44.4% (12/27) | 100.0% final across 256 ops |
-| Qwen | `qwen3.6-flash` | OK | 100.0% | 25.0% (1/4) | 100.0% final across 256 ops |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 14.3% (1/7) | 100.0% final across 256 ops |
+| Google | `gemini-3.1-flash-lite-preview` | Review | 100.0% | 11.1% (1/9) | 100.0% final across 256 ops |
+| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 27.3% (3/11) | 100.0% final across 256 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | 25.0% (2/8) | 100.0% final across 256 ops |
 
-The published model-evaluation set covers 512 task attempts and 1024 expected MCP operations. Across the selected reports, models emitted 1397 tool calls over 1397 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 512 task attempts and 1024 expected MCP operations. Across the selected reports, models emitted 1284 tool calls over 1284 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC3 SUMMARY -->
 
 ## Documentation
@@ -472,66 +472,66 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 655 | 138,992 |
-| Unit tests (`_test.go`) | 418 | 223,956 |
-| End-to-end tests | 111 | 24,022 |
-| **Total** | **1,184** | **386,970** |
+| Source (`.go`, non-test) | 660 | 142,547 |
+| Unit tests (`_test.go`) | 418 | 227,423 |
+| End-to-end tests | 111 | 24,070 |
+| **Total** | **1,189** | **394,040** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 4,199 |
-| — exported (public) | 2,265 |
-| — unexported (private) | 1,934 |
-| Unit test functions (`TestXxx`) | 9,264 |
-| Subtests (`t.Run(...)`) | 2,012 |
+| Source functions | 4,339 |
+| — exported (public) | 2,277 |
+| — unexported (private) | 2,062 |
+| Unit test functions (`TestXxx`) | 9,356 |
+| Subtests (`t.Run(...)`) | 2,026 |
 | End-to-end test functions | 248 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.61× more tests than code |
-| Average source file length | ~212 lines |
-| Average test file length | ~535 lines |
-| Comment lines in source | 10,642 (~7.7% of source) |
+| Test lines vs source lines | 1.60× more tests than code |
+| Average source file length | ~215 lines |
+| Average test file length | ~544 lines |
+| Comment lines in source | 10,696 (~7.5% of source) |
 | Test functions per source function | 2.2× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,896 |
-| `defer` statements | 732 |
-| `struct` types defined | 2,062 |
-| `//nolint` suppressions | 54 |
+| `if err != nil` checks | 6,014 |
+| `defer` statements | 733 |
+| `struct` types defined | 2,078 |
+| `//nolint` suppressions | 51 |
 | `TODO` / `FIXME` / `HACK` comments | 1 |
 
 ### Project
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 198 |
+| Go packages | 199 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 122 |
+| Git commits | 114 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 7,136 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 7,206 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,527 pages of A4 |
-| Source lines mentioning `"gitlab"` | 11,136 (impossible to avoid) |
-| Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
+| Source code printed at 55 lines/page | ~2,591 pages of A4 |
+| Source lines mentioning `"gitlab"` | 11,175 (impossible to avoid) |
+| Longest function name in source | `NormalizeParamAliasesForSchemaWithExplanation` (45 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
 <!-- END STATS -->

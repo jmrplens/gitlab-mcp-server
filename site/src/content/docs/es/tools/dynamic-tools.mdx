@@ -185,13 +185,13 @@ El asistente debe ejecutar el ID de acción canónico devuelto por búsqueda o d
 
 El modo dinámico está diseñado para poder repararse. Si una llamada devuelve `isError: true`, el asistente debe usar el mensaje como feedback y repetir el paso correcto.
 
-| Fallo                                  | Recuperación                                                                  |
-| -------------------------------------- | ----------------------------------------------------------------------------- |
-| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles           |
-| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error    |
-| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados y describirlo                  |
-| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`               |
-| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` |
+| Fallo                                  | Recuperación                                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles                            |
+| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error                     |
+| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados y describirlo                                   |
+| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`                                |
+| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` a nivel superior |
 
 ## Las acciones destructivas siguen protegidas
 
@@ -209,7 +209,22 @@ El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramient
 }
 ```
 
-Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` dentro de los parámetros de la acción.
+Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_tool`:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"confirm": true,
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+La ejecución dinámica valida los parámetros antes de despachar. Los campos desconocidos, incluidos campos sensibles no soportados como `masked` o `protected` en variables de pipeline schedules, se rechazan con guía de reparación en lugar de eliminarse silenciosamente.
 
 Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
 
