@@ -1,3 +1,6 @@
+// search_index_test covers lightweight candidate-index behavior in package
+// dynamic, including top-result parity vs full scan and defensive/fallback
+// branches using table-driven subtests and tiny in-memory fixtures.
 package dynamic
 
 import (

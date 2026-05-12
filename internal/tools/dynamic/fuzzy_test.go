@@ -239,3 +239,31 @@ func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
 		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
 	}
 }
+
+func TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore(t *testing.T) {
+	entry := actionEntry{
+		ID:           "merge_request.list",
+		Domain:       "merge_request",
+		Action:       "list",
+		Tags:         []string{"merge_request", "project"},
+		Aliases:      []string{"merge request list"},
+		SearchTokens: buildSearchTokens("merge_request list project"),
+	}
+	terms := normalizeSearchTerms("marge request project")
+
+	want := fuzzyScoreEntry(entry, terms)
+	got, explanation := fuzzyScoreEntryWithExplanation(entry, terms)
+
+	if want == 0 {
+		t.Fatal("fuzzyScoreEntry returned 0, want a positive score for typo-recovery query")
+	}
+	if got != want {
+		t.Fatalf("fuzzyScoreEntryWithExplanation() = %d, want %d", got, want)
+	}
+	if explanation.TotalScore != got {
+		t.Fatalf("explanation.TotalScore = %d, want %d", explanation.TotalScore, got)
+	}
+	if explanation.MatchedTerms == 0 || len(explanation.Reasons) == 0 {
+		t.Fatalf("explanation missing matches/reasons: %+v", explanation)
+	}
+}

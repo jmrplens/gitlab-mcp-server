@@ -20,7 +20,7 @@ The current registry stores each visible action as an `actionEntry` with:
 
 Search currently scans the visible action entries and scores each normalized query term against typed action metadata, falling back to flat text for compatibility. Exact canonical IDs score highest, followed by aliases, tags, exact domain or action names, partial ID matches, partial domain or action matches, typed field matches, and broader flat text matches. Synonyms and verb alternatives are expanded before scoring.
 
-Callers may pass `explain:true` to `gitlab_search_tools` or `gitlab_find_action` to include deterministic scoring explanations. The default remains compact and omits explanations.
+Callers may pass `explain:true` to `gitlab_search_tools` or `gitlab_find_action` to include deterministic scoring explanations. The default remains compact and omits explanations. Explanation mode reuses the same scoring path as non-explanation mode, so enabling explanations does not change ranking.
 
 Search and describe results also include curated `related_actions` for workflows where ordering matters, such as comparing refs before generating release notes or checking tag/release state before deletion. These relationships are intentionally sparse and live with the action UX metadata next to usage hints.
 

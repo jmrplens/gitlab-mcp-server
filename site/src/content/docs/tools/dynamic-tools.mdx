@@ -131,7 +131,7 @@ The ranking pipeline:
 
 Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters and suppresses weak typo matches for destructive actions. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
 
-Search accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
+Search accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
 
 :::tip[Use canonical IDs]
 Aliases help search and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. When in doubt, describe the action ID returned by search and execute exactly that ID.

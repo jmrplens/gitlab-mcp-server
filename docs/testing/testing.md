@@ -18,10 +18,10 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,626 |
-| Unit test functions | 9,379 |
+| Total test functions | 9,624 |
+| Unit test functions | 9,377 |
 | E2E test functions | 247 |
-| cmd test functions | 404 |
+| cmd test functions | 401 |
 | Test files (internal/) | 407 |
 | Test files (cmd/) | 13 |
 | Test files (test/e2e/suite/) | 109 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,631 | 89.7% |
+| `TestFunc_Scenario` (2-part) | 8,629 | 89.7% |
 | `TestFunc` (no underscore) | 705 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 290 | 3.0% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,592 | 83 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 233 | 8 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (165) | 7,150 | 316 | domain-specific GitLab tool handlers |
+| Tool sub-packages (165) | 7,151 | 316 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
-| cmd packages | 404 | 13 | server entry point and developer command utilities |
-| **Total** | **9,626** | **529** |  |
+| cmd packages | 401 | 13 | server entry point and developer command utilities |
+| **Total** | **9,624** | **529** |  |
 
 ### Core Packages
 
@@ -86,9 +86,9 @@
 | groups | 123 | 98.9% | 18 |
 | jobs | 118 | 96.1% | 17 |
 | search | 114 | 100.0% | 10 |
-| dynamic | 111 | 99.8% | 4 |
+| dynamic | 112 | 99.8% | 4 |
 | packages | 108 | 95.6% | 9 |
-| awardemoji | 106 | 65.0% | 25 |
+| awardemoji | 106 | 65.2% | 25 |
 | pipelines | 99 | 97.4% | 12 |
 | resourceevents | 99 | 100.0% | 16 |
 | commits | 97 | 96.5% | 13 |
@@ -121,7 +121,7 @@
 | attestations | 17 | 2 | 100.0% | 2 |
 | auditevents | 42 | 3 | 100.0% | 6 |
 | avatar | 10 | 1 | 95.2% | 2 |
-| awardemoji | 106 | 1 | 65.0% | 25 |
+| awardemoji | 106 | 1 | 65.2% | 25 |
 | badges | 47 | 1 | 97.2% | 12 |
 | boards | 64 | 2 | 99.7% | 11 |
 | branches | 80 | 1 | 97.0% | 10 |
@@ -148,7 +148,7 @@
 | deploytokens | 65 | 2 | 100.0% | 10 |
 | dockerfiletemplates | 14 | 1 | 100.0% | 2 |
 | dorametrics | 9 | 2 | 100.0% | 2 |
-| dynamic | 111 | 7 | 99.8% | 4 |
+| dynamic | 112 | 7 | 99.8% | 4 |
 | elicitationtools | 57 | 2 | 98.2% | 4 |
 | enterpriseusers | 33 | 3 | 100.0% | 4 |
 | environments | 47 | 2 | 100.0% | 6 |
@@ -276,7 +276,7 @@
 | vulnerabilities | 52 | 3 | 98.5% | 8 |
 | wikis | 58 | 2 | 98.9% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,150** | **316** |  | **1,061** |
+| **Total** | **7,151** | **316** |  | **1,061** |
 
 </details>
 
@@ -333,7 +333,7 @@
 | attestations | 100.0% |
 | auditevents | 100.0% |
 | avatar | 95.2% |
-| awardemoji | 65.0% |
+| awardemoji | 65.2% |
 | badges | 97.2% |
 | boards | 99.7% |
 | branches | 97.0% |
@@ -500,7 +500,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_meta_tools** (57.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
-- **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
+- **awardemoji** (65.2%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (77.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.

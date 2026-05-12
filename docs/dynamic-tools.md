@@ -126,7 +126,7 @@ Search returns a ranked shortlist of catalog actions. The Markdown response is a
 }
 ```
 
-Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Search may also set `low_confidence: true` when the top result score or margin is weak, and `ambiguous_with` when a query matches a known ambiguous alias.
+Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata. Search may also set `low_confidence: true` when the top result score or margin is weak, and `ambiguous_with` when a query matches a known ambiguous alias.
 
 An empty query returns `isError: true` with example search terms. A query with no matches returns a non-error result with `count: 0` and a small `suggestions` array of nearby tokens and common domains, so the model can broaden the query and try again without receiving a catalog dump.
 

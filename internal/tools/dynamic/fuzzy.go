@@ -57,12 +57,12 @@ func fuzzyTermMatchesResourceSignal(entry actionEntry, raw, alternative string) 
 }
 
 func fuzzyScoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, ScoringExplanation) {
-	totalScore, matchedCount, minRequired, _, reasons := fuzzyScoreCore(entry, terms, true)
+	totalScore, matchedCount, minRequired, resourceBoost, reasons := fuzzyScoreCore(entry, terms, true)
 	if matchedCount == 0 || matchedCount < minRequired {
 		return 0, ScoringExplanation{}
 	}
 
-	score := totalScore*matchedCount/len(terms) + fuzzyResourceSignalBoostFor(entry, reasons)
+	score := totalScore*matchedCount/len(terms) + resourceBoost
 	return score, ScoringExplanation{
 		TotalScore:    score,
 		MatchedTerms:  matchedCount,
@@ -123,17 +123,6 @@ func bestFuzzyTermMatch(entry actionEntry, term searchTerm, includeReason bool) 
 		}
 	}
 	return best
-}
-
-func fuzzyResourceSignalBoostFor(entry actionEntry, reasons []MatchReason) int {
-	document := documentForEntry(entry)
-	boost := 0
-	for _, reason := range reasons {
-		if termMatchesResourceSignal(reason.MatchedValue, document) || termMatchesResourceSignal(reason.Alternative, document) {
-			boost += fuzzyResourceSignalBoost
-		}
-	}
-	return boost
 }
 
 func fuzzyTokenScoreWithReason(raw, alternative string, searchTokens []string) (int, MatchReason) {
