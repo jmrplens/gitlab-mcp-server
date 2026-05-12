@@ -1,7 +1,7 @@
 ---
 title: "ADR-0012: Action catalog package name"
 status: "Accepted"
-date: "2026-05-13"
+date: "2026-05-12"
 authors: "jmrplens, GitHub Copilot"
 tags: ["architecture", "decision", "mcp", "tool-surfaces", "action-catalog"]
 supersedes: ""
