@@ -19,9 +19,9 @@ func FormatOutputMarkdown(br Output) string {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, br.WebURL)
 	}
 	toolutil.WriteHints(&b,
-		"Use gitlab_merge_request action 'create' to open an MR from this branch",
-		"Use gitlab_repository action 'commit_list' to see recent commits on this branch",
-		"Use action 'delete' to remove the branch after merging",
+		"Use the selected tool surface's merge-request create action to open an MR from this branch",
+		"Use the selected tool surface's repository commit-list action with the same project_id and ref_name to see recent commits on this branch",
+		"Use the selected tool surface's branch delete action with the same project_id, branch_name, and explicit confirm=true to remove the branch after merging",
 	)
 	return b.String()
 }
@@ -47,9 +47,9 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with a branch name to see full details",
-		"Use action 'create' to create a new branch",
-		"Use action 'protect' to protect a branch",
+		"Use the selected tool surface's branch get action with project_id and branch_name to see full details",
+		"Use the selected tool surface's branch create action with project_id, branch_name, and ref to create a new branch",
+		"Use the selected tool surface's branch protect action with project_id and branch_name to protect a branch",
 	)
 	return b.String()
 }
@@ -63,9 +63,9 @@ func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	fmt.Fprintf(&b, "- **Merge Access Level**: %d\n", pb.MergeAccessLevel)
 	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
 	toolutil.WriteHints(&b,
-		"Use the selected tool surface's get protected-branch action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",
-		"Use the selected tool surface's update protected-branch action with the same project_id and branch_name to change protection settings",
-		"Use the selected tool surface's unprotect action with the same project_id, branch_name, and explicit confirm=true to remove branch protection",
+		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",
+		"Use the selected tool surface's branch update_protected action with the same project_id and branch_name to change protection settings",
+		"Use the selected tool surface's branch unprotect action with the same project_id, branch_name, and explicit confirm=true to remove branch protection",
 	)
 	return b.String()
 }
@@ -87,8 +87,8 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's get protected-branch action with the same project_id and branch_name for full details before update/unprotect workflows",
-		"Use the selected tool surface's protect action with project_id and branch_name to add branch protection",
+		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name for full details before update/unprotect workflows",
+		"Use the selected tool surface's branch protect action with project_id and branch_name to add branch protection",
 	)
 	return b.String()
 }

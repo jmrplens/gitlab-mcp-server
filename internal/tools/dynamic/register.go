@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -265,6 +266,7 @@ func newRegistryFromCatalog(catalog *actionregistry.Catalog, aliases []actionAli
 	if catalog == nil {
 		catalog = actionregistry.NewCatalog()
 	}
+	compatibilityAliasesByCanonical := aliasesByCanonical(aliases)
 	registry := &Registry{
 		byID:             make(map[string]actionEntry),
 		aliases:          make(map[string]string),
@@ -285,7 +287,7 @@ func newRegistryFromCatalog(catalog *actionregistry.Catalog, aliases []actionAli
 			route := action.Route
 			domain := action.Domain
 			id := string(action.ID)
-			compatibilityAliases := aliasesForCanonicalAction(id, aliases)
+			compatibilityAliases := compatibilityAliasesByCanonical[id]
 			entryAliases := dedupeStrings(append(action.Aliases, searchableAliasNames(compatibilityAliases)...))
 			canonicalAliases := dedupeStrings(append(action.Aliases, aliasNames(compatibilityAliases)...))
 			tags := dedupeStrings(append(action.Tags, actionTags(id, domain, action.Name, route.InputSchema)...))
@@ -454,7 +456,6 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 				return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: action %q implies state_event=%q, but params.state_event was %q. Use the canonical issue.update action for explicit state_event control.", requestedActionID, stateEvent, existingStateEvent)), nil, nil
 			}
 		} else {
-			params = maps.Clone(params)
 			params["state_event"] = stateEvent
 			actionParamExplanations = append(actionParamExplanations, toolutil.ParamAliasExplanation{Alias: requestedActionID, Canonical: "state_event", Source: "dynamic_action_alias", Notes: "issue lifecycle aliases execute issue.update with the matching state_event"})
 		}
@@ -2003,15 +2004,17 @@ func backtickString(value string) string {
 	return "`" + value + "`"
 }
 
-func aliasesForCanonicalAction(id string, allAliases []actionAlias) []actionAlias {
-	var matches []actionAlias
-	for _, actionAlias := range allAliases {
-		if actionAlias.Canonical == id {
-			matches = append(matches, actionAlias)
-		}
+func aliasesByCanonical(aliases []actionAlias) map[string][]actionAlias {
+	grouped := make(map[string][]actionAlias)
+	for _, alias := range dedupeActionAliases(aliases) {
+		grouped[alias.Canonical] = append(grouped[alias.Canonical], alias)
 	}
-	sort.Slice(matches, func(i, j int) bool { return matches[i].Alias < matches[j].Alias })
-	return dedupeActionAliases(matches)
+	for canonical := range grouped {
+		sort.Slice(grouped[canonical], func(i, j int) bool {
+			return grouped[canonical][i].Alias < grouped[canonical][j].Alias
+		})
+	}
+	return grouped
 }
 
 func aliasNames(aliases []actionAlias) []string {
@@ -2205,15 +2208,30 @@ func NormalizeCompatibilityActionAlias(actionID string) (string, bool) {
 	if actionID == "" {
 		return "", false
 	}
-	targets := make(map[string][]string)
-	for _, alias := range actionAliases() {
-		targets[alias.Alias] = append(targets[alias.Alias], alias.Canonical)
-	}
-	matches := dedupeSortedStrings(targets[actionID])
+	matches := compatibilityAliasTargetIndex()[actionID]
 	if len(matches) != 1 {
 		return actionID, false
 	}
 	return matches[0], true
+}
+
+var (
+	compatibilityAliasTargetIndexOnce sync.Once
+	compatibilityAliasTargets         map[string][]string
+)
+
+func compatibilityAliasTargetIndex() map[string][]string {
+	compatibilityAliasTargetIndexOnce.Do(func() {
+		targets := make(map[string][]string)
+		for _, alias := range actionAliases() {
+			targets[alias.Alias] = append(targets[alias.Alias], alias.Canonical)
+		}
+		for alias, matches := range targets {
+			targets[alias] = dedupeSortedStrings(matches)
+		}
+		compatibilityAliasTargets = targets
+	})
+	return compatibilityAliasTargets
 }
 
 func annotateCompatibilityAliases(aliases []actionAlias) []actionAlias {

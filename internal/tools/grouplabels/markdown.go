@@ -31,7 +31,7 @@ func FormatMarkdown(l Output) string {
 		"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
 		"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
 		"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
-		"Use the selected tool surface's group-label subscribe or unsubscribe action with the same group_id and this label_id to follow or unfollow",
+		"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
 	)
 	return b.String()
 }

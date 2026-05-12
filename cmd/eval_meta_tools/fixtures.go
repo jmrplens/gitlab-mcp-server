@@ -195,6 +195,9 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.CleanupReleaseTag == "" {
 		state.CleanupReleaseTag = liveFixtureCleanupTag
 	}
+	// Legacy fixture snapshots sometimes persisted CleanupReleaseTag into
+	// ReleaseSummaryTag; treat that value as unset so summary checks migrate to
+	// the dedicated release-summary tag.
 	if state.ReleaseSummaryTag == "" || state.ReleaseSummaryTag == liveFixtureCleanupTag {
 		state.ReleaseSummaryTag = liveFixtureReleaseSummaryTag
 	}

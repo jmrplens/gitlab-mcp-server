@@ -1423,151 +1423,150 @@ func TestValidateStepCallWithRoutes_AcceptsDynamicActionScopedAliases(t *testing
 	}
 }
 
-// TestValidateStepCallWithRoutes_AcceptsDynamicCompatibilityAliases verifies
-// the eval validator recognizes dynamic aliases accepted by gitlab_execute_tool.
-func TestValidateStepCallWithRoutes_AcceptsDynamicCompatibilityAliases(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.tree", RequiredParams: []string{"project_id"}}
-	routes := map[string]toolutil.ActionMap{
-		dynamicExecuteTool: {
-			"repository.tree": toolutil.ActionRoute{InputSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"project_id": map[string]any{"type": "string"},
-					"ref":        map[string]any{"type": "string"},
+// TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization verifies
+// dynamic alias and parameter-normalization behavior across representative
+// compatibility scenarios.
+func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *testing.T) {
+	tests := []struct {
+		name       string
+		step       evalStep
+		routes     map[string]toolutil.ActionMap
+		input      map[string]any
+		wantAction string
+		wantValid  bool
+	}{
+		{
+			name:       "accepts dynamic compatibility aliases",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.tree", RequiredParams: []string{"project_id"}},
+			wantAction: "repository.tree",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"repository.tree": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"ref":        map[string]any{"type": "string"},
+						},
+					}},
 				},
-			}},
+			},
+			input: map[string]any{
+				"action": "repository_tree.list",
+				"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "ref": "main"},
+			},
 		},
-	}
-
-	result := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{
-		"action": "repository_tree.list",
-		"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "ref": "main"},
-	}, routes)
-
-	if !result.Valid {
-		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
-	}
-	if result.Action != "repository.tree" {
-		t.Fatalf("Action = %q, want repository.tree", result.Action)
-	}
-}
-
-// TestValidateStepCallWithRoutes_AcceptsDynamicOnlyAliases verifies the eval
-// validator shares Dynamic runtime compatibility aliases without adding them to
-// the meta-tool alias table.
-func TestValidateStepCallWithRoutes_AcceptsDynamicOnlyAliases(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid"}}
-	routes := map[string]toolutil.ActionMap{
-		dynamicExecuteTool: {
-			"issue.update": toolutil.ActionRoute{InputSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"project_id":  map[string]any{"type": "string"},
-					"issue_iid":   map[string]any{"type": "integer"},
-					"state_event": map[string]any{"type": "string"},
+		{
+			name:       "accepts dynamic-only aliases",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid"}},
+			wantAction: "issue.update",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"issue.update": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id":  map[string]any{"type": "string"},
+							"issue_iid":   map[string]any{"type": "integer"},
+							"state_event": map[string]any{"type": "string"},
+						},
+					}},
 				},
-			}},
+			},
+			input: map[string]any{
+				"action": "issue.close",
+				"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "issue_iid": 1},
+			},
 		},
-	}
-
-	result := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{
-		"action": "issue.close",
-		"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "issue_iid": 1},
-	}, routes)
-
-	if !result.Valid {
-		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
-	}
-	if result.Action != "issue.update" {
-		t.Fatalf("Action = %q, want issue.update", result.Action)
-	}
-}
-
-// TestValidateStepCallWithRoutes_AcceptsNestedDynamicParamNormalization verifies
-// nested action-scoped normalization runs before schema validation.
-func TestValidateStepCallWithRoutes_AcceptsNestedDynamicParamNormalization(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title"}}
-	routes := map[string]toolutil.ActionMap{
-		dynamicExecuteTool: {
-			"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"project_id": map[string]any{"type": "string"},
-					"title":      map[string]any{"type": "string"},
-					"files": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"file_path": map[string]any{"type": "string"},
-								"content":   map[string]any{"type": "string"},
+		{
+			name:       "accepts nested dynamic param normalization",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title"}},
+			wantAction: "snippet.project_create",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"title":      map[string]any{"type": "string"},
+							"files": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"file_path": map[string]any{"type": "string"},
+										"content":   map[string]any{"type": "string"},
+									},
+								},
 							},
 						},
-					},
+					}},
 				},
-			}},
+			},
+			input: map[string]any{
+				"action": "snippet.project_create",
+				"params": map[string]any{
+					"project_id": "my-org/tools/gitlab-mcp-server",
+					"title":      "snippet",
+					"files": []any{map[string]any{
+						"action":    "create",
+						"file_path": "snippet.md",
+						"content":   "body",
+					}},
+				},
+			},
 		},
-	}
-
-	result := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{
-		"action": "snippet.project_create",
-		"params": map[string]any{
-			"project_id": "my-org/tools/gitlab-mcp-server",
-			"title":      "snippet",
-			"files": []any{map[string]any{
-				"action":    "create",
-				"file_path": "snippet.md",
-				"content":   "body",
-			}},
-		},
-	}, routes)
-
-	if !result.Valid {
-		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
-	}
-}
-
-// TestValidateStepCallWithRoutes_ValidatesRequiredParamsBeforeDynamicNormalization
-// verifies exact-call task requirements are checked against the model input
-// even when dynamic execute normalizes those params for schema validation.
-func TestValidateStepCallWithRoutes_ValidatesRequiredParamsBeforeDynamicNormalization(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title", "file_name", "content"}}
-	routes := map[string]toolutil.ActionMap{
-		dynamicExecuteTool: {
-			"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
-				"type":     "object",
-				"required": []any{"project_id", "title", "files"},
-				"properties": map[string]any{
-					"project_id": map[string]any{"type": "string"},
-					"title":      map[string]any{"type": "string"},
-					"files": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type":     "object",
-							"required": []any{"file_path", "content"},
-							"properties": map[string]any{
-								"file_path": map[string]any{"type": "string"},
-								"content":   map[string]any{"type": "string"},
+		{
+			name:       "validates required params before dynamic normalization",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title", "file_name", "content"}},
+			wantAction: "snippet.project_create",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type":     "object",
+						"required": []any{"project_id", "title", "files"},
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"title":      map[string]any{"type": "string"},
+							"files": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type":     "object",
+									"required": []any{"file_path", "content"},
+									"properties": map[string]any{
+										"file_path": map[string]any{"type": "string"},
+										"content":   map[string]any{"type": "string"},
+									},
+								},
 							},
 						},
-					},
+					}},
 				},
-			}},
+			},
+			input: map[string]any{
+				"action": "snippet.project_create",
+				"params": map[string]any{
+					"project_id": "my-org/tools/gitlab-mcp-server",
+					"title":      "snippet",
+					"file_name":  "snippet.md",
+					"content":    "body",
+				},
+			},
 		},
 	}
 
-	result := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{
-		"action": "snippet.project_create",
-		"params": map[string]any{
-			"project_id": "my-org/tools/gitlab-mcp-server",
-			"title":      "snippet",
-			"file_name":  "snippet.md",
-			"content":    "body",
-		},
-	}, routes)
-
-	if !result.Valid {
-		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validateStepCallWithRoutes(tc.step, dynamicExecuteTool, tc.input, tc.routes)
+			if result.Valid != tc.wantValid {
+				t.Fatalf("validateStepCallWithRoutes() Valid = %v, want %v: %s", result.Valid, tc.wantValid, result.Message)
+			}
+			if tc.wantAction != "" && result.Action != tc.wantAction {
+				t.Fatalf("Action = %q, want %q", result.Action, tc.wantAction)
+			}
+		})
 	}
 }
 

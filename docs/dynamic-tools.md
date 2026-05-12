@@ -173,7 +173,13 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
 
 ### `gitlab_execute_tool`
 
-Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters. Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, applies a small set of action-scoped compatibility conversions, and moves top-level `confirm: true` into action params for destructive calls. Compatibility conversions cover observed low-token model patterns such as issue lifecycle aliases (`issue.close` and `issue.reopen`), pipeline schedule action spellings, project snippet single-file params, deploy-key ID aliases, and feature-flag user-list list filters that should stay project-scoped. Unknown parameters, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected before dispatch rather than silently removed.
+Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters.
+
+Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, and applies a small set of action-scoped compatibility conversions.
+
+It also moves top-level `confirm: true` into action params for destructive calls. Compatibility conversions cover observed low-token model patterns such as issue lifecycle aliases (`issue.close` and `issue.reopen`), pipeline schedule action spellings, project snippet single-file params, deploy-key ID aliases, and feature-flag user-list list filters that should stay project-scoped.
+
+Unknown parameters, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected before dispatch rather than silently removed.
 
 ```json
 {

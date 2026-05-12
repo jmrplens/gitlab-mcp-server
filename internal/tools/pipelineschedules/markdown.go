@@ -99,7 +99,7 @@ func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_pipeline action 'get' with pipeline_id for full details",
+		"Use the selected tool surface's pipeline get action with pipeline_id for full details",
 	)
 	return b.String()
 }

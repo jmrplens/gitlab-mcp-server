@@ -12,7 +12,7 @@
         "notes": "Compatibility aliases should canonicalize for discovery."
     },
     {
-        "category": "provider_invented_alias",
+        "category": "provider_invented_alias_pipeline_jobs",
         "query": "pipeline jobs",
         "want_top": "job.list",
         "notes": "Observed provider alias phrasing should resolve to the canonical job list action."
@@ -114,13 +114,13 @@
         "notes": "Provider-invented repository_tree.list should resolve to the repository tree action."
     },
     {
-        "category": "provider_invented_alias",
+        "category": "provider_invented_alias_schedule_variable",
         "query": "pipeline.schedule_variable_delete",
         "want_top": "pipeline.schedule_delete_variable",
         "notes": "Observed pipeline schedule variable delete spelling should resolve to the canonical action."
     },
     {
-        "category": "provider_invented_alias",
+        "category": "provider_invented_alias_issue_close",
         "query": "issue.close",
         "want_top": "issue.update",
         "notes": "Issue lifecycle shorthand should resolve to issue.update; execute injects the state_event."

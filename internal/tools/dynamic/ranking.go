@@ -26,6 +26,13 @@ const (
 	searchFieldFuzzyToken     = "fuzzy_token"
 )
 
+// Scoring balances precision first, then recovery. Exact identifier matches
+// (scoreCanonicalExact, scoreAliasExact, scoreTagExact) intentionally outrank
+// domain/action and schema-field heuristics so canonical IDs stay stable at the
+// top. minimumHighConfidenceScore and minimumHighConfidenceMargin gate when the
+// best result is considered trustworthy, while scoreVerbIntentBoost,
+// scoreVerbIntentPenalty, scoreRequiredParamBoost, and scoreCompoundTagBoost are
+// tuning knobs for intent disambiguation without overriding exact matches.
 const (
 	scoreCanonicalExact       = 120
 	scoreAliasExact           = 100
@@ -151,6 +158,9 @@ func hasFindExplanations(results []FindResult) bool {
 	return false
 }
 
+// ambiguousTargetsFromSearchResults returns the deduplicated ambiguity set from
+// the first result that carries AmbiguousWith. Search ambiguity is modeled as a
+// single canonical set, so later rows are intentionally ignored.
 func ambiguousTargetsFromSearchResults(results []SearchResult) []string {
 	for _, result := range results {
 		if len(result.AmbiguousWith) > 0 {

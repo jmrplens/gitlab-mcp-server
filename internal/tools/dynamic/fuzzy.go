@@ -31,87 +31,16 @@ func buildSearchTokens(searchText string) []string {
 }
 
 func fuzzyTokenScore(needle string, searchTokens []string) int {
-	parts := splitWordTokens(needle)
-	if len(parts) == 0 || len(searchTokens) == 0 {
+	score, _, _, ok := fuzzyTokenScoreCore(needle, searchTokens)
+	if !ok {
 		return 0
 	}
-
-	total := 0
-	eligibleParts := 0
-	for _, part := range parts {
-		if len(part) < fuzzyMinTokenLen {
-			continue
-		}
-		eligibleParts++
-
-		best := 0
-		for _, token := range searchTokens {
-			if !comparableTokenLength(part, token) {
-				continue
-			}
-
-			distance, ok := boundedLevenshtein(part, token, fuzzyMaxDistance)
-			if !ok {
-				continue
-			}
-
-			score := fuzzyDistanceScore(distance)
-			if strings.HasPrefix(token, firstRuneString(part)) {
-				score += 2
-			}
-			if score > best {
-				best = score
-			}
-		}
-
-		if best == 0 {
-			return 0
-		}
-		total += best
-	}
-
-	if total == 0 || eligibleParts == 0 {
-		return 0
-	}
-	return total / eligibleParts
+	return score
 }
 
 func fuzzyScoreEntry(entry actionEntry, terms []searchTerm) int {
-	if len(terms) == 0 {
-		return 0
-	}
-
-	totalScore := 0
-	matchedCount := 0
-	resourceBoost := 0
-	for _, term := range terms {
-		best := 0
-		resourceSignal := false
-		for _, alternative := range term.Alternatives {
-			score := fuzzyTokenScore(alternative, entry.SearchTokens)
-			if score > best {
-				best = score
-				resourceSignal = fuzzyTermMatchesResourceSignal(entry, term.Raw, alternative)
-			}
-		}
-		if best > 0 {
-			matchedCount++
-			totalScore += best
-			if resourceSignal {
-				resourceBoost += fuzzyResourceSignalBoost
-			}
-		}
-	}
-
-	if matchedCount == 0 {
-		return 0
-	}
-
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
-	if matchedCount < minRequired {
+	totalScore, matchedCount, minRequired, resourceBoost, _ := fuzzyScoreCore(entry, terms, false)
+	if matchedCount == 0 || matchedCount < minRequired {
 		return 0
 	}
 
@@ -128,39 +57,8 @@ func fuzzyTermMatchesResourceSignal(entry actionEntry, raw, alternative string) 
 }
 
 func fuzzyScoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, ScoringExplanation) {
-	if len(terms) == 0 {
-		return 0, ScoringExplanation{}
-	}
-
-	totalScore := 0
-	matchedCount := 0
-	reasons := make([]MatchReason, 0, len(terms))
-	for _, term := range terms {
-		best := 0
-		var bestReason MatchReason
-		for _, alternative := range term.Alternatives {
-			score, reason := fuzzyTokenScoreWithReason(term.Raw, alternative, entry.SearchTokens)
-			if score > best {
-				best = score
-				bestReason = reason
-			}
-		}
-		if best > 0 {
-			matchedCount++
-			totalScore += best
-			reasons = append(reasons, bestReason)
-		}
-	}
-
-	if matchedCount == 0 {
-		return 0, ScoringExplanation{}
-	}
-
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
-	if matchedCount < minRequired {
+	totalScore, matchedCount, minRequired, _, reasons := fuzzyScoreCore(entry, terms, true)
+	if matchedCount == 0 || matchedCount < minRequired {
 		return 0, ScoringExplanation{}
 	}
 
@@ -171,6 +69,60 @@ func fuzzyScoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int,
 		RequiredTerms: minRequired,
 		Reasons:       reasons,
 	}
+}
+
+type fuzzyTermMatch struct {
+	score          int
+	reason         MatchReason
+	resourceSignal bool
+}
+
+func fuzzyScoreCore(entry actionEntry, terms []searchTerm, includeReason bool) (totalScore, matchedCount, minRequired, resourceBoost int, reasons []MatchReason) {
+	if len(terms) == 0 {
+		return 0, 0, 0, 0, nil
+	}
+	if includeReason {
+		reasons = make([]MatchReason, 0, len(terms))
+	}
+	for _, term := range terms {
+		match := bestFuzzyTermMatch(entry, term, includeReason)
+		if match.score == 0 {
+			continue
+		}
+		matchedCount++
+		totalScore += match.score
+		if match.resourceSignal {
+			resourceBoost += fuzzyResourceSignalBoost
+		}
+		if includeReason {
+			reasons = append(reasons, match.reason)
+		}
+	}
+
+	minRequired = len(terms)
+	if len(terms) > 2 {
+		minRequired = len(terms) - 1
+	}
+	return totalScore, matchedCount, minRequired, resourceBoost, reasons
+}
+
+func bestFuzzyTermMatch(entry actionEntry, term searchTerm, includeReason bool) fuzzyTermMatch {
+	best := fuzzyTermMatch{}
+	for _, alternative := range term.Alternatives {
+		var candidateScore int
+		candidateReason := MatchReason{}
+		if includeReason {
+			candidateScore, candidateReason = fuzzyTokenScoreWithReason(term.Raw, alternative, entry.SearchTokens)
+		} else {
+			candidateScore = fuzzyTokenScore(alternative, entry.SearchTokens)
+		}
+		if candidateScore > best.score {
+			best.score = candidateScore
+			best.reason = candidateReason
+			best.resourceSignal = fuzzyTermMatchesResourceSignal(entry, term.Raw, alternative)
+		}
+	}
+	return best
 }
 
 func fuzzyResourceSignalBoostFor(entry actionEntry, reasons []MatchReason) int {
@@ -185,59 +137,10 @@ func fuzzyResourceSignalBoostFor(entry actionEntry, reasons []MatchReason) int {
 }
 
 func fuzzyTokenScoreWithReason(raw, alternative string, searchTokens []string) (int, MatchReason) {
-	parts := splitWordTokens(alternative)
-	if len(parts) == 0 || len(searchTokens) == 0 {
+	score, bestMatchedValue, bestDistance, ok := fuzzyTokenScoreCore(alternative, searchTokens)
+	if !ok {
 		return 0, MatchReason{}
 	}
-
-	total := 0
-	eligibleParts := 0
-	bestMatchedValue := ""
-	bestDistance := 0
-	for _, part := range parts {
-		if len(part) < fuzzyMinTokenLen {
-			continue
-		}
-		eligibleParts++
-
-		best := 0
-		matchedValue := ""
-		distanceValue := 0
-		for _, token := range searchTokens {
-			if !comparableTokenLength(part, token) {
-				continue
-			}
-
-			distance, ok := boundedLevenshtein(part, token, fuzzyMaxDistance)
-			if !ok {
-				continue
-			}
-
-			score := fuzzyDistanceScore(distance)
-			if strings.HasPrefix(token, firstRuneString(part)) {
-				score += 2
-			}
-			if score > best {
-				best = score
-				matchedValue = token
-				distanceValue = distance
-			}
-		}
-
-		if best == 0 {
-			return 0, MatchReason{}
-		}
-		if best > total || bestMatchedValue == "" {
-			bestMatchedValue = matchedValue
-			bestDistance = distanceValue
-		}
-		total += best
-	}
-
-	if total == 0 || eligibleParts == 0 {
-		return 0, MatchReason{}
-	}
-	score := total / eligibleParts
 	reason := MatchReason{
 		Field:        searchFieldFuzzyToken,
 		QueryTerm:    raw,
@@ -250,6 +153,63 @@ func fuzzyTokenScoreWithReason(raw, alternative string, searchTokens []string) (
 		reason.Alternative = alternative
 	}
 	return score, reason
+}
+
+func fuzzyTokenScoreCore(alternative string, searchTokens []string) (score int, bestMatchedValue string, bestDistance int, ok bool) {
+	parts := splitWordTokens(alternative)
+	if len(parts) == 0 || len(searchTokens) == 0 {
+		return 0, "", 0, false
+	}
+
+	total := 0
+	eligibleParts := 0
+	bestOverallScore := -1
+	for _, part := range parts {
+		if len(part) < fuzzyMinTokenLen {
+			continue
+		}
+		eligibleParts++
+
+		partPrefix := firstRuneString(part)
+		partBestScore := 0
+		partMatchedValue := ""
+		partDistance := 0
+		for _, token := range searchTokens {
+			if !comparableTokenLength(part, token) {
+				continue
+			}
+
+			distance, withinThreshold := boundedLevenshtein(part, token, fuzzyMaxDistance)
+			if !withinThreshold {
+				continue
+			}
+
+			candidateScore := fuzzyDistanceScore(distance)
+			if partPrefix != "" && strings.HasPrefix(token, partPrefix) {
+				candidateScore += 2
+			}
+			if candidateScore > partBestScore {
+				partBestScore = candidateScore
+				partMatchedValue = token
+				partDistance = distance
+			}
+		}
+
+		if partBestScore == 0 {
+			return 0, "", 0, false
+		}
+		if partBestScore > bestOverallScore {
+			bestOverallScore = partBestScore
+			bestMatchedValue = partMatchedValue
+			bestDistance = partDistance
+		}
+		total += partBestScore
+	}
+
+	if total == 0 || eligibleParts == 0 {
+		return 0, "", 0, false
+	}
+	return total / eligibleParts, bestMatchedValue, bestDistance, true
 }
 
 func splitWordTokens(value string) []string {

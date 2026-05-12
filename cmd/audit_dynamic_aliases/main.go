@@ -10,6 +10,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 )
 
+// main audits default dynamic action aliases against canonical catalog routes.
+// It builds the action catalog, adds standalone dynamic routes, then runs
+// dynamic.AuditDefaultActionAliases to emit one TSV line per finding as:
+// Severity, Problem, Alias, Canonical, Message. Findings with Severity="error"
+// fail the command; warnings and informational findings are printed for review.
 func main() {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {

@@ -25,8 +25,8 @@ func FormatOutputMarkdown(o Output) string {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
 	toolutil.WriteHints(&b,
-		"Use the selected tool surface's project deploy-token get action with the same project_id and deploy_token_id to fetch this deploy token before changing it",
-		"Use the selected tool surface's project deploy-token delete action with the same project_id, this deploy_token_id, and explicit confirm=true to revoke this deploy token",
+		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id to fetch this deploy token before changing it",
+		"Use the selected tool surface's deploy-token delete action with the matching scope (project or group), this deploy_token_id, and explicit confirm=true to revoke this deploy token",
 	)
 	return b.String()
 }
@@ -50,8 +50,8 @@ func FormatListMarkdown(o ListOutput) string {
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's project deploy-token get action with the same project_id and deploy_token_id for full details",
-		"Use the selected tool surface's project deploy-token create action with project_id to generate a new deploy token",
+		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id for full details",
+		"Use the selected tool surface's deploy-token create action with the matching scope (project or group) to generate a new deploy token",
 	)
 	return b.String()
 }

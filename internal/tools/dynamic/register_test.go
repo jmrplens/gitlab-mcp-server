@@ -320,6 +320,9 @@ func TestDynamicSearchCorpus(t *testing.T) {
 			if len(output.Results) == 0 {
 				t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
 			}
+			if tc.Limit > 0 && len(output.Results) > tc.Limit {
+				t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
+			}
 			if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
 				t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
 			}
@@ -2410,6 +2413,8 @@ func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...st
 	}
 }
 
+// fullScanScoredMatches performs a scorer-based full scan and keeps only
+// positive-score entries for comparison against indexed candidate results.
 func fullScanScoredMatches(entries []actionEntry, terms []searchTerm, scorer searchScorer) []scoredActionEntry {
 	matches := make([]scoredActionEntry, 0)
 	for _, entry := range entries {
@@ -2421,6 +2426,7 @@ func fullScanScoredMatches(entries []actionEntry, terms []searchTerm, scorer sea
 	return matches
 }
 
+// scoredActionIDs extracts canonical action IDs from scored search matches.
 func scoredActionIDs(matches []scoredActionEntry) []string {
 	ids := make([]string, 0, len(matches))
 	for _, match := range matches {

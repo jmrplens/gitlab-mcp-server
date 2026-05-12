@@ -205,7 +205,8 @@ Model-backed trace JSON records the normalized prompt flow plus provider HTTP re
 
 `--publish-docs` is intentionally separate from normal runs. It consumes reviewed Markdown reports selected with `--publish-from`. Full GitLab-backed MCP reports without an explicit preset also read their local `Trace artifacts` JSONL. That lets the publisher split the table by preset and special partitions. It refuses to publish Docker metrics from GitLab-backed reports that did not use MCP tool execution. Partial Docker preset reports must use a `--publish-label` containing `targeted` so they are not mistaken for full preset results.
 
-Docker live reports include a failure-triage section that separates MCP implementation bugs, GitLab CE limitations, model route-selection misses, model parameter-shape misses, fixture setup failures, transient GitLab 5xx responses, timeout/resource exhaustion, destructive safety failures, and not-found results. Dynamic-surface reports also separate `ranker_miss` diagnostics from model discovery and execution failures when ranker-specific notes are available.
+Docker live reports include a failure-triage section.
+It separates MCP implementation bugs, GitLab CE limitations, model route-selection misses, model parameter-shape misses, fixture setup failures, transient GitLab 5xx responses, timeout/resource exhaustion, destructive safety failures, and not-found results. Dynamic-surface reports also separate `ranker_miss` diagnostics from model discovery and execution failures when ranker-specific notes are available.
 
 ## Related Documentation
 

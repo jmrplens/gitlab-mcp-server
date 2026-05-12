@@ -6480,13 +6480,13 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 }
 
 func dynamicRankerMiss(text string) bool {
-	rankerMarkers := []string{
-		"dynamic ranker miss",
-		"ranker miss",
-		"expected top action",
-		"search corpus",
+	if strings.Contains(text, "dynamic ranker miss") || strings.Contains(text, "ranker miss") {
+		return true
 	}
-	for _, marker := range rankerMarkers {
+	if !strings.Contains(text, "search corpus") {
+		return false
+	}
+	for _, marker := range []string{"ranker", "expected top action", "no results", "no hits", "no matches"} {
 		if strings.Contains(text, marker) {
 			return true
 		}

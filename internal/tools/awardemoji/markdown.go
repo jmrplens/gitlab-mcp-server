@@ -23,11 +23,18 @@ func FormatListMarkdownString(out ListOutput) string {
 	fmt.Fprintf(&b, "## Award Emoji (%d)\n\n", len(out.AwardEmoji))
 	toolutil.WriteListSummary(&b, len(out.AwardEmoji), out.Pagination)
 	for _, e := range out.AwardEmoji {
-		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) — %s\n", e.Name, e.Username, e.ID, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) - %s\n", e.Name, awardEmojiUserMarkdown(e), e.ID, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use the selected tool surface's matching award emoji actions for this resource; delete actions require explicit confirm=true plus the same resource identifiers and award_id")
 	return b.String()
+}
+
+func awardEmojiUserMarkdown(out Output) string {
+	if out.UserWebURL == "" {
+		return out.Username
+	}
+	return toolutil.MdTitleLink(out.Username, out.UserWebURL)
 }
 
 // FormatMarkdown formats a single award emoji as a Markdown CallToolResult.

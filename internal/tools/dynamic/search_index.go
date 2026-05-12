@@ -2,6 +2,9 @@ package dynamic
 
 import "sort"
 
+// buildSearchIndex constructs the core lookup index used by dynamic search.
+// It keeps parallel alias/domain/action/token maps so candidate selection can
+// narrow quickly across multiple query dimensions before scoring.
 func buildSearchIndex(entries []actionEntry) searchIndex {
 	index := searchIndex{
 		byToken:  make(map[string][]int),
@@ -21,6 +24,9 @@ func buildSearchIndex(entries []actionEntry) searchIndex {
 	return index
 }
 
+// candidateEntryIndexes returns indexed candidates for normalized terms. When
+// no index bucket matches, it intentionally falls back to a copy of index.all
+// so downstream ranking can still evaluate the full catalog deterministically.
 func (index searchIndex) candidateEntryIndexes(terms []searchTerm) []int {
 	if len(index.all) == 0 {
 		return nil
@@ -50,6 +56,9 @@ func (index searchIndex) candidateEntryIndexes(terms []searchTerm) []int {
 	return entryIndexes
 }
 
+// addValues indexes each deduplicated full value plus its split word tokens.
+// dedupeStrings avoids repeated work, and appendEntryIndex keeps entry lists
+// stable while preventing adjacent duplicates.
 func (index searchIndex) addValues(target map[string][]int, values []string, entryIndex int) {
 	for _, value := range dedupeStrings(values) {
 		target[value] = appendEntryIndex(target[value], entryIndex)
@@ -65,6 +74,9 @@ func (index searchIndex) addCandidates(candidates map[int]struct{}, entryIndexes
 	}
 }
 
+// appendEntryIndex deduplicates only adjacent duplicates; callers rely on
+// monotonic index construction so the same entryIndex can only repeat
+// consecutively for a given posting list.
 func appendEntryIndex(entryIndexes []int, entryIndex int) []int {
 	if len(entryIndexes) > 0 && entryIndexes[len(entryIndexes)-1] == entryIndex {
 		return entryIndexes
@@ -73,7 +85,18 @@ func appendEntryIndex(entryIndexes []int, entryIndex int) []int {
 }
 
 func searchDocumentIndexTokens(document searchDocument) []string {
-	values := []string{
+	tokens := make([]string, 0,
+		10+
+			len(document.IDWords)+
+			len(document.DomainWords)+
+			len(document.ActionWords)+
+			len(document.Aliases)+
+			len(document.Tags)+
+			len(document.RequiredParams)+
+			len(document.SchemaProperties),
+	)
+
+	for _, value := range []string{
 		document.Backend,
 		document.Capability,
 		document.Resource,
@@ -84,18 +107,22 @@ func searchDocumentIndexTokens(document searchDocument) []string {
 		document.Domain,
 		document.Action,
 		document.FlatText,
-	}
-	values = append(values, document.IDWords...)
-	values = append(values, document.DomainWords...)
-	values = append(values, document.ActionWords...)
-	values = append(values, document.Aliases...)
-	values = append(values, document.Tags...)
-	values = append(values, document.RequiredParams...)
-	values = append(values, document.SchemaProperties...)
-
-	tokens := make([]string, 0, len(values))
-	for _, value := range values {
+	} {
 		tokens = append(tokens, splitSearchFieldWords(value)...)
+	}
+
+	for _, values := range [][]string{
+		document.IDWords,
+		document.DomainWords,
+		document.ActionWords,
+		document.Aliases,
+		document.Tags,
+		document.RequiredParams,
+		document.SchemaProperties,
+	} {
+		for _, value := range values {
+			tokens = append(tokens, splitSearchFieldWords(value)...)
+		}
 	}
 	return dedupeStrings(tokens)
 }

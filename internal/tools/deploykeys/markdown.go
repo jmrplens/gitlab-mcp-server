@@ -94,7 +94,8 @@ func FormatInstanceOutputMarkdown(o InstanceOutput) string {
 		}
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'instance_delete' to remove this instance key",
+		"Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this instance key to a project",
+		"Use the selected tool surface's deploy-key list action with project_id to verify project-level references before deletion workflows",
 	)
 	return b.String()
 }
@@ -118,7 +119,8 @@ func FormatInstanceListMarkdown(o InstanceListOutput) string {
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'instance_get' with key_id for full details",
+		"Use the selected tool surface's deploy-key enable action with project_id and deploy_key_id to grant one of these keys to a project",
+		"Use the selected tool surface's deploy-key list action with project_id to inspect project-level deploy key metadata",
 	)
 	return b.String()
 }

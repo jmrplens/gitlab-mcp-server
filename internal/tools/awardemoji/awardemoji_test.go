@@ -310,7 +310,7 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
-			{ID: 10, Name: testEmojiThumbsup, UserID: 1, Username: "admin", CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+			{ID: 10, Name: testEmojiThumbsup, UserID: 1, Username: "admin", UserWebURL: "https://gitlab.example.com/admin", CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
 			{ID: 11, Name: "heart", UserID: 2, Username: "dev", CreatedAt: "2026-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
 		},
 	}
@@ -323,6 +323,9 @@ func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	}
 	if !contains(md, ":heart:") {
 		t.Error("expected :heart:")
+	}
+	if !contains(md, "[admin](https://gitlab.example.com/admin)") {
+		t.Error("expected linked username when user profile URL is available")
 	}
 }
 
@@ -351,6 +354,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	if !contains(md, "admin") {
 		t.Error("expected admin in markdown")
 	}
+	// Delete award-emoji operations are destructive and must require explicit confirmation guidance.
 	if !contains(md, "explicit confirm=true") {
 		t.Error("expected destructive confirmation hint in markdown")
 	}

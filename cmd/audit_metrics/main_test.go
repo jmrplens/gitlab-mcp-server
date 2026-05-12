@@ -114,7 +114,7 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 		t.Fatalf("metrics = %+v, want alias metrics", metrics)
 	}
 	if metrics.UnsearchableAliasCount == 0 {
-		t.Fatalf("metrics = %+v, want repository_tree unsearchable alias counted", metrics)
+		t.Fatalf("metrics = %+v, want non-zero unsearchable alias count", metrics)
 	}
 	if len(listDynamicTools(catalog)) != 3 {
 		t.Fatal("dynamic metrics changed advertised dynamic tool count")
