@@ -108,28 +108,30 @@ Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `conten
 
 ## Qué devuelve cada llamada
 
-| Llamada                 | Qué recibe el asistente                                                                                                                                                           | Cómo debe usarlo el asistente                                                                     |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `gitlab_search_tools`   | Una lista ordenada de IDs de acción canónicos con meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso y puntuación | Elegir el mejor candidato `domain.action` y describirlo antes de ejecutar                         |
-| `gitlab_describe_tools` | `input_schema` exacto, parámetros requeridos, metadatos de seguridad, `output_schema` opcional, URI de schema y ejemplo ejecutable con `gitlab_execute_tool`                      | Construir `params` desde el schema y evitar nombres de campos inventados                          |
-| `gitlab_execute_tool`   | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                               | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
+| Llamada                 | Qué recibe el asistente                                                                                                                                                                                                            | Cómo debe usarlo el asistente                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `gitlab_search_tools`   | Una lista ordenada de IDs de acción canónicos con meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso, acciones relacionadas, explicaciones opcionales y puntuación | Elegir el mejor candidato `domain.action` y describirlo antes de ejecutar                         |
+| `gitlab_describe_tools` | `input_schema` exacto, parámetros requeridos, metadatos de seguridad, pistas de uso, acciones relacionadas, `output_schema` opcional, URI de schema y ejemplo ejecutable con `gitlab_execute_tool`                                 | Construir `params` desde el schema y evitar nombres de campos inventados                          |
+| `gitlab_execute_tool`   | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                                                                                | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
 
 Buscar y describir son llamadas deliberadamente pequeñas comparadas con anunciar todas las operaciones de GitLab en `tools/list`. El modelo solo paga por schemas detallados cuando necesita una acción concreta.
 
 ## Cómo encuentra acciones la búsqueda
 
-`gitlab_search_tools` es más que una búsqueda de subcadenas. Indexa IDs canónicos, palabras del ID separadas, nombres de meta-herramientas base, dominios, nombres de acción, alias, etiquetas, parámetros requeridos y nombres de propiedades del schema.
+`gitlab_search_tools` es más que una búsqueda de subcadenas. Indexa IDs canónicos, palabras del ID separadas, nombres de meta-herramientas base, dominios, nombres de acción, alias, etiquetas, parámetros requeridos, parámetros opcionales, nombres de propiedades del schema, valores enum, descripciones compactas del schema y metadatos internos de backend.
 
 El pipeline de ranking:
 
 1. Normaliza la consulta en minúsculas y separa espacios, puntos, guiones bajos y guiones.
 2. Elimina palabras frecuentes como `the`, `to`, `with` y `please`.
-3. Expande sinónimos como `mr` → merge request, `secret` → variable/token de CI, `show` → get y `remove` → delete.
-4. Puntúa primero IDs canónicos exactos, después alias, etiquetas, nombres de dominio/acción, coincidencias parciales de ID y metadatos más amplios.
-5. Ejecuta recuperación fuzzy de errores tipográficos solo cuando la búsqueda léxica no devuelve resultados.
+3. Expande sinónimos como `mr` → merge request, `secret` → variable/token de CI, `show` → get y `remove` → delete. Palabras de backend como `github pr` o `jira ticket` se normalizan a conceptos GitLab de merge request o issue sin exponer IDs de acción no GitLab.
+4. Puntúa primero IDs canónicos exactos, después alias, etiquetas, nombres de dominio/acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios.
+5. Ejecuta recuperación fuzzy de errores tipográficos solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza.
 6. Busca prompts largos en ventanas de tres a seis términos para que prompts de varios pasos puedan sacar varias acciones relevantes.
 
-La recuperación fuzzy está limitada a propósito: permite hasta dos errores de edición en tokens de al menos tres caracteres. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
+La recuperación fuzzy está limitada a propósito: permite hasta dos errores de edición en tokens de al menos tres caracteres y suprime coincidencias tipográficas débiles para acciones destructivas. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
+
+La búsqueda acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `repository.compare` antes de `analyze.release_notes`.
 
 :::tip[Usa IDs canónicos]
 Los alias ayudan en la búsqueda y pueden resolverse si no son ambiguos, pero los IDs canónicos `domain.action` son el contrato estable de ejecución. Ante la duda, describe el ID de acción devuelto por la búsqueda y ejecuta exactamente ese ID.
@@ -183,13 +185,13 @@ El asistente debe ejecutar el ID de acción canónico devuelto por búsqueda o d
 
 El modo dinámico está diseñado para poder repararse. Si una llamada devuelve `isError: true`, el asistente debe usar el mensaje como feedback y repetir el paso correcto.
 
-| Fallo                                  | Recuperación                                                                  |
-| -------------------------------------- | ----------------------------------------------------------------------------- |
-| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles           |
-| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error    |
-| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados y describirlo                  |
-| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`               |
-| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` |
+| Fallo                                  | Recuperación                                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| La consulta de búsqueda está vacía     | Reintentar la búsqueda con dominio, recurso, verbo y filtros útiles                            |
+| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error                     |
+| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados y describirlo                                   |
+| Los parámetros son rechazados          | Describir la acción y reconstruir `params` desde `input_schema`                                |
+| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` a nivel superior |
 
 ## Las acciones destructivas siguen protegidas
 
@@ -207,7 +209,22 @@ El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramient
 }
 ```
 
-Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` dentro de los parámetros de la acción.
+Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_tool`:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"confirm": true,
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+La ejecución dinámica valida los parámetros antes de despachar. Los campos desconocidos, incluidos campos sensibles no soportados como `masked` o `protected` en variables de pipeline schedules, se rechazan con guía de reparación en lugar de eliminarse silenciosamente.
 
 Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
 

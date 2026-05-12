@@ -186,3 +186,84 @@ func TestFuzzyScoreEntry_CoversActionScoring(t *testing.T) {
 		})
 	}
 }
+
+// TestFuzzyTokenScoreWithReason_DefensiveBranches covers zero-score defensive
+// paths and the typo path that returns a fuzzy-token explanation. It uses a
+// fixed token fixture built with buildSearchTokens and table-driven subtests.
+func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
+	tokens := buildSearchTokens("merge request")
+	tests := []struct {
+		name        string
+		query       string
+		alternative string
+		tokens      []string
+		wantMatch   bool
+	}{
+		{name: "empty query", query: "", alternative: "", tokens: tokens},
+		{name: "short query", query: "mr", alternative: "mr", tokens: tokens},
+		{name: "far query", query: "abcdef", alternative: "abcdef", tokens: tokens},
+		{name: "empty tokens", query: "merge", alternative: "merge"},
+		{name: "typo fuzzy token", query: "marge", alternative: "merge", tokens: tokens, wantMatch: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, reason := fuzzyTokenScoreWithReason(tt.query, tt.alternative, tt.tokens)
+			if !tt.wantMatch {
+				if score != 0 || reason.Field != "" {
+					t.Fatalf("fuzzyTokenScoreWithReason() = %d, %+v; want zero result", score, reason)
+				}
+				return
+			}
+			if score == 0 {
+				t.Fatal("score = 0, want fuzzy match")
+			}
+			if !reason.Fuzzy {
+				t.Fatalf("reason.Fuzzy = false, want true: %+v", reason)
+			}
+			if reason.Field != searchFieldFuzzyToken {
+				t.Fatalf("reason.Field = %q, want %q", reason.Field, searchFieldFuzzyToken)
+			}
+			if reason.QueryTerm != "marge" {
+				t.Fatalf("reason.QueryTerm = %q, want marge", reason.QueryTerm)
+			}
+			if reason.Alternative != "merge" {
+				t.Fatalf("reason.Alternative = %q, want merge", reason.Alternative)
+			}
+		})
+	}
+}
+
+func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
+	if score, explanation := fuzzyScoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
+		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
+	}
+}
+
+func TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore(t *testing.T) {
+	entry := actionEntry{
+		ID:           "merge_request.list",
+		Domain:       "merge_request",
+		Action:       "list",
+		Tags:         []string{"merge_request", "project"},
+		Aliases:      []string{"merge request list"},
+		SearchTokens: buildSearchTokens("merge_request list project"),
+	}
+	terms := normalizeSearchTerms("marge request project")
+
+	want := fuzzyScoreEntry(entry, terms)
+	got, explanation := fuzzyScoreEntryWithExplanation(entry, terms)
+
+	if want == 0 {
+		t.Fatal("fuzzyScoreEntry returned 0, want a positive score for typo-recovery query")
+	}
+	if got != want {
+		t.Fatalf("fuzzyScoreEntryWithExplanation() = %d, want %d", got, want)
+	}
+	if explanation.TotalScore != got {
+		t.Fatalf("explanation.TotalScore = %d, want %d", explanation.TotalScore, got)
+	}
+	if explanation.MatchedTerms == 0 || len(explanation.Reasons) == 0 {
+		t.Fatalf("explanation missing matches/reasons: %+v", explanation)
+	}
+}

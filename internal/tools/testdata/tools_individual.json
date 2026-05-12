@@ -41823,6 +41823,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -41955,6 +41958,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -42038,6 +42044,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"
@@ -45147,6 +45156,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -45289,6 +45301,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -45377,6 +45392,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"
@@ -66271,6 +66289,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -66403,6 +66424,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -66486,6 +66510,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"
@@ -69404,6 +69431,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -69546,6 +69576,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -69634,6 +69667,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"
@@ -105274,6 +105310,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -105406,6 +105445,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -105489,6 +105531,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"
@@ -106559,6 +106604,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -106701,6 +106749,9 @@
         "user_id": {
           "type": "integer"
         },
+        "user_web_url": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         }
@@ -106789,6 +106840,9 @@
               },
               "user_id": {
                 "type": "integer"
+              },
+              "user_web_url": {
+                "type": "string"
               },
               "username": {
                 "type": "string"

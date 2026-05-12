@@ -119,13 +119,16 @@ Search returns a ranked shortlist of catalog actions. The Markdown response is a
       "destructive": false,
       "required_params": ["project_id"],
       "usage": "",
+      "related_actions": [],
       "score": 275
     }
   ]
 }
 ```
 
-An empty query returns `isError: true` with example search terms. A query with no matches returns a non-error result with a no-match message and `count: 0`, so the model can broaden the query and try again.
+Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata. Search may also set `low_confidence: true` when the top result score or margin is weak, and `ambiguous_with` when a query matches a known ambiguous alias.
+
+An empty query returns `isError: true` with example search terms. A query with no matches returns a non-error result with `count: 0` and a small `suggestions` array of nearby tokens and common domains, so the model can broaden the query and try again without receiving a catalog dump.
 
 ### `gitlab_describe_tools`
 
@@ -143,6 +146,8 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
       "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
       "destructive": false,
       "required_params": ["project_id"],
+      "usage": "",
+      "related_actions": [],
       "input_schema": {
         "type": "object",
         "required": ["project_id"],
@@ -164,11 +169,17 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
 }
 ```
 
-`output_schema` is included when the underlying action route provides one. The Markdown response includes the core metadata and embeds the compact JSON input schema for clients that display only text content.
+`usage` distinguishes commonly confused actions. `related_actions` appears only for curated workflows where order matters, such as comparing refs before generating release notes or checking tag/release state before deletion. `output_schema` is included when the underlying action route provides one. The Markdown response includes the core metadata and embeds the compact JSON input schema for clients that display only text content.
 
 ### `gitlab_execute_tool`
 
-Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters. Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, applies a small set of action-scoped compatibility conversions, and moves top-level `confirm: true` into action params for destructive calls.
+Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters.
+
+Before dispatching, it resolves unambiguous aliases, normalizes known parameter aliases against the selected schema, and applies a small set of action-scoped compatibility conversions.
+
+It also moves top-level `confirm: true` into action params for destructive calls. Compatibility conversions cover observed low-token model patterns such as issue lifecycle aliases (`issue.close` and `issue.reopen`), pipeline schedule action spellings, project snippet single-file params, deploy-key ID aliases, and feature-flag user-list list filters that should stay project-scoped.
+
+Unknown parameters, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected before dispatch rather than silently removed.
 
 ```json
 {
@@ -242,7 +253,7 @@ Dynamic mode is designed for repairable failures. Models should treat `isError: 
 | Unknown action ID | Error result, often with `Did you mean ...?` canonical IDs | Search or describe the suggested canonical action ID |
 | Ambiguous alias | Error result listing the valid canonical targets | Pick one listed `domain.action` ID and describe it |
 | Invalid params | Backing handler validation error | Call `gitlab_describe_tools` and rebuild `params` from `input_schema` |
-| Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with confirmation only if approved |
+| Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with top-level `confirm: true` only if approved |
 
 ## Destructive Actions
 
@@ -267,9 +278,9 @@ Without confirmation, destructive execution returns `isError: true` with guidanc
   "tool": "gitlab_execute_tool",
   "arguments": {
     "action": "project.delete",
+    "confirm": true,
     "params": {
-      "project_id": "my-group/my-project",
-      "confirm": true
+      "project_id": "my-group/my-project"
     }
   }
 }
@@ -322,10 +333,11 @@ The canonical action catalog is filtered after policy decisions such as enterpri
 
 - **Normalization**: query text is lower-cased and split on spaces, dots, underscores, and hyphens. Frequent words such as `the`, `to`, `with`, and `please` are dropped.
 - **Search corpus**: each action is indexed by canonical ID, split ID words, backing meta-tool name, domain, action name, aliases, tags, required params, and schema property names.
-- **Synonyms**: common task words expand to domain-specific alternatives. For example, `mr` expands toward merge-request terms, `secret` toward CI variables and tokens, `show` toward `get`, and `remove` toward `delete`.
-- **Exact ranking**: exact canonical IDs score highest, followed by aliases, tags, domain/action names, partial ID matches, and broader search-text matches.
-- **Fuzzy fallback**: typo-tolerant matching runs only when exact lexical search returns no matches. It uses bounded Levenshtein distance up to two edits, ignores query tokens shorter than three characters, and requires all terms for one- or two-term queries or all but one term for longer queries.
+- **Synonyms**: common task words expand to domain-specific alternatives. For example, `mr` expands toward merge-request terms, `secret` toward CI variables and tokens, `show` toward `get`, and `remove` toward `delete`. Backend vocabulary such as `github pr` and `jira ticket` normalizes to GitLab merge-request or issue concepts without exposing non-GitLab action IDs.
+- **Exact ranking**: exact canonical IDs score highest, followed by aliases, tags, domain/action names, required params, schema enum values, schema property names, and broader search-text matches.
+- **Fuzzy fallback**: typo-tolerant matching runs only when exact lexical search returns no matches or only low-confidence matches. It uses bounded Levenshtein distance up to two edits, ignores query tokens shorter than three characters, and suppresses weak fuzzy matches for destructive actions.
 - **Segmented matching**: long multi-intent prompts are also searched in overlapping three- to six-term windows. This helps prompts such as `discover project from remote url merge request list current user open authored` surface both project discovery and merge-request listing candidates.
+- **Ambiguity handling**: ambiguous aliases are reported with explicit canonical alternatives; execute rejects ambiguous aliases until the caller chooses one canonical `domain.action` ID.
 
 The goal is not to make the model guess blindly. The model should use search to shortlist actions, describe to fetch exact schemas, then execute.
 
@@ -401,7 +413,7 @@ Use `dynamic-3` when you need an explicit name for the current three-tool candid
 | Search returns many broad list actions | Query is too generic | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me` |
 | Execute says the action is unknown | The model invented an action ID or the action was excluded | Search again and execute the canonical action ID from the result |
 | Execute rejects parameters | Params do not match the described schema | Call `gitlab_describe_tools` for that action and retry with the exact field names and types |
-| Destructive action returns an error | Confirmation is missing or policy blocks mutation | Add `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
+| Destructive action returns an error | Confirmation is missing or policy blocks mutation | Add top-level `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
 | Resources and prompts still use context | Capability surface is still full | Set `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal` |
 
 ## See Also

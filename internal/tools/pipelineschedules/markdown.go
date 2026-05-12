@@ -36,9 +36,9 @@ func FormatOutputMarkdown(s Output) string {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(s.UpdatedAt))
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'update' to modify schedule settings",
-		"Use action 'run' to trigger this schedule immediately",
-		"Use action 'delete' to remove this schedule",
+		"Use the selected tool surface's pipeline-schedule update action with the same project_id and schedule_id to modify schedule settings",
+		"Use the selected tool surface's pipeline-schedule run action with the same project_id and schedule_id to trigger this schedule immediately",
+		"Use the selected tool surface's pipeline-schedule delete action with the same project_id, schedule_id, and explicit confirm=true to remove this schedule",
 	)
 	return b.String()
 }
@@ -59,8 +59,9 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use action 'get' with schedule_id for full details",
-		"Use action 'create' to add a new schedule",
+		toolutil.HintPreserveLinks,
+		"Use the selected tool surface's pipeline-schedule get action with the same project_id and schedule_id for full details",
+		"Use the selected tool surface's pipeline-schedule create action with project_id to add a new schedule",
 	)
 	return b.String()
 }
@@ -75,8 +76,8 @@ func FormatVariableMarkdown(v VariableOutput) string {
 		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'schedule_edit_variable' to change this variable",
-		"Use action 'schedule_delete_variable' to remove it",
+		"Use the selected tool surface's pipeline-schedule variable edit action with the same project_id, schedule_id, and key to change this variable",
+		"Use the selected tool surface's pipeline-schedule variable delete action with the same project_id, schedule_id, key, and explicit confirm=true to remove it",
 	)
 	return b.String()
 }
@@ -98,7 +99,7 @@ func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_pipeline action 'get' with pipeline_id for full details",
+		"Use the selected tool surface's pipeline get action with pipeline_id for full details",
 	)
 	return b.String()
 }

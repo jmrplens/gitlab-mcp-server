@@ -108,28 +108,30 @@ Each dynamic tool returns a normal MCP tool result: Markdown in `content`, JSON 
 
 ## What each call returns
 
-| Call                    | What the assistant receives                                                                                                                             | How the assistant should use it                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `gitlab_search_tools`   | A ranked list of canonical action IDs with the backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, and score | Pick the best `domain.action` candidate and describe it before execution          |
-| `gitlab_describe_tools` | Exact `input_schema`, required params, safety metadata, optional `output_schema`, schema URI, and an executable `gitlab_execute_tool` example           | Build `params` from the schema and avoid guessed field names                      |
-| `gitlab_execute_tool`   | The existing action response from the backing handler, usually Markdown plus structured JSON                                                            | Use the returned data to answer the user, or repair from `isError: true` feedback |
+| Call                    | What the assistant receives                                                                                                                                                                     | How the assistant should use it                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `gitlab_search_tools`   | A ranked list of canonical action IDs with the backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, related actions, optional explanations, and score | Pick the best `domain.action` candidate and describe it before execution          |
+| `gitlab_describe_tools` | Exact `input_schema`, required params, safety metadata, usage hints, related actions, optional `output_schema`, schema URI, and an executable `gitlab_execute_tool` example                     | Build `params` from the schema and avoid guessed field names                      |
+| `gitlab_execute_tool`   | The existing action response from the backing handler, usually Markdown plus structured JSON                                                                                                    | Use the returned data to answer the user, or repair from `isError: true` feedback |
 
 Search and describe are deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
 
 ## How search finds actions
 
-`gitlab_search_tools` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, and schema property names.
+`gitlab_search_tools` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, optional params, schema property names, schema enum values, compact schema descriptions, and internal backend metadata.
 
 The ranking pipeline:
 
 1. Normalizes the query by lower-casing it and splitting spaces, dots, underscores, and hyphens.
 2. Removes common stopwords such as `the`, `to`, `with`, and `please`.
-3. Expands synonyms such as `mr` → merge request, `secret` → CI variable/token, `show` → get, and `remove` → delete.
-4. Scores exact canonical IDs first, then aliases, tags, domain/action names, partial ID matches, and broader metadata matches.
-5. Runs fuzzy typo recovery only when lexical search returns no matches.
+3. Expands synonyms such as `mr` → merge request, `secret` → CI variable/token, `show` → get, and `remove` → delete. Backend words such as `github pr` or `jira ticket` normalize to GitLab merge-request or issue concepts without exposing non-GitLab action IDs.
+4. Scores exact canonical IDs first, then aliases, tags, domain/action names, required params, schema enum values, schema fields, and broader metadata matches.
+5. Runs fuzzy typo recovery only when lexical search returns no matches or only low-confidence matches.
 6. Searches long prompts in three- to six-term windows so multi-step prompts can surface multiple relevant actions.
 
-Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
+Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters and suppresses weak typo matches for destructive actions. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
+
+Search accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
 
 :::tip[Use canonical IDs]
 Aliases help search and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. When in doubt, describe the action ID returned by search and execute exactly that ID.
@@ -183,13 +185,13 @@ The assistant should execute the canonical action ID returned by search or descr
 
 Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should use the message as feedback and retry the right step.
 
-| Failure                       | Recovery                                                                |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Search query is empty         | Retry search with a domain, resource, verb, and useful filters          |
-| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message  |
-| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                      |
-| Params are rejected           | Describe the action and rebuild `params` from `input_schema`            |
-| Destructive action is blocked | Ask the user for explicit approval before retrying with `confirm: true` |
+| Failure                       | Recovery                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| Search query is empty         | Retry search with a domain, resource, verb, and useful filters                    |
+| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message            |
+| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                                |
+| Params are rejected           | Describe the action and rebuild `params` from `input_schema`                      |
+| Destructive action is blocked | Ask the user for explicit approval before retrying with top-level `confirm: true` |
 
 ## Destructive actions stay protected
 
@@ -207,7 +209,22 @@ Dynamic mode reuses the same safety model as meta-tools. Destructive actions sti
 }
 ```
 
-Without confirmation, the server returns an error result instead of deleting the project. To run the action intentionally, pass `confirm: true` in the action params.
+Without confirmation, the server returns an error result instead of deleting the project. To run the action intentionally, pass `confirm: true` at the top level of the `gitlab_execute_tool` arguments:
+
+```json
+{
+	"tool": "gitlab_execute_tool",
+	"arguments": {
+		"action": "project.delete",
+		"confirm": true,
+		"params": {
+			"project_id": "my-group/my-project"
+		}
+	}
+}
+```
+
+Dynamic execution validates parameters before dispatch. Unknown fields, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected with repair guidance instead of being silently removed.
 
 For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or `GITLAB_SAFE_MODE=true` to preview mutations without applying them.
 

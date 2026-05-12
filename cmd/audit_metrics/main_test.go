@@ -6,15 +6,19 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -83,4 +87,89 @@ func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 	if got := countActionRoutes(routes); got != 3 {
 		t.Fatalf("countActionRoutes() = %d, want 3", got)
 	}
+}
+
+// TestDynamicSearchMetrics_ReportsIndexAndAliasCounts verifies static dynamic
+// search metrics are available without adding visible MCP tools.
+func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_repository": {
+			"tree": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
+		},
+		"gitlab_project": {
+			"delete":   {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }, Destructive: true},
+			"hook_add": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
+		},
+	}
+	catalog := actionregistry.FromActionMaps(routes)
+
+	metrics := dynamicSearchMetrics(catalog)
+	if metrics.ActionCount != 3 {
+		t.Fatalf("ActionCount = %d, want 3", metrics.ActionCount)
+	}
+	if metrics.IndexTokenCount == 0 || metrics.IndexPostingCount == 0 {
+		t.Fatalf("metrics = %+v, want populated search index metrics", metrics)
+	}
+	if metrics.AliasCount == 0 || metrics.SearchableAliasCount == 0 {
+		t.Fatalf("metrics = %+v, want alias metrics", metrics)
+	}
+	if metrics.UnsearchableAliasCount == 0 {
+		t.Fatalf("metrics = %+v, want non-zero unsearchable alias count", metrics)
+	}
+	if len(listDynamicTools(catalog)) != 3 {
+		t.Fatal("dynamic metrics changed advertised dynamic tool count")
+	}
+}
+
+// TestPrintDynamicSearchMetrics_IncludesAllSurfaces verifies the audit report
+// prints dynamic index and alias rows for base, self-managed enterprise, and
+// GitLab.com enterprise surfaces.
+func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
+	base := dynamictools.RegistryMetrics{IndexTokenCount: 1, IndexPostingCount: 2, AliasCount: 3, SearchableAliasCount: 4, UnsearchableAliasCount: 5, AmbiguousAliasCount: 6}
+	enterprise := dynamictools.RegistryMetrics{IndexTokenCount: 7, IndexPostingCount: 8, AliasCount: 9, SearchableAliasCount: 10, UnsearchableAliasCount: 11, AmbiguousAliasCount: 12}
+	gitLabCom := dynamictools.RegistryMetrics{IndexTokenCount: 13, IndexPostingCount: 14, AliasCount: 15, SearchableAliasCount: 16, UnsearchableAliasCount: 17, AmbiguousAliasCount: 18}
+
+	output := captureStdout(t, func() {
+		printDynamicSearchMetrics(base, enterprise, gitLabCom)
+	})
+	for _, want := range []string{
+		"Dynamic search index tokens (base)",
+		"Dynamic search index tokens (self-managed enterprise)",
+		"Dynamic search index tokens (GitLab.com enterprise)",
+		"Dynamic search index postings (GitLab.com enterprise)",
+		"Dynamic aliases (GitLab.com enterprise)",
+		"Dynamic aliases searchable (GitLab.com enterprise)",
+		"Dynamic aliases unsearchable (GitLab.com enterprise)",
+		"Dynamic aliases ambiguous (GitLab.com enterprise)",
+		"18",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printDynamicSearchMetrics() output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error: %v", err)
+	}
+	os.Stdout = writer
+	t.Cleanup(func() { os.Stdout = oldStdout })
+
+	fn()
+	if closeErr := writer.Close(); closeErr != nil {
+		t.Fatalf("writer.Close() error: %v", closeErr)
+	}
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error: %v", err)
+	}
+	if closeErr := reader.Close(); closeErr != nil {
+		t.Fatalf("reader.Close() error: %v", closeErr)
+	}
+	return string(output)
 }

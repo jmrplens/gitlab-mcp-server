@@ -81,6 +81,9 @@ func main() {
 	dynamicBase := listDynamicTools(actionregistry.FromActionMaps(dynamicBaseRoutes))
 	dynamicEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
 	dynamicGitLabComEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
+	dynamicBaseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicBaseRoutes))
+	dynamicEnterpriseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
+	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -125,6 +128,7 @@ func main() {
 	printRow("Dynamic catalog actions (base)", countActionRoutes(dynamicBaseRoutes))
 	printRow("Dynamic catalog actions (self-managed enterprise)", countActionRoutes(dynamicEnterpriseRoutes))
 	printRow("Dynamic catalog actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
+	printDynamicSearchMetrics(dynamicBaseMetrics, dynamicEnterpriseMetrics, dynamicGitLabComEnterpriseMetrics)
 	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
 	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
 	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
@@ -187,6 +191,33 @@ func main() {
 			fmt.Printf(toolListFormat, t.Name)
 		}
 	}
+}
+
+// dynamicSearchMetrics builds the dynamic registry and returns static search
+// index and alias metrics without changing the advertised MCP tool count.
+func dynamicSearchMetrics(catalog *actionregistry.Catalog) dynamictools.RegistryMetrics {
+	return dynamictools.NewRegistryFromCatalog(catalog).Metrics()
+}
+
+func printDynamicSearchMetrics(base, enterprise, gitLabCom dynamictools.RegistryMetrics) {
+	printRow("Dynamic search index tokens (base)", base.IndexTokenCount)
+	printRow("Dynamic search index tokens (self-managed enterprise)", enterprise.IndexTokenCount)
+	printRow("Dynamic search index tokens (GitLab.com enterprise)", gitLabCom.IndexTokenCount)
+	printRow("Dynamic search index postings (base)", base.IndexPostingCount)
+	printRow("Dynamic search index postings (self-managed enterprise)", enterprise.IndexPostingCount)
+	printRow("Dynamic search index postings (GitLab.com enterprise)", gitLabCom.IndexPostingCount)
+	printRow("Dynamic aliases (base)", base.AliasCount)
+	printRow("Dynamic aliases (self-managed enterprise)", enterprise.AliasCount)
+	printRow("Dynamic aliases (GitLab.com enterprise)", gitLabCom.AliasCount)
+	printRow("Dynamic aliases searchable (base)", base.SearchableAliasCount)
+	printRow("Dynamic aliases searchable (self-managed enterprise)", enterprise.SearchableAliasCount)
+	printRow("Dynamic aliases searchable (GitLab.com enterprise)", gitLabCom.SearchableAliasCount)
+	printRow("Dynamic aliases unsearchable (base)", base.UnsearchableAliasCount)
+	printRow("Dynamic aliases unsearchable (self-managed enterprise)", enterprise.UnsearchableAliasCount)
+	printRow("Dynamic aliases unsearchable (GitLab.com enterprise)", gitLabCom.UnsearchableAliasCount)
+	printRow("Dynamic aliases ambiguous (base)", base.AmbiguousAliasCount)
+	printRow("Dynamic aliases ambiguous (self-managed enterprise)", enterprise.AmbiguousAliasCount)
+	printRow("Dynamic aliases ambiguous (GitLab.com enterprise)", gitLabCom.AmbiguousAliasCount)
 }
 
 // dynamicActionRoutes builds the dynamic action catalog from canonical action

@@ -28,9 +28,10 @@ func FormatMarkdown(l Output) string {
 		fmt.Fprintf(&b, "- **Open MRs**: %d\n", l.OpenMergeRequestsCount)
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'group_label_update' to modify this label",
-		"Use action 'group_label_delete' to remove this label",
-		"Use action 'group_label_subscribe'/'group_label_unsubscribe' to follow/unfollow",
+		"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
+		"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
+		"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
+		"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
 	)
 	return b.String()
 }
@@ -52,8 +53,9 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use action 'group_label_get' with label name for full details",
-		"Use action 'group_label_create' to add a new group label",
+		toolutil.HintPreserveLinks,
+		"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
+		"Use the selected tool surface's group-label create action with group_id to add a new group label",
 	)
 	return b.String()
 }

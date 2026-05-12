@@ -3,6 +3,8 @@ package dynamic
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -13,6 +15,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type dynamicSearchCorpusCase struct {
+	Category             string                     `json:"category"`
+	Query                string                     `json:"query"`
+	WantTop              string                     `json:"want_top"`
+	WantTopN             []string                   `json:"want_top_n"`
+	Limit                int                        `json:"limit"`
+	CustomAliases        []dynamicSearchCorpusAlias `json:"custom_aliases"`
+	ExpectZero           bool                       `json:"expect_zero"`
+	ExpectAmbiguous      bool                       `json:"expect_ambiguous"`
+	ExpectDestructiveTop bool                       `json:"expect_destructive_top"`
+	ForbidDestructiveTop bool                       `json:"forbid_destructive_top"`
+	Notes                string                     `json:"notes"`
+}
+
+type dynamicSearchCorpusAlias struct {
+	Alias     string `json:"alias"`
+	Canonical string `json:"canonical"`
+}
 
 // TestSearch_RanksMatchingActions verifies that Search prioritizes the most
 // specific destructive action when query terms match both the domain and action.
@@ -34,6 +55,101 @@ func TestSearch_RanksMatchingActions(t *testing.T) {
 	}
 	if !output.Results[0].Destructive {
 		t.Fatal("top result Destructive = false, want true")
+	}
+}
+
+// TestSearch_ExplainIsOptIn verifies that ranking explanations are omitted by
+// default and returned only when requested by the caller.
+func TestSearch_ExplainIsOptIn(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	defaultResult, defaultOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 3})
+	if err != nil {
+		t.Fatalf("Search(default) error = %v", err)
+	}
+	if defaultResult == nil || defaultResult.IsError {
+		t.Fatalf("Search(default) result = %+v, want non-error", defaultResult)
+	}
+	if defaultOutput.Count == 0 {
+		t.Fatal("Search(default) returned no matches")
+	}
+	if defaultOutput.Results[0].Explanation != nil {
+		t.Fatalf("Search(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
+	}
+	if strings.Contains(textContent(defaultResult), "| Why |") {
+		t.Fatalf("Search(default) markdown includes Why column: %s", textContent(defaultResult))
+	}
+
+	explainResult, explainOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 3, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(explain) error = %v", err)
+	}
+	if explainResult == nil || explainResult.IsError {
+		t.Fatalf("Search(explain) result = %+v, want non-error", explainResult)
+	}
+	if explainOutput.Count == 0 {
+		t.Fatal("Search(explain) returned no matches")
+	}
+	explanation := explainOutput.Results[0].Explanation
+	if explanation == nil {
+		t.Fatal("Search(explain) explanation is nil")
+	}
+	if explanation.TotalScore != explainOutput.Results[0].Score {
+		t.Fatalf("explanation TotalScore = %d, want result score %d", explanation.TotalScore, explainOutput.Results[0].Score)
+	}
+	if explanation.MatchedTerms == 0 || explanation.RequiredTerms == 0 || len(explanation.Reasons) == 0 {
+		t.Fatalf("Search(explain) explanation = %+v, want matched terms and reasons", explanation)
+	}
+	if explanation.Reasons[0].Field == "" || explanation.Reasons[0].QueryTerm == "" || explanation.Reasons[0].MatchedValue == "" {
+		t.Fatalf("Search(explain) first reason = %+v, want field, query term, and matched value", explanation.Reasons[0])
+	}
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
+	}
+}
+
+// TestSearch_IncludesCuratedRelatedActions verifies compact search results keep
+// workflow hints in structured fields without enabling scoring explanations.
+func TestSearch_IncludesCuratedRelatedActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "analyze.release_notes", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 1 || output.Results[0].ID != "analyze.release_notes" {
+		t.Fatalf("Search() output = %+v, want analyze.release_notes", output)
+	}
+	if !slices.Contains(output.Results[0].RelatedActions, "repository.compare") {
+		t.Fatalf("RelatedActions = %v, want repository.compare", output.Results[0].RelatedActions)
+	}
+	if output.Results[0].Explanation != nil {
+		t.Fatalf("Explanation = %+v, want nil by default", output.Results[0].Explanation)
+	}
+}
+
+// TestSearch_NoMatchSuggestsNearbyTokens verifies empty searches still return a
+// small recovery hint instead of dumping the full catalog.
+func TestSearch_NoMatchSuggestsNearbyTokens(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "nonsenseonlyzz", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 0 {
+		t.Fatalf("Search() Count = %d, want 0", output.Count)
+	}
+	if len(output.Suggestions) == 0 || len(output.Suggestions) > 6 {
+		t.Fatalf("Suggestions = %v, want 1..6 values", output.Suggestions)
+	}
+	if !strings.Contains(textContent(result), "Try:") {
+		t.Fatalf("Search() markdown = %q, want no-match suggestions", textContent(result))
 	}
 }
 
@@ -113,6 +229,200 @@ func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 	}
 	if output.Count == 0 || output.Results[0].ID != "project.list" {
 		t.Fatalf("top result = %+v, want project.list", output.Results)
+	}
+}
+
+// TestSearch_CurrentHighConfidenceQueriesRemainStable protects the current
+// production-catalog top results before the ranker is refactored.
+func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name         string
+		query        string
+		limit        int
+		wantTop      string
+		wantContains string
+	}{
+		{name: "merge request list", query: "merge request list open author project", wantTop: "merge_request.list"},
+		{name: "open issues", query: "list open issues", limit: 10},
+		{name: "pipeline trigger", query: "pipeline run trigger", wantContains: "pipeline.trigger_create"},
+		{name: "ci variable secret", query: "ci variable secret", wantTop: "ci_variable.create"},
+		{name: "project delete", query: "project delete", wantTop: "project.delete"},
+		{name: "project discovery", query: "discover project from remote", wantTop: "discover_project.resolve"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limit := tt.limit
+			if limit == 0 {
+				limit = 5
+			}
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: limit})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if output.Count == 0 {
+				t.Fatalf("Search(%q) returned no matches", tt.query)
+			}
+			if tt.wantTop != "" && output.Results[0].ID != tt.wantTop {
+				t.Fatalf("Search(%q) top result = %+v, want %s", tt.query, output.Results, tt.wantTop)
+			}
+			if tt.wantContains != "" && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == tt.wantContains }) {
+				t.Fatalf("Search(%q) results = %+v, want %s", tt.query, output.Results, tt.wantContains)
+			}
+		})
+	}
+}
+
+// TestDynamicSearchCorpus validates the versioned dynamic search query corpus
+// with table-driven cases loaded from testdata. Each entry describes a query,
+// expected top actions, ambiguity/destructive expectations, and optional custom
+// aliases; the test builds an in-memory catalog and registry per case.
+// Run it directly with:
+//
+//	go test ./internal/tools/dynamic/ -run TestDynamicSearchCorpus -count=1
+func TestDynamicSearchCorpus(t *testing.T) {
+	cases := loadDynamicSearchCorpus(t)
+	baseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	baseCatalog, err = AddStandaloneCatalog(baseCatalog, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Category, func(t *testing.T) {
+			registry := NewRegistryFromCatalog(baseCatalog)
+			if len(tc.CustomAliases) > 0 {
+				aliases := append([]actionAlias(nil), actionAliases()...)
+				for _, customAlias := range tc.CustomAliases {
+					aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
+				}
+				registry = newRegistryFromCatalog(baseCatalog, aliases)
+			}
+
+			_, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tc.Query, Limit: tc.Limit})
+			if searchErr != nil {
+				t.Fatalf("Search() error = %v", searchErr)
+			}
+			if tc.ExpectZero {
+				if len(output.Results) != 0 {
+					t.Fatalf("Search(%q) results = %+v, want zero results", tc.Query, output.Results)
+				}
+				return
+			}
+			if len(output.Results) == 0 {
+				t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
+			}
+			if tc.Limit > 0 && len(output.Results) > tc.Limit {
+				t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
+			}
+			if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
+				t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
+			}
+			for _, want := range tc.WantTopN {
+				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == want }) {
+					t.Fatalf("Search(%q) results = %+v, want top-N action %s", tc.Query, output.Results, want)
+				}
+			}
+			if tc.ExpectAmbiguous {
+				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return len(result.AmbiguousWith) > 0 }) {
+					t.Fatalf("Search(%q) results = %+v, want ambiguity annotation", tc.Query, output.Results)
+				}
+			}
+			if tc.ExpectDestructiveTop && !output.Results[0].Destructive {
+				t.Fatalf("Search(%q) top = %+v, want destructive top result", tc.Query, output.Results[0])
+			}
+			if tc.ForbidDestructiveTop && output.Results[0].Destructive {
+				t.Fatalf("Search(%q) top = %+v, want non-destructive top result", tc.Query, output.Results[0])
+			}
+		})
+	}
+}
+
+func loadDynamicSearchCorpus(t *testing.T) []dynamicSearchCorpusCase {
+	t.Helper()
+	content, err := os.ReadFile("testdata/dynamic_search_queries.json")
+	if err != nil {
+		t.Fatalf("ReadFile(dynamic_search_queries.json) error = %v", err)
+	}
+	var cases []dynamicSearchCorpusCase
+	if unmarshalErr := json.Unmarshal(content, &cases); unmarshalErr != nil {
+		t.Fatalf("Unmarshal(dynamic_search_queries.json) error = %v", unmarshalErr)
+	}
+	if len(cases) == 0 {
+		t.Fatal("dynamic search corpus is empty")
+	}
+	return cases
+}
+
+// TestSearch_AnnotatesAmbiguousAlias verifies that exact ambiguous aliases are
+// surfaced in search results before the model reaches describe or execute.
+func TestSearch_AnnotatesAmbiguousAlias(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "danger.delete", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	annotated := 0
+	for _, searchResult := range output.Results {
+		if slices.Contains(searchResult.AmbiguousWith, "project.delete") && slices.Contains(searchResult.AmbiguousWith, "package.delete") {
+			annotated++
+		}
+	}
+	if annotated == 0 {
+		t.Fatalf("Search() results = %+v, want ambiguous alias annotations", output.Results)
+	}
+	text := textContent(result)
+	if !strings.Contains(text, "Use one canonical action ID explicitly") || !strings.Contains(text, "`project.delete`") || !strings.Contains(text, "`package.delete`") {
+		t.Fatalf("Search() markdown = %q, want ambiguous alias guidance", text)
+	}
+}
+
+// TestSearch_ConfidenceAnnotations verifies close-score low confidence and a
+// clear high-confidence top result. The thresholds are score >= 80 and margin >= 15.
+func TestSearch_ConfidenceAnnotations(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	lowResult, lowOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(low) error = %v", err)
+	}
+	if lowResult == nil || lowResult.IsError || lowOutput.Count == 0 {
+		t.Fatalf("Search(low) result/output = %+v %+v, want matches", lowResult, lowOutput)
+	}
+	if !lowOutput.Results[0].LowConfidence {
+		t.Fatalf("Search(project) top result = %+v, want low confidence", lowOutput.Results[0])
+	}
+	if lowOutput.Results[0].Explanation == nil || !lowOutput.Results[0].Explanation.LowConfidence {
+		t.Fatalf("Search(project) explanation = %+v, want low confidence", lowOutput.Results[0].Explanation)
+	}
+
+	highResult, highOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search(high) error = %v", err)
+	}
+	if highResult == nil || highResult.IsError || highOutput.Count == 0 {
+		t.Fatalf("Search(high) result/output = %+v %+v, want matches", highResult, highOutput)
+	}
+	if highOutput.Results[0].ID != "project.delete" || highOutput.Results[0].LowConfidence {
+		t.Fatalf("Search(project delete) top result = %+v, want high-confidence project.delete", highOutput.Results[0])
 	}
 }
 
@@ -443,6 +753,50 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	}
 }
 
+// TestFind_ExplainIsOptIn verifies that find keeps its default payload compact
+// and exposes scoring reasons only when explicitly requested.
+func TestFind_ExplainIsOptIn(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	defaultResult, defaultOutput, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 3})
+	if err != nil {
+		t.Fatalf("Find(default) error = %v", err)
+	}
+	if defaultResult == nil || defaultResult.IsError {
+		t.Fatalf("Find(default) result = %+v, want non-error", defaultResult)
+	}
+	if defaultOutput.Count == 0 {
+		t.Fatal("Find(default) returned no matches")
+	}
+	if defaultOutput.Results[0].Explanation != nil {
+		t.Fatalf("Find(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
+	}
+	if strings.Contains(textContent(defaultResult), "| Why |") {
+		t.Fatalf("Find(default) markdown includes Why column: %s", textContent(defaultResult))
+	}
+
+	explainResult, explainOutput, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 3, Explain: true})
+	if err != nil {
+		t.Fatalf("Find(explain) error = %v", err)
+	}
+	if explainResult == nil || explainResult.IsError {
+		t.Fatalf("Find(explain) result = %+v, want non-error", explainResult)
+	}
+	if explainOutput.Count == 0 {
+		t.Fatal("Find(explain) returned no matches")
+	}
+	explanation := explainOutput.Results[0].Explanation
+	if explanation == nil {
+		t.Fatal("Find(explain) explanation is nil")
+	}
+	if explanation.TotalScore != explainOutput.Results[0].Score || len(explanation.Reasons) == 0 {
+		t.Fatalf("Find(explain) explanation = %+v, want score and reasons", explanation)
+	}
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Find(explain) markdown missing Why explanation: %s", textContent(explainResult))
+	}
+}
+
 // TestFind_RequiresQuery verifies that Find returns an MCP tool error and empty
 // output when the query is omitted.
 func TestFind_RequiresQuery(t *testing.T) {
@@ -524,6 +878,41 @@ func TestDescribe_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+// TestUnsearchableAlias_CanonicalizesWithoutRanking verifies compatibility
+// aliases can remain valid for describe/execute without influencing search.
+func TestUnsearchableAlias_CanonicalizesWithoutRanking(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "hidden.lookup", Canonical: "project.get", Source: aliasSourceCompatibility, Searchable: false, Notes: "test-only hidden alias"},
+	})
+
+	describeResult, describeOutput, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "hidden.lookup"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if describeResult == nil || describeResult.IsError || describeOutput.Count != 1 || describeOutput.Actions[0].ID != "project.get" {
+		t.Fatalf("Describe() result/output = %+v %+v, want project.get", describeResult, describeOutput)
+	}
+
+	executeResult, executeOutput, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "hidden.lookup", Params: map[string]any{"project_id": 123}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if executeResult == nil || executeResult.IsError || executeOutput == nil {
+		t.Fatalf("Execute() result/output = %+v %+v, want non-error output", executeResult, executeOutput)
+	}
+
+	searchResult, searchOutput, err := registry.Search(t.Context(), nil, SearchInput{Query: "hidden lookup", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if searchResult == nil || searchResult.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", searchResult)
+	}
+	if slices.ContainsFunc(searchOutput.Results, func(result SearchResult) bool { return result.ID == "project.get" }) {
+		t.Fatalf("Search() results = %+v, want hidden alias not to rank project.get", searchOutput.Results)
+	}
+}
+
 // TestRequiredParams_IncludesPreferredAlternative verifies that schemas using
 // anyOf still produce a useful example branch for search and describe output.
 func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
@@ -541,6 +930,71 @@ func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
 	}
 }
 
+// TestBuildSearchDocument_CapturesTypedFields verifies that the dynamic ranker
+// builds typed metadata fields while preserving the flat text compatibility
+// fallback used by the current scorer.
+func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id"},
+		"properties": map[string]any{
+			"project_id":      map[string]any{"type": "string", "description": "Project path or numeric identifier"},
+			"author_username": map[string]any{"type": "string"},
+			"state":           map[string]any{"type": "string", "enum": []any{"opened", "closed"}},
+		},
+	}
+
+	document := buildSearchDocument(
+		"repository.tree",
+		"gitlab_repository",
+		"repository",
+		"tree",
+		[]string{"repository_tree", "repo.files"},
+		[]string{"read", "tree"},
+		schema,
+	)
+
+	if document.CanonicalID != "repository.tree" {
+		t.Fatalf("CanonicalID = %q, want repository.tree", document.CanonicalID)
+	}
+	for _, want := range []string{"repository", "tree"} {
+		if !slices.Contains(document.IDWords, want) {
+			t.Fatalf("IDWords = %v, want %q", document.IDWords, want)
+		}
+	}
+	if document.Tool != "gitlab_repository" || document.Domain != "repository" || document.Action != "tree" {
+		t.Fatalf("document identity fields = %+v", document)
+	}
+	if document.Backend != "gitlab" || document.Capability != "source_control" || document.Resource != "repository" || document.Operation != "tree" || document.Scope != "project" {
+		t.Fatalf("document cross-backend fields = %+v", document)
+	}
+	if !slices.Contains(document.Aliases, "repository_tree") || !slices.Contains(document.Aliases, "repo.files") {
+		t.Fatalf("Aliases = %v, want hidden and visible aliases", document.Aliases)
+	}
+	if !strings.Contains(document.FlatText, "repository_tree") {
+		t.Fatalf("FlatText = %q, want explicitly supplied aliases to be searchable", document.FlatText)
+	}
+	for _, want := range []string{"gitlab", "source_control", "project", "repo.files", "read", "project_id", "author_username", "author username", "opened", "closed", "project path or numeric identifier"} {
+		if !strings.Contains(document.FlatText, want) {
+			t.Fatalf("FlatText = %q, want %q", document.FlatText, want)
+		}
+	}
+	if !slices.Contains(document.Tags, "read") || !slices.Contains(document.RequiredParams, "project_id") {
+		t.Fatalf("document tags/required params = %+v", document)
+	}
+	if strings.Join(document.OptionalParams, ",") != "author_username,state" {
+		t.Fatalf("OptionalParams = %v, want sorted author_username,state", document.OptionalParams)
+	}
+	if strings.Join(document.SchemaProperties, ",") != "author_username,project_id,state" {
+		t.Fatalf("SchemaProperties = %v, want sorted author_username,project_id,state", document.SchemaProperties)
+	}
+	if strings.Join(document.SchemaEnums, ",") != "closed,opened" {
+		t.Fatalf("SchemaEnums = %v, want closed,opened", document.SchemaEnums)
+	}
+	if strings.Join(document.SchemaDescTerms, ",") != "project path or numeric identifier" {
+		t.Fatalf("SchemaDescTerms = %v, want project path or numeric identifier", document.SchemaDescTerms)
+	}
+}
+
 // TestDescribe_CanonicalizesObservedModelAliases verifies aliases observed in
 // model output so dynamic execution remains tolerant of alternate naming.
 func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
@@ -554,6 +1008,8 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"merge_request.changes":                     "mr_review.changes_get",
 		"merge_request.accept":                      "merge_request.merge",
 		"project.hooks.list":                        "project.hook_list",
+		"merge_request.emoji_award_create":          "merge_request.emoji_mr_create",
+		"merge_request.emoji_award_delete":          "merge_request.emoji_mr_delete",
 		"project.status_check_list":                 "external_status_check.list_project",
 		"project.status_checks.list":                "external_status_check.list_project",
 		"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
@@ -563,8 +1019,13 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"release.generate_notes":                    "analyze.release_notes",
 		"deploy_token.create":                       "access.deploy_token_create_project",
 		"deploy_key.create":                         "access.deploy_key_add",
+		"deploy_key.delete":                         "access.deploy_key_delete",
+		"deploy_key.get":                            "access.deploy_key_get",
+		"deploy_key.update":                         "access.deploy_key_update",
 		"branch.protected_list":                     "branch.get_protected",
 		"branch.update_protection":                  "branch.update_protected",
+		"issue.close":                               "issue.update",
+		"issue.reopen":                              "issue.update",
 		"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
 		"merge_request.time_estimate":               "merge_request.time_estimate_set",
 		"merge_request.time_spent_add":              "merge_request.spent_time_add",
@@ -605,25 +1066,36 @@ func TestDescribe_CanonicalizesProviderSpecificAliases(t *testing.T) {
 	tests := map[string]string{
 		"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
 		"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
+		"feature_flags.feature_flag_user_list":       "feature_flags.ff_user_list_list",
+		"feature_flags.feature_flag_user_list_list":  "feature_flags.ff_user_list_list",
 		"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
 		"gitlab_issue.create":                        "issue.create",
 		"gitlab_server.health_check":                 "server.health_check",
 		"job.artifact_download":                      "job.download_single_artifact",
 		"issue.link":                                 "issue.link_create",
 		"issue.note.create":                          "issue.note_create",
+		"issue.note.delete":                          "issue.note_delete",
+		"issue.note.get":                             "issue.note_get",
+		"issue.note.list":                            "issue.note_list",
+		"issue.note.update":                          "issue.note_update",
 		"issue_note.get":                             "issue.note_get",
 		"issue_note.list":                            "issue.note_list",
 		"repository_tree":                            "repository.tree",
+		"repository_tree.list":                       "repository.tree",
 		"repository_file.get":                        "repository.file_get",
 		"repository_file.read":                       "repository.file_get",
 		"repository_files.get_raw_file":              "repository.file_raw",
 		"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
+		"pipeline.schedule_variable_delete":          "pipeline.schedule_delete_variable",
 		"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
 		"project.badge_update":                       "project.badge_edit",
 		"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
 		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
+		"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
 		"generic_package.list":                       "package.list",
 		"issue_note.create":                          "issue.note_create",
+		"issue_note.delete":                          "issue.note_delete",
+		"issue_note.update":                          "issue.note_update",
 		"release_link.link_list":                     "release.link_list",
 		"wiki.show":                                  "wiki.get",
 		"gitlab_interactive_issue.create":            "interactive.issue_create",
@@ -672,6 +1144,12 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 			description := actionDescriptionByID(t, output, actionID)
 			if !strings.Contains(description.Usage, wantSubstring) {
 				t.Fatalf("usage = %q, want substring %q", description.Usage, wantSubstring)
+			}
+			if actionID == "repository.compare" && !slices.Contains(description.RelatedActions, "analyze.release_notes") {
+				t.Fatalf("RelatedActions = %v, want analyze.release_notes", description.RelatedActions)
+			}
+			if actionID == "repository.compare" && !strings.Contains(textContent(result), "Related actions") {
+				t.Fatalf("Describe() markdown = %q, want related actions", textContent(result))
 			}
 		})
 	}
@@ -879,6 +1357,42 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			},
 		},
 		{
+			name:  "issue close alias injects state event",
+			input: ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["state_event"] != "close" {
+					t.Fatalf("output = %#v, want state_event close", output)
+				}
+			},
+		},
+		{
+			name:  "issue reopen alias injects state event",
+			input: ExecuteInput{Action: "issue.reopen", Params: map[string]any{"project_id": 123, "issue_iid": 1}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["state_event"] != "reopen" {
+					t.Fatalf("output = %#v, want state_event reopen", output)
+				}
+			},
+		},
+		{
+			name:  "pipeline schedule name to description",
+			input: ExecuteInput{Action: "pipeline.schedule_create", Params: map[string]any{"project_id": 123, "name": "nightly", "ref": "main", "cron": "0 1 * * *"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["description"] != "nightly" {
+					t.Fatalf("output = %#v, want description nightly", output)
+				}
+				if _, ok := data["name"]; ok {
+					t.Fatalf("output = %#v, want name alias removed", output)
+				}
+			},
+		},
+		{
 			name: "branch protect role access levels",
 			input: ExecuteInput{Action: "branch.protect", Params: map[string]any{
 				"project_id":         123,
@@ -910,6 +1424,110 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			},
 		},
 		{
+			name:  "feature flag version alias",
+			input: ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["version"] != "new_version_flag" {
+					t.Fatalf("output = %#v, want version new_version_flag", output)
+				}
+			},
+		},
+		{
+			name:  "feature flag user list drops feature flag name",
+			input: ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if _, ok := data["name"]; ok {
+					t.Fatalf("output = %#v, want name removed", output)
+				}
+				if data["per_page"] != 20 {
+					t.Fatalf("output = %#v, want per_page 20", output)
+				}
+			},
+		},
+		{
+			name:  "release link tag alias",
+			input: ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["tag_name"] != "v1.0.0" {
+					t.Fatalf("output = %#v, want tag_name v1.0.0", output)
+				}
+			},
+		},
+		{
+			name: "snippet create drops file action",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"files": []any{map[string]any{
+					"action":    "create",
+					"file_path": "snippet.md",
+					"content":   "body",
+				}},
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if _, ok := file["action"]; ok {
+					t.Fatalf("output = %#v, want files[0].action removed", output)
+				}
+			},
+		},
+		{
+			name: "snippet create builds files from single file params",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"file_name":  "snippet.md",
+				"content":    "body",
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if file["file_path"] != "snippet.md" || file["content"] != "body" {
+					t.Fatalf("output = %#v, want files[0] with file_path and content", output)
+				}
+				if _, ok := data["file_name"]; ok {
+					t.Fatalf("output = %#v, want top-level file_name removed", output)
+				}
+				if _, ok := data["content"]; ok {
+					t.Fatalf("output = %#v, want top-level content removed", output)
+				}
+			},
+		},
+		{
+			name: "snippet create normalizes nested file name",
+			input: ExecuteInput{Action: "snippet.project_create", Params: map[string]any{
+				"project_id": 123,
+				"title":      "snippet",
+				"files": []any{map[string]any{
+					"file_name": "snippet.md",
+					"content":   "body",
+				}},
+			}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				files := data["files"].([]any)
+				file := files[0].(map[string]any)
+				if file["file_path"] != "snippet.md" {
+					t.Fatalf("output = %#v, want files[0].file_path snippet.md", output)
+				}
+				if _, ok := file["file_name"]; ok {
+					t.Fatalf("output = %#v, want files[0].file_name removed", output)
+				}
+			},
+		},
+		{
 			name:  "runner paused string to bool",
 			input: ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
 			assert: func(t *testing.T, output any) {
@@ -933,6 +1551,191 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			}
 			tt.assert(t, output)
 		})
+	}
+}
+
+// TestNormalizeActionScopedParamsWithExplanation verifies debug metadata is
+// deterministic and records parameter names only.
+func TestNormalizeActionScopedParamsWithExplanation(t *testing.T) {
+	schema := map[string]any{
+		"type":     "object",
+		"required": []any{"project_id", "file_path", "ref"},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "integer"},
+			"file_path":  map[string]any{"type": "string"},
+			"ref":        map[string]any{"type": "string"},
+		},
+	}
+	params := map[string]any{"project_id": 123, "file_path": "README.md", "branch": "main"}
+
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("repository.file_get", params, schema)
+	if normalized["ref"] != "main" {
+		t.Fatalf("normalized = %#v, want ref main", normalized)
+	}
+	if _, ok := normalized["branch"]; ok {
+		t.Fatalf("normalized = %#v, want branch removed", normalized)
+	}
+	if len(explanations) != 1 {
+		t.Fatalf("explanations = %+v, want one explanation", explanations)
+	}
+	if explanations[0].Alias != "branch" || explanations[0].Canonical != "ref" || explanations[0].Source != "dynamic_action_scoped" {
+		t.Fatalf("explanations = %+v, want branch -> ref action-scoped explanation", explanations)
+	}
+}
+
+// TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParams
+// verifies snippet create keeps top-level file_name/content when the selected
+// schema already accepts them.
+func TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParams(t *testing.T) {
+	schema := map[string]any{
+		"type":     "object",
+		"required": []any{"project_id", "title", "file_name", "content"},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"title":      map[string]any{"type": "string"},
+			"file_name":  map[string]any{"type": "string"},
+			"content":    map[string]any{"type": "string"},
+			"files":      map[string]any{"type": "array"},
+		},
+	}
+	params := map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "title": "snippet", "file_name": "snippet.md", "content": "body"}
+
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("snippet.project_create", params, schema)
+	if normalized["file_name"] != "snippet.md" || normalized["content"] != "body" {
+		t.Fatalf("normalized = %#v, want top-level file_name/content preserved", normalized)
+	}
+	if _, ok := normalized["files"]; ok {
+		t.Fatalf("normalized = %#v, want files not synthesized", normalized)
+	}
+	if len(explanations) != 0 {
+		t.Fatalf("explanations = %+v, want no normalization explanation", explanations)
+	}
+}
+
+// TestActionScopedParamAliases_CoversDocumentedActions verifies the declarative
+// metadata includes every action currently normalized by dynamic execute.
+func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
+	aliases := actionScopedParamAliases()
+	wantActions := []string{
+		"job.list",
+		"repository.file_get",
+		"issue.link_create",
+		"issue.update",
+		"pipeline.schedule_create",
+		"pipeline.schedule_update",
+		"branch.protect",
+		"feature_flags.feature_flag_create",
+		"feature_flags.ff_user_list_list",
+		"group.group_label_update",
+		"project.member_add",
+		"project.member_edit",
+		"release.link_create",
+		"release.link_delete",
+		"release.link_get",
+		"release.link_list",
+		"release.link_update",
+		"runner.update",
+		"snippet.project_create",
+	}
+	for _, actionID := range wantActions {
+		if !slices.ContainsFunc(aliases, func(alias actionScopedParamAlias) bool { return alias.ActionID == actionID }) {
+			t.Fatalf("actionScopedParamAliases() = %+v, want action %s", aliases, actionID)
+		}
+	}
+}
+
+// TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch verifies dynamic
+// execute gives schema-aware repair guidance before route validation.
+func TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "repository.file_get", Params: map[string]any{"project_id": 123, "file_path": "README.md", "reff": "main"}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	text := textContent(result)
+	for _, want := range []string{"Unknown params: reff", "Did you mean reff -> ref", "Missing required params: ref", "Valid params: file_path, project_id, ref"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Execute() error text = %q, want %q", text, want)
+		}
+	}
+}
+
+// TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields verifies
+// dynamic execute does not silently drop user-supplied security intent.
+func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "pipeline.schedule_create_variable", Params: map[string]any{
+		"project_id":  123,
+		"schedule_id": 109,
+		"key":         "SCHEDULE_CRUD_TOKEN",
+		"value":       "secret",
+		"masked":      true,
+		"protected":   true,
+	}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	text := textContent(result)
+	for _, want := range []string{"Unknown params: masked, protected", "Valid params: key, project_id, schedule_id, value, variable_type"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Execute() error text = %q, want %q", text, want)
+		}
+	}
+}
+
+// TestExecute_RejectsIssueLifecycleAliasStateConflict verifies shorthand issue
+// lifecycle aliases cannot execute the opposite state transition.
+func TestExecute_RejectsIssueLifecycleAliasStateConflict(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1, "state_event": "reopen"}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	if text := textContent(result); !strings.Contains(text, "implies state_event") || !strings.Contains(text, "issue.update") {
+		t.Fatalf("Execute() error text = %q, want conflict guidance", text)
+	}
+}
+
+// TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives verifies execute
+// validation accepts either single-file or multi-file snippet creation shapes.
+func TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id", "title"},
+		"anyOf": []any{
+			map[string]any{"required": []any{"file_name", "content"}},
+			map[string]any{"required": []any{"files"}},
+		},
+	}
+
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md", "content": "body"}); len(got) != 0 {
+		t.Fatalf("missingDynamicRequiredParams(single-file) = %v, want none", got)
+	}
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "files": []any{map[string]any{"file_path": "a.md", "content": "body"}}}); len(got) != 0 {
+		t.Fatalf("missingDynamicRequiredParams(files) = %v, want none", got)
+	}
+	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md"}); !slices.Equal(got, []string{"content"}) {
+		t.Fatalf("missingDynamicRequiredParams(partial) = %v, want content", got)
 	}
 }
 
@@ -1000,6 +1803,30 @@ func TestDescribe_RejectsAmbiguousAlias(t *testing.T) {
 	}
 }
 
+// TestDescribe_CurrentAmbiguousAliasBehaviorRemainsStable protects the current
+// contract that ambiguous aliases are reported with canonical repair targets.
+func TestDescribe_CurrentAmbiguousAliasBehaviorRemainsStable(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "resource.remove", Canonical: "project.delete"},
+		{Alias: "resource.remove", Canonical: "package.delete"},
+	})
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "resource.remove"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Describe() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Actions) != 0 {
+		t.Fatalf("Describe() output = %+v, want empty output", output)
+	}
+	text := textContent(result)
+	if !strings.Contains(text, "ambiguous") || !strings.Contains(text, "`project.delete`") || !strings.Contains(text, "`package.delete`") {
+		t.Fatalf("Describe() text = %q, want ambiguous canonical repair guidance", text)
+	}
+}
+
 // TestExecute_DestructiveActionRequiresConfirm verifies that destructive actions
 // are blocked until the caller explicitly sets confirm=true.
 func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
@@ -1038,6 +1865,48 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 	}
 	if data["confirm"] != true {
 		t.Fatalf("confirm = %v, want true", data["confirm"])
+	}
+}
+
+// TestExecute_CurrentDestructiveSafetyRemainsStable protects the current
+// destructive-action confirmation contract before ranker internals change.
+func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	blocked, blockedOutput, blockedErr := registry.Execute(t.Context(), nil, ExecuteInput{
+		Action: "project.delete",
+		Params: map[string]any{"project_id": 123},
+	})
+	if blockedErr != nil {
+		t.Fatalf("Execute(blocked) error = %v", blockedErr)
+	}
+	if blocked == nil || !blocked.IsError {
+		t.Fatalf("Execute(blocked) result = %+v, want tool error", blocked)
+	}
+	if blockedOutput != nil {
+		t.Fatalf("Execute(blocked) output = %+v, want nil", blockedOutput)
+	}
+	if !strings.Contains(textContent(blocked), "confirm=true") {
+		t.Fatalf("Execute(blocked) text = %q, want confirm guidance", textContent(blocked))
+	}
+
+	allowed, allowedOutput, allowedErr := registry.Execute(t.Context(), nil, ExecuteInput{
+		Action:  "project.delete",
+		Params:  map[string]any{"project_id": 123},
+		Confirm: true,
+	})
+	if allowedErr != nil {
+		t.Fatalf("Execute(allowed) error = %v", allowedErr)
+	}
+	if allowed == nil || allowed.IsError {
+		t.Fatalf("Execute(allowed) result = %+v, want non-error", allowed)
+	}
+	data, ok := allowedOutput.(map[string]any)
+	if !ok {
+		t.Fatalf("Execute(allowed) output = %T, want map[string]any", allowedOutput)
+	}
+	if data["confirm"] != true {
+		t.Fatalf("Execute(allowed) confirm = %v, want true", data["confirm"])
 	}
 }
 
@@ -1229,6 +2098,120 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 	}
 }
 
+// TestSearch_FuzzyRecoveryQueriesReturnExpectedCandidates verifies typo recovery
+// for common GitLab resource and workflow phrases.
+func TestSearch_FuzzyRecoveryQueriesReturnExpectedCandidates(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		query      string
+		want       string
+		wantPrefix string
+	}{
+		{query: "merje request", wantPrefix: "merge_request."},
+		{query: "merge requesy", wantPrefix: "merge_request."},
+		{query: "pipline retry", want: "pipeline.retry"},
+		{query: "brnch protect", want: "branch.protect"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10, Explain: true})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if tt.want != "" {
+				assertSearchResultsContain(t, output.Results, tt.want)
+			}
+			if tt.wantPrefix != "" && !strings.HasPrefix(output.Results[0].ID, tt.wantPrefix) {
+				t.Fatalf("Search(%q) top result = %+v, want prefix %s", tt.query, output.Results[0], tt.wantPrefix)
+			}
+		})
+	}
+}
+
+// TestSearch_FuzzyRecoveryIncludesReasonMetadata verifies fuzzy explanations
+// include fuzzy=true and edit distance metadata when fuzzy fallback supplies a result.
+func TestSearch_FuzzyRecoveryIncludesReasonMetadata(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "merje requesy", Limit: 10, Explain: true})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	for _, searchResult := range output.Results {
+		if searchResult.Explanation == nil {
+			continue
+		}
+		for _, reason := range searchResult.Explanation.Reasons {
+			if reason.Fuzzy && reason.Distance > 0 {
+				return
+			}
+		}
+	}
+	t.Fatalf("Search() results = %+v, want at least one fuzzy reason with edit distance", output.Results)
+}
+
+// TestSearch_FuzzyRecoveryDoesNotElevateWeakDestructiveTypo verifies typo-only
+// destructive-looking queries cannot push a destructive action above safer matches.
+func TestSearch_FuzzyRecoveryDoesNotElevateWeakDestructiveTypo(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "projec list delet", Limit: 5, Explain: true})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 {
+		t.Fatal("Search() returned no matches")
+	}
+	if output.Results[0].ID == "project.delete" {
+		t.Fatalf("Search() top result = %+v, want non-destructive candidate above project.delete", output.Results[0])
+	}
+}
+
+// TestSearch_DomainVerbParameterIntentSignals_ReturnExpectedActions verifies
+// semantic intent signals for confusing cross-domain GitLab task phrasing.
+func TestSearch_DomainVerbParameterIntentSignals_ReturnExpectedActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "release link create", want: "release.link_create"},
+		{query: "package list project", want: "package.list"},
+		{query: "pipeline jobs", want: "job.list"},
+		{query: "project member remove", want: "project.member_delete"},
+		{query: "group variable create", want: "ci_variable.group_create"},
+		{query: "repository file read", want: "repository.file_get"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10, Explain: true})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want)
+		})
+	}
+}
+
 // TestSearch_ProviderConfusionQueries_ReturnExpectedActions locks in the
 // production catalog ranking for phrases that confused evaluated models.
 func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
@@ -1259,6 +2242,39 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 				t.Fatalf("Search() result = %+v, want non-error", result)
 			}
 			assertSearchResultsContain(t, output.Results, tt.want...)
+		})
+	}
+}
+
+// TestSearch_CrossBackendTermsStayGitLabOnly verifies non-GitLab vocabulary is
+// normalized to current GitLab capabilities without exposing foreign action IDs.
+func TestSearch_CrossBackendTermsStayGitLabOnly(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "github pull request", query: "github pr list open", want: "merge_request.list"},
+		{name: "jira ticket", query: "jira ticket list open", want: "issue.list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: 10})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			assertSearchResultsContain(t, output.Results, tt.want)
+			for _, searchResult := range output.Results {
+				if strings.HasPrefix(searchResult.ID, "github.") || strings.HasPrefix(searchResult.ID, "jira.") {
+					t.Fatalf("Search() results = %+v, want GitLab-only action IDs", output.Results)
+				}
+			}
 		})
 	}
 }
@@ -1395,6 +2411,28 @@ func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...st
 	if !slices.Equal(gotIDs, wantIDs) {
 		t.Fatalf("Search() result IDs = %v, want exactly %v", gotIDs, wantIDs)
 	}
+}
+
+// fullScanScoredMatches performs a scorer-based full scan and keeps only
+// positive-score entries for comparison against indexed candidate results.
+func fullScanScoredMatches(entries []actionEntry, terms []searchTerm, scorer searchScorer) []scoredActionEntry {
+	matches := make([]scoredActionEntry, 0)
+	for _, entry := range entries {
+		score, explanation := scorer(entry, terms)
+		if score > 0 {
+			matches = append(matches, scoredActionEntry{entry: entry, score: score, explanation: explanation})
+		}
+	}
+	return matches
+}
+
+// scoredActionIDs extracts canonical action IDs from scored search matches.
+func scoredActionIDs(matches []scoredActionEntry) []string {
+	ids := make([]string, 0, len(matches))
+	for _, match := range matches {
+		ids = append(ids, match.entry.ID)
+	}
+	return ids
 }
 
 func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...string) {
@@ -1592,6 +2630,17 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"spent": "added"}, nil
 				},
 			},
+			"emoji_mr_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"name": params["name"]}, nil
+				},
+			},
+			"emoji_mr_delete": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"award_id": params["award_id"]}, nil
+				},
+				Destructive: true,
+			},
 		},
 		"gitlab_issue": {
 			"note_list": {
@@ -1698,6 +2747,56 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 		},
+		"gitlab_pipeline": {
+			"schedule_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "description", "ref", "cron"},
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"description": map[string]any{"type": "string"},
+						"ref":         map[string]any{"type": "string"},
+						"cron":        map[string]any{"type": "string"},
+						"active":      map[string]any{"type": "boolean"},
+					},
+				},
+			},
+			"schedule_create_variable": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "schedule_id", "key", "value"},
+					"properties": map[string]any{
+						"project_id":    map[string]any{"type": "integer"},
+						"schedule_id":   map[string]any{"type": "integer"},
+						"key":           map[string]any{"type": "string"},
+						"value":         map[string]any{"type": "string"},
+						"variable_type": map[string]any{"type": "string"},
+					},
+				},
+			},
+			"schedule_edit_variable": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "schedule_id", "key", "value"},
+					"properties": map[string]any{
+						"project_id":    map[string]any{"type": "integer"},
+						"schedule_id":   map[string]any{"type": "integer"},
+						"key":           map[string]any{"type": "string"},
+						"value":         map[string]any{"type": "string"},
+						"variable_type": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
 		"gitlab_repository": {
 			"file_get": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
@@ -1718,6 +2817,22 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 			"deploy_key_add": {
 				Handler: func(_ context.Context, _ map[string]any) (any, error) {
 					return map[string]any{"deploy_key": "added"}, nil
+				},
+			},
+			"deploy_key_delete": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
+				},
+				Destructive: true,
+			},
+			"deploy_key_get": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
+				},
+			},
+			"deploy_key_update": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
 				},
 			},
 			"token_project_create": {
@@ -1844,8 +2959,72 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 			"link_create": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"link": "created"}, nil
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "tag_name", "name", "url"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"tag_name":   map[string]any{"type": "string"},
+						"name":       map[string]any{"type": "string"},
+						"url":        map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+		"gitlab_feature_flags": {
+			"feature_flag_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"version": params["version"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "name", "version"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"name":       map[string]any{"type": "string"},
+						"version":    map[string]any{"type": "string"},
+					},
+				},
+			},
+			"ff_user_list_list": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return params, nil
+				},
+				InputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"page":       map[string]any{"type": "integer"},
+						"per_page":   map[string]any{"type": "integer"},
+					},
+				},
+			},
+		},
+		"gitlab_snippet": {
+			"project_create": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"files": params["files"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "title"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"title":      map[string]any{"type": "string"},
+						"files": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "object",
+								"properties": map[string]any{
+									"file_path": map[string]any{"type": "string"},
+									"content":   map[string]any{"type": "string"},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -1868,4 +3047,904 @@ func textContent(result *mcp.CallToolResult) string {
 		return ""
 	}
 	return text.Text
+}
+
+// Additional dynamic dispatcher coverage tests migrated from register_coverage_test.go.
+// TestRegistry_DefensiveBranches covers small validation and fallback branches
+// in the dynamic registry dispatcher. These scenarios matter because the catalog
+// action surface should return helpful tool errors for malformed calls instead
+// of leaking empty or ambiguous execution attempts.
+func TestRegistry_DefensiveBranches(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	t.Run("describe requires action", func(t *testing.T) {
+		result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
+		if err != nil {
+			t.Fatalf("Describe() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Describe() result = %+v, want tool error", result)
+		}
+		if output.Count != 0 || len(output.Actions) != 0 {
+			t.Fatalf("Describe() output = %+v, want empty output", output)
+		}
+	})
+
+	t.Run("execute requires action", func(t *testing.T) {
+		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Execute() result = %+v, want tool error", result)
+		}
+		if output != nil {
+			t.Fatalf("Execute() output = %+v, want nil", output)
+		}
+	})
+
+	t.Run("execute unknown action without suggestions", func(t *testing.T) {
+		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "zzzz"})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Execute() result = %+v, want tool error", result)
+		}
+		if output != nil {
+			t.Fatalf("Execute() output = %+v, want nil", output)
+		}
+		if strings.Contains(textContent(result), "Did you mean") {
+			t.Fatalf("Execute() error text = %q, want no suggestions", textContent(result))
+		}
+	})
+
+	t.Run("execute initializes nil params", func(t *testing.T) {
+		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_list"})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || result.IsError {
+			t.Fatalf("Execute() result = %+v, want non-error", result)
+		}
+		data, ok := output.(map[string]any)
+		if !ok {
+			t.Fatalf("Execute() output type = %T, want map[string]any", output)
+		}
+		if data["hooks"] != true {
+			t.Fatalf("Execute() output = %+v, want hooks=true", data)
+		}
+	})
+}
+
+// TestRegistry_HelperCoverage validates deterministic helper behavior used by
+// search ranking, examples, confirmations, and Markdown formatting. The cases
+// target defensive branches that are easy to regress while refactoring the low
+// token dynamic action surface.
+func TestRegistry_HelperCoverage(t *testing.T) {
+	t.Run("annotations with nil base", func(t *testing.T) {
+		got := annotationsWithTitle(nil, "Dynamic Search")
+		if got == nil || got.Title != "Dynamic Search" {
+			t.Fatalf("annotationsWithTitle(nil) = %+v, want title", got)
+		}
+	})
+
+	t.Run("dedupe strings trims empty and duplicates", func(t *testing.T) {
+		got := dedupeStrings([]string{" Project ", "", "project", "Issue"})
+		want := []string{"project", "issue"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("dedupeStrings() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("action tags include schema property hints", func(t *testing.T) {
+		schema := map[string]any{"properties": map[string]any{
+			"state_event": map[string]any{},
+			"ref":         map[string]any{},
+			"file_path":   map[string]any{},
+			"url":         map[string]any{},
+		}}
+		got := actionTags("repository.file_create", "repository", "file_create", schema)
+		for _, want := range []string{"repository file", "branch", "url", "close"} {
+			if !stringInSlice(got, want) {
+				t.Fatalf("actionTags() = %v, want %q", got, want)
+			}
+		}
+	})
+
+	t.Run("action tags include protected environment and member role hints", func(t *testing.T) {
+		protected := actionTags("group.protected_environment_create", "group", "protected_environment_create", nil)
+		if !stringInSlice(protected, "protected environment") {
+			t.Fatalf("actionTags(protected environment) = %v, want protected environment", protected)
+		}
+		memberRole := actionTags("member_role.create", "member_role", "create", nil)
+		if !stringInSlice(memberRole, "member role") {
+			t.Fatalf("actionTags(member role) = %v, want member role", memberRole)
+		}
+	})
+
+	t.Run("normalized limit clamps low and high values", func(t *testing.T) {
+		if got := normalizedLimit(0); got != defaultLimit {
+			t.Fatalf("normalizedLimit(0) = %d, want %d", got, defaultLimit)
+		}
+		if got := normalizedLimit(maxLimit + 1); got != maxLimit {
+			t.Fatalf("normalizedLimit(max+1) = %d, want %d", got, maxLimit)
+		}
+	})
+
+	t.Run("suggest action ids returns nil for empty terms", func(t *testing.T) {
+		registry := NewRegistry(testRoutes(t))
+		if got := registry.suggestActionIDs("   ", 5); got != nil {
+			t.Fatalf("suggestActionIDs(empty) = %v, want nil", got)
+		}
+	})
+
+	t.Run("score entry rejects empty terms", func(t *testing.T) {
+		if got := scoreEntry(actionEntry{ID: "project.get"}, nil); got != 0 {
+			t.Fatalf("scoreEntry(empty terms) = %d, want 0", got)
+		}
+	})
+
+	t.Run("segmented search ignores short queries", func(t *testing.T) {
+		registry := NewRegistry(testRoutes(t))
+		if got := registry.segmentedSearchMatches(normalizeSearchTerms("project get")); got != nil {
+			t.Fatalf("segmentedSearchMatches(short query) = %v, want nil", got)
+		}
+	})
+}
+
+// TestScoreSearch_Alternative covers every ranking branch in the exact search
+// scorer. This keeps the weighting contract explicit while fuzzy fallback stays
+// isolated to only zero-result searches.
+func TestScoreSearch_Alternative(t *testing.T) {
+	base := actionEntry{
+		ID:         "project.delete",
+		Domain:     "project",
+		Action:     "delete",
+		Aliases:    []string{"project.destroy"},
+		Tags:       []string{"danger"},
+		SearchText: "project delete owner",
+	}
+
+	tests := []struct {
+		name        string
+		entry       actionEntry
+		raw         string
+		alternative string
+		want        int
+	}{
+		{name: "canonical id", entry: base, raw: "project.delete", alternative: "project.delete", want: 120},
+		{name: "alias", entry: base, raw: "project.destroy", alternative: "project.destroy", want: 100},
+		{name: "tag", entry: base, raw: "danger", alternative: "danger", want: 90},
+		{name: "action", entry: base, raw: "delete", alternative: "delete", want: 80},
+		{name: "id contains", entry: base, raw: "ject.del", alternative: "ject.del", want: 55},
+		{name: "domain contains", entry: actionEntry{ID: "x.y", Domain: "project", Action: "remove"}, raw: "proj", alternative: "proj", want: 45},
+		{name: "raw search text", entry: actionEntry{ID: "x.y", Domain: "x", Action: "y", SearchText: "owner filter"}, raw: "owner", alternative: "owner", want: 25},
+		{name: "synonym search text", entry: actionEntry{ID: "x.y", Domain: "x", Action: "y", SearchText: "owner filter"}, raw: "owned", alternative: "owner", want: 18},
+		{name: "no match", entry: base, raw: "missing", alternative: "missing", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := scoreSearchAlternative(tt.entry, tt.raw, tt.alternative)
+			if got != tt.want {
+				t.Fatalf("scoreSearchAlternative() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestScoreSearchAlternative_WeightOrdering documents the intended precedence
+// between exact metadata fields so future tuning can change weights deliberately.
+func TestScoreSearchAlternative_WeightOrdering(t *testing.T) {
+	entry := actionEntry{
+		ID:         "project.delete",
+		Domain:     "project",
+		Action:     "delete",
+		Aliases:    []string{"project.destroy"},
+		Tags:       []string{"danger"},
+		SearchText: "project delete owner",
+	}
+
+	scores := []int{
+		scoreSearchAlternative(entry, "project.delete", "project.delete"),
+		scoreSearchAlternative(entry, "project.destroy", "project.destroy"),
+		scoreSearchAlternative(entry, "danger", "danger"),
+		scoreSearchAlternative(entry, "delete", "delete"),
+		scoreSearchAlternative(entry, "owner", "owner"),
+	}
+	for index := 1; index < len(scores); index++ {
+		if scores[index-1] <= scores[index] {
+			t.Fatalf("scores = %v, want strictly descending precedence", scores)
+		}
+	}
+}
+
+// TestScoreSearchAlternative_ReturnsReason verifies that explanation metadata
+// is stable enough for structured search debugging.
+func TestScoreSearchAlternative_ReturnsReason(t *testing.T) {
+	entry := actionEntry{
+		ID:         "issue.list",
+		Domain:     "issue",
+		Action:     "list",
+		SearchText: "issue list author_username",
+	}
+
+	score, reason := scoreSearchAlternativeWithReason(entry, "author", "author_username")
+	if score == 0 {
+		t.Fatal("scoreSearchAlternativeWithReason() score = 0, want match")
+	}
+	if reason.Field == "" || reason.QueryTerm == "" || reason.MatchedValue == "" {
+		t.Fatalf("reason = %+v, want non-empty field, query term, and matched value", reason)
+	}
+	if reason.QueryTerm != "author" || reason.Alternative != "author_username" {
+		t.Fatalf("reason = %+v, want original term and synonym alternative", reason)
+	}
+}
+
+// TestScoreSearchAlternative_SchemaParamWeights verifies schema-aware ranking
+// prefers required params over optional params while still considering enum and
+// description values as weak repair signals.
+func TestScoreSearchAlternative_SchemaParamWeights(t *testing.T) {
+	document := searchDocument{
+		CanonicalID:    "issue.list",
+		Domain:         "issue",
+		Action:         "list",
+		RequiredParams: []string{"project_id"},
+		OptionalParams: []string{"state"},
+		SchemaEnums:    []string{"opened"},
+		SchemaDescTerms: []string{
+			"filter issues by assignee username",
+		},
+		FlatText: "issue list project_id state opened filter issues by assignee username",
+	}
+	entry := actionEntry{ID: "issue.list", Domain: "issue", Action: "list", Document: document}
+
+	required := scoreSearchAlternative(entry, "project_id", "project_id")
+	optional := scoreSearchAlternative(entry, "state", "state")
+	enumValue := scoreSearchAlternative(entry, "opened", "opened")
+	description := scoreSearchAlternative(entry, "assignee", "assignee")
+
+	if required <= enumValue || enumValue <= optional || optional <= description {
+		t.Fatalf("scores required=%d enum=%d optional=%d description=%d, want required > enum > optional > description", required, enumValue, optional, description)
+	}
+}
+
+// TestComputeConfidence_Thresholds documents the current high-confidence gates:
+// score must be at least 80 and the top-result margin must be at least 15.
+func TestComputeConfidence_Thresholds(t *testing.T) {
+	tests := []struct {
+		name    string
+		matches []scoredActionEntry
+		wantLow bool
+	}{
+		{
+			name: "high confidence at thresholds",
+			matches: []scoredActionEntry{
+				{score: minimumHighConfidenceScore},
+				{score: minimumHighConfidenceScore - minimumHighConfidenceMargin},
+			},
+		},
+		{
+			name: "low score",
+			matches: []scoredActionEntry{
+				{score: minimumHighConfidenceScore - 1},
+			},
+			wantLow: true,
+		},
+		{
+			name: "close margin",
+			matches: []scoredActionEntry{
+				{score: 100},
+				{score: 100 - minimumHighConfidenceMargin + 1},
+			},
+			wantLow: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeConfidence(tt.matches)
+			if got[0].lowConfidence != tt.wantLow {
+				t.Fatalf("lowConfidence = %t, want %t", got[0].lowConfidence, tt.wantLow)
+			}
+			if got[0].explanation.LowConfidence != tt.wantLow {
+				t.Fatalf("explanation.LowConfidence = %t, want %t", got[0].explanation.LowConfidence, tt.wantLow)
+			}
+		})
+	}
+}
+
+// TestSearchRuntimeMetrics_RecordQualitySignals verifies process-local search
+// counters capture quality events without storing query text.
+func TestSearchRuntimeMetrics_RecordQualitySignals(t *testing.T) {
+	ResetSearchRuntimeMetrics()
+	t.Cleanup(ResetSearchRuntimeMetrics)
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	registry.searchMatches("zzzzzzzz", 5, false)
+	registry.searchMatches("merje requesy", 5, false)
+	registry.searchMatches("danger.delete", 5, false)
+
+	metrics := SearchRuntimeMetricsSnapshot()
+	if metrics.Searches != 3 {
+		t.Fatalf("Searches = %d, want 3", metrics.Searches)
+	}
+	if metrics.ZeroResultSearches == 0 {
+		t.Fatalf("metrics = %+v, want zero-result search recorded", metrics)
+	}
+	if metrics.FuzzyFallbackSearches == 0 {
+		t.Fatalf("metrics = %+v, want fuzzy fallback recorded", metrics)
+	}
+	if metrics.AmbiguousAliasQueries == 0 {
+		t.Fatalf("metrics = %+v, want ambiguous alias query recorded", metrics)
+	}
+	if metrics.LowConfidenceSearches == 0 {
+		t.Fatalf("metrics = %+v, want low-confidence search recorded", metrics)
+	}
+	destructiveSuppressions := metrics.DestructiveFuzzySuppressions
+	recordSearchRuntimeMetrics(1, false, false, false, -1)
+	if got := SearchRuntimeMetricsSnapshot().DestructiveFuzzySuppressions; got != destructiveSuppressions {
+		t.Fatalf("DestructiveFuzzySuppressions after negative input = %d, want %d", got, destructiveSuppressions)
+	}
+}
+
+// TestRegistryMetrics_SummarizesRegistryAndIndex verifies that registry metrics
+// report action, index, alias, and ambiguity counts. The fixture includes a
+// deprecated alias and an ambiguous alias to catch mapping-count regressions.
+func TestRegistryMetrics_SummarizesRegistryAndIndex(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "project.lookup", Canonical: "project.get"},
+		{Alias: "project.compat", Canonical: "project.get", Source: aliasSourceDeprecated},
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	metrics := registry.Metrics()
+	if metrics.ActionCount != len(registry.entries) {
+		t.Fatalf("ActionCount = %d, want %d", metrics.ActionCount, len(registry.entries))
+	}
+	if metrics.IndexTokenCount == 0 || metrics.IndexPostingCount == 0 {
+		t.Fatalf("metrics = %+v, want populated search index metrics", metrics)
+	}
+	if metrics.AliasCount != 4 || metrics.SearchableAliasCount != 2 || metrics.UnsearchableAliasCount != 1 || metrics.AmbiguousAliasCount != 1 {
+		t.Fatalf("metrics = %+v, want alias count 4, searchable names 2, unsearchable mappings 1, ambiguous aliases 1", metrics)
+	}
+}
+
+// TestExplanationSummary_FallbacksAndEscaping verifies that scoring summaries
+// fall back to stable placeholders and escape table-breaking characters. It
+// covers nil, empty, fuzzy, and query-term fallback explanations.
+func TestExplanationSummary_FallbacksAndEscaping(t *testing.T) {
+	if got := explanationSummary(nil); got != "-" {
+		t.Fatalf("explanationSummary(nil) = %q, want dash", got)
+	}
+	if got := explanationSummary(&ScoringExplanation{}); got != "-" {
+		t.Fatalf("explanationSummary(empty) = %q, want dash", got)
+	}
+
+	summary := explanationSummary(&ScoringExplanation{Reasons: []MatchReason{{
+		Field:       searchFieldFuzzyToken,
+		QueryTerm:   "project|delete\nnow",
+		Alternative: "project.delete",
+		Fuzzy:       true,
+	}}})
+	if !strings.Contains(summary, "fuzzy-matched") || strings.Contains(summary, "|") || strings.Contains(summary, "\n") {
+		t.Fatalf("explanationSummary(fuzzy) = %q, want escaped single-line fuzzy summary", summary)
+	}
+
+	queryFallback := explanationSummary(&ScoringExplanation{Reasons: []MatchReason{{Field: searchFieldAlias, QueryTerm: "project.get"}}})
+	if !strings.Contains(queryFallback, "project.get") {
+		t.Fatalf("explanationSummary(query fallback) = %q, want query term", queryFallback)
+	}
+}
+
+// TestDynamicParamValidation_DefensiveBranches verifies defensive helpers for
+// dynamic parameter normalization and unknown-parameter detection. It covers nil
+// schemas, alternative required groups, confirm bypasses, and nearest-name hints.
+func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
+	if got := NormalizeActionScopedParams("job.list", map[string]any{"status": "failed"}, schemaWithProperties("scope")); got["scope"] != "failed" {
+		t.Fatalf("NormalizeActionScopedParams() = %#v, want scope alias", got)
+	}
+	if got := unknownDynamicParamNames(nil, []string{"project_id"}); got != nil {
+		t.Fatalf("unknownDynamicParamNames(nil) = %v, want nil", got)
+	}
+	if got := unknownDynamicParamNames(map[string]any{"confirm": true}, []string{"project_id"}); len(got) != 0 {
+		t.Fatalf("unknownDynamicParamNames(confirm) = %v, want empty", got)
+	}
+	if got := rootRequiredParams(nil); got != nil {
+		t.Fatalf("rootRequiredParams(nil) = %v, want nil", got)
+	}
+	if got := alternativeRequiredParamGroups(map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"file_path"}}}}); len(got) != 1 || got[0][0] != "file_path" {
+		t.Fatalf("alternativeRequiredParamGroups() = %v, want file_path group", got)
+	}
+	if got := alternativeRequiredParamGroups(map[string]any{"anyOf": "invalid", "oneOf": []any{map[string]any{"required": []any{"content"}}}}); len(got) != 1 || got[0][0] != "content" {
+		t.Fatalf("alternativeRequiredParamGroups(oneOf fallback) = %v, want content group", got)
+	}
+	if got := alternativeRequiredParamGroups(nil); got != nil {
+		t.Fatalf("alternativeRequiredParamGroups(nil) = %v, want nil", got)
+	}
+	if got := closestDynamicParamName("proj", []string{"project_id"}); got != "project_id" {
+		t.Fatalf("closestDynamicParamName() = %q, want project_id", got)
+	}
+}
+
+// TestActionScopedParamValueConversions verifies action-scoped conversion
+// helpers for issue state events, GitLab access levels, and boolean strings. It
+// covers accepted inputs and rejected edge cases without external fixtures.
+func TestActionScopedParamValueConversions(t *testing.T) {
+	stateCases := map[any]string{"closed": "close", "OPEN": "reopen"}
+	for input, want := range stateCases {
+		got, ok := issueStateEventValue(input)
+		if !ok || got != want {
+			t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", input, got, ok, want)
+		}
+	}
+	if _, ok := issueStateEventValue(123); ok {
+		t.Fatal("issueStateEventValue(non-string) converted unexpectedly")
+	}
+	if _, ok := issueStateEventValue("archived"); ok {
+		t.Fatal("issueStateEventValue(archived) converted unexpectedly")
+	}
+
+	accessCases := map[any]int{
+		10:             10,
+		int64(20):      20,
+		float64(30):    30,
+		"40":           40,
+		"guest":        10,
+		"reporter":     20,
+		"developer":    30,
+		" maintainer ": 40,
+		"owner":        50,
+	}
+	for input, want := range accessCases {
+		got, ok := gitlabAccessLevelValue(input)
+		if !ok || got != want {
+			t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", input, got, ok, want)
+		}
+	}
+	for _, input := range []any{float64(30.5), 70, int64(70), "70", "admin", true} {
+		if got, ok := gitlabAccessLevelValue(input); ok {
+			t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", input, got)
+		}
+	}
+
+	if value, ok := boolStringValue(" true "); !ok || !value {
+		t.Fatalf("boolStringValue(true) = %t, %t; want true, true", value, ok)
+	}
+	for _, input := range []any{true, "not-bool"} {
+		if _, ok := boolStringValue(input); ok {
+			t.Fatalf("boolStringValue(%v) converted unexpectedly", input)
+		}
+	}
+}
+
+// TestSnippetParamNormalization_DefensiveBranches verifies snippet file
+// normalization helpers preserve invalid entries and only clone maps when a
+// conversion is possible. It uses in-memory parameter maps as fixtures.
+func TestSnippetParamNormalization_DefensiveBranches(t *testing.T) {
+	cloneCalls := 0
+	params := map[string]any{"content": "body"}
+	clone := func() map[string]any {
+		cloneCalls++
+		return params
+	}
+	if buildSnippetCreateFilesFromSingleFileParams(clone, params) {
+		t.Fatal("buildSnippetCreateFilesFromSingleFileParams() converted without file_name")
+	}
+	if cloneCalls != 0 {
+		t.Fatalf("cloneCalls = %d, want 0", cloneCalls)
+	}
+
+	files := map[string]any{"files": []any{"not-a-map", map[string]any{"file_name": "a.go"}}}
+	if !normalizeSnippetFileNameFields(cloneMap(files), files) {
+		t.Fatal("normalizeSnippetFileNameFields() = false, want true for map entry")
+	}
+	if got := files["files"].([]any)[0]; got != "not-a-map" {
+		t.Fatalf("first file entry = %#v, want original non-map", got)
+	}
+
+	actions := map[string]any{"files": []any{"not-a-map", map[string]any{"action": "create", "file_path": "a.go"}}}
+	if !stripSnippetCreateFileActions(cloneMap(actions), actions) {
+		t.Fatal("stripSnippetCreateFileActions() = false, want true for create action")
+	}
+	if got := actions["files"].([]any)[0]; got != "not-a-map" {
+		t.Fatalf("first action entry = %#v, want original non-map", got)
+	}
+}
+
+// TestCompatibilityAliasAndDescriptionBranches verifies compatibility alias
+// normalization, alias deduplication, dynamic description fallback behavior, and
+// compact schema rendering for nil or unmarshalable schemas.
+func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
+	if got, ok := NormalizeCompatibilityActionAlias(" FEATURE_FLAG_USER_LIST.CREATE "); !ok || got != "feature_flags.ff_user_list_create" {
+		t.Fatalf("NormalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
+	}
+	for _, actionID := range []string{"", "project.get", "project.unknown"} {
+		if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
+			t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
+		}
+	}
+
+	aliases := dedupeActionAliases([]actionAlias{{Alias: "", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}})
+	if len(aliases) != 1 || aliases[0].Alias != "project.lookup" {
+		t.Fatalf("dedupeActionAliases() = %+v, want one normalized alias", aliases)
+	}
+
+	description := describeEntry(actionEntry{ID: "missing.action", Tool: "gitlab_missing", Domain: "missing", Action: "action", Route: toolutil.ActionRoute{OutputSchema: map[string]any{"type": "object"}}})
+	if description.InputSchema["additionalProperties"] != true || description.OutputSchema["type"] != "object" {
+		t.Fatalf("describeEntry(fallback) = %+v, want fallback input schema and cloned output schema", description)
+	}
+	registry := NewRegistry(testRoutes(t))
+	if got := describeEntry(registry.entries[0]); got.InputSchema["type"] == "" || got.Example.Tool != executeToolName {
+		t.Fatalf("describeEntry(success) = %+v, want schema and dynamic execute example", got)
+	}
+	if got := compactSchemaJSON(nil); got != "" {
+		t.Fatalf("compactSchemaJSON(nil) = %q, want empty", got)
+	}
+	if got := compactSchemaJSON(map[string]any{"bad": make(chan int)}); got != "" {
+		t.Fatalf("compactSchemaJSON(unmarshalable) = %q, want empty", got)
+	}
+}
+
+// TestScoredMatchesAndDestructiveFuzzyBranches verifies corrupted-index
+// resilience and destructive fuzzy-match safety checks. The fixture keeps the
+// dynamic registry in memory and injects invalid postings directly.
+func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	registry.SearchIndex.byToken["project"] = []int{-1, 0, len(registry.entries)}
+	matches := registry.scoredMatches(normalizeSearchTerms("project"), scoreEntryWithoutExplanation)
+	if len(matches) == 0 {
+		t.Fatalf("scoredMatches(corrupted index) = %+v, want valid matches", matches)
+	}
+
+	entry := actionEntry{ID: "project.delete", Domain: "project", Action: "delete", Destructive: true}
+	if allowsDestructiveFuzzyMatch(normalizeSearchTerms("purge"), entry) {
+		t.Fatal("allowsDestructiveFuzzyMatch(purge without resource) = true, want false")
+	}
+	if !allowsDestructiveFuzzyMatch(normalizeSearchTerms("delete project"), entry) {
+		t.Fatal("allowsDestructiveFuzzyMatch(delete project) = false, want true")
+	}
+}
+
+type testEnumStringer string
+
+func (value testEnumStringer) String() string { return string(value) }
+
+// TestSchemaSearchTermHelpers_Branches verifies schema descriptions and enum
+// values are extracted from mixed JSON-schema shapes. It covers non-object
+// properties, empty descriptions, stringers, numbers, booleans, and strings.
+func TestSchemaSearchTermHelpers_Branches(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"plain":      "not-object",
+		"empty_desc": map[string]any{"description": "   "},
+		"state": map[string]any{
+			"description": "Merge request state",
+			"enum":        []any{"opened", testEnumStringer("closed"), 30, true, struct{}{}},
+		},
+		"kind": map[string]any{"enum": []string{"bug", "feature"}},
+	}}
+	if descriptions := schemaPropertyDescriptions(schema); strings.Join(descriptions, ",") != "merge request state" {
+		t.Fatalf("schemaPropertyDescriptions() = %v, want merge request state", descriptions)
+	}
+	enums := strings.Join(schemaPropertyEnumValues(schema), ",")
+	for _, want := range []string{"opened", "closed", "30", "true", "bug", "feature"} {
+		if !strings.Contains(enums, want) {
+			t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
+		}
+	}
+}
+
+// TestSuggestSearchTokens_Branches verifies token suggestion limit handling,
+// fuzzy ordering, tie-breaking, deduplication, and static fallbacks. It uses the
+// standard test registry plus a tiny custom index for deterministic ties.
+func TestSuggestSearchTokens_Branches(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	if got := registry.suggestSearchTokens("project", 0); got != nil {
+		t.Fatalf("suggestSearchTokens(limit 0) = %v, want nil", got)
+	}
+	near := registry.suggestSearchTokens("projec", 3)
+	if len(near) == 0 || near[0] != "project" {
+		t.Fatalf("suggestSearchTokens(projec) = %v, want project first", near)
+	}
+	withTie := (&Registry{SearchIndex: searchIndex{byToken: map[string][]int{"abc": {0}, "abd": {1}}, all: []int{0, 1}}}).suggestSearchTokens("abe", 1)
+	if len(withTie) != 1 || withTie[0] != "abc" {
+		t.Fatalf("suggestSearchTokens(tie/limit) = %v, want abc", withTie)
+	}
+	withDuplicateFallback := registry.suggestSearchTokens("projec", 10)
+	if strings.Count(strings.Join(withDuplicateFallback, ","), "project") != 1 {
+		t.Fatalf("suggestSearchTokens(fallback dedupe) = %v, want project once", withDuplicateFallback)
+	}
+	fallbacks := registry.suggestSearchTokens("zzzz", 2)
+	if len(fallbacks) != 2 || fallbacks[0] != "project" || fallbacks[1] != "issue" {
+		t.Fatalf("suggestSearchTokens(fallback) = %v, want first two fallbacks", fallbacks)
+	}
+}
+
+// TestScoreSearchAlternativeWithReason_Branches verifies field-specific scoring
+// explanations for canonical IDs, aliases, tags, schema fields, enums, and flat
+// text. It uses table-driven subtests plus explicit fallback edge cases.
+func TestScoreSearchAlternativeWithReason_Branches(t *testing.T) {
+	entry := actionEntry{Document: searchDocument{
+		CanonicalID:      "project.get",
+		Tool:             "gitlab_project",
+		Domain:           "project",
+		DomainWords:      []string{"project"},
+		Action:           "get",
+		ActionWords:      []string{"get"},
+		Aliases:          []string{"project.lookup"},
+		Tags:             []string{"project details"},
+		RequiredParams:   []string{"project_id"},
+		OptionalParams:   []string{"statistics"},
+		SchemaProperties: []string{"visibility_level"},
+		SchemaEnums:      []string{"private"},
+		SchemaDescTerms:  []string{"repository visibility"},
+		FlatText:         "gitlab project lookup read repository visibility",
+	}}
+
+	tests := []struct {
+		name        string
+		raw         string
+		alternative string
+		wantField   string
+	}{
+		{name: "canonical", raw: "project.get", alternative: "project.get", wantField: searchFieldCanonicalID},
+		{name: "alias", raw: "lookup", alternative: "project.lookup", wantField: searchFieldAlias},
+		{name: "tag", raw: "details", alternative: "project details", wantField: searchFieldTag},
+		{name: "action", raw: "get", alternative: "get", wantField: searchFieldAction},
+		{name: "domain", raw: "project", alternative: "project", wantField: searchFieldDomain},
+		{name: "id contains", raw: "proj", alternative: "project.g", wantField: searchFieldIDContains},
+		{name: "tool", raw: "gitlab", alternative: "gitlab", wantField: searchFieldTool},
+		{name: "required", raw: "project_id", alternative: "project_id", wantField: searchFieldRequiredParam},
+		{name: "optional", raw: "statistics", alternative: "statistics", wantField: searchFieldOptionalParam},
+		{name: "enum", raw: "private", alternative: "private", wantField: searchFieldSchemaEnum},
+		{name: "description", raw: "visibility", alternative: "visibility", wantField: searchFieldSchemaDesc},
+		{name: "property", raw: "visibility", alternative: "visibility_level", wantField: searchFieldSchemaProperty},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, reason := scoreSearchAlternativeWithReason(entry, tt.raw, tt.alternative)
+			if score == 0 || reason.Field != tt.wantField {
+				t.Fatalf("scoreSearchAlternativeWithReason() = %d, %+v; want field %s", score, reason, tt.wantField)
+			}
+		})
+	}
+	if score, reason := scoreSearchAlternativeWithReason(entry, "missing", "missing"); score != 0 || reason.Field != "" {
+		t.Fatalf("scoreSearchAlternativeWithReason(missing) = %d, %+v; want zero result", score, reason)
+	}
+	if score, reason := scoreSearchAlternativeWithReason(actionEntry{Document: searchDocument{CanonicalID: "ticket.list", Domain: "work_item", DomainWords: []string{"work item"}}}, "work", "work"); score == 0 || reason.Field != searchFieldDomainContains {
+		t.Fatalf("scoreSearchAlternativeWithReason(domain contains) = %d, %+v; want domain contains", score, reason)
+	}
+	if score, reason := scoreSearchAlternativeWithReason(actionEntry{Document: searchDocument{CanonicalID: "ticket.list", Action: "schedule_project", ActionWords: []string{"schedule project"}}}, "sched", "sched"); score == 0 || reason.Field != searchFieldActionContains {
+		t.Fatalf("scoreSearchAlternativeWithReason(action contains) = %d, %+v; want action contains", score, reason)
+	}
+	if score, reason := scoreSearchAlternativeWithReason(actionEntry{Document: searchDocument{CanonicalID: "project.get", FlatText: "read repository"}}, "read", "read"); score == 0 || reason.Field != searchFieldFlatText {
+		t.Fatalf("scoreSearchAlternativeWithReason(flat exact) = %d, %+v; want flat text", score, reason)
+	}
+	if score, reason := scoreSearchAlternativeWithReason(actionEntry{Document: searchDocument{CanonicalID: "project.get", FlatText: "read repository"}}, "repo", "repository"); score == 0 || reason.Field != searchFieldFlatText {
+		t.Fatalf("scoreSearchAlternativeWithReason(flat synonym) = %d, %+v; want flat text", score, reason)
+	}
+
+	schemaPropertyEntry := actionEntry{Document: searchDocument{
+		CanonicalID:      "project.get",
+		SchemaProperties: []string{"visibility_level"},
+	}}
+	if scoreSearchAlternative(schemaPropertyEntry, "visibility", "visibility_level") == 0 {
+		t.Fatal("scoreSearchAlternative(schema property) = 0, want match")
+	}
+	if score := scoreFieldContainsFor("field", "field_extra"); score != scoreSynonymContains {
+		t.Fatalf("scoreFieldContainsFor(synonym) = %d, want %d", score, scoreSynonymContains)
+	}
+	if score, explanation := scoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
+		t.Fatalf("scoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
+	}
+}
+
+// TestRequiredParamAndPlaceholderBranches verifies preferred required-parameter
+// extraction from alternative schema groups and parameter placeholder selection.
+// It uses small schema fixtures with no external setup.
+func TestRequiredParamAndPlaceholderBranches(t *testing.T) {
+	schema := map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"project_id"}}}}
+	if got := appendPreferredAlternativeRequiredParams(nil, schema); len(got) != 1 || got[0] != "project_id" {
+		t.Fatalf("appendPreferredAlternativeRequiredParams() = %v, want project_id", got)
+	}
+	if got := placeholderForParam("group_id"); got != "group/subgroup" {
+		t.Fatalf("placeholderForParam(group_id) = %v, want group/subgroup", got)
+	}
+}
+
+func cloneMap(target map[string]any) func() map[string]any {
+	return func() map[string]any { return target }
+}
+
+func schemaWithProperties(names ...string) map[string]any {
+	properties := make(map[string]any, len(names))
+	for _, name := range names {
+		properties[name] = map[string]any{"type": "string"}
+	}
+	return map[string]any{"properties": properties}
+}
+
+// TestNormalization_FormattingBranches covers compact helpers that
+// shape user-facing dynamic tool output. It verifies deduplication of described
+// actions, placeholder selection, confirmation parsing, schema cloning failures,
+// and empty-result Markdown messages.
+func TestNormalization_FormattingBranches(t *testing.T) {
+	t.Run("normalize describe ids trims and deduplicates", func(t *testing.T) {
+		got := normalizeDescribeIDs(DescribeInput{Action: " Project.Get ", Actions: []string{"project.get", "", "Issue.List"}})
+		want := []string{"project.get", "issue.list"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("normalizeDescribeIDs() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("placeholder selects dates and generic values", func(t *testing.T) {
+		if got := placeholderForParam("due_date"); got != "YYYY-MM-DD" {
+			t.Fatalf("placeholderForParam(date) = %v, want YYYY-MM-DD", got)
+		}
+		if got := placeholderForParam("project_id"); got != "group/project" {
+			t.Fatalf("placeholderForParam(project_id) = %v, want group/project", got)
+		}
+		if got := placeholderForParam("title"); got != "value" {
+			t.Fatalf("placeholderForParam(title) = %v, want value", got)
+		}
+	})
+
+	t.Run("explicit confirm parses supported values", func(t *testing.T) {
+		cases := []struct {
+			params map[string]any
+			want   bool
+		}{
+			{params: nil, want: false},
+			{params: map[string]any{"confirm": false}, want: false},
+			{params: map[string]any{"confirm": true}, want: true},
+			{params: map[string]any{"confirm": " true "}, want: true},
+			{params: map[string]any{"confirm": "yes"}, want: false},
+			{params: map[string]any{"confirm": "no"}, want: false},
+			{params: map[string]any{"confirm": 1}, want: false},
+			{params: map[string]any{"confirm": int64(1)}, want: false},
+			{params: map[string]any{"confirm": 1.0}, want: false},
+			{params: map[string]any{"confirm": 2}, want: false},
+		}
+		for _, tt := range cases {
+			if got := hasExplicitConfirm(tt.params); got != tt.want {
+				t.Fatalf("hasExplicitConfirm(%v) = %v, want %v", tt.params, got, tt.want)
+			}
+		}
+	})
+
+	t.Run("format empty outputs", func(t *testing.T) {
+		searchText := formatSearchOutput(SearchOutput{Query: "zzzz"})
+		if !strings.Contains(searchText, "No catalog actions matched") {
+			t.Fatalf("formatSearchOutput(empty) = %q, want no-match message", searchText)
+		}
+		findText := formatFindOutput(FindOutput{Query: "zzzz"})
+		if !strings.Contains(findText, "No catalog actions matched") {
+			t.Fatalf("formatFindOutput(empty) = %q, want no-match message", findText)
+		}
+	})
+}
+
+// TestAnnotationsWithTitle_CopiesBase verifies that annotation updates do not
+// mutate the caller's base annotations. The dynamic tool registration uses this
+// when assigning distinct titles to otherwise shared tool metadata.
+func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
+	base := &mcp.ToolAnnotations{Title: "Original", ReadOnlyHint: true}
+	got := annotationsWithTitle(base, "Updated")
+	if got == nil || got.Title != "Updated" || !got.ReadOnlyHint {
+		t.Fatalf("annotationsWithTitle(base) = %+v, want copied read-only annotation with updated title", got)
+	}
+	if base.Title != "Original" {
+		t.Fatalf("base title = %q, want unchanged Original", base.Title)
+	}
+}
+
+// Benchmarks migrated from register_benchmark_test.go.
+// BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
+// allocations against the captured meta catalog plus standalone routes.
+func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
+	registry := benchmarkRegistry(b)
+	ctx := context.Background()
+
+	queries := []string{
+		"merge request list open author project",
+		"list open issues",
+		"pipeline run trigger",
+		"ci variable secret",
+		"project delete",
+		"discover project from remote",
+		"merje requesy", // Known low-signal typo-heavy query kept in the baseline until fuzzy matching handles both misspelled terms.
+	}
+	allowZero := map[string]bool{
+		// TODO(dynamic-search): remove this exception when fuzzy matching can recover both malformed terms.
+		"merje requesy": true,
+	}
+
+	for _, query := range queries {
+		b.Run(benchmarkName(query), func(b *testing.B) {
+			input := SearchInput{Query: query, Limit: 20}
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for range b.N {
+				result, output, err := registry.Search(ctx, nil, input)
+				if err != nil {
+					b.Fatalf("Search() error: %v", err)
+				}
+				if result == nil || result.IsError {
+					b.Fatalf("Search() result = %+v, want non-error", result)
+				}
+				if output.Count == 0 && !allowZero[query] {
+					b.Fatalf("Search() output.Count = 0 for query %q", query)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkSearch_FieldAwareIndex compares indexed candidate scoring against
+// the previous full-scan scoring path for representative lexical queries.
+func BenchmarkSearch_FieldAwareIndex(b *testing.B) {
+	registry := benchmarkRegistry(b)
+	queries := []string{
+		"merge request list open author project",
+		"list open issues",
+		"project delete",
+	}
+
+	for _, query := range queries {
+		terms := normalizeSearchTerms(query)
+		b.Run(benchmarkName(query)+"/indexed", func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				matches := sortAndLimitMatches(registry.scoredMatches(terms, scoreEntryWithExplanation), 20)
+				if len(matches) == 0 {
+					b.Fatalf("indexed search returned no matches for %q", query)
+				}
+			}
+		})
+		b.Run(benchmarkName(query)+"/full_scan", func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				matches := sortAndLimitMatches(fullScanScoredMatches(registry.entries, terms, scoreEntryWithExplanation), 20)
+				if len(matches) == 0 {
+					b.Fatalf("full scan returned no matches for %q", query)
+				}
+			}
+		})
+	}
+}
+
+func benchmarkRegistry(b *testing.B) *Registry {
+	b.Helper()
+
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		b.Fatalf("BuildActionCatalog() error: %v", err)
+	}
+	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	if err != nil {
+		b.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+	registry := NewRegistryFromCatalog(catalog)
+	if len(registry.entries) == 0 {
+		b.Fatal("benchmark registry is empty")
+	}
+
+	b.Logf("benchmark registry entries: %d", len(registry.entries))
+	return registry
+}
+
+func benchmarkName(query string) string {
+	parts := strings.Fields(strings.ToLower(query))
+	if len(parts) == 0 {
+		return "empty"
+	}
+	return fmt.Sprintf("q_%s", strings.Join(parts, "_"))
 }

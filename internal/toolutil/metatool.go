@@ -32,6 +32,7 @@ const (
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
 	actionExternalStatusCheckListProject = "external_status_check.list_project"
+	actionFeatureFlagUserListList        = "feature_flags.ff_user_list_list"
 )
 
 // MetaToolInput is the common input for all meta-tools.
@@ -85,65 +86,88 @@ var commonActionAliases = map[string]string{
 	"me":                       "current",
 	"broadcast_message.create": "admin.broadcast_message_create",
 	"broadcast_message.delete": "admin.broadcast_message_delete",
-	"ci_job_token_scope.inbound_allowlist.list": "job.token_scope_list_inbound",
-	"deploy_key.create":                         "access.deploy_key_add",
-	"deploy_key.list":                           "access.deploy_key_list_project",
-	"deploy_token.create":                       "access.deploy_token_create_project",
-	"deploy_token.delete":                       "access.deploy_token_delete_project",
-	"deploy_token.get":                          "access.deploy_token_get_project",
-	"deploy_token.list":                         "access.deploy_token_list_project",
-	"merge_request.changes":                     "mr_review.changes_get",
-	"merge_request_note.create":                 "mr_review.note_create",
-	"merge_request_note.delete":                 "mr_review.note_delete",
-	"merge_request_note.get":                    "mr_review.note_get",
-	"merge_request_note.update":                 "mr_review.note_update",
-	"mr_review.draft_notes_publish":             "mr_review.draft_note_publish_all",
-	"mr_review.publish":                         "mr_review.draft_note_publish_all",
-	"package.files":                             "package.file_list",
-	"package.list_generic":                      "package.list",
-	"project.releases.list":                     "release.list",
-	"project.hooks.list":                        "project.hook_list",
-	"project.member_remove":                     actionProjectMemberDelete,
-	"project.member_update":                     actionProjectMemberEdit,
-	"project.schedule_storage_move":             "storage_move.schedule_project",
-	"project.status_check_list":                 actionExternalStatusCheckListProject,
-	"project.status_checks.list":                actionExternalStatusCheckListProject,
-	"project_member.add":                        "project.member_add",
-	"project_member.delete":                     actionProjectMemberDelete,
-	"project_member.edit":                       actionProjectMemberEdit,
-	"project_member.get":                        "project.member_get",
-	"project_member.remove":                     actionProjectMemberDelete,
-	"project_member.update":                     actionProjectMemberEdit,
-	"external_status_check.list_project_checks": actionExternalStatusCheckListProject,
-	"feature_flag_user_list.create":             "feature_flags.ff_user_list_create",
-	"feature_flag_user_list.delete":             "feature_flags.ff_user_list_delete",
-	"feature_flag_user_list.get":                "feature_flags.ff_user_list_get",
-	"feature_flag_user_list.list":               "feature_flags.ff_user_list_list",
-	"feature_flag_user_list.update":             "feature_flags.ff_user_list_update",
-	"gitlab_issue.create":                       "issue.create",
-	"gitlab_issue.delete":                       "issue.delete",
-	"gitlab_server.health_check":                "server.health_check",
-	"group.audit_events":                        "audit_event.list_group",
-	"issue.link":                                "issue.link_create",
-	"job.artifact_download":                     "job.download_single_artifact",
-	"group.variable.create":                     "ci_variable.group_create",
-	"merge_request.add_spent_time":              "merge_request.spent_time_add",
-	"merge_request.set_time_estimate":           "merge_request.time_estimate_set",
-	"merge_request.time_estimate":               "merge_request.time_estimate_set",
-	"merge_request.time_spent_add":              "merge_request.spent_time_add",
-	"release.asset_link.create":                 "release.link_create",
-	"release.generate_notes":                    "analyze.release_notes",
-	"repository_tree":                           "repository.tree",
-	"repository_file.get":                       "repository.file_get",
-	"repository_file.read":                      "repository.file_get",
-	"pipeline.schedule_variable_create":         "pipeline.schedule_create_variable",
-	"project.badge_update":                      "project.badge_edit",
-	"merge_request.time_spent_reset":            "merge_request.spent_time_reset",
-	"generic_package.list":                      "package.list",
-	"issue_note.create":                         "issue.note_create",
-	"gitlab_interactive_issue.create":           "interactive.issue_create",
-	"variable.create":                           "ci_variable.create",
-	"webhook.add":                               "project.hook_add",
+	"ci_job_token_scope.inbound_allowlist.list":  "job.token_scope_list_inbound",
+	"deploy_key.create":                          "access.deploy_key_add",
+	"deploy_key.list":                            "access.deploy_key_list_project",
+	"deploy_token.create":                        "access.deploy_token_create_project",
+	"deploy_token.delete":                        "access.deploy_token_delete_project",
+	"deploy_token.get":                           "access.deploy_token_get_project",
+	"deploy_token.list":                          "access.deploy_token_list_project",
+	"branch.update_protection":                   "branch.update_protected",
+	"merge_request.changes":                      "mr_review.changes_get",
+	"merge_request.emoji_award_create":           "merge_request.emoji_mr_create",
+	"merge_request.emoji_award_delete":           "merge_request.emoji_mr_delete",
+	"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
+	"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
+	"merge_request_note.create":                  "mr_review.note_create",
+	"merge_request_note.delete":                  "mr_review.note_delete",
+	"merge_request_note.get":                     "mr_review.note_get",
+	"merge_request_note.update":                  "mr_review.note_update",
+	"mr_review.draft_notes_publish":              "mr_review.draft_note_publish_all",
+	"mr_review.publish":                          "mr_review.draft_note_publish_all",
+	"package.files":                              "package.file_list",
+	"package.list_generic":                       "package.list",
+	"project.releases.list":                      "release.list",
+	"project.hooks.list":                         "project.hook_list",
+	"project.member_remove":                      actionProjectMemberDelete,
+	"project.member_update":                      actionProjectMemberEdit,
+	"project.schedule_storage_move":              "storage_move.schedule_project",
+	"project.status_check_list":                  actionExternalStatusCheckListProject,
+	"project.status_checks.list":                 actionExternalStatusCheckListProject,
+	"project_member.add":                         "project.member_add",
+	"project_member.delete":                      actionProjectMemberDelete,
+	"project_member.edit":                        actionProjectMemberEdit,
+	"project_member.get":                         "project.member_get",
+	"project_member.remove":                      actionProjectMemberDelete,
+	"project_member.update":                      actionProjectMemberEdit,
+	"external_status_check.list_project_checks":  actionExternalStatusCheckListProject,
+	"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
+	"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
+	"feature_flag_user_list.get":                 "feature_flags.ff_user_list_get",
+	"feature_flag_user_list.list":                actionFeatureFlagUserListList,
+	"feature_flag_user_list.update":              "feature_flags.ff_user_list_update",
+	"feature_flags.feature_flag_user_list":       actionFeatureFlagUserListList,
+	"feature_flags.feature_flag_user_list_list":  actionFeatureFlagUserListList,
+	"feature_flags.feature_flag_user_lists_list": actionFeatureFlagUserListList,
+	"gitlab_issue.create":                        "issue.create",
+	"gitlab_issue.delete":                        "issue.delete",
+	"gitlab_server.health_check":                 "server.health_check",
+	"group.audit_events":                         "audit_event.list_group",
+	"issue.link":                                 "issue.link_create",
+	"issue.note.create":                          "issue.note_create",
+	"issue.note.delete":                          "issue.note_delete",
+	"issue.note.get":                             "issue.note_get",
+	"issue.note.list":                            "issue.note_list",
+	"issue.note.update":                          "issue.note_update",
+	"job.artifact_download":                      "job.download_single_artifact",
+	"group.variable.create":                      "ci_variable.group_create",
+	"merge_request.add_spent_time":               "merge_request.spent_time_add",
+	"merge_request.set_time_estimate":            "merge_request.time_estimate_set",
+	"merge_request.time_estimate":                "merge_request.time_estimate_set",
+	"merge_request.time_spent_add":               "merge_request.spent_time_add",
+	"release.asset_link.create":                  "release.link_create",
+	"release.create_link":                        "release.link_create",
+	"release_link.link_list":                     "release.link_list",
+	"release.generate_notes":                     "analyze.release_notes",
+	"repository_tree":                            "repository.tree",
+	"repository_tree.list":                       "repository.tree",
+	"repository_file.get":                        "repository.file_get",
+	"repository_file.read":                       "repository.file_get",
+	"repository_files.get_raw_file":              "repository.file_raw",
+	"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
+	"pipeline.schedule_variable_delete":          "pipeline.schedule_delete_variable",
+	"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
+	"project.badge_update":                       "project.badge_edit",
+	"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
+	"generic_package.list":                       "package.list",
+	"issue_note.create":                          "issue.note_create",
+	"issue_note.delete":                          "issue.note_delete",
+	"issue_note.get":                             "issue.note_get",
+	"issue_note.list":                            "issue.note_list",
+	"issue_note.update":                          "issue.note_update",
+	"gitlab_interactive_issue.create":            "interactive.issue_create",
+	"variable.create":                            "ci_variable.create",
+	"webhook.add":                                "project.hook_add",
 }
 
 // NormalizeActionAlias returns the canonical action name for common shortened
@@ -475,6 +499,7 @@ var commonParamAliases = []struct {
 	{Alias: "expiration", Canonical: "expires_at"},
 	{Alias: "merge_when_pipeline_succeeds", Canonical: "auto_merge"},
 	{Alias: "branch", Canonical: "branch_name"},
+	{Alias: "branch", Canonical: "ref"},
 	{Alias: "branch_name", Canonical: "ref"},
 	{Alias: "ref", Canonical: "content_ref"},
 	{Alias: "from_ref", Canonical: "from"},
@@ -482,9 +507,19 @@ var commonParamAliases = []struct {
 	{Alias: "target_branch", Canonical: "to"},
 	{Alias: "feature_flag_name", Canonical: "name"},
 	{Alias: "emoji_name", Canonical: "name"},
+	{Alias: "award_emoji", Canonical: "name"},
 	{Alias: "award", Canonical: "name"},
 	{Alias: "time_estimate", Canonical: "duration"},
 	{Alias: "name", Canonical: "environment"},
+}
+
+// ParamAliasExplanation describes a compatibility parameter normalization.
+// It intentionally records parameter names only, never parameter values.
+type ParamAliasExplanation struct {
+	Alias     string `json:"alias"`
+	Canonical string `json:"canonical"`
+	Source    string `json:"source"`
+	Notes     string `json:"notes,omitempty"`
 }
 
 func normalizeIDAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool, clone func() map[string]any) {
@@ -621,6 +656,61 @@ func NormalizeParamAliasesForSchema(params, schema map[string]any) map[string]an
 	normalized = coerceSchemaParamTypes(normalized, schema)
 	normalized = coerceSingleStringArraysForSchema(normalized, schema)
 	return coerceStringListParamsForSchema(normalized, schema)
+}
+
+// NormalizeParamAliasesForSchemaWithExplanation returns the normalized params
+// and name-only metadata describing compatibility aliases that were applied.
+func NormalizeParamAliasesForSchemaWithExplanation(params, schema map[string]any) (map[string]any, []ParamAliasExplanation) {
+	normalized := NormalizeParamAliasesForSchema(params, schema)
+	return normalized, explainSchemaParamAliases(params, schema)
+}
+
+func explainSchemaParamAliases(params, schema map[string]any) []ParamAliasExplanation {
+	fields := schemaPropertyNames(schema)
+	if len(params) == 0 || len(fields) == 0 {
+		return nil
+	}
+	accepts := func(name string) bool {
+		_, ok := fields[name]
+		return ok
+	}
+	explanations := make([]ParamAliasExplanation, 0)
+	for _, pair := range commonParamAliases {
+		_, hasAlias := params[pair.Alias]
+		_, hasCanonical := params[pair.Canonical]
+		if !hasAlias || hasCanonical || !accepts(pair.Canonical) || accepts(pair.Alias) {
+			continue
+		}
+		explanations = append(explanations, ParamAliasExplanation{
+			Alias:     pair.Alias,
+			Canonical: pair.Canonical,
+			Source:    "schema_common",
+		})
+	}
+	if explanation, ok := explainIDParamAlias(params, fields, accepts); ok {
+		explanations = append(explanations, explanation)
+	}
+	return explanations
+}
+
+func explainIDParamAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool) (ParamAliasExplanation, bool) {
+	if _, hasID := params["id"]; !hasID || accepts("id") {
+		return ParamAliasExplanation{}, false
+	}
+	canonical := ""
+	for name := range fields {
+		if name == "id" || !strings.HasSuffix(name, "_id") {
+			continue
+		}
+		if canonical != "" {
+			return ParamAliasExplanation{}, false
+		}
+		canonical = name
+	}
+	if canonical == "" {
+		return ParamAliasExplanation{}, false
+	}
+	return ParamAliasExplanation{Alias: "id", Canonical: canonical, Source: "schema_common"}, true
 }
 
 func normalizeParamAliasesWithFields(params map[string]any, fields map[string]struct{}) map[string]any {

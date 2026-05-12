@@ -214,6 +214,7 @@ type Output struct {
 	Name          string `json:"name"`
 	UserID        int64  `json:"user_id"`
 	Username      string `json:"username"`
+	UserWebURL    string `json:"user_web_url,omitempty"`
 	CreatedAt     string `json:"created_at,omitempty"`
 	AwardableID   int64  `json:"awardable_id"`
 	AwardableType string `json:"awardable_type"`
@@ -739,6 +740,7 @@ func toOutput(e *gl.AwardEmoji) Output {
 		Name:          e.Name,
 		UserID:        e.User.ID,
 		Username:      e.User.Username,
+		UserWebURL:    e.User.WebURL,
 		AwardableID:   e.AwardableID,
 		AwardableType: e.AwardableType,
 	}

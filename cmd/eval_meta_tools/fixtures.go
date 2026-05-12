@@ -32,6 +32,7 @@ const (
 	liveFixtureObsoleteRef       = "obsolete/eval"
 	liveFixtureFailureTag        = "v0.0.0-eval"
 	liveFixtureCleanupTag        = "v0.0.0-eval-ms"
+	liveFixtureReleaseSummaryTag = "v0.0.0-eval-summary-ms"
 	liveFixtureElicitationTag    = "v0.0.0-eval-elicit"
 	liveFixtureInteractiveMRFile = "interactive/eval-mr.txt"
 	liveFixtureFeatureFlag       = "eval_flag"
@@ -138,7 +139,7 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 		FeatureFlagName:       liveFixtureFeatureFlag,
 		WikiSlug:              liveFixtureWikiSlug,
 		CleanupReleaseTag:     liveFixtureCleanupTag,
-		ReleaseSummaryTag:     liveFixtureCleanupTag,
+		ReleaseSummaryTag:     liveFixtureReleaseSummaryTag,
 		ElicitationReleaseTag: liveFixtureElicitationTag,
 	}
 	preparer := &liveFixturePreparer{client: client, state: state}
@@ -194,8 +195,11 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.CleanupReleaseTag == "" {
 		state.CleanupReleaseTag = liveFixtureCleanupTag
 	}
-	if state.ReleaseSummaryTag == "" {
-		state.ReleaseSummaryTag = liveFixtureCleanupTag
+	// Legacy fixture snapshots sometimes persisted CleanupReleaseTag into
+	// ReleaseSummaryTag; treat that value as unset so summary checks migrate to
+	// the dedicated release-summary tag.
+	if state.ReleaseSummaryTag == "" || state.ReleaseSummaryTag == liveFixtureCleanupTag {
+		state.ReleaseSummaryTag = liveFixtureReleaseSummaryTag
 	}
 	if state.ElicitationReleaseTag == "" {
 		state.ElicitationReleaseTag = liveFixtureElicitationTag
@@ -505,6 +509,27 @@ func (p *liveFixturePreparer) ensureCleanupRelease(ctx context.Context) error {
 		URL:  new("https://example.com/eval-release-notes"),
 	}, gl.WithContext(ctx))
 	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return err
+	}
+	if p.state.ReleaseSummaryTag == "" {
+		p.state.ReleaseSummaryTag = liveFixtureReleaseSummaryTag
+	}
+	if tagErr := p.ensureTag(ctx, p.state.ReleaseSummaryTag, p.defaultRef()); tagErr != nil {
+		return tagErr
+	}
+	_, _, err = p.client.GL().Releases.GetRelease(p.state.ProjectID, p.state.ReleaseSummaryTag, gl.WithContext(ctx))
+	if err == nil {
+		return nil
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return err
+	}
+	_, _, err = p.client.GL().Releases.CreateRelease(p.state.ProjectID, &gl.CreateReleaseOptions{
+		Name:        new("Evaluation release summary fixture"),
+		TagName:     &p.state.ReleaseSummaryTag,
+		Description: new("Fixture release for release-summary workflows."),
+	}, gl.WithContext(ctx))
+	if err != nil {
 		return err
 	}
 	return nil
