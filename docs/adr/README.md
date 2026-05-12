@@ -23,6 +23,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0009](adr-0009-progressive-graphql-migration.md) | Progressive GraphQL migration strategy | Accepted | 2026-04-20 |
 | [ADR-0010](adr-0010-no-resource-subscribe.md) | No resource subscribe capability | Accepted | 2026-04-26 |
 | [ADR-0011](adr-0011-low-token-dynamic-toolset.md) | Low-token dynamic toolset mode | Accepted | 2026-05-07 |
+| [ADR-0012](adr-0012-action-catalog-package-name.md) | Action catalog package name | Accepted | 2026-05-13 |
 
 ## About Missing ADRs
 

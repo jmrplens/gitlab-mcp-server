@@ -1470,10 +1470,10 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 var knownExceptions = map[string]string{
 	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
 	// it is registered in cmd/server/main.go.
-	"actionregistry": "infrastructure package for catalog metadata, not an MCP tool package",
-	"dynamic":        "registered in cmd/server/main.go from the canonical action catalog",
-	"serverupdate":   "registered in cmd/server/main.go with *autoupdate.Updater",
-	"testdata":       "contains test data, not a tool package",
+	"actioncatalog": "infrastructure package for catalog metadata, not an MCP tool package",
+	"dynamic":       "registered in cmd/server/main.go from the canonical action catalog",
+	"serverupdate":  "registered in cmd/server/main.go with *autoupdate.Updater",
+	"testdata":      "contains test data, not a tool package",
 }
 
 // TestAllSubPackagesRegistered verifies that every sub-directory under

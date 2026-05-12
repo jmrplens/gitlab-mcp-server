@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -479,7 +479,7 @@ func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddStandaloneRoutes() error = %v", err)
 	}
-	standaloneCatalog, err := AddStandaloneCatalog(actionregistry.FromActionMaps(routes), nil, StandaloneOptions{})
+	standaloneCatalog, err := AddStandaloneCatalog(actioncatalog.FromActionMaps(routes), nil, StandaloneOptions{})
 	if err != nil {
 		t.Fatalf("AddStandaloneCatalog() error = %v", err)
 	}
@@ -522,9 +522,9 @@ func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testin
 // mode can consume registry-native action metadata without rebuilding it from
 // legacy route maps.
 func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
-	catalog := actionregistry.NewCatalog()
-	group := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_custom"})
-	group.SetAction(actionregistry.Action{
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_custom"})
+	group.SetAction(actioncatalog.Action{
 		Name:    "inspect",
 		Aliases: []string{"custom.lookup"},
 		Tags:    []string{"bespoke"},
@@ -818,7 +818,7 @@ func TestFind_RequiresQuery(t *testing.T) {
 // two-tool surface exposes only find and execute through an MCP session.
 func TestRegisterCatalogFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterCatalogFindExecuteTools(server, actionregistry.FromActionMaps(testRoutes(t)))
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -1252,14 +1252,14 @@ func TestExecute_DispatchesReadOnlyAction(t *testing.T) {
 // TestExecute_UsesCatalogFormatter verifies that dynamic execution preserves
 // the formatter attached to the backing catalog group.
 func TestExecute_UsesCatalogFormatter(t *testing.T) {
-	catalog := actionregistry.NewCatalog()
-	group := actionregistry.NewGroup(actionregistry.GroupOptions{
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName: "gitlab_custom",
 		FormatResult: func(any) *mcp.CallToolResult {
 			return toolutil.ToolResultAnnotated("custom formatted result", toolutil.ContentDetail)
 		},
 	})
-	group.SetAction(actionregistry.Action{
+	group.SetAction(actioncatalog.Action{
 		Name: "get",
 		Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return map[string]any{"ok": true}, nil
@@ -1940,7 +1940,7 @@ func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
 // surface exposes search, describe, and execute through an MCP session.
 func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterCatalogTools(server, actionregistry.FromActionMaps(testRoutes(t)))
+	RegisterCatalogTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)

@@ -364,7 +364,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 
 | File | Responsibility |
 | --- | --- |
-| `internal/tools/actionregistry/registry.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
+| `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
 | `internal/tools/action_catalog.go` | Builds the canonical catalog from meta-tool definitions without constructing an MCP server |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from the canonical catalog |
 | `internal/tools/dynamic/register.go` | Public dynamic tools, catalog-backed registry, search, describe, find, and execute logic |

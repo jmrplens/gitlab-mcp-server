@@ -40,7 +40,7 @@ The core pieces are:
 | File | Responsibility |
 | --- | --- |
 | `internal/toolutil/metatool.go` | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
-| `internal/tools/actionregistry/registry.go` | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs |
+| `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs |
 | `internal/tools/action_catalog.go` | Builds the catalog from current meta route definitions without constructing an MCP server |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from catalog groups |
 | `internal/tools/dynamic/register.go` | Builds the dynamic registry, search index, describe output, and execute dispatch from the catalog |
@@ -176,8 +176,8 @@ tool name.
 - Domain packages under `internal/tools/{domain}` may import `internal/toolutil`.
 - `internal/toolutil` must not import domain packages.
 - `internal/tools` may import domain packages to wire registration.
-- `internal/tools/actionregistry` may import `internal/toolutil` for route metadata.
-- `internal/tools/dynamic` may import `internal/tools/actionregistry` and `internal/toolutil`, but must not depend on visible individual MCP tools.
+- `internal/tools/actioncatalog` may import `internal/toolutil` for route metadata.
+- `internal/tools/dynamic` may import `internal/tools/actioncatalog` and `internal/toolutil`, but must not depend on visible individual MCP tools.
 - `cmd/server` is the composition root for selecting and filtering the active surface.
 
 ## When Adding A GitLab Action
@@ -194,7 +194,7 @@ tool name.
 ```bash
 rg -n "func RegisterMeta\(" internal/tools --glob '*.go'
 rg -n "RegisterMeta\(server, client\)|RegisterMeta\(server, .*client" internal/tools/register_meta.go
-rg -n "BuildActionCatalog\(|RegisterMetaCatalog\(|actionregistry\.|internal/tools/actionregistry|internal/tools/dynamic" --glob '*.go' cmd internal
+rg -n "BuildActionCatalog\(|RegisterMetaCatalog\(|actioncatalog\.|internal/tools/actioncatalog|internal/tools/dynamic" --glob '*.go' cmd internal
 ```
 
 Use these checks before removing legacy registration functions or moving the

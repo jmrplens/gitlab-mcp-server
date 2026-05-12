@@ -7,7 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 // MetaToolScopes maps meta-tool names to the PAT scopes required for that
@@ -83,9 +83,9 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 // not satisfied by the detected token scopes. It returns a non-nil error when
 // rebuilding the filtered catalog fails, which means callers could not safely
 // evaluate the scope filter and should propagate the failure.
-func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []string) (*actionregistry.Catalog, error) {
+func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []string) (*actioncatalog.Catalog, error) {
 	if catalog == nil {
-		return actionregistry.NewCatalog(), nil
+		return actioncatalog.NewCatalog(), nil
 	}
 	if tokenScopes == nil {
 		// Return a defensive clone because callers may further filter the returned
@@ -96,7 +96,7 @@ func FilterScopeFilteredCatalog(catalog *actionregistry.Catalog, tokenScopes []s
 
 	scopeSet := buildScopeSet(tokenScopes)
 
-	filtered := actionregistry.NewCatalog()
+	filtered := actioncatalog.NewCatalog()
 	var removed []string
 	for _, group := range catalog.Groups() {
 		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {

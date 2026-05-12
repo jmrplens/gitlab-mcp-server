@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
@@ -56,7 +56,7 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 
 	for _, actionID := range []string{"project.list", "search.code", "runner.list", "analyze.issue_summary"} {
 		t.Run(actionID, func(t *testing.T) {
-			if _, ok := catalog.Action(actionregistry.ActionID(actionID)); !ok {
+			if _, ok := catalog.Action(actioncatalog.ActionID(actionID)); !ok {
 				t.Fatalf("catalog missing %s", actionID)
 			}
 		})

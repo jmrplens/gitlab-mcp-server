@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 const aliasPairSeparator = "\x00"
@@ -28,11 +28,11 @@ type AliasAuditFinding struct {
 // follows: "error" for definite violations, "warning" for ambiguous alias
 // mappings that require explicit canonical IDs, and "info" for expected
 // informational states such as intentionally unsearchable aliases.
-func AuditDefaultActionAliases(catalog *actionregistry.Catalog) []AliasAuditFinding {
+func AuditDefaultActionAliases(catalog *actioncatalog.Catalog) []AliasAuditFinding {
 	return auditActionAliases(catalog, actionAliases())
 }
 
-func auditActionAliases(catalog *actionregistry.Catalog, aliases []actionAlias) []AliasAuditFinding {
+func auditActionAliases(catalog *actioncatalog.Catalog, aliases []actionAlias) []AliasAuditFinding {
 	canonicalIDs := collectCanonicalIDs(catalog)
 	findings, aliasTargets := detectAliasErrors(aliases, canonicalIDs, catalog != nil)
 	findings = append(findings, detectAmbiguousAliases(aliasTargets)...)
@@ -49,7 +49,7 @@ func auditActionAliases(catalog *actionregistry.Catalog, aliases []actionAlias) 
 	return findings
 }
 
-func collectCanonicalIDs(catalog *actionregistry.Catalog) map[string]struct{} {
+func collectCanonicalIDs(catalog *actioncatalog.Catalog) map[string]struct{} {
 	canonicalIDs := make(map[string]struct{})
 	if catalog == nil {
 		return canonicalIDs

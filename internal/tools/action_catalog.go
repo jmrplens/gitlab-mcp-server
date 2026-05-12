@@ -6,7 +6,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -20,11 +20,11 @@ type ActionCatalogOptions struct {
 
 // BuildActionCatalog builds the canonical action catalog for catalog-backed
 // GitLab action surfaces without constructing an MCP server.
-func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actionregistry.Catalog, error) {
+func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
 		registerAllMetaGroups(nil, client, opts.Enterprise)
 	})
-	catalog := actionregistry.NewCatalog()
+	catalog := actioncatalog.NewCatalog()
 	for _, definition := range definitions {
 		if err := catalog.AddGroup(groupFromMetaToolDefinition(definition)); err != nil {
 			return nil, fmt.Errorf("add meta tool group %q: %w", definition.Name, err)
@@ -42,11 +42,11 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 }
 
 // groupFromMetaToolDefinition converts a captured meta-tool definition into an
-// actionregistry.Group built with actionregistry.NewGroup and populated with
+// actioncatalog.Group built with actioncatalog.NewGroup and populated with
 // group.SetAction. Route names are sorted first so catalog action ordering is
 // deterministic across map iterations.
-func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actionregistry.Group {
-	group := actionregistry.NewGroup(actionregistry.GroupOptions{
+func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actioncatalog.Group {
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName:     def.Name,
 		Description:  def.Description,
 		Icons:        def.Icons,
@@ -59,7 +59,7 @@ func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actionregistry
 	}
 	sort.Strings(actionNames)
 	for _, actionName := range actionNames {
-		group.SetAction(actionregistry.Action{Name: actionName, Route: def.Routes[actionName]})
+		group.SetAction(actioncatalog.Action{Name: actionName, Route: def.Routes[actionName]})
 	}
 	return group
 }

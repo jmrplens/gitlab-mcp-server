@@ -1,4 +1,4 @@
-package actionregistry
+package actioncatalog
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	errCatalogNil       = "action registry catalog is nil"
+	errCatalogNil       = "action catalog is nil"
 	errToolNameRequired = "tool name is required"
 )
 

@@ -181,7 +181,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive (+ 15 enterprise inline, + 1 GitLab.com Enterprise Orbit) |
 | `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, schema resources, audits, and generators |
 | `meta_catalog.go`  | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog |
-| `actionregistry/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
+| `actioncatalog/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |

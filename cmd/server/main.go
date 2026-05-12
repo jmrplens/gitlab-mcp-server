@@ -61,7 +61,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
@@ -647,7 +647,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		})
 		if catalogErr != nil {
 			slog.Warn("failed to build meta action catalog", "error", catalogErr)
-			actionCatalog = actionregistry.NewCatalog()
+			actionCatalog = actioncatalog.NewCatalog()
 		}
 		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
 		if filterErr != nil {
@@ -1422,7 +1422,7 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 // buildDynamicActionCatalog builds the executable catalog for low-token dynamic
 // mode. Filters run before standalone tools are added so configured exclusions,
 // token scopes, and read-only mode cannot leave hidden catalog actions behind.
-func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actionregistry.Catalog, error) {
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 		Enterprise: cfg.Enterprise,
 		IncludeMCP: true,
@@ -1445,7 +1445,7 @@ func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerCo
 	return withStandalone, nil
 }
 
-func filterActionCatalog(catalog *actionregistry.Catalog, cfg *config.ServerConfig) (*actionregistry.Catalog, error) {
+func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, error) {
 	filtered := catalog.FilterExcludedTools(cfg.ExcludeTools)
 	var err error
 	filtered, err = gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
@@ -1663,7 +1663,7 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 	return nil
 }
 
-func buildToolSearchCatalog(enterprise bool) (*actionregistry.Catalog, error) {
+func buildToolSearchCatalog(enterprise bool) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
 		Enterprise: enterprise,
 		IncludeMCP: true,
