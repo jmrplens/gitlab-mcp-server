@@ -171,6 +171,8 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
 
+For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
+
 **Orchestration files** in `internal/tools/`:
 
 | File               | Purpose                                                       |
@@ -285,6 +287,8 @@ sequenceDiagram
 The dynamic toolset is a progressive-disclosure layer over the canonical action catalog. Instead of exposing all domain
 meta-tools in `tools/list`, it exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
 The current default remains meta-tools, but dynamic mode is the low-token candidate for a future default.
+
+For developer guidance on shared catalog ownership, standalone dynamic actions, and registration rules, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
 Startup builds the canonical action catalog from the same route definitions used by meta-tools, then adds standalone
 actions such as project discovery for dynamic mode. This preserves existing typed schemas, route classification, markdown formatters,

@@ -7,7 +7,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// RegisterMetaCatalog registers visible meta-tools from a canonical action catalog.
+// RegisterMetaCatalog registers visible meta-tools from the canonical action
+// catalog.
 func RegisterMetaCatalog(server *mcp.Server, catalog *actionregistry.Catalog) {
 	if server == nil || catalog == nil {
 		return

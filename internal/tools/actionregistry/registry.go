@@ -1,5 +1,3 @@
-// Package actionregistry provides the canonical GitLab action catalog used by
-// higher-level MCP tool surfaces.
 package actionregistry
 
 import (

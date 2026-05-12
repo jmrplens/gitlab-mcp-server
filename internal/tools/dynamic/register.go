@@ -1,4 +1,3 @@
-// Package dynamic registers the low-token dynamic toolset for GitLab actions.
 package dynamic
 
 import (

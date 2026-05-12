@@ -344,16 +344,17 @@ With the modular sub-package architecture (ADR-0004):
 1. **Create sub-package**: `internal/tools/{domain}/`
 2. **Create handler file**: `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace)
 3. **Create test file**: `{domain}_test.go` with table-driven tests using `testutil.NewTestClient`
-4. **Create register file**: `register.go` with `RegisterTools(server, client)` and optionally `RegisterMeta(server, client)`
-5. **Create markdown formatters**: `Format*Markdown()` functions in the sub-package
+4. **Create register file**: `register.go` with `RegisterTools(server, client)` for the individual tool surface
+5. **Create markdown formatters**: register output formatters from the sub-package with `toolutil.RegisterMarkdown` or `toolutil.RegisterMarkdownResult`
 6. **Wire in orchestration**:
-   - Add to `internal/tools/register.go` (call `{domain}.RegisterTools()`)
-   - Add to `internal/tools/register_meta.go` (call `{domain}.RegisterMeta()` or add the action to the relevant domain route map)
-   - Add markdown dispatch in `internal/tools/markdown.go`
+    - Add to `internal/tools/register.go` (call `{domain}.RegisterTools()`)
+    - Add catalog-backed action routes to `internal/tools/register_meta.go` or an approved delegated meta group
 7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
 When adding a normal GitLab operation, define the route once with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Avoid adding dynamic-only copies of ordinary GitLab actions.
+
+See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 
 ### Example: Adding a tools sub-package
 

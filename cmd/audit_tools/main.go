@@ -89,7 +89,19 @@ func main() {
 	violations = append(violations, auditDuplicates(individualTools, "individual")...)
 	violations = append(violations, auditDuplicates(metaTools, "meta")...)
 
-	printReport(individualTools, metaTools, violations)
+	root, err := repositoryRoot(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "register meta audit skipped: %v\n", err)
+	}
+	var registerMetaDefinitions []registerMetaDefinition
+	if root != "" {
+		registerMetaDefinitions, err = auditRegisterMetaDefinitions(root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "register meta audit skipped: %v\n", err)
+		}
+	}
+
+	printReport(individualTools, metaTools, violations, registerMetaDefinitions)
 }
 
 // listTools registers all MCP tools on an in-memory server and returns
@@ -288,7 +300,7 @@ func isDeleteToolName(name string) bool {
 // printReport writes the full markdown audit report to stdout,
 // including summary counts, violations grouped by category, and a
 // complete listing of all individual and meta-tools with their annotations.
-func printReport(individual, meta []*mcp.Tool, vs []violation) {
+func printReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Tool Metadata Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)
@@ -298,6 +310,7 @@ func printReport(individual, meta []*mcp.Tool, vs []violation) {
 	fmt.Printf("| Individual tools | %d |\n", len(individual))
 	fmt.Printf("| Meta-tools | %d |\n", len(meta))
 	fmt.Printf("| Total violations | %d |\n\n", len(vs))
+	printRegisterMetaDefinitions(registerMetaDefinitions)
 
 	if len(vs) == 0 {
 		fmt.Println("**No violations found.**")
@@ -359,6 +372,39 @@ func printReport(individual, meta []*mcp.Tool, vs []violation) {
 		}
 		fmt.Printf("| %d | `%s` | %s | %s |\n", i+1, t.Name, desc, ann)
 	}
+}
+
+func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
+	if len(definitions) == 0 {
+		return
+	}
+	referenced := 0
+	for _, definition := range definitions {
+		if definition.Referenced {
+			referenced++
+		}
+	}
+	fmt.Printf("## RegisterMeta Definition Inventory\n\n")
+	fmt.Printf("This section is informational. Unreferenced package-level `RegisterMeta` definitions are historical cleanup candidates, not metadata violations yet.\n\n")
+	fmt.Printf("| Metric | Count |\n")
+	fmt.Printf("| --- | ---: |\n")
+	fmt.Printf("| Package-level RegisterMeta definitions | %d |\n", len(definitions))
+	fmt.Printf("| Referenced from central meta hub | %d |\n", referenced)
+	fmt.Printf("| Unreferenced cleanup candidates | %d |\n\n", len(definitions)-referenced)
+	fmt.Printf("| Status | Package | File | Meta tool names |\n")
+	fmt.Printf("| --- | --- | --- | --- |\n")
+	for _, definition := range definitions {
+		status := "unreferenced"
+		if definition.Referenced {
+			status = "referenced"
+		}
+		toolNames := strings.Join(definition.ToolNames, ", ")
+		if toolNames == "" {
+			toolNames = "-"
+		}
+		fmt.Printf("| %s | `%s` | `%s` | `%s` |\n", status, definition.Package, definition.File, toolNames)
+	}
+	fmt.Println()
 }
 
 // ptrBool formats a *bool as "true", "false", or "nil".
