@@ -16,7 +16,7 @@ func TestMetrics_RuntimeCountersClampNegativeSuppressions(t *testing.T) {
 }
 
 func TestMetrics_SearchIndexPostingCount(t *testing.T) {
-	index := searchIndex{byToken: map[string][]int{"project": []int{0, 2}, "delete": []int{1}}}
+	index := searchIndex{byToken: map[string][]int{"project": {0, 2}, "delete": {1}}}
 	if got := searchIndexPostingCount(index); got != 3 {
 		t.Fatalf("searchIndexPostingCount() = %d, want 3", got)
 	}
