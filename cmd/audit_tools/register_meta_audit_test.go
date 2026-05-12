@@ -142,17 +142,24 @@ func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 				ToolNames:  []string{"gitlab_legacy"},
 				Referenced: false,
 			},
+			{
+				Package:    "runners",
+				File:       "internal/tools/runners/register.go",
+				ToolNames:  nil,
+				Referenced: false,
+			},
 		})
 	})
 
 	expectedFragments := []string{
 		"## RegisterMeta Definition Inventory",
-		"| Package-level RegisterMeta definitions | 2 |",
+		"| Package-level RegisterMeta definitions | 3 |",
 		"| Referenced from central meta hub | 1 |",
 		"| Approved delegated definitions | 1 |",
-		"| Unexpected definitions | 1 |",
+		"| Unexpected definitions | 2 |",
 		"| delegated | `search` | `internal/tools/search/register.go` | `-` |",
 		"| unexpected | `legacy` | `internal/tools/legacy/register.go` | `gitlab_legacy` |",
+		"| unexpected | `runners` | `internal/tools/runners/register.go` | `-` |",
 	}
 	for _, expected := range expectedFragments {
 		if !strings.Contains(output, expected) {

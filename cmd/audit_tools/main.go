@@ -385,7 +385,7 @@ func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
 		if definition.Referenced {
 			referenced++
 		}
-		if _, ok := delegatedRegisterMetaPackages[definition.Package]; ok {
+		if isDelegatedRegisterMetaDefinition(definition) {
 			delegated++
 		}
 	}
@@ -401,7 +401,7 @@ func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
 	fmt.Printf("| --- | --- | --- | --- |\n")
 	for _, definition := range definitions {
 		status := "unexpected"
-		if _, ok := delegatedRegisterMetaPackages[definition.Package]; ok && definition.Referenced {
+		if isDelegatedRegisterMetaDefinition(definition) {
 			status = "delegated"
 		}
 		toolNames := strings.Join(definition.ToolNames, ", ")

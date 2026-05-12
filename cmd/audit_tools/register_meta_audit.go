@@ -88,6 +88,11 @@ func unexpectedRegisterMetaDefinitions(definitions []registerMetaDefinition) []u
 	return unexpected
 }
 
+func isDelegatedRegisterMetaDefinition(definition registerMetaDefinition) bool {
+	_, ok := delegatedRegisterMetaPackages[definition.Package]
+	return ok && definition.Referenced
+}
+
 func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinition, error) {
 	var definitions []registerMetaDefinition
 	fileSet := token.NewFileSet()
