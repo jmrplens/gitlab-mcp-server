@@ -253,15 +253,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — all 6 individual tools
@@ -305,47 +297,6 @@ func TestMCPRound_Trip(t *testing.T) {
 // MCP round-trip — meta-tool
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripMeta validates m c p round trip meta across multiple scenarios using table-driven subtests.
-func TestMCPRound_TripMeta(t *testing.T) {
-	session := newTerraformMetaMCPSession(t)
-	ctx := context.Background()
-
-	actions := []struct {
-		name   string
-		action string
-		params map[string]any
-	}{
-		{"list", "list", map[string]any{"project_path": "group/project"}},
-		{"get", "get", map[string]any{"project_path": "group/project", "name": "state1"}},
-		{"delete", "delete", map[string]any{"project_id": "1", "name": "state1"}},
-		{"lock", "lock", map[string]any{"project_id": "1", "name": "state1"}},
-		{"unlock", "unlock", map[string]any{"project_id": "1", "name": "state1"}},
-	}
-
-	for _, tt := range actions {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: "gitlab_terraform_state",
-				Arguments: map[string]any{
-					"action": tt.action,
-					"params": tt.params,
-				},
-			})
-			if err != nil {
-				t.Fatalf("CallTool(meta/%s) error: %v", tt.action, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(meta/%s) returned error: %s", tt.action, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(meta/%s) returned IsError=true", tt.action)
-			}
-		})
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Helper: MCP session factory (individual tools)
 // ---------------------------------------------------------------------------.
@@ -379,32 +330,6 @@ func newTerraformMCPSession(t *testing.T) *mcp.ClientSession {
 // ---------------------------------------------------------------------------
 // Helper: MCP session factory (meta-tool)
 // ---------------------------------------------------------------------------.
-
-// newTerraformMetaMCPSession is an internal helper for the terraformstates package.
-func newTerraformMetaMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := terraformHandler()
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
 
 // ---------------------------------------------------------------------------
 // Shared mock handler

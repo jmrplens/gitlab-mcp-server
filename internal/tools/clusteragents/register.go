@@ -149,37 +149,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_cluster_agent meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_agents":        toolutil.RouteAction(client, ListAgents),
-		"get_agent":          toolutil.RouteAction(client, GetAgent),
-		"register_agent":     toolutil.RouteAction(client, RegisterAgent),
-		"delete_agent":       toolutil.DestructiveVoidAction(client, DeleteAgent),
-		"list_agent_tokens":  toolutil.RouteAction(client, ListAgentTokens),
-		"get_agent_token":    toolutil.RouteAction(client, GetAgentToken),
-		"create_agent_token": toolutil.RouteAction(client, CreateAgentToken),
-		"revoke_agent_token": toolutil.DestructiveVoidAction(client, RevokeAgentToken),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_cluster_agent",
-		Title: toolutil.TitleFromName("gitlab_cluster_agent"),
-		Description: `Manage cluster agents and their tokens in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list_agents: List cluster agents for a project. Params: project_id (required), page, per_page
-- get_agent: Get a single cluster agent. Params: project_id (required), agent_id (required, int)
-- register_agent: Register a new cluster agent. Params: project_id (required), name (required)
-- delete_agent: Delete a cluster agent. Params: project_id (required), agent_id (required, int)
-- list_agent_tokens: List tokens for a cluster agent. Params: project_id (required), agent_id (required, int), page, per_page
-- get_agent_token: Get a single agent token. Params: project_id (required), agent_id (required, int), token_id (required, int)
-- create_agent_token: Create a token for a cluster agent. Params: project_id (required), agent_id (required, int), name (required), description
-- revoke_agent_token: Revoke a cluster agent token. Params: project_id (required), agent_id (required, int), token_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconRunner,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_cluster_agent", routes, nil))
-}

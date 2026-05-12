@@ -1017,7 +1017,6 @@ func TestDeleteProtectionRule_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools + RegisterMeta — no-panic tests
 // ---------------------------------------------------------------------------.
 
 // TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
@@ -1025,13 +1024,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 }
 
 // newRegistryMCPTestMux creates a ServeMux that handles all registry API endpoints
@@ -1180,58 +1172,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip for RegisterMeta — exercises both meta-tool handlers
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_CallThroughMCP validates cov register meta call through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterMeta_CallThroughMCP(t *testing.T) {
-	const basePath = "/api/v4"
-
-	mux := http.NewServeMux()
-	mux.HandleFunc(basePath+"/projects/42/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+covRepoJSON+`]`,
-			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-	})
-	mux.HandleFunc(basePath+"/projects/42/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+covRuleJSON+`]`,
-			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-	})
-
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_registry", map[string]any{"action": "list_project", "params": map[string]any{"project_id": "42"}}},
-		{"gitlab_registry_protection", map[string]any{"action": "list", "params": map[string]any{"project_id": "42"}}},
-	}
-
-	for _, tc := range tools {
-		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
-			}
-			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
-			}
-		})
-	}
-}
 
 // Ensure unused import is consumed.
 var _ = toolutil.ReadAnnotations

@@ -455,61 +455,10 @@ func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
 
 // ---------------------------------------------------------------------------
-// RegisterMeta — MCP round-trip for all 4 actions
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_CallAllThroughMCP validates cov register meta call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterMeta_CallAllThroughMCP(t *testing.T) {
-	session := covNewAlertMgmtMetaMCPSession(t)
-	ctx := context.Background()
-
-	actions := []struct {
-		name   string
-		action string
-		params map[string]any
-	}{
-		{"list_metric_images", "list_metric_images", map[string]any{"project_id": "1", "alert_iid": 5}},
-		{"upload_metric_image", "upload_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "content_base64": "ZGF0YQ==", "filename": "img.png"}},
-		{"update_metric_image", "update_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1}},
-		{"delete_metric_image", "delete_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1}},
-	}
-
-	for _, tt := range actions {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: "gitlab_alert_management",
-				Arguments: map[string]any{
-					"action": tt.action,
-					"params": tt.params,
-				},
-			})
-			if err != nil {
-				t.Fatalf("CallTool(action=%s) error: %v", tt.action, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(action=%s) returned error: %s", tt.action, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(action=%s) returned IsError=true", tt.action)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Helper: MCP session for RegisterTools (success)
@@ -593,51 +542,7 @@ func covNewAlertMgmtErrorMCPSession(t *testing.T) *mcp.ClientSession {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterMeta
 // ---------------------------------------------------------------------------.
-
-// covNewAlertMgmtMetaMCPSession is an internal helper for the alertmanagement package.
-func covNewAlertMgmtMetaMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+covImageJSON+`]`)
-	})
-
-	handler.HandleFunc("POST /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, covImageJSON)
-	})
-
-	handler.HandleFunc("PUT /api/v4/projects/1/alert_management_alerts/5/metric_images/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covImageJSON)
-	})
-
-	handler.HandleFunc("DELETE /api/v4/projects/1/alert_management_alerts/5/metric_images/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
 
 // TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
 // branch in the alert metric image delete handler when the user declines.

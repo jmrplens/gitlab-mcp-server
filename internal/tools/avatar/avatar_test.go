@@ -95,15 +95,6 @@ func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic_Coverage verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"x"}`)
-	}))
-	RegisterMeta(server, client)
-}
-
 // TestMCPRound_Trip_Coverage verifies the behavior of cov m c p round trip.
 func TestMCPRound_Trip_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

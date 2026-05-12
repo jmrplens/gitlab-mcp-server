@@ -20,6 +20,23 @@ type registerMetaDefinition struct {
 	Referenced bool
 }
 
+type unexpectedRegisterMetaDefinition struct {
+	Package string
+	File    string
+	Reason  string
+}
+
+var delegatedRegisterMetaPackages = map[string]struct{}{
+	// GitLab.com-only enterprise meta-tool gated inside the central meta hub.
+	"orbit": {},
+	// Large runner domain still delegates route capture from the sub-package.
+	"runners": {},
+	// MCP sampling utilities remain outside the GitLab action catalog builders.
+	"samplingtools": {},
+	// Cross-scope search meta-tool still delegates route capture from the sub-package.
+	"search": {},
+}
+
 func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error) {
 	toolsDir := filepath.Join(root, "internal", "tools")
 	definitions, err := findRegisterMetaDefinitions(root, toolsDir)
@@ -34,6 +51,41 @@ func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error)
 		_, definitions[index].Referenced = references[definitions[index].Package]
 	}
 	return definitions, nil
+}
+
+func auditRegisterMetaDefinitionViolations(definitions []registerMetaDefinition) []violation {
+	unexpected := unexpectedRegisterMetaDefinitions(definitions)
+	violations := make([]violation, 0, len(unexpected))
+	for _, definition := range unexpected {
+		violations = append(violations, violation{
+			tool:     definition.Package,
+			category: "register-meta",
+			detail:   fmt.Sprintf("%s (%s)", definition.Reason, definition.File),
+		})
+	}
+	return violations
+}
+
+func unexpectedRegisterMetaDefinitions(definitions []registerMetaDefinition) []unexpectedRegisterMetaDefinition {
+	unexpected := make([]unexpectedRegisterMetaDefinition, 0)
+	for _, definition := range definitions {
+		if _, ok := delegatedRegisterMetaPackages[definition.Package]; !ok {
+			unexpected = append(unexpected, unexpectedRegisterMetaDefinition{
+				Package: definition.Package,
+				File:    definition.File,
+				Reason:  "package-level RegisterMeta is not an approved delegated meta-tool",
+			})
+			continue
+		}
+		if !definition.Referenced {
+			unexpected = append(unexpected, unexpectedRegisterMetaDefinition{
+				Package: definition.Package,
+				File:    definition.File,
+				Reason:  "approved delegated RegisterMeta is not referenced from internal/tools/register_meta.go",
+			})
+		}
+	}
+	return unexpected
 }
 
 func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinition, error) {

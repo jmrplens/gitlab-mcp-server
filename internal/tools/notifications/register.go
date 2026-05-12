@@ -90,33 +90,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
 }
-
-// RegisterMeta registers the gitlab_notification meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"global_get":     toolutil.RouteAction(client, GetGlobalSettings),
-		"project_get":    toolutil.RouteAction(client, GetSettingsForProject),
-		"group_get":      toolutil.RouteAction(client, GetSettingsForGroup),
-		"global_update":  toolutil.RouteAction(client, UpdateGlobalSettings),
-		"project_update": toolutil.RouteAction(client, UpdateSettingsForProject),
-		"group_update":   toolutil.RouteAction(client, UpdateSettingsForGroup),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_notification",
-		Title: toolutil.TitleFromName("gitlab_notification"),
-		Description: `Manage GitLab notification settings. Use 'action' to specify the operation.
-
-Actions:
-- global_get: Get global notification settings. No params required.
-- project_get: Get project notification settings. Params: project_id (required)
-- group_get: Get group notification settings. Params: group_id (required)
-- global_update: Update global notification settings. Params: level, notification_email, and event booleans (close_issue, new_issue, etc.)
-- project_update: Update project notification settings. Params: project_id (required), level, notification_email, and event booleans
-- group_update: Update group notification settings. Params: group_id (required), level, notification_email, and event booleans`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconNotify,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_notification", routes, nil))
-}

@@ -33,8 +33,8 @@ func FormatOutputMarkdown(out Output) string {
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'revoke' to revoke this token",
-		"Use action 'rotate' to rotate this token",
+		"Use action 'token_project_revoke', action 'token_group_revoke', or action 'token_personal_revoke' to revoke this token from the matching scope",
+		"Use action 'token_project_rotate', action 'token_group_rotate', or action 'token_personal_rotate' to rotate this token from the matching scope",
 	)
 	return b.String()
 }

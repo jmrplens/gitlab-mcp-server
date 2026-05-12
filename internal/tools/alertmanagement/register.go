@@ -81,29 +81,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_alert_management meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_metric_images":  toolutil.RouteAction(client, ListMetricImages),
-		"upload_metric_image": toolutil.RouteAction(client, UploadMetricImage),
-		"update_metric_image": toolutil.RouteAction(client, UpdateMetricImage),
-		"delete_metric_image": toolutil.DestructiveVoidAction(client, DeleteMetricImage),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_alert_management",
-		Title: toolutil.TitleFromName("gitlab_alert_management"),
-		Description: `Manage alert metric images in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list_metric_images: List metric images for an alert. Params: project_id (required), alert_iid (required, int)
-- upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), file_path or content_base64 (one required), url, url_text
-- update_metric_image: Update a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int), filename, url, url_text
-- delete_metric_image: Delete a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconAlert,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_alert_management", routes, nil))
-}

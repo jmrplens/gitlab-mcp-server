@@ -998,7 +998,6 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools & RegisterMeta — no panic + MCP round-trip
 // ---------------------------------------------------------------------------.
 
 // TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
@@ -1006,13 +1005,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 }
 
 // newBoardMux is an internal helper for the boards package.

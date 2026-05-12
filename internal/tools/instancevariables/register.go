@@ -84,31 +84,3 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 		return toolutil.DeleteResult("instance CI/CD variable")
 	})
 }
-
-// RegisterMeta registers the gitlab_instance_variable meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlab.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, List),
-		"get":    toolutil.RouteAction(client, Get),
-		"create": toolutil.RouteAction(client, Create),
-		"update": toolutil.RouteAction(client, Update),
-		"delete": toolutil.DestructiveVoidAction(client, Delete),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_instance_variable",
-		Title: toolutil.TitleFromName("gitlab_instance_variable"),
-		Description: `Manage CI/CD variables at the GitLab instance level. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List variables. Params: page, per_page
-- get: Get variable by key. Params: key (required)
-- create: Create variable. Params: key (required), value (required), description, variable_type, protected (bool), masked (bool), raw (bool)
-- update: Update variable. Params: key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool)
-- delete: Delete variable. Params: key (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconVariable,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_instance_variable", routes, nil))
-}

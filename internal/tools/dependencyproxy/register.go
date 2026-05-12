@@ -33,23 +33,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_dependency_proxy meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"purge": toolutil.DestructiveVoidAction(client, Purge),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_dependency_proxy",
-		Title: toolutil.TitleFromName("gitlab_dependency_proxy"),
-		Description: `Manage dependency proxy in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- purge: Purge the dependency proxy cache for a group. Params: group_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconPackage,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_dependency_proxy", routes, nil))
-}

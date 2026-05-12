@@ -130,39 +130,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(FormatBurndownChartEventsMarkdown(out), out, err)
 	})
 }
-
-// RegisterMeta registers the group milestone meta-tool on the MCP server.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":            toolutil.RouteAction(client, List),
-		"get":             toolutil.RouteAction(client, Get),
-		"create":          toolutil.RouteAction(client, Create),
-		"update":          toolutil.RouteAction(client, Update),
-		"delete":          toolutil.DestructiveVoidAction(client, Delete),
-		"issues":          toolutil.RouteAction(client, GetIssues),
-		"merge_requests":  toolutil.RouteAction(client, GetMergeRequests),
-		"burndown_events": toolutil.RouteAction(client, GetBurndownChartEvents),
-	}
-
-	desc := `Manage GitLab group milestones (list, get, create, update, delete, issues, merge_requests, burndown_events).
-
-Actions:
-- list: List group milestones. Params: group_id (required), state (active/closed), title, search, search_title, include_ancestors (bool), include_descendants (bool), iids ([]int), updated_before/updated_after/containing_date (YYYY-MM-DD), page, per_page
-- get: Get a group milestone. Params: group_id (required), milestone_iid (required)
-- create: Create a group milestone. Params: group_id (required), title (required), description, start_date (YYYY-MM-DD), due_date (YYYY-MM-DD)
-- update: Update a group milestone. Params: group_id (required), milestone_iid (required), title, description, start_date, due_date, state_event (activate/close)
-- delete: Delete a group milestone. Params: group_id (required), milestone_iid (required)
-- issues: List issues assigned to a group milestone. Params: group_id (required), milestone_iid (required), page, per_page
-- merge_requests: List merge requests assigned to a group milestone. Params: group_id (required), milestone_iid (required), page, per_page
-- burndown_events: List burndown chart events for a group milestone. Params: group_id (required), milestone_iid (required), page, per_page`
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         "gitlab_group_milestone",
-		Title:        toolutil.TitleFromName("gitlab_group_milestone"),
-		Description:  desc,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconMilestone,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_milestone", routes, nil))
-}

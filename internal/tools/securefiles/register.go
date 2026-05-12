@@ -81,29 +81,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_secure_file meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, List),
-		"show":   toolutil.RouteAction(client, Show),
-		"create": toolutil.RouteAction(client, Create),
-		"remove": toolutil.DestructiveVoidAction(client, Remove),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_secure_file",
-		Title: toolutil.TitleFromName("gitlab_secure_file"),
-		Description: `Manage CI/CD secure files in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List secure files for a project. Params: project_id (required), page, per_page
-- show: Show details of a secure file. Params: project_id (required), file_id (required, int)
-- create: Create a new secure file. Params: project_id (required), name (required), content (required, base64-encoded)
-- remove: Remove a secure file. Params: project_id (required), file_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconSecurity,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_secure_file", routes, nil))
-}

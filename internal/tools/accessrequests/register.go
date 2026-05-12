@@ -129,37 +129,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("group access request")
 	})
 }
-
-// RegisterMeta registers the gitlab_access_request meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_project":    toolutil.RouteAction(client, ListProject),
-		"list_group":      toolutil.RouteAction(client, ListGroup),
-		"request_project": toolutil.RouteAction(client, RequestProject),
-		"request_group":   toolutil.RouteAction(client, RequestGroup),
-		"approve_project": toolutil.RouteAction(client, ApproveProject),
-		"approve_group":   toolutil.RouteAction(client, ApproveGroup),
-		"deny_project":    toolutil.DestructiveVoidAction(client, DenyProject),
-		"deny_group":      toolutil.DestructiveVoidAction(client, DenyGroup),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_access_request",
-		Title: toolutil.TitleFromName("gitlab_access_request"),
-		Description: `Manage access requests for GitLab projects and groups. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list_project: List project access requests. Params: project_id (required), page, per_page
-- list_group: List group access requests. Params: group_id (required), page, per_page
-- request_project: Request access to a project. Params: project_id (required)
-- request_group: Request access to a group. Params: group_id (required)
-- approve_project: Approve project access request. Params: project_id (required), user_id (required, int), access_level (optional, int)
-- approve_group: Approve group access request. Params: group_id (required), user_id (required, int), access_level (optional, int)
-- deny_project: Deny project access request. Params: project_id (required), user_id (required, int)
-- deny_group: Deny group access request. Params: group_id (required), user_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotationsWithTitle("gitlab_access_request", routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_access_request", routes, nil))
-}

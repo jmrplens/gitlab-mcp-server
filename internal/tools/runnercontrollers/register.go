@@ -8,8 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -85,64 +83,4 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		return toolutil.DeleteResult("runner controller")
 	})
-}
-
-// RegisterMeta registers the gitlab_runner_controller meta-tool, consolidating
-// controller CRUD, scope management, and token management into a single tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		// Controller CRUD
-		"list":   toolutil.RouteAction(client, List),
-		"get":    toolutil.RouteAction(client, Get),
-		"create": toolutil.RouteAction(client, Create),
-		"update": toolutil.RouteAction(client, Update),
-		"delete": toolutil.DestructiveVoidAction(client, Delete),
-		// Scope management
-		"scope_list":            toolutil.RouteAction(client, runnercontrollerscopes.List),
-		"scope_add_instance":    toolutil.RouteAction(client, runnercontrollerscopes.AddInstanceScope),
-		"scope_remove_instance": toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
-		"scope_add_runner":      toolutil.RouteAction(client, runnercontrollerscopes.AddRunnerScope),
-		"scope_remove_runner":   toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
-		// Token management
-		"token_list":   toolutil.RouteAction(client, runnercontrollertokens.List),
-		"token_get":    toolutil.RouteAction(client, runnercontrollertokens.Get),
-		"token_create": toolutil.RouteAction(client, runnercontrollertokens.Create),
-		"token_rotate": toolutil.RouteAction(client, runnercontrollertokens.Rotate),
-		"token_revoke": toolutil.DestructiveVoidAction(client, runnercontrollertokens.Revoke),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_runner_controller",
-		Title: toolutil.TitleFromName("gitlab_runner_controller"),
-		Description: `Manage GitLab runner controllers, their scopes, and tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions (controller CRUD):
-- list: List all runner controllers. Params: page, per_page
-- get: Get runner controller details. Params: controller_id (required, int)
-- create: Register a new runner controller. Params: description, state (enabled/disabled/dry_run)
-- update: Update a runner controller. Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
-- delete: Delete a runner controller. Params: controller_id (required, int)
-
-Actions (scope management):
-- scope_list: List all scopes for a controller. Params: controller_id (required, int)
-- scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
-- scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
-- scope_add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
-- scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
-
-Actions (token management):
-- token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
-- token_get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
-- token_create: Create a new token. Params: controller_id (required, int), description
-- token_rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
-- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)
-
-Use this tool for runner controller lifecycle (admin, experimental): CRUD, scopes, and tokens.
-Do NOT use for managing runner instances (use gitlab_runner).
-See also: gitlab_runner (runner instance management)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconRunner,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_runner_controller", routes, nil))
 }

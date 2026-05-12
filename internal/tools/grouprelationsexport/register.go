@@ -45,25 +45,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListExportStatus(out)), out, nil)
 	})
 }
-
-// RegisterMeta registers the gitlab_group_relations_export meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"schedule":    toolutil.RouteVoidAction(client, ScheduleExport),
-		"list_status": toolutil.RouteAction(client, ListExportStatus),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_group_relations_export",
-		Title: toolutil.TitleFromName("gitlab_group_relations_export"),
-		Description: `Manage group relations exports in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- schedule: Schedule a new group relations export. Params: group_id (required), batched (bool)
-- list_status: List group relations export statuses. Params: group_id (required), relation, page, per_page`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconImport,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_relations_export", routes, nil))
-}

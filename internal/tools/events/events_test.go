@@ -646,8 +646,6 @@ func TestListProjectEvents_InvalidDates(t *testing.T) {
 	}
 }
 
-// RegisterTools / RegisterMeta.
-
 // TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
@@ -655,15 +653,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
-	RegisterMeta(server, client)
 }
 
 // MCP round-trip.

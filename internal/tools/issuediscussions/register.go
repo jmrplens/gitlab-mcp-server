@@ -96,33 +96,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("issue discussion note")
 	})
 }
-
-// RegisterMeta registers the gitlab_issue_discussion meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":        toolutil.RouteAction(client, List),
-		"get":         toolutil.RouteAction(client, Get),
-		"create":      toolutil.RouteAction(client, Create),
-		"add_note":    toolutil.RouteAction(client, AddNote),
-		"update_note": toolutil.RouteAction(client, UpdateNote),
-		"delete_note": toolutil.DestructiveVoidAction(client, DeleteNote),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_issue_discussion",
-		Title: toolutil.TitleFromName("gitlab_issue_discussion"),
-		Description: `Manage GitLab issue discussion threads. Use 'action' to specify the operation.
-
-Actions:
-- list: List discussion threads on an issue. Params: project_id, issue_iid (required), page, per_page
-- get: Get a single discussion. Params: project_id, issue_iid, discussion_id (required)
-- create: Create a new discussion thread. Params: project_id, issue_iid, body (required)
-- add_note: Reply to an existing discussion. Params: project_id, issue_iid, discussion_id, body (required)
-- update_note: Update a discussion note. Params: project_id, issue_iid, discussion_id, note_id, body (required)
-- delete_note: Delete a discussion note. Params: project_id, issue_iid, discussion_id, note_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconDiscussion,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_issue_discussion", routes, nil))
-}

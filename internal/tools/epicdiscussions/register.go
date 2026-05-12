@@ -96,33 +96,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("epic discussion note")
 	})
 }
-
-// RegisterMeta registers the gitlab_epic_discussion meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":        toolutil.RouteAction(client, List),
-		"get":         toolutil.RouteAction(client, Get),
-		"create":      toolutil.RouteAction(client, Create),
-		"add_note":    toolutil.RouteAction(client, AddNote),
-		"update_note": toolutil.RouteAction(client, UpdateNote),
-		"delete_note": toolutil.DestructiveVoidAction(client, DeleteNote),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_epic_discussion",
-		Title: toolutil.TitleFromName("gitlab_epic_discussion"),
-		Description: `Manage GitLab epic discussion threads via the Work Items GraphQL API. Use 'action' to specify the operation.
-
-Actions:
-- list: List discussion threads on an epic. Params: full_path, iid (required), first, after
-- get: Get a single discussion. Params: full_path, iid, discussion_id (required)
-- create: Create a new discussion thread. Params: full_path, iid, body (required)
-- add_note: Reply to an existing discussion. Params: full_path, iid, discussion_id, body (required)
-- update_note: Update a discussion note. Params: full_path, iid, note_id, body (required)
-- delete_note: Delete a discussion note. Params: full_path, iid, note_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconDiscussion,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_epic_discussion", routes, nil))
-}

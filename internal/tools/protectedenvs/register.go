@@ -84,31 +84,3 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 		return toolutil.DeleteResult("protected environment")
 	})
 }
-
-// RegisterMeta registers the gitlab_protected_environment meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlab.Client) {
-	routes := toolutil.ActionMap{
-		"list":      toolutil.RouteAction(client, List),
-		"get":       toolutil.RouteAction(client, Get),
-		"protect":   toolutil.RouteAction(client, Protect),
-		"update":    toolutil.RouteAction(client, Update),
-		"unprotect": toolutil.DestructiveVoidAction(client, Unprotect),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_protected_environment",
-		Title: toolutil.TitleFromName("gitlab_protected_environment"),
-		Description: `Manage protected environments in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List protected environments. Params: project_id (required), page, per_page
-- get: Get a protected environment. Params: project_id (required), environment (required)
-- protect: Protect an environment. Params: project_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
-- update: Update a protected environment. Params: project_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
-- unprotect: Remove environment protection. Params: project_id (required), environment (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconShield,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_protected_environment", routes, nil))
-}

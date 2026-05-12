@@ -1155,6 +1155,32 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 	}
 }
 
+func TestDescribe_IncludesConsolidatedRegisterMetaReplacementActions(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	actionIDs := []string{
+		"feature_flags.feature_flag_list",
+		"access.request_list_project",
+		"package.registry_list_project",
+		"snippet.project_get",
+	}
+
+	for _, actionID := range actionIDs {
+		t.Run(actionID, func(t *testing.T) {
+			result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: actionID})
+			if err != nil {
+				t.Fatalf("Describe() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Describe() result = %+v, want non-error", result)
+			}
+			if output.Count != 1 || output.Actions[0].ID != actionID {
+				t.Fatalf("Describe() output = %+v, want %s", output, actionID)
+			}
+		})
+	}
+}
+
 // TestDescribe_JobSingleArtifactRequiresArtifactPath verifies the dynamic
 // schema exposes all values needed to download one artifact file.
 func TestDescribe_JobSingleArtifactRequiresArtifactPath(t *testing.T) {

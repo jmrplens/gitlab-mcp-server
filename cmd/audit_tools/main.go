@@ -99,6 +99,7 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "register meta audit skipped: %v\n", err)
 		}
+		violations = append(violations, auditRegisterMetaDefinitionViolations(registerMetaDefinitions)...)
 	}
 
 	printReport(individualTools, metaTools, violations, registerMetaDefinitions)
@@ -128,7 +129,6 @@ func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
 		os.Exit(1)
 	}
-
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -379,24 +379,30 @@ func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
 		return
 	}
 	referenced := 0
+	delegated := 0
+	unexpected := unexpectedRegisterMetaDefinitions(definitions)
 	for _, definition := range definitions {
 		if definition.Referenced {
 			referenced++
 		}
+		if _, ok := delegatedRegisterMetaPackages[definition.Package]; ok {
+			delegated++
+		}
 	}
 	fmt.Printf("## RegisterMeta Definition Inventory\n\n")
-	fmt.Printf("This section is informational. Unreferenced package-level `RegisterMeta` definitions are historical cleanup candidates, not metadata violations yet.\n\n")
+	fmt.Printf("This section is enforced. Package-level `RegisterMeta` definitions are allowed only for delegated meta-tools that capture routes through `internal/tools/register_meta.go`.\n\n")
 	fmt.Printf("| Metric | Count |\n")
 	fmt.Printf("| --- | ---: |\n")
 	fmt.Printf("| Package-level RegisterMeta definitions | %d |\n", len(definitions))
 	fmt.Printf("| Referenced from central meta hub | %d |\n", referenced)
-	fmt.Printf("| Unreferenced cleanup candidates | %d |\n\n", len(definitions)-referenced)
+	fmt.Printf("| Approved delegated definitions | %d |\n", delegated)
+	fmt.Printf("| Unexpected definitions | %d |\n\n", len(unexpected))
 	fmt.Printf("| Status | Package | File | Meta tool names |\n")
 	fmt.Printf("| --- | --- | --- | --- |\n")
 	for _, definition := range definitions {
-		status := "unreferenced"
-		if definition.Referenced {
-			status = "referenced"
+		status := "unexpected"
+		if _, ok := delegatedRegisterMetaPackages[definition.Package]; ok && definition.Referenced {
+			status = "delegated"
 		}
 		toolNames := strings.Join(definition.ToolNames, ", ")
 		if toolNames == "" {

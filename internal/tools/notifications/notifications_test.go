@@ -429,8 +429,6 @@ func TestFormatMarkdownString_AllEvents(t *testing.T) {
 	}
 }
 
-// RegisterTools / RegisterMeta no-panic.
-
 // TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
@@ -438,15 +436,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
 	}))
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
-	}))
-	RegisterMeta(server, client)
 }
 
 // MCP round-trip for all 6 tools.

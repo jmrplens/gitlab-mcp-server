@@ -231,17 +231,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
 
 // ---------------------------------------------------------------------------
 // MCP round-trip for all 4 individual tools
@@ -249,7 +239,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 
 // TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
 func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewResourceGroupsMCPSession(t, false)
+	session := covNewResourceGroupsToolsMCPSession(t)
 	ctx := context.Background()
 
 	tools := []struct {
@@ -287,46 +277,6 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // ---------------------------------------------------------------------------
 // MCP round-trip for meta-tool (all 4 actions)
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_CallAllThroughMCP validates cov register meta call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterMeta_CallAllThroughMCP(t *testing.T) {
-	session := covNewResourceGroupsMCPSession(t, true)
-	ctx := context.Background()
-
-	actions := []struct {
-		name   string
-		action string
-		params map[string]any
-	}{
-		{"list", "list", map[string]any{"project_id": "1"}},
-		{"get", "get", map[string]any{"project_id": "1", "key": "production"}},
-		{"edit", "edit", map[string]any{"project_id": "1", "key": "production", "process_mode": "newest_first"}},
-		{"list_upcoming_jobs", "list_upcoming_jobs", map[string]any{"project_id": "1", "key": "production"}},
-	}
-
-	for _, tt := range actions {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: "gitlab_resource_group",
-				Arguments: map[string]any{
-					"action": tt.action,
-					"params": tt.params,
-				},
-			})
-			if err != nil {
-				t.Fatalf("CallTool(gitlab_resource_group/%s) error: %v", tt.action, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(gitlab_resource_group/%s) returned error: %s", tt.action, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(gitlab_resource_group/%s) returned IsError=true", tt.action)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — API error paths through RegisterTools
@@ -388,8 +338,7 @@ func TestRegisterTools_APIErrors(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
-// covNewResourceGroupsMCPSession is an internal helper for the resourcegroups package.
-func covNewResourceGroupsMCPSession(t *testing.T, meta bool) *mcp.ClientSession {
+func covNewResourceGroupsToolsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
 	covGroupJSON := `{"id":1,"key":"production","process_mode":"unordered"}`
@@ -414,12 +363,7 @@ func covNewResourceGroupsMCPSession(t *testing.T, meta bool) *mcp.ClientSession 
 
 	client := testutil.NewTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-
-	if meta {
-		RegisterMeta(server, client)
-	} else {
-		RegisterTools(server, client)
-	}
+	RegisterTools(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

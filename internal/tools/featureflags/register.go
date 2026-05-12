@@ -91,31 +91,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("feature flag")
 	})
 }
-
-// RegisterMeta registers the feature flag meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, ListFeatureFlags),
-		"get":    toolutil.RouteAction(client, GetFeatureFlag),
-		"create": toolutil.RouteAction(client, CreateFeatureFlag),
-		"update": toolutil.RouteAction(client, UpdateFeatureFlag),
-		"delete": toolutil.DestructiveVoidAction(client, DeleteFeatureFlag),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_feature_flag",
-		Title: toolutil.TitleFromName("gitlab_feature_flag"),
-		Description: `Project feature flag operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List feature flags (project_id, scope, page, per_page)
-- get: Get a feature flag by name (project_id, name)
-- create: Create a feature flag (project_id, name, description, version, active, strategies)
-- update: Update a feature flag (project_id, name, new_name, description, active, strategies)
-- delete: Delete a feature flag (project_id, name)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconConfig,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_feature_flag", routes, nil))
-}

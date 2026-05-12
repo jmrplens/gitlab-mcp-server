@@ -84,31 +84,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("runner controller token")
 	})
 }
-
-// RegisterMeta registers the gitlab_runner_controller_token meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, List),
-		"get":    toolutil.RouteAction(client, Get),
-		"create": toolutil.RouteAction(client, Create),
-		"rotate": toolutil.DestructiveAction(client, Rotate),
-		"revoke": toolutil.DestructiveVoidAction(client, Revoke),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_runner_controller_token",
-		Title: toolutil.TitleFromName("gitlab_runner_controller_token"),
-		Description: `Manage GitLab runner controller tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
-- get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
-- create: Create a new token. Params: controller_id (required, int), description
-- rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
-- revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconToken,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_runner_controller_token", routes, nil))
-}

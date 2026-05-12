@@ -415,15 +415,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	RegisterMeta(server, client)
-}
-
 // ---------------------------------------------------------------------------
 // markdownForResult dispatch
 // ---------------------------------------------------------------------------.
@@ -522,41 +513,6 @@ func TestMCPRoundTrip_AllNamespaceTools(t *testing.T) {
 				t.Errorf("expected no error for %s", tc.name)
 			}
 		})
-	}
-}
-
-// TestMCPRound_TripMetaTool verifies the behavior of m c p round trip meta tool.
-func TestMCPRound_TripMetaTool(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"name":"ns","path":"ns","kind":"group","full_path":"ns"}]`,
-			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-	}))
-	RegisterMeta(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_namespace",
-		Arguments: map[string]any{
-			"action": "list",
-			"params": map[string]any{},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if result.IsError {
-		t.Error("expected no error")
 	}
 }
 
