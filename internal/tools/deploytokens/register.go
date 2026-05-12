@@ -142,39 +142,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("group deploy token")
 	})
 }
-
-// RegisterMeta registers the gitlab_deploy_token meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_all":       toolutil.RouteAction(client, ListAll),
-		"list_project":   toolutil.RouteAction(client, ListProject),
-		"list_group":     toolutil.RouteAction(client, ListGroup),
-		"get_project":    toolutil.RouteAction(client, GetProject),
-		"get_group":      toolutil.RouteAction(client, GetGroup),
-		"create_project": toolutil.RouteAction(client, CreateProject),
-		"create_group":   toolutil.RouteAction(client, CreateGroup),
-		"delete_project": toolutil.DestructiveVoidAction(client, DeleteProject),
-		"delete_group":   toolutil.DestructiveVoidAction(client, DeleteGroup),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_deploy_token",
-		Title: toolutil.TitleFromName("gitlab_deploy_token"),
-		Description: `Manage deploy tokens in GitLab (project, group, and instance level). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list_all: List all instance deploy tokens (admin). No params required
-- list_project: List project deploy tokens. Params: project_id (required), page, per_page
-- list_group: List group deploy tokens. Params: group_id (required), page, per_page
-- get_project: Get a project deploy token. Params: project_id (required), deploy_token_id (required, int)
-- get_group: Get a group deploy token. Params: group_id (required), deploy_token_id (required, int)
-- create_project: Create project deploy token. Params: project_id (required), name (required), scopes (required, array), username, expires_at (YYYY-MM-DD)
-- create_group: Create group deploy token. Params: group_id (required), name (required), scopes (required, array), username, expires_at (YYYY-MM-DD)
-- delete_project: Delete project deploy token. Params: project_id (required), deploy_token_id (required, int)
-- delete_group: Delete group deploy token. Params: group_id (required), deploy_token_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconToken,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_deploy_token", routes, nil))
-}

@@ -97,31 +97,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_error_tracking meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"get_settings":      toolutil.RouteAction(client, GetSettings),
-		"enable_disable":    toolutil.RouteAction(client, EnableDisable),
-		"list_client_keys":  toolutil.RouteAction(client, ListClientKeys),
-		"create_client_key": toolutil.RouteAction(client, CreateClientKey),
-		"delete_client_key": toolutil.DestructiveVoidAction(client, DeleteClientKey),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_error_tracking",
-		Title: toolutil.TitleFromName("gitlab_error_tracking"),
-		Description: `Manage error tracking settings and client keys in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- get_settings: Get error tracking settings. Params: project_id (required)
-- enable_disable: Enable or disable error tracking. Params: project_id (required), active (required, bool), integrated (bool)
-- list_client_keys: List error tracking client keys. Params: project_id (required)
-- create_client_key: Create error tracking client key. Params: project_id (required)
-- delete_client_key: Delete error tracking client key. Params: project_id (required), key_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconAlert,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_error_tracking", routes, nil))
-}

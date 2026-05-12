@@ -1271,13 +1271,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, covBadHandler())
-	RegisterMeta(server, client)
-}
-
 // ======================== MCP Round-trip ========================.
 
 // TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.

@@ -84,31 +84,3 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 		return toolutil.DeleteResult("group CI/CD variable")
 	})
 }
-
-// RegisterMeta registers the gitlab_group_variable meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlab.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, List),
-		"get":    toolutil.RouteAction(client, Get),
-		"create": toolutil.RouteAction(client, Create),
-		"update": toolutil.RouteAction(client, Update),
-		"delete": toolutil.DestructiveVoidAction(client, Delete),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_group_variable",
-		Title: toolutil.TitleFromName("gitlab_group_variable"),
-		Description: `Manage CI/CD variables in a GitLab group. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List variables. Params: group_id (required), page, per_page
-- get: Get variable by key. Params: group_id (required), key (required), environment_scope
-- create: Create variable. Params: group_id (required), key (required), value (required), description, variable_type, protected (bool), masked (bool), masked_and_hidden (bool), raw (bool), environment_scope
-- update: Update variable. Params: group_id (required), key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool), environment_scope
-- delete: Delete variable. Params: group_id (required), key (required), environment_scope`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconVariable,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_variable", routes, nil))
-}

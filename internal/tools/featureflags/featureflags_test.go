@@ -635,17 +635,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
-
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — all 5 individual tools

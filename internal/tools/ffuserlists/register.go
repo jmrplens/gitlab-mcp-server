@@ -84,31 +84,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("feature flag user list")
 	})
 }
-
-// RegisterMeta registers the feature flag user list meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, ListUserLists),
-		"get":    toolutil.RouteAction(client, GetUserList),
-		"create": toolutil.RouteAction(client, CreateUserList),
-		"update": toolutil.RouteAction(client, UpdateUserList),
-		"delete": toolutil.DestructiveVoidAction(client, DeleteUserList),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_ff_user_list",
-		Title: toolutil.TitleFromName("gitlab_ff_user_list"),
-		Description: `Feature flag user list operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List user lists (project_id, search, page, per_page)
-- get: Get a user list (project_id, iid)
-- create: Create a user list (project_id, name, user_xids)
-- update: Update a user list (project_id, iid, name, user_xids)
-- delete: Delete a user list (project_id, iid)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_ff_user_list", routes, nil))
-}

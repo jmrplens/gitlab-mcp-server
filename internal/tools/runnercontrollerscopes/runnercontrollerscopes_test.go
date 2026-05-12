@@ -525,13 +525,6 @@ func TestMCPRoundTrip_RemoveErrors(t *testing.T) {
 	}
 }
 
-// TestRegisterMeta_NoPanic verifies RegisterMeta does not panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
-
 // newScopesMCPSession creates an MCP session with runner controller scope tools.
 func newScopesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

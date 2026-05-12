@@ -121,35 +121,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("group share")
 	})
 }
-
-// RegisterMeta registers the gitlab_group_member meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"get":           toolutil.RouteAction(client, GetMember),
-		"get_inherited": toolutil.RouteAction(client, GetInheritedMember),
-		"add":           toolutil.RouteAction(client, AddMember),
-		"edit":          toolutil.RouteAction(client, EditMember),
-		"remove":        toolutil.DestructiveVoidAction(client, RemoveMember),
-		"share":         toolutil.RouteAction(client, ShareGroup),
-		"unshare":       toolutil.DestructiveVoidAction(client, UnshareGroup),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_group_member",
-		Title: toolutil.TitleFromName("gitlab_group_member"),
-		Description: `Group member operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- get: Get a group member (group_id, user_id)
-- get_inherited: Get an inherited group member (group_id, user_id)
-- add: Add a member to a group (group_id, user_id/username, access_level, expires_at)
-- edit: Edit a group member (group_id, user_id, access_level, expires_at)
-- remove: Remove a member from a group (group_id, user_id, skip_subresources, unassign_issuables)
-- share: Share a group with another group (group_id, share_group_id, group_access, expires_at)
-- unshare: Stop sharing a group (group_id, share_group_id)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_member", routes, nil))
-}

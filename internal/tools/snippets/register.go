@@ -62,20 +62,6 @@ func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
 	}
 }
 
-func snippetCreateRouteGeneric[T any, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), schema map[string]any) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, fn)
-	route.InputSchema = schema
-	return route
-}
-
-func snippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return snippetCreateRouteGeneric(client, Create, CreateInputSchemaMap())
-}
-
-func projectSnippetCreateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return snippetCreateRouteGeneric(client, ProjectCreate, ProjectCreateInputSchemaMap())
-}
-
 // RegisterTools registers all snippet MCP tools (personal + project).
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	// Personal snippets.
@@ -314,67 +300,4 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		return toolutil.DeleteResult("project snippet")
 	})
-}
-
-// RegisterMeta registers the gitlab_snippet and gitlab_project_snippet meta-tools.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":         toolutil.RouteAction(client, List),
-		"list_all":     toolutil.RouteAction(client, ListAll),
-		"get":          toolutil.RouteAction(client, Get),
-		"content":      toolutil.RouteAction(client, Content),
-		"file_content": toolutil.RouteAction(client, FileContent),
-		"create":       snippetCreateRoute(client),
-		"update":       toolutil.RouteAction(client, Update),
-		"delete":       toolutil.DestructiveVoidAction(client, Delete),
-		"explore":      toolutil.RouteAction(client, Explore),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_snippet",
-		Title: toolutil.TitleFromName("gitlab_snippet"),
-		Description: `Manage personal snippets in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List current user's snippets. Params: page, per_page
-- list_all: List all snippets (admin). Params: created_after, created_before, page, per_page
-- get: Get snippet. Params: snippet_id (required, int)
-- content: Get snippet raw content. Params: snippet_id (required, int)
-- file_content: Get snippet file content. Params: snippet_id (required, int), ref (required), file_name (required)
-- create: Create snippet. Params: title (required), file_name, description, content, visibility, files (array)
-- update: Update snippet. Params: snippet_id (required, int), title, file_name, description, content, visibility, files (array)
-- delete: Delete snippet. Params: snippet_id (required, int)
-- explore: List public snippets. Params: page, per_page`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconSnippet,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_snippet", routes, nil))
-
-	projRoutes := toolutil.ActionMap{
-		"list":    toolutil.RouteAction(client, ProjectList),
-		"get":     toolutil.RouteAction(client, ProjectGet),
-		"content": toolutil.RouteAction(client, ProjectContent),
-		"create":  projectSnippetCreateRoute(client),
-		"update":  toolutil.RouteAction(client, ProjectUpdate),
-		"delete":  toolutil.DestructiveVoidAction(client, ProjectDelete),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_project_snippet",
-		Title: toolutil.TitleFromName("gitlab_project_snippet"),
-		Description: `Manage project snippets in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List project snippets. Params: project_id (required), page, per_page
-- get: Get project snippet. Params: project_id (required), snippet_id (required, int)
-- content: Get project snippet raw content. Params: project_id (required), snippet_id (required, int)
-- create: Create project snippet. Params: project_id (required), title (required), description, visibility, files (array), file_name, content
-- update: Update project snippet. Params: project_id (required), snippet_id (required, int), title, description, visibility, files (array), file_name, content
-- delete: Delete project snippet. Params: project_id (required), snippet_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(projRoutes),
-		Icons:        toolutil.IconSnippet,
-		InputSchema:  toolutil.MetaToolSchema(projRoutes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_project_snippet", projRoutes, nil))
 }

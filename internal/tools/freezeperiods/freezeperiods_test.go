@@ -482,15 +482,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic verifies that RegisterMeta does not panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
-
 // TestRegisterTools_CallThroughMCP verifies that all registered tools can be
 // called through MCP in-memory transport, covering the handler closures of
 // RegisterTools. Each tool is called with valid inputs and a mock handler

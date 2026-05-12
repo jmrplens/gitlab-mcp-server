@@ -589,10 +589,3 @@ func TestRegisterTools_RevokeAPIError(t *testing.T) {
 		t.Fatal("expected error result for API failure")
 	}
 }
-
-// TestRegisterMeta_NoPanic verifies that RegisterMeta does not panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}

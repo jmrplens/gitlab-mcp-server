@@ -90,31 +90,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("runner scope")
 	})
 }
-
-// RegisterMeta registers the gitlab_runner_controller_scope meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":            toolutil.RouteAction(client, List),
-		"add_instance":    toolutil.RouteAction(client, AddInstanceScope),
-		"remove_instance": toolutil.DestructiveVoidAction(client, RemoveInstanceScope),
-		"add_runner":      toolutil.RouteAction(client, AddRunnerScope),
-		"remove_runner":   toolutil.DestructiveVoidAction(client, RemoveRunnerScope),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_runner_controller_scope",
-		Title: toolutil.TitleFromName("gitlab_runner_controller_scope"),
-		Description: `Manage GitLab runner controller scopes (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List all scopes for a controller. Params: controller_id (required, int)
-- add_instance: Add instance-level scope. Params: controller_id (required, int)
-- remove_instance: Remove instance-level scope. Params: controller_id (required, int)
-- add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
-- remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconRunner,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_runner_controller_scope", routes, nil))
-}

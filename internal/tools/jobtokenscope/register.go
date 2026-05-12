@@ -131,37 +131,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 }
-
-// RegisterMeta registers the gitlab_job_token_scope meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"get_access_settings":            toolutil.RouteAction(client, GetAccessSettings),
-		"patch_access_settings":          toolutil.RouteAction(client, PatchAccessSettings),
-		"list_inbound_project_allowlist": toolutil.RouteAction(client, ListInboundAllowlist),
-		"add_project_allowlist":          toolutil.RouteAction(client, AddProjectAllowlist),
-		"remove_project_allowlist":       toolutil.DestructiveVoidAction(client, RemoveProjectAllowlist),
-		"list_group_allowlist":           toolutil.RouteAction(client, ListGroupAllowlist),
-		"add_group_allowlist":            toolutil.RouteAction(client, AddGroupAllowlist),
-		"remove_group_allowlist":         toolutil.DestructiveVoidAction(client, RemoveGroupAllowlist),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_job_token_scope",
-		Title: toolutil.TitleFromName("gitlab_job_token_scope"),
-		Description: `Manage CI/CD job token scope settings for a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- get_access_settings: Get job token access settings. Params: project_id (required)
-- patch_access_settings: Update job token access settings. Params: project_id (required), enabled (required, bool)
-- list_inbound_project_allowlist: List projects in inbound allowlist. Params: project_id (required), page, per_page
-- add_project_allowlist: Add a project to inbound allowlist. Params: project_id (required), target_project_id (required, int)
-- remove_project_allowlist: Remove a project from inbound allowlist. Params: project_id (required), target_project_id (required, int)
-- list_group_allowlist: List groups in allowlist. Params: project_id (required), page, per_page
-- add_group_allowlist: Add a group to allowlist. Params: project_id (required), target_group_id (required, int)
-- remove_group_allowlist: Remove a group from allowlist. Params: project_id (required), target_group_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconToken,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_job_token_scope", routes, nil))
-}

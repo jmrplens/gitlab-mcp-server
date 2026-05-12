@@ -120,37 +120,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("group label subscription")
 	})
 }
-
-// RegisterMeta registers group label meta-tool on the MCP server.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":        toolutil.RouteAction(client, List),
-		"get":         toolutil.RouteAction(client, Get),
-		"create":      toolutil.RouteAction(client, Create),
-		"update":      toolutil.RouteAction(client, Update),
-		"delete":      toolutil.DestructiveVoidAction(client, Delete),
-		"subscribe":   toolutil.RouteAction(client, Subscribe),
-		"unsubscribe": toolutil.RouteVoidAction(client, Unsubscribe),
-	}
-
-	desc := `Manage GitLab group labels (list, get, create, update, delete, subscribe, unsubscribe).
-
-Actions:
-- list: List group labels. Params: group_id (required), search, with_counts (bool), include_ancestor_groups (bool), include_descendant_groups (bool), only_group_labels (bool), page, per_page
-- get: Get a group label. Params: group_id (required), label_id (required)
-- create: Create a group label. Params: group_id (required), name (required), color (required, hex), description, priority
-- update: Update a group label. Params: group_id (required), label_id (required), new_name, color, description, priority
-- delete: Delete a group label. Params: group_id (required), label_id (required)
-- subscribe: Subscribe to a group label. Params: group_id (required), label_id (required)
-- unsubscribe: Unsubscribe from a group label. Params: group_id (required), label_id (required)`
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         "gitlab_group_label",
-		Title:        toolutil.TitleFromName("gitlab_group_label"),
-		Description:  desc,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconLabel,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_label", routes, nil))
-}

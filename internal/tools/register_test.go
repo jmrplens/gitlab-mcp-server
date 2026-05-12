@@ -2061,9 +2061,10 @@ func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *test
 
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count
-	// across BOTH register_meta.go inline routes AND sub-package routes.
-	// Observed: 194 as of 2025-07-16 (after metadata-driven destructive detection).
-	const minExpectedDestructiveRoutes = 150
+	// across register_meta.go inline routes and the remaining delegated
+	// sub-package routes. Observed: 136 as of 2026-05-13 after removing
+	// unreferenced legacy RegisterMeta route maps.
+	const minExpectedDestructiveRoutes = 136
 
 	total := len(uniqueActions)
 	if total < minExpectedDestructiveRoutes {

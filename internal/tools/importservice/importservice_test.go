@@ -433,7 +433,6 @@ func TestFormatImportGists(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools + RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
 
 // TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
@@ -443,15 +442,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 }
 
 // ---------------------------------------------------------------------------
@@ -518,66 +508,6 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 // ---------------------------------------------------------------------------
 // MCP round-trip — meta tool
 // ---------------------------------------------------------------------------.
-
-// TestMCPRound_TripMetaTool validates m c p round trip meta tool across multiple scenarios using table-driven subtests.
-func TestMCPRound_TripMetaTool(t *testing.T) {
-	session := newImportMetaMCPSession(t)
-	ctx := context.Background()
-
-	actions := []struct {
-		name   string
-		action string
-		params map[string]any
-	}{
-		{"from_github", "from_github", map[string]any{
-			"personal_access_token": "ghp_token",
-			"repo_id":               float64(12345),
-			"target_namespace":      "ns",
-		}},
-		{"cancel_github", "cancel_github", map[string]any{
-			"project_id": float64(1),
-		}},
-		{"github_gists", "github_gists", map[string]any{
-			"personal_access_token": "ghp_token",
-		}},
-		{"from_bitbucket_cloud", "from_bitbucket_cloud", map[string]any{
-			"bitbucket_username":     "user",
-			"bitbucket_app_password": "pass",
-			"repo_path":              "user/repo",
-			"target_namespace":       "ns",
-		}},
-		{"from_bitbucket_server", "from_bitbucket_server", map[string]any{
-			"bitbucket_server_url":      "https://bitbucket.example.com",
-			"bitbucket_server_username": "admin",
-			"personal_access_token":     "pat123",
-			"bitbucket_server_project":  "PROJ",
-			"bitbucket_server_repo":     "repo",
-		}},
-	}
-
-	for _, tt := range actions {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: "gitlab_import",
-				Arguments: map[string]any{
-					"action": tt.action,
-					"params": tt.params,
-				},
-			})
-			if err != nil {
-				t.Fatalf("CallTool(gitlab_import/%s) error: %v", tt.action, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(gitlab_import/%s) returned error: %s", tt.action, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(gitlab_import/%s) returned IsError=true", tt.action)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Helpers: MCP session factories
@@ -662,30 +592,6 @@ func newImportMCPSession(t *testing.T) *mcp.ClientSession {
 	client := testutil.NewTestClient(t, importHandler())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// newImportMetaMCPSession is an internal helper for the importservice package.
-func newImportMetaMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, importHandler())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

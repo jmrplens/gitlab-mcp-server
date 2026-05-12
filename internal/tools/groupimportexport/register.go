@@ -51,27 +51,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(FormatImportFileMarkdown(out), out, err)
 	})
 }
-
-// RegisterMeta registers the gitlab_group_import_export meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"schedule_export": toolutil.RouteAction(client, ScheduleExport),
-		"export_download": toolutil.RouteAction(client, ExportDownload),
-		"import_file":     toolutil.RouteAction(client, ImportFile),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_group_import_export",
-		Title: toolutil.TitleFromName("gitlab_group_import_export"),
-		Description: `Manage group import/export operations. Use 'action' to specify the operation.
-
-Actions:
-- schedule_export: Schedule an async group export. Params: group_id (required)
-- export_download: Download finished group export archive as base64. Params: group_id (required)
-- import_file: Import group from archive. Params: name, path, file (required), parent_id`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconImport,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_group_import_export", routes, nil))
-}

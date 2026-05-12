@@ -143,39 +143,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 }
-
-// RegisterMeta registers the gitlab_deploy_key meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_project":      toolutil.RouteAction(client, ListProject),
-		"get":               toolutil.RouteAction(client, Get),
-		"add":               toolutil.RouteAction(client, Add),
-		"update":            toolutil.RouteAction(client, Update),
-		"delete":            toolutil.DestructiveVoidAction(client, Delete),
-		"enable":            toolutil.RouteAction(client, Enable),
-		"list_all":          toolutil.RouteAction(client, ListAll),
-		"add_instance":      toolutil.RouteAction(client, AddInstance),
-		"list_user_project": toolutil.RouteAction(client, ListUserProject),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_deploy_key",
-		Title: toolutil.TitleFromName("gitlab_deploy_key"),
-		Description: `Manage deploy keys in GitLab (project-level, instance-level, and per-user). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list_project: List project deploy keys. Params: project_id (required), page, per_page
-- get: Get a deploy key. Params: project_id (required), deploy_key_id (required, int)
-- add: Add a deploy key to a project. Params: project_id (required), title (required), key (required), can_push (bool), expires_at (YYYY-MM-DD)
-- update: Update a deploy key. Params: project_id (required), deploy_key_id (required, int), title, can_push (bool)
-- delete: Delete a deploy key. Params: project_id (required), deploy_key_id (required, int)
-- enable: Enable a deploy key for a project. Params: project_id (required), deploy_key_id (required, int)
-- list_all: List all instance-level deploy keys (admin). Params: public (bool), page, per_page
-- add_instance: Create instance-level deploy key (admin). Params: title (required), key (required), expires_at (YYYY-MM-DD)
-- list_user_project: List deploy keys for a user's projects. Params: user_id (required), page, per_page`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconKey,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_deploy_key", routes, nil))
-}

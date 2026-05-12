@@ -93,31 +93,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatBitbucketServerImport(out)), out, nil)
 	})
 }
-
-// RegisterMeta registers the gitlab_import meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"from_github":           toolutil.RouteAction(client, ImportFromGitHub),
-		"cancel_github":         toolutil.DestructiveAction(client, CancelGitHubImport),
-		"github_gists":          toolutil.RouteVoidAction(client, ImportGists),
-		"from_bitbucket_cloud":  toolutil.RouteAction(client, ImportFromBitbucketCloud),
-		"from_bitbucket_server": toolutil.RouteAction(client, ImportFromBitbucketServer),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_import",
-		Title: toolutil.TitleFromName("gitlab_import"),
-		Description: `Import repositories from external services into GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- from_github: Import a repository from GitHub. Params: personal_access_token (required), repo_id (required, int), new_name, target_namespace (required), github_hostname, optional_stages, timeout_strategy
-- cancel_github: Cancel an ongoing GitHub import. Params: project_id (required, int)
-- github_gists: Import GitHub gists as GitLab snippets. Params: personal_access_token (required)
-- from_bitbucket_cloud: Import from Bitbucket Cloud. Params: bitbucket_username (required), bitbucket_app_password (required), repo_path (required), target_namespace (required), new_name
-- from_bitbucket_server: Import from Bitbucket Server. Params: bitbucket_server_url (required), bitbucket_server_username (required), personal_access_token (required), bitbucket_server_project (required), bitbucket_server_repo (required), new_name, new_namespace, timeout_strategy`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconImport,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_import", routes, nil))
-}

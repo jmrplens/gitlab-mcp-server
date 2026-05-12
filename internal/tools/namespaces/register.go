@@ -79,28 +79,3 @@ func markdownForResult(result any) *mcp.CallToolResult {
 		return nil
 	}
 }
-
-// RegisterMeta registers the gitlab_namespace meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, List),
-		"get":    toolutil.RouteAction(client, Get),
-		"exists": toolutil.RouteAction(client, Exists),
-		"search": toolutil.RouteAction(client, Search),
-	}
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_namespace",
-		Title: toolutil.TitleFromName("gitlab_namespace"),
-		Description: `Manage GitLab namespaces. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List all visible namespaces. Params: search, owned_only (bool), top_level_only (bool), page, per_page
-- get: Get namespace by ID or path. Params: id (required)
-- exists: Check namespace path availability. Params: id (required, path to check), parent_id (int)
-- search: Search namespaces by query. Params: query (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconGroup,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_namespace", routes, markdownForResult))
-}

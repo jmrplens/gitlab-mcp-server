@@ -83,31 +83,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("freeze period")
 	})
 }
-
-// RegisterMeta registers the gitlab_freeze_period meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list_freeze_periods":  toolutil.RouteAction(client, List),
-		"get_freeze_period":    toolutil.RouteAction(client, Get),
-		"create_freeze_period": toolutil.RouteAction(client, Create),
-		"update_freeze_period": toolutil.RouteAction(client, Update),
-		"delete_freeze_period": toolutil.DestructiveVoidAction(client, Delete),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_freeze_period",
-		Title: toolutil.TitleFromName("gitlab_freeze_period"),
-		Description: `Manage GitLab deploy freeze periods. Use 'action' to specify the operation.
-
-Actions:
-- list_freeze_periods: List freeze periods for a project. Params: project_id (required), page, per_page
-- get_freeze_period: Get a freeze period by ID. Params: project_id (required), freeze_period_id (required)
-- create_freeze_period: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
-- update_freeze_period: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
-- delete_freeze_period: Delete a freeze period. Params: project_id (required), freeze_period_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconSchedule,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_freeze_period", routes, nil))
-}

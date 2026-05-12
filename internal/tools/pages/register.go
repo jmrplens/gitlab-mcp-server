@@ -144,39 +144,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult(fmt.Sprintf("pages domain %s", input.Domain))
 	})
 }
-
-// RegisterMeta registers the gitlab_page meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"get_pages":        toolutil.RouteAction(client, GetPages),
-		"update_pages":     toolutil.RouteAction(client, UpdatePages),
-		"unpublish_pages":  toolutil.DestructiveVoidAction(client, UnpublishPages),
-		"list_all_domains": toolutil.RouteAction(client, ListAllDomains),
-		"list_domains":     toolutil.RouteAction(client, ListDomains),
-		"get_domain":       toolutil.RouteAction(client, GetDomain),
-		"create_domain":    toolutil.RouteAction(client, CreateDomain),
-		"update_domain":    toolutil.RouteAction(client, UpdateDomain),
-		"delete_domain":    toolutil.DestructiveVoidAction(client, DeleteDomain),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_page",
-		Title: toolutil.TitleFromName("gitlab_page"),
-		Description: `Manage GitLab Pages and Pages domains. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- get_pages: Get Pages settings for a project. Params: project_id (required)
-- update_pages: Update Pages settings. Params: project_id (required), pages_unique_domain_enabled, pages_https_only, pages_primary_domain
-- unpublish_pages: Unpublish Pages for a project. Params: project_id (required)
-- list_all_domains: List all Pages domains across all projects. No params required.
-- list_domains: List Pages domains for a project. Params: project_id (required), page, per_page
-- get_domain: Get a single Pages domain. Params: project_id (required), domain (required)
-- create_domain: Create a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
-- update_domain: Update a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
-- delete_domain: Delete a Pages domain. Params: project_id (required), domain (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconFile,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_page", routes, nil))
-}

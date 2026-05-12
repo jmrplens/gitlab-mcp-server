@@ -77,31 +77,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(FormatImportStatusMarkdown(out), out, err)
 	})
 }
-
-// RegisterMeta registers the gitlab_project_import_export meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"schedule_export":  toolutil.RouteAction(client, ScheduleExport),
-		"export_status":    toolutil.RouteAction(client, GetExportStatus),
-		"export_download":  toolutil.RouteAction(client, ExportDownload),
-		"import_from_file": toolutil.DestructiveAction(client, ImportFromFile),
-		"import_status":    toolutil.RouteAction(client, GetImportStatus),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_project_import_export",
-		Title: toolutil.TitleFromName("gitlab_project_import_export"),
-		Description: `Manage project import/export operations. Use 'action' to specify the operation.
-
-Actions:
-- schedule_export: Schedule an async export. Params: project_id (required), description, upload_url, upload_http_method
-- export_status: Get export status. Params: project_id (required)
-- export_download: Download finished export archive as base64. Params: project_id (required)
-- import_from_file: Import project from archive. Params: file_path or content_base64 (required), namespace, name, path, overwrite
-- import_status: Get import status. Params: project_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconImport,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_project_import_export", routes, nil))
-}

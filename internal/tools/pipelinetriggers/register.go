@@ -97,33 +97,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatRunOutputMarkdown(out)), out, err)
 	})
 }
-
-// RegisterMeta registers the pipeline trigger meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":   toolutil.RouteAction(client, ListTriggers),
-		"get":    toolutil.RouteAction(client, GetTrigger),
-		"create": toolutil.RouteAction(client, CreateTrigger),
-		"update": toolutil.RouteAction(client, UpdateTrigger),
-		"delete": toolutil.DestructiveVoidAction(client, DeleteTrigger),
-		"run":    toolutil.RouteAction(client, RunTrigger),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_pipeline_trigger",
-		Title: toolutil.TitleFromName("gitlab_pipeline_trigger"),
-		Description: `Pipeline trigger token operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List trigger tokens (project_id, page, per_page)
-- get: Get a trigger token (project_id, trigger_id)
-- create: Create a trigger token (project_id, description)
-- update: Update a trigger token (project_id, trigger_id, description)
-- delete: Delete a trigger token (project_id, trigger_id)
-- run: Trigger a pipeline (project_id, ref, token, variables)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconPipeline,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_pipeline_trigger", routes, nil))
-}

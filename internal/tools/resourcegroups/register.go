@@ -76,29 +76,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatJobsMarkdown(out)), out, nil)
 	})
 }
-
-// RegisterMeta registers the gitlab_resource_group meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":               toolutil.RouteAction(client, ListAll),
-		"get":                toolutil.RouteAction(client, Get),
-		"edit":               toolutil.RouteAction(client, Edit),
-		"list_upcoming_jobs": toolutil.RouteAction(client, ListUpcomingJobs),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_resource_group",
-		Title: toolutil.TitleFromName("gitlab_resource_group"),
-		Description: `Manage resource groups in GitLab CI/CD. Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List resource groups for a project. Params: project_id (required)
-- get: Get a single resource group. Params: project_id (required), key (required)
-- edit: Edit a resource group process mode. Params: project_id (required), key (required), process_mode (required: unordered, oldest_first, newest_first)
-- list_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconQueue,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_resource_group", routes, nil))
-}

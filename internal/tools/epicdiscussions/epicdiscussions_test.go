@@ -823,7 +823,6 @@ func TestFormatNoteMarkdown(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// RegisterTools + RegisterMeta — no panic
 // --------------------------------------------------------------------------
 
 // TestRegisterTools_NoPanic verifies that RegisterTools registers all tools on the MCP server without panicking.
@@ -833,15 +832,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-}
-
-// TestRegisterMeta_NoPanic verifies that RegisterMeta registers the meta-tool on the MCP server without panicking.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 }
 
 // --------------------------------------------------------------------------
@@ -891,48 +881,6 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 // MCP round-trip — meta tool
 // --------------------------------------------------------------------------
 
-// TestMCPRoundTrip_MetaTool uses table-driven subtests to invoke each meta-tool action via an in-memory MCP session and verify successful dispatch.
-func TestMCPRoundTrip_MetaTool(t *testing.T) {
-	session := newEpicDiscussionsMetaMCPSession(t)
-	ctx := context.Background()
-
-	actions := []struct {
-		name   string
-		action string
-		params map[string]any
-	}{
-		{"list", "list", map[string]any{"full_path": testFullPath, "epic_iid": float64(5)}},
-		{"get", "get", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex"}},
-		{"create", "create", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}},
-		{"add_note", "add_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
-		{"update_note", "update_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}},
-		{"delete_note", "delete_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}},
-	}
-
-	for _, tt := range actions {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: "gitlab_epic_discussion",
-				Arguments: map[string]any{
-					"action": tt.action,
-					"params": tt.params,
-				},
-			})
-			if err != nil {
-				t.Fatalf("CallTool(gitlab_epic_discussion/%s) error: %v", tt.action, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(gitlab_epic_discussion/%s) returned error: %s", tt.action, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(gitlab_epic_discussion/%s) returned IsError=true", tt.action)
-			}
-		})
-	}
-}
-
 // --------------------------------------------------------------------------
 // Helpers: MCP session factories
 // --------------------------------------------------------------------------
@@ -964,30 +912,6 @@ func newEpicDiscussionsMCPSession(t *testing.T) *mcp.ClientSession {
 	client := testutil.NewTestClient(t, graphqlSessionMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-func newEpicDiscussionsMetaMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, graphqlSessionMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

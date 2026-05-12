@@ -50,15 +50,6 @@ func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic_Coverage verifies dependency proxy meta-tool registration.
-func TestRegisterMeta_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	RegisterMeta(server, client)
-}
-
 // TestMCPRound_Trip_Coverage verifies dependency proxy tool execution over
 // in-memory MCP transports.
 func TestMCPRound_Trip_Coverage(t *testing.T) {

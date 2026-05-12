@@ -38,25 +38,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
 }
-
-// RegisterMeta registers the gitlab_key meta-tool.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"get_key_with_user":      toolutil.RouteAction(client, GetKeyWithUser),
-		"get_key_by_fingerprint": toolutil.RouteAction(client, GetKeyByFingerprint),
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_key",
-		Title: toolutil.TitleFromName("gitlab_key"),
-		Description: `Look up GitLab SSH keys. Use 'action' to specify the operation.
-
-Actions:
-- get_key_with_user: Get an SSH key and its user by key ID. Params: key_id (required)
-- get_key_by_fingerprint: Get an SSH key and its user by fingerprint. Params: fingerprint (required, e.g. SHA256:abc123)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconKey,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_key", routes, nil))
-}

@@ -49,12 +49,3 @@ func TestRegisterTools_DeleteNoteError(t *testing.T) {
 		t.Error("expected error result from delete with failing backend")
 	}
 }
-
-// TestRegisterMeta_NoPanic verifies that RegisterMeta registers the meta-tool without panicking.
-func TestRegisterMeta_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
-}
