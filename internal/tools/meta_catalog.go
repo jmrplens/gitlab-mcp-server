@@ -3,13 +3,13 @@ package tools
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // RegisterMetaCatalog registers visible meta-tools from the canonical action
 // catalog.
-func RegisterMetaCatalog(server *mcp.Server, catalog *actionregistry.Catalog) {
+func RegisterMetaCatalog(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	if server == nil || catalog == nil {
 		return
 	}

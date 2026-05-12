@@ -14,7 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -183,7 +183,7 @@ type Registry struct {
 
 // RegisterCatalogTools registers the dynamic search, describe, and execute
 // tools from the canonical action catalog.
-func RegisterCatalogTools(server *mcp.Server, catalog *actionregistry.Catalog) {
+func RegisterCatalogTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	registry := NewRegistryFromCatalog(catalog)
 	addSearchTool(server, registry)
 	addDescribeTool(server, registry)
@@ -192,7 +192,7 @@ func RegisterCatalogTools(server *mcp.Server, catalog *actionregistry.Catalog) {
 
 // RegisterCatalogFindExecuteTools registers the experimental two-tool dynamic
 // catalog from the canonical action catalog.
-func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actionregistry.Catalog) {
+func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	registry := NewRegistryFromCatalog(catalog)
 	addFindTool(server, registry)
 	addExecuteTool(server, registry)
@@ -248,22 +248,22 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
 func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
-	return NewRegistryFromCatalog(actionregistry.FromActionMaps(routes))
+	return NewRegistryFromCatalog(actioncatalog.FromActionMaps(routes))
 }
 
 func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *Registry {
-	return newRegistryFromCatalog(actionregistry.FromActionMaps(routes), aliases)
+	return newRegistryFromCatalog(actioncatalog.FromActionMaps(routes), aliases)
 }
 
 // NewRegistryFromCatalog builds a deterministic dynamic action index from the
 // canonical action catalog.
-func NewRegistryFromCatalog(catalog *actionregistry.Catalog) *Registry {
+func NewRegistryFromCatalog(catalog *actioncatalog.Catalog) *Registry {
 	return newRegistryFromCatalog(catalog, actionAliases())
 }
 
-func newRegistryFromCatalog(catalog *actionregistry.Catalog, aliases []actionAlias) *Registry {
+func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlias) *Registry {
 	if catalog == nil {
-		catalog = actionregistry.NewCatalog()
+		catalog = actioncatalog.NewCatalog()
 	}
 	compatibilityAliasesByCanonical := aliasesByCanonical(aliases)
 	registry := &Registry{

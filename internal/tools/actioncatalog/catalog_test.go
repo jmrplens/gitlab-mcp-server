@@ -1,4 +1,4 @@
-package actionregistry
+package actioncatalog
 
 import (
 	"context"

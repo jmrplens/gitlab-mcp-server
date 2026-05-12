@@ -28,7 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -78,12 +78,12 @@ func main() {
 	dynamicBaseRoutes := dynamicActionRoutes(client, false)
 	dynamicEnterpriseRoutes := dynamicActionRoutes(client, true)
 	dynamicGitLabComEnterpriseRoutes := dynamicActionRoutes(gitLabComClient, true)
-	dynamicBase := listDynamicTools(actionregistry.FromActionMaps(dynamicBaseRoutes))
-	dynamicEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
-	dynamicGitLabComEnterprise := listDynamicTools(actionregistry.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
-	dynamicBaseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicBaseRoutes))
-	dynamicEnterpriseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicEnterpriseRoutes))
-	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(actionregistry.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
+	dynamicBase := listDynamicTools(actioncatalog.FromActionMaps(dynamicBaseRoutes))
+	dynamicEnterprise := listDynamicTools(actioncatalog.FromActionMaps(dynamicEnterpriseRoutes))
+	dynamicGitLabComEnterprise := listDynamicTools(actioncatalog.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
+	dynamicBaseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicBaseRoutes))
+	dynamicEnterpriseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicEnterpriseRoutes))
+	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -195,7 +195,7 @@ func main() {
 
 // dynamicSearchMetrics builds the dynamic registry and returns static search
 // index and alias metrics without changing the advertised MCP tool count.
-func dynamicSearchMetrics(catalog *actionregistry.Catalog) dynamictools.RegistryMetrics {
+func dynamicSearchMetrics(catalog *actioncatalog.Catalog) dynamictools.RegistryMetrics {
 	return dynamictools.NewRegistryFromCatalog(catalog).Metrics()
 }
 
@@ -238,7 +238,7 @@ func dynamicActionRoutes(client *gitlabclient.Client, enterprise bool) map[strin
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // catalog action routes and returns the advertised tool definitions.
-func listDynamicTools(catalog *actionregistry.Catalog) []*mcp.Tool {
+func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000})
 	dynamictools.RegisterCatalogTools(server, catalog)
 	return listToolsFromServer(server)

@@ -28,7 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -81,12 +81,12 @@ func main() {
 
 	metaBaseRoutes := buildMetaActionMaps(client, false)
 	metaEnterpriseRoutes := buildMetaActionMaps(client, true)
-	dynamicBaseCatalog, err := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicBaseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "add standalone base dynamic catalog: %v\n", err)
 		os.Exit(1)
 	}
-	dynamicEnterpriseCatalog, err := dynamictools.AddStandaloneCatalog(actionregistry.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
+	dynamicEnterpriseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "add standalone enterprise dynamic catalog: %v\n", err)
 		os.Exit(1)
@@ -261,7 +261,7 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // action routes and returns the advertised tool definitions.
-func listDynamicTools(catalog *actionregistry.Catalog) []*mcp.Tool {
+func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
 	dynamictools.RegisterCatalogTools(server, catalog)
 	return listToolsFromServer(server)
@@ -269,7 +269,7 @@ func listDynamicTools(catalog *actionregistry.Catalog) []*mcp.Tool {
 
 // listDynamic2Tools registers the experimental find/execute dynamic public
 // toolset backed by action routes and returns the advertised tools.
-func listDynamic2Tools(catalog *actionregistry.Catalog) []*mcp.Tool {
+func listDynamic2Tools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)

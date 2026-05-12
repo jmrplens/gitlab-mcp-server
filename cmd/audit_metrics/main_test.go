@@ -17,7 +17,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -60,7 +60,7 @@ func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
 		},
 	}
 
-	dynamicTools := listDynamicTools(actionregistry.FromActionMaps(routes))
+	dynamicTools := listDynamicTools(actioncatalog.FromActionMaps(routes))
 	if len(dynamicTools) != 3 {
 		t.Fatalf("listDynamicTools() count = %d, want 3", len(dynamicTools))
 	}
@@ -101,7 +101,7 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 			"hook_add": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
 		},
 	}
-	catalog := actionregistry.FromActionMaps(routes)
+	catalog := actioncatalog.FromActionMaps(routes)
 
 	metrics := dynamicSearchMetrics(catalog)
 	if metrics.ActionCount != 3 {

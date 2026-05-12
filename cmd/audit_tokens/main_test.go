@@ -13,7 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 // newAuditTokensClient creates a [gitlabclient.Client] backed by a mock
@@ -73,7 +73,7 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 		t.Fatal("buildMetaActionMaps() returned no actions")
 	}
 
-	toolList := listDynamicTools(actionregistry.FromActionMaps(routes))
+	toolList := listDynamicTools(actioncatalog.FromActionMaps(routes))
 	names := make([]string, 0, len(toolList))
 	for _, tool := range toolList {
 		names = append(names, tool.Name)
@@ -93,7 +93,7 @@ func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
 		t.Fatal("buildMetaActionMaps() returned no actions")
 	}
 
-	catalog := actionregistry.FromActionMaps(routes)
+	catalog := actioncatalog.FromActionMaps(routes)
 	dynamic3 := listDynamicTools(catalog)
 	dynamic2 := listDynamic2Tools(catalog)
 	names := make([]string, 0, len(dynamic2))

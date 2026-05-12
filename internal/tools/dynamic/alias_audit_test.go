@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actionregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -16,10 +16,10 @@ import (
 // test data reports every governance finding type and remains deterministically
 // sorted. It uses an in-memory action catalog fixture and no external services.
 func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
-	catalog := actionregistry.NewCatalog()
-	group := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_project"})
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
 	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
-	group.SetAction(actionregistry.Action{Name: "get", Route: route})
+	group.SetAction(actioncatalog.Action{Name: "get", Route: route})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}

@@ -1,4 +1,4 @@
-// Package actionregistry provides the canonical GitLab action catalog shared by
+// Package actioncatalog provides the canonical GitLab action catalog shared by
 // catalog-backed MCP tool surfaces.
 //
 // The catalog is the intermediate action core between typed GitLab handlers and
@@ -17,4 +17,4 @@
 // are still registered directly by internal/tools.RegisterAll for compatibility.
 // Meta-tools and dynamic tools consume this catalog through adapters such as
 // internal/tools.RegisterMetaCatalog and internal/tools/dynamic.NewRegistryFromCatalog.
-package actionregistry
+package actioncatalog
