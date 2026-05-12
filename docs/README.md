@@ -30,6 +30,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | Document | Description |
 | --- | --- |
 | [Development Guide](development/development.md) | Developer guide: setup, building, testing, adding new tools |
+| [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md) | Developer architecture for individual tools, meta-tools, dynamic mode, and shared action catalog |
 | [Testing](testing/testing.md) | Test suite overview, coverage breakdown, and per-package statistics |
 | [AI Model Evaluation](testing/model-evaluation.md) | How model evaluations validate MCP tool use against schema and Docker GitLab |
 | [AI Model Evaluation Developer Guide](testing/model-evaluation-developer.md) | Commands, fixtures, traces, and maintenance workflow for model evaluation |

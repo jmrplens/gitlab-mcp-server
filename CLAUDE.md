@@ -56,7 +56,7 @@ gitlab-mcp-server/
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — delegates to sub-package RegisterMeta()
+│   │   ├── register_meta.go     # RegisterAllMeta() — builds meta route groups for the canonical action catalog
 │   │   ├── dynamic/             # Low-token dynamic search/describe/execute surface over catalog routes
 │   │   ├── markdown.go          # Thin delegator to type-based markdown registry (toolutil.MarkdownForResult)
 │   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
@@ -471,7 +471,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 `TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` register only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering. Meta-tools remain the default today; dynamic is the current low-token candidate (minimizes LLM context-window usage) for a future default. `dynamic-2` is a parked comparison surface (`gitlab_find_action` + `gitlab_execute_tool`) and should not be promoted unless explicitly requested.
 
-Developers add normal GitLab actions through the route definitions that feed `internal/tools/register_meta.go` or delegated domain `RegisterMeta` functions. `internal/tools/action_catalog.go` builds the canonical catalog from those definitions; meta-tools register visible domain dispatchers from it, and dynamic mode builds search/describe/execute over it. Do not add duplicate dynamic-only action definitions for ordinary GitLab API operations.
+Developers add normal GitLab actions through the route definitions that feed `internal/tools/register_meta.go` or approved delegated meta groups. `internal/tools/action_catalog.go` builds the canonical catalog from those definitions; meta-tools register visible domain dispatchers from it, and dynamic mode builds search/describe/execute over it. Individual `RegisterTools` remains a separate compatibility surface. Do not add duplicate dynamic-only action definitions for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
 Search combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should search, describe exact schemas, then execute the canonical action ID returned by search or describe. See `docs/dynamic-tools.md` and ADR-0011.
 
@@ -513,7 +513,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -d '{
 ### Common issues
 
 - **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
-- **Tool not found**: Check `register.go` and `register_meta.go` for registration
+- **Tool not found**: Check `register.go` for individual tools, `register_meta.go` / `action_catalog.go` for catalog-backed meta and dynamic actions, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: `META_TOOLS=false` disables discovery tools — set to `true` (default)
 - **Dynamic mode shows only three tools**: this is expected when `TOOL_SURFACE=dynamic` or `dynamic-3` is set. Use `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`; unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta` to return to default meta-tools.
 - **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations

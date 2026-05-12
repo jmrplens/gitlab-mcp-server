@@ -10,15 +10,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// ActionCatalogOptions controls which action groups are included in a catalog.
+// ActionCatalogOptions controls which action groups are included in the
+// canonical catalog.
 type ActionCatalogOptions struct {
 	Enterprise bool
 	IncludeMCP bool
 	Updater    *autoupdate.Updater
 }
 
-// BuildActionCatalog builds the canonical action catalog for meta-style GitLab
-// actions without constructing an MCP server.
+// BuildActionCatalog builds the canonical action catalog for catalog-backed
+// GitLab action surfaces without constructing an MCP server.
 func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actionregistry.Catalog, error) {
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
 		registerAllMetaGroups(nil, client, opts.Enterprise)

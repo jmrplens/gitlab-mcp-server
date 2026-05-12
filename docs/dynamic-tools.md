@@ -360,6 +360,8 @@ For most users today, meta-tools remain the conservative default. Dynamic mode i
 
 Implementation entry points:
 
+For the broader developer architecture of individual tools, meta-tools, dynamic surfaces, and the canonical action core, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
+
 | File | Responsibility |
 | --- | --- |
 | `internal/tools/actionregistry/registry.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
