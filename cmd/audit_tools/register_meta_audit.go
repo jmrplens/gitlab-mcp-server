@@ -38,6 +38,7 @@ func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error)
 
 func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinition, error) {
 	var definitions []registerMetaDefinition
+	fileSet := token.NewFileSet()
 	err := filepath.WalkDir(toolsDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -52,7 +53,6 @@ func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinitio
 			return nil
 		}
 
-		fileSet := token.NewFileSet()
 		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
 			return fmt.Errorf("parse %s: %w", path, parseErr)
