@@ -2,7 +2,8 @@ package dynamic
 
 import "sync/atomic"
 
-// RegistryMetrics summarizes the static dynamic registry and search index.
+// RegistryMetrics summarizes static counts from the dynamic registry and search
+// index, including action totals, token/posting totals, and alias statistics.
 type RegistryMetrics struct {
 	ActionCount            int
 	IndexTokenCount        int
@@ -32,13 +33,18 @@ type searchRuntimeCounters struct {
 	destructiveFuzzySuppressions atomic.Uint64
 }
 
+// dynamicSearchRuntimeCounters accumulates process-wide search quality events
+// using atomic counters safe for concurrent access.
 var dynamicSearchRuntimeCounters searchRuntimeCounters
 
 // Metrics returns static registry and search-index metrics.
 func (r *Registry) Metrics() RegistryMetrics {
+	searchableMappingCount := 0
 	searchableAliases := make(map[string]struct{})
 	for _, entry := range r.entries {
-		for _, alias := range documentForEntry(entry).Aliases {
+		aliases := documentForEntry(entry).Aliases
+		searchableMappingCount += len(aliases)
+		for _, alias := range aliases {
 			searchableAliases[alias] = struct{}{}
 		}
 	}
@@ -52,7 +58,7 @@ func (r *Registry) Metrics() RegistryMetrics {
 		IndexPostingCount:      searchIndexPostingCount(r.SearchIndex),
 		AliasCount:             aliasCount,
 		SearchableAliasCount:   len(searchableAliases),
-		UnsearchableAliasCount: max(0, aliasCount-len(searchableAliases)),
+		UnsearchableAliasCount: max(0, aliasCount-searchableMappingCount),
 		AmbiguousAliasCount:    len(r.ambiguousAliases),
 	}
 }

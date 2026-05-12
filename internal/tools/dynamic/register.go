@@ -28,6 +28,9 @@ const (
 	describeToolName = "gitlab_describe_tools"
 	findToolName     = "gitlab_find_action"
 	executeToolName  = "gitlab_execute_tool"
+
+	actionFeatureFlagsUserListList = "feature_flags.ff_user_list_list"
+
 	defaultLimit     = 20
 	maxLimit         = 50
 	minSegmentTerms  = 3
@@ -500,7 +503,7 @@ func actionScopedParamAliases() []actionScopedParamAlias {
 		{ActionID: "branch.protect", Alias: "push_access_level", Canonical: "push_access_level", Notes: "normalized GitLab access level name to numeric level"},
 		{ActionID: "branch.protect", Alias: "merge_access_level", Canonical: "merge_access_level", Notes: "normalized GitLab access level name to numeric level"},
 		{ActionID: "feature_flags.feature_flag_create", Alias: "new_version_flag", Canonical: "version", Notes: "feature flag creation uses version for the flag API version"},
-		{ActionID: "feature_flags.ff_user_list_list", Alias: "name", Canonical: "removed", Notes: "feature flag user-list listing is project-scoped and does not accept a feature flag name"},
+		{ActionID: actionFeatureFlagsUserListList, Alias: "name", Canonical: "removed", Notes: "feature flag user-list listing is project-scoped and does not accept a feature flag name"},
 		{ActionID: "group.group_label_update", Alias: "name", Canonical: "new_name", Notes: "group label update renames labels with new_name"},
 		{ActionID: "project.member_add", Alias: "access_level", Canonical: "access_level", Notes: "normalized GitLab access level name to numeric level"},
 		{ActionID: "project.member_edit", Alias: "access_level", Canonical: "access_level", Notes: "normalized GitLab access level name to numeric level"},
@@ -608,7 +611,7 @@ func NormalizeActionScopedParamsWithExplanation(actionID string, params, schema 
 				record("new_version_flag", "version", "feature flag creation uses version for the flag API version")
 			}
 		}
-	case "feature_flags.ff_user_list_list":
+	case actionFeatureFlagsUserListList:
 		if _, ok := out["name"]; ok && !accepts("name") {
 			delete(clone(), "name")
 			record("name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name")
@@ -1260,9 +1263,6 @@ func (r *Registry) suggestSearchTokens(query string, limit int) []string {
 		if len(values) >= limit {
 			break
 		}
-		if _, ok := seen[item.value]; ok {
-			continue
-		}
 		seen[item.value] = struct{}{}
 		values = append(values, item.value)
 	}
@@ -1580,7 +1580,7 @@ func (r *Registry) searchMatches(query string, limit int, explain bool) []scored
 	matches := r.scoredMatches(terms, searchScorer)
 	fuzzyUsed := false
 	destructiveFuzzySuppressions := 0
-	if mode := fuzzyModeForMatches(matches, limit); mode != fuzzyDisabled {
+	if fuzzyModeForMatches(matches, limit) != fuzzyDisabled {
 		fuzzyMatches := r.scoredMatches(terms, fuzzyScorer)
 		beforeFilter := len(fuzzyMatches)
 		fuzzyMatches = filterUnsafeFuzzyMatches(terms, fuzzyMatches)
@@ -1814,15 +1814,7 @@ func normalizedLimit(limit int) int {
 }
 
 func describeEntry(entry actionEntry) ActionDescription {
-	inputSchema, ok := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
-	if !ok {
-		slog.Debug("dynamic action schema lookup failed", "tool", entry.Tool, "action", entry.Action, "id", entry.ID)
-		inputSchema = map[string]any{
-			"type":                 "object",
-			"additionalProperties": true,
-			"description":          "Schema lookup failed for this action; use the action's schema_uri resource for authoritative params.",
-		}
-	}
+	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
 	return ActionDescription{
 		ID:             entry.ID,
 		Tool:           entry.Tool,
@@ -2108,11 +2100,11 @@ func actionAliases() []actionAlias {
 		{Alias: "feature_flag_user_list.create", Canonical: "feature_flags.ff_user_list_create"},
 		{Alias: "feature_flag_user_list.delete", Canonical: "feature_flags.ff_user_list_delete"},
 		{Alias: "feature_flag_user_list.get", Canonical: "feature_flags.ff_user_list_get"},
-		{Alias: "feature_flag_user_list.list", Canonical: "feature_flags.ff_user_list_list"},
+		{Alias: "feature_flag_user_list.list", Canonical: actionFeatureFlagsUserListList},
 		{Alias: "feature_flag_user_list.update", Canonical: "feature_flags.ff_user_list_update"},
-		{Alias: "feature_flags.feature_flag_user_list", Canonical: "feature_flags.ff_user_list_list"},
-		{Alias: "feature_flags.feature_flag_user_list_list", Canonical: "feature_flags.ff_user_list_list"},
-		{Alias: "feature_flags.feature_flag_user_lists_list", Canonical: "feature_flags.ff_user_list_list"},
+		{Alias: "feature_flags.feature_flag_user_list", Canonical: actionFeatureFlagsUserListList},
+		{Alias: "feature_flags.feature_flag_user_list_list", Canonical: actionFeatureFlagsUserListList},
+		{Alias: "feature_flags.feature_flag_user_lists_list", Canonical: actionFeatureFlagsUserListList},
 		{Alias: "gitlab_issue.create", Canonical: "issue.create"},
 		{Alias: "gitlab_issue.delete", Canonical: "issue.delete"},
 		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},

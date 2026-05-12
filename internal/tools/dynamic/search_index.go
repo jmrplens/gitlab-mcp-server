@@ -52,9 +52,6 @@ func (index searchIndex) candidateEntryIndexes(terms []searchTerm) []int {
 
 func (index searchIndex) addValues(target map[string][]int, values []string, entryIndex int) {
 	for _, value := range dedupeStrings(values) {
-		if value == "" {
-			continue
-		}
 		target[value] = appendEntryIndex(target[value], entryIndex)
 		for _, word := range splitSearchFieldWords(value) {
 			target[word] = appendEntryIndex(target[word], entryIndex)

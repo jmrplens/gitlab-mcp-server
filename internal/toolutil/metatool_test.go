@@ -369,6 +369,47 @@ func TestNormalizeParamAliasesForSchemaWithExplanation(t *testing.T) {
 	}
 }
 
+func TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"name":       map[string]any{"type": "string"},
+			"project_id": map[string]any{"type": "string"},
+		},
+	}
+	normalized, explanations := NormalizeParamAliasesForSchemaWithExplanation(map[string]any{"id": "group/project"}, schema)
+	if normalized["project_id"] != "group/project" {
+		t.Fatalf("normalized = %#v, want project_id alias", normalized)
+	}
+	if len(explanations) != 1 || explanations[0].Alias != "id" || explanations[0].Canonical != "project_id" {
+		t.Fatalf("explanations = %+v, want id -> project_id", explanations)
+	}
+}
+
+func TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"group_id":   map[string]any{"type": "string"},
+		},
+	}
+	_, explanations := NormalizeParamAliasesForSchemaWithExplanation(map[string]any{"id": "group/project"}, schema)
+	if len(explanations) != 0 {
+		t.Fatalf("explanations = %+v, want no ambiguous id alias explanation", explanations)
+	}
+}
+
+func TestNormalizeParamAliasesForSchemaWithExplanation_EmptyAndRejectedIDAlias(t *testing.T) {
+	if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(nil, map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "string"}}}); explanations != nil {
+		t.Fatalf("explanations = %+v, want nil for empty params", explanations)
+	}
+	if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(map[string]any{"id": "group/project"}, map[string]any{"properties": map[string]any{"id": map[string]any{"type": "string"}}}); len(explanations) != 0 {
+		t.Fatalf("explanations = %+v, want empty when schema accepts id", explanations)
+	}
+	if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(map[string]any{"id": "group/project"}, map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}}); len(explanations) != 0 {
+		t.Fatalf("explanations = %+v, want empty without a canonical _id field", explanations)
+	}
+}
+
 // TestNormalizeParamAliasesForSchema_CanonicalWins verifies aliases are
 // dropped when the canonical parameter is already present and the schema does
 // not accept the alias.
@@ -983,6 +1024,23 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 	}
 	if got := NormalizeActionAlias("repository_file.read", ActionMap{}); got != "repository_file.read" {
 		t.Fatalf("NormalizeActionAlias without canonical route = %q, want unchanged", got)
+	}
+	if got := NormalizeActionAlias("", routes); got != "" {
+		t.Fatalf("NormalizeActionAlias empty action = %q, want empty", got)
+	}
+}
+
+func TestParamValidationError_Unwrap(t *testing.T) {
+	if got := (*ParamValidationError)(nil).Unwrap(); got != nil {
+		t.Fatalf("nil ParamValidationError unwrap = %v, want nil", got)
+	}
+	baseErr := errors.New("decode failed")
+	validationErr := &ParamValidationError{Err: baseErr}
+	if !errors.Is(validationErr, baseErr) {
+		t.Fatalf("errors.Is(%v, %v) = false, want true", validationErr, baseErr)
+	}
+	if got := (&ParamValidationError{}).Error(); got != "invalid params" {
+		t.Fatalf("empty ParamValidationError error = %q, want invalid params", got)
 	}
 }
 

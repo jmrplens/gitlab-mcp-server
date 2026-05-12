@@ -186,3 +186,26 @@ func TestFuzzyScoreEntry_CoversActionScoring(t *testing.T) {
 		})
 	}
 }
+
+func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
+	tokens := buildSearchTokens("merge request")
+	for _, query := range []string{"", "mr", "abcdef"} {
+		if score, reason := fuzzyTokenScoreWithReason(query, query, tokens); score != 0 || reason.Field != "" {
+			t.Fatalf("fuzzyTokenScoreWithReason(%q) = %d, %+v; want zero result", query, score, reason)
+		}
+	}
+	if score, reason := fuzzyTokenScoreWithReason("merge", "merge", nil); score != 0 || reason.Field != "" {
+		t.Fatalf("fuzzyTokenScoreWithReason(empty tokens) = %d, %+v; want zero result", score, reason)
+	}
+
+	score, reason := fuzzyTokenScoreWithReason("marge", "merge", tokens)
+	if score == 0 || !reason.Fuzzy || reason.Field != searchFieldFuzzyToken || reason.QueryTerm != "marge" || reason.Alternative != "merge" {
+		t.Fatalf("fuzzyTokenScoreWithReason(typo) = %d, %+v; want fuzzy explanation", score, reason)
+	}
+}
+
+func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
+	if score, explanation := fuzzyScoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
+		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
+	}
+}

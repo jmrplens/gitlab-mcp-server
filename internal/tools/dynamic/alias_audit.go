@@ -19,6 +19,10 @@ type AliasAuditFinding struct {
 
 // AuditDefaultActionAliases checks the built-in compatibility alias metadata.
 func AuditDefaultActionAliases(catalog *actionregistry.Catalog) []AliasAuditFinding {
+	return auditActionAliases(catalog, actionAliases())
+}
+
+func auditActionAliases(catalog *actionregistry.Catalog, aliases []actionAlias) []AliasAuditFinding {
 	canonicalIDs := make(map[string]struct{})
 	if catalog != nil {
 		for _, group := range catalog.Groups() {
@@ -28,7 +32,6 @@ func AuditDefaultActionAliases(catalog *actionregistry.Catalog) []AliasAuditFind
 		}
 	}
 
-	aliases := actionAliases()
 	findings := make([]AliasAuditFinding, 0)
 	seenPairs := make(map[string]struct{}, len(aliases))
 	aliasTargets := make(map[string][]string)

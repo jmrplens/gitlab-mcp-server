@@ -32,6 +32,7 @@ const (
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
 	actionExternalStatusCheckListProject = "external_status_check.list_project"
+	actionFeatureFlagUserListList        = "feature_flags.ff_user_list_list"
 )
 
 // MetaToolInput is the common input for all meta-tools.
@@ -123,11 +124,11 @@ var commonActionAliases = map[string]string{
 	"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
 	"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
 	"feature_flag_user_list.get":                 "feature_flags.ff_user_list_get",
-	"feature_flag_user_list.list":                "feature_flags.ff_user_list_list",
+	"feature_flag_user_list.list":                actionFeatureFlagUserListList,
 	"feature_flag_user_list.update":              "feature_flags.ff_user_list_update",
-	"feature_flags.feature_flag_user_list":       "feature_flags.ff_user_list_list",
-	"feature_flags.feature_flag_user_list_list":  "feature_flags.ff_user_list_list",
-	"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
+	"feature_flags.feature_flag_user_list":       actionFeatureFlagUserListList,
+	"feature_flags.feature_flag_user_list_list":  actionFeatureFlagUserListList,
+	"feature_flags.feature_flag_user_lists_list": actionFeatureFlagUserListList,
 	"gitlab_issue.create":                        "issue.create",
 	"gitlab_issue.delete":                        "issue.delete",
 	"gitlab_server.health_check":                 "server.health_check",
