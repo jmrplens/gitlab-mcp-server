@@ -9,6 +9,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestAuditActionAliases_ReportsGovernanceFindings verifies that alias audit
+// test data reports every governance finding type and remains deterministically
+// sorted. It uses an in-memory action catalog fixture and no external services.
 func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	catalog := actionregistry.NewCatalog()
 	group := actionregistry.NewGroup(actionregistry.GroupOptions{ToolName: "gitlab_project"})
@@ -53,6 +56,9 @@ func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	}
 }
 
+// TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings verifies the
+// default alias audit behavior when no catalog is available. It expects only
+// informational unsearchable-alias findings with populated source metadata.
 func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing.T) {
 	findings := AuditDefaultActionAliases(nil)
 	if len(findings) == 0 {

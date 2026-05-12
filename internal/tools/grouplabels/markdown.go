@@ -53,6 +53,7 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
 		"Use the selected tool surface's group-label create action with group_id to add a new group label",
 	)

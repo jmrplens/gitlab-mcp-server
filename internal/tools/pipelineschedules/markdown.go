@@ -59,6 +59,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline-schedule get action with the same project_id and schedule_id for full details",
 		"Use the selected tool surface's pipeline-schedule create action with project_id to add a new schedule",
 	)

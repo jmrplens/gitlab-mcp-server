@@ -619,7 +619,7 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		"abc123",
 		"Admin",
 		"1 Jan 2026 00:00 UTC",
-		"2026-12-01T00:00:00Z",
+		"1 Dec 2026 00:00 UTC",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)

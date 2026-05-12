@@ -53,8 +53,9 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
-		"Use the selected tool surface's merge-request note get action with the same project_id, merge_request_iid, and note_id to read a specific note",
-		"Use the selected tool surface's merge-request note create action with the same project_id and merge_request_iid to add a new note to this MR",
+		toolutil.HintPreserveLinks,
+		"Use gitlab_get_mrnote with the same project_id, merge_request_iid, and note_id to read a specific note",
+		"Use gitlab_create_mrnote with the same project_id and merge_request_iid to add a new note to this MR",
 	)
 	return b.String()
 }

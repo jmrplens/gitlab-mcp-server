@@ -22,7 +22,7 @@ func FormatTriggerMarkdown(out Output) string {
 		b.WriteString("| Created | " + toolutil.FormatTime(out.CreatedAt) + " |\n")
 	}
 	if out.LastUsed != "" {
-		b.WriteString("| Last Used | " + out.LastUsed + " |\n")
+		b.WriteString("| Last Used | " + toolutil.FormatTime(out.LastUsed) + " |\n")
 	}
 	toolutil.WriteHints(&b,
 		"Use the selected tool surface's pipeline-trigger update action with the same project_id and this trigger_id to modify this trigger",
@@ -48,10 +48,11 @@ func FormatListTriggersMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(t.Description),
 			toolutil.EscapeMdTableCell(t.Token),
 			toolutil.EscapeMdTableCell(t.OwnerName),
-			t.LastUsed)
+			toolutil.FormatTime(t.LastUsed))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline-trigger get action with the same project_id and trigger_id for full details",
 		"Use the selected tool surface's pipeline-trigger create action with project_id to add a new pipeline trigger",
 	)

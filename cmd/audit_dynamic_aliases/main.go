@@ -1,3 +1,5 @@
+// Package main implements the audit_dynamic_aliases command, which checks the
+// dynamic toolset compatibility alias catalog for governance issues.
 package main
 
 import (

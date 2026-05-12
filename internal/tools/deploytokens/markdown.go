@@ -49,6 +49,7 @@ func FormatListMarkdown(o ListOutput) string {
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's project deploy-token get action with the same project_id and deploy_token_id for full details",
 		"Use the selected tool surface's project deploy-token create action with project_id to generate a new deploy token",
 	)

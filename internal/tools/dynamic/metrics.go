@@ -52,6 +52,8 @@ func (r *Registry) Metrics() RegistryMetrics {
 	for _, targets := range r.ambiguousAliases {
 		aliasCount += len(targets)
 	}
+	// AliasCount counts alias-to-action mappings, including each ambiguous
+	// target, so compare it with searchable mappings rather than unique names.
 	return RegistryMetrics{
 		ActionCount:            len(r.entries),
 		IndexTokenCount:        len(r.SearchIndex.byToken),
@@ -86,6 +88,9 @@ func ResetSearchRuntimeMetrics() {
 }
 
 func recordSearchRuntimeMetrics(resultCount int, fuzzyUsed, ambiguousAlias, lowConfidence bool, destructiveFuzzySuppressions int) {
+	if destructiveFuzzySuppressions < 0 {
+		destructiveFuzzySuppressions = 0
+	}
 	dynamicSearchRuntimeCounters.searches.Add(1)
 	if resultCount == 0 {
 		dynamicSearchRuntimeCounters.zeroResultSearches.Add(1)

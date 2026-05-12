@@ -187,20 +187,50 @@ func TestFuzzyScoreEntry_CoversActionScoring(t *testing.T) {
 	}
 }
 
+// TestFuzzyTokenScoreWithReason_DefensiveBranches covers zero-score defensive
+// paths and the typo path that returns a fuzzy-token explanation. It uses a
+// fixed token fixture built with buildSearchTokens and table-driven subtests.
 func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
 	tokens := buildSearchTokens("merge request")
-	for _, query := range []string{"", "mr", "abcdef"} {
-		if score, reason := fuzzyTokenScoreWithReason(query, query, tokens); score != 0 || reason.Field != "" {
-			t.Fatalf("fuzzyTokenScoreWithReason(%q) = %d, %+v; want zero result", query, score, reason)
-		}
-	}
-	if score, reason := fuzzyTokenScoreWithReason("merge", "merge", nil); score != 0 || reason.Field != "" {
-		t.Fatalf("fuzzyTokenScoreWithReason(empty tokens) = %d, %+v; want zero result", score, reason)
+	tests := []struct {
+		name        string
+		query       string
+		alternative string
+		tokens      []string
+		wantMatch   bool
+	}{
+		{name: "empty query", query: "", alternative: "", tokens: tokens},
+		{name: "short query", query: "mr", alternative: "mr", tokens: tokens},
+		{name: "far query", query: "abcdef", alternative: "abcdef", tokens: tokens},
+		{name: "empty tokens", query: "merge", alternative: "merge"},
+		{name: "typo fuzzy token", query: "marge", alternative: "merge", tokens: tokens, wantMatch: true},
 	}
 
-	score, reason := fuzzyTokenScoreWithReason("marge", "merge", tokens)
-	if score == 0 || !reason.Fuzzy || reason.Field != searchFieldFuzzyToken || reason.QueryTerm != "marge" || reason.Alternative != "merge" {
-		t.Fatalf("fuzzyTokenScoreWithReason(typo) = %d, %+v; want fuzzy explanation", score, reason)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, reason := fuzzyTokenScoreWithReason(tt.query, tt.alternative, tt.tokens)
+			if !tt.wantMatch {
+				if score != 0 || reason.Field != "" {
+					t.Fatalf("fuzzyTokenScoreWithReason() = %d, %+v; want zero result", score, reason)
+				}
+				return
+			}
+			if score == 0 {
+				t.Fatal("score = 0, want fuzzy match")
+			}
+			if !reason.Fuzzy {
+				t.Fatalf("reason.Fuzzy = false, want true: %+v", reason)
+			}
+			if reason.Field != searchFieldFuzzyToken {
+				t.Fatalf("reason.Field = %q, want %q", reason.Field, searchFieldFuzzyToken)
+			}
+			if reason.QueryTerm != "marge" {
+				t.Fatalf("reason.QueryTerm = %q, want marge", reason.QueryTerm)
+			}
+			if reason.Alternative != "merge" {
+				t.Fatalf("reason.Alternative = %q, want merge", reason.Alternative)
+			}
+		})
 	}
 }
 

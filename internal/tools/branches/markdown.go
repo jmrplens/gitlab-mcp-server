@@ -86,6 +86,7 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's get protected-branch action with the same project_id and branch_name for full details before update/unprotect workflows",
 		"Use the selected tool surface's protect action with project_id and branch_name to add branch protection",
 	)

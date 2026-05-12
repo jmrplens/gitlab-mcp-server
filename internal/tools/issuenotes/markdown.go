@@ -50,6 +50,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
+		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's issue-note get action with the same project_id, issue_iid, and note_id to read a specific note",
 		"Use the selected tool surface's issue-note create action with the same project_id and issue_iid to add a new note to this issue",
 	)
