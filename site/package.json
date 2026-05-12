@@ -37,7 +37,7 @@
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^1.7.0",
-    "html-validate": "^11.0.0",
+    "html-validate": "^11.1.0",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "prettier": "^3.8.3",
