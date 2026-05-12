@@ -1,11 +1,13 @@
 package tools
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
@@ -76,9 +78,7 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 	}
 }
 
-func TestBuildActionCatalog_DoesNotRegisterMCPTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-
+func TestBuildActionCatalog_DoesNotLeakCaptureState(t *testing.T) {
 	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
@@ -87,8 +87,15 @@ func TestBuildActionCatalog_DoesNotRegisterMCPTools(t *testing.T) {
 		t.Fatalf("catalog counts = groups %d actions %d, want non-zero", catalog.CountGroups(), catalog.CountActions())
 	}
 
-	if names := toolNamesFromServer(t, server); len(names) != 0 {
-		t.Fatalf("BuildActionCatalog() registered MCP tools as a side effect: %v", names)
+	if leaked := toolutil.CaptureMetaToolDefinitions(func() {}); len(leaked) != 0 {
+		t.Fatalf("BuildActionCatalog() leaked captured meta-tool definitions: %v", leaked)
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	registerProjectMeta(server, nil, false)
+	names := toolNamesFromServer(t, server)
+	if !slices.Contains(names, "gitlab_project") {
+		t.Fatalf("registerProjectMeta() after BuildActionCatalog() registered tools %v, want gitlab_project", names)
 	}
 }
 

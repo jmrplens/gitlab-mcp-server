@@ -108,20 +108,20 @@ and Enterprise/Premium route injection for one visible catalog group.
 Target builder rules:
 
 - A builder must return catalog metadata or captureable meta-tool metadata; it
-        must not require a live MCP server to produce routes.
+  must not require a live MCP server to produce routes.
 - Building the catalog must not register MCP tools as a side effect. Visible
-        tool registration belongs to `RegisterMetaCatalog` for meta mode and
-        `dynamic.RegisterCatalogTools` / `dynamic.RegisterCatalogFindExecuteTools` for
-        dynamic modes.
+  tool registration belongs to `RegisterMetaCatalog` for meta mode and
+  `dynamic.RegisterCatalogTools` / `dynamic.RegisterCatalogFindExecuteTools` for
+  dynamic modes.
 - Builders may stay in `internal/tools` while they depend on many domain
-        packages. Prefer splitting central files by domain area before moving builders
-        into domain sub-packages.
+  packages. Prefer splitting central files by domain area before moving builders
+  into domain sub-packages.
 - Domain packages should expose typed handlers and individual `RegisterTools`
-        functions. They should not import the catalog package unless a later ADR moves
-        group ownership into those packages.
+  functions. They should not import `internal/tools/actioncatalog` unless a
+  later ADR moves group ownership into those packages.
 - Delegated meta groups are allowed only for packages explicitly called from
-        `registerAllMetaGroups`; otherwise ordinary GitLab API operations should flow
-        through the central catalog builders.
+  `registerAllMetaGroups`; otherwise ordinary GitLab API operations should flow
+  through the central catalog builders.
 
 Current direction: keep builders in `internal/tools`, split them into focused
 `register_meta_*.go` files by domain area, and keep `register_meta.go` as the
