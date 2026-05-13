@@ -90,10 +90,13 @@ func schemaMap(schema any) map[string]any {
 	return decoded
 }
 
-// lockdownSchemaNode forces additionalProperties=false on any object schema
-// node that does not already declare it, recursing through nested schemas.
+// lockdownSchemaNode forces additionalProperties=false and ensures a properties
+// object exists on any object schema node, recursing through nested schemas.
 func lockdownSchemaNode(node map[string]any) {
 	if isObjectType(node) {
+		if _, present := node["properties"]; !present {
+			node["properties"] = map[string]any{}
+		}
 		if _, present := node["additionalProperties"]; !present {
 			node["additionalProperties"] = false
 		}

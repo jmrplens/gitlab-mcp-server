@@ -3406,6 +3406,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	default:
 		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)
 	}
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

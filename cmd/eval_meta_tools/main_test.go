@@ -698,6 +698,43 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	}
 }
 
+// TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown verifies the
+// evaluator sees the same no-input object schema shape as runtime tools/list.
+func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
+	client := newEvalTestClient(t, false)
+	_, closeSession, toolList, _, err := buildCatalogSession(client, config.ToolSurfaceMeta)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(meta) error = %v", err)
+	}
+	defer closeSession()
+
+	var schema map[string]any
+	for _, tool := range toolList {
+		if tool.Name != "gitlab_interactive_project_create" {
+			continue
+		}
+		var ok bool
+		schema, ok = tool.InputSchema.(map[string]any)
+		if !ok {
+			t.Fatalf("input schema = %T, want map[string]any", tool.InputSchema)
+		}
+		break
+	}
+	if schema == nil {
+		t.Fatal("gitlab_interactive_project_create was not registered")
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || properties == nil {
+		t.Fatalf("properties = %T, want map[string]any in %#v", schema["properties"], schema)
+	}
+	if len(properties) != 0 {
+		t.Fatalf("properties = %#v, want empty map", properties)
+	}
+	if v, boolOK := schema["additionalProperties"].(bool); !boolOK || v {
+		t.Fatalf("additionalProperties = %v, want false", schema["additionalProperties"])
+	}
+}
+
 // TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes verifies dynamic
 // mode advertises only the low-token public tools while retaining catalog routes
 // for validation and execution.
