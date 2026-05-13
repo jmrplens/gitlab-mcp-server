@@ -1044,6 +1044,22 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 		if _, ok := wantTools[tool.Name]; ok {
 			wantTools[tool.Name] = true
 		}
+		if tool.Name == "gitlab_interactive_project_create" {
+			schema, ok := tool.InputSchema.(map[string]any)
+			if !ok {
+				t.Fatalf("gitlab_interactive_project_create input schema = %T, want map[string]any", tool.InputSchema)
+			}
+			properties, ok := schema["properties"].(map[string]any)
+			if !ok || properties == nil {
+				t.Fatalf("gitlab_interactive_project_create properties = %T, want map[string]any in %#v", schema["properties"], schema)
+			}
+			if len(properties) != 0 {
+				t.Fatalf("gitlab_interactive_project_create properties = %#v, want empty map", properties)
+			}
+			if v, boolOK := schema["additionalProperties"].(bool); !boolOK || v {
+				t.Fatalf("gitlab_interactive_project_create additionalProperties = %v, want false", schema["additionalProperties"])
+			}
+		}
 	}
 	for name, found := range wantTools {
 		if !found {

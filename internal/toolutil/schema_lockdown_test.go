@@ -82,6 +82,28 @@ func TestLockdownInputSchemas_PreservesExisting(t *testing.T) {
 	}
 }
 
+// TestLockdownSchemaNode_AddsEmptyPropertiesForObject verifies object schemas
+// without fields still publish an explicit empty properties object for model
+// providers that require it.
+func TestLockdownSchemaNode_AddsEmptyPropertiesForObject(t *testing.T) {
+	t.Parallel()
+
+	node := map[string]any{"type": "object"}
+
+	lockdownSchemaNode(node)
+
+	properties, ok := node["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T, want map[string]any", node["properties"])
+	}
+	if len(properties) != 0 {
+		t.Fatalf("properties = %#v, want empty map", properties)
+	}
+	if v, boolOK := node["additionalProperties"].(bool); !boolOK || v {
+		t.Fatalf("additionalProperties = %v, want false", node["additionalProperties"])
+	}
+}
+
 // TestLockdownSchemaNode_NestedObjects verifies recursion into nested object
 // schemas referenced via properties, items, and anyOf.
 func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
