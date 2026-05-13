@@ -282,6 +282,8 @@ func TestFilterTasksByPartition(t *testing.T) {
 		{ID: "base-delete", ExpectedTool: "gitlab", ExpectedAction: "project.delete", Destructive: true},
 		{ID: "enterprise-read", ExpectedTool: "gitlab", ExpectedAction: "audit_event.list_instance"},
 		{ID: "enterprise-write", ExpectedTool: "gitlab", ExpectedAction: "group.protected_env_protect"},
+		{ID: "enterprise-group-security", ExpectedTool: "gitlab_group", ExpectedAction: "security_settings_update"},
+		{ID: "enterprise-user-service-account", ExpectedTool: "gitlab_user", ExpectedAction: "create_service_account"},
 		{ID: "MF-001", ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Simulation: "poisoned_output"}}},
 		{ID: "schema", Prompt: "Use schema fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
 	}
@@ -297,7 +299,7 @@ func TestFilterTasksByPartition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPartition(enterprise-mutating) error = %v", err)
 	}
-	if got := taskIDs(enterpriseMutating); got != "enterprise-write" {
+	if got := taskIDs(enterpriseMutating); got != "enterprise-write,enterprise-group-security,enterprise-user-service-account" {
 		t.Fatalf("enterprise-mutating IDs = %q", got)
 	}
 	errorRecovery, err := filterTasksByPartition(tasks, "error-recovery")
@@ -1069,6 +1071,40 @@ func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
 		t.Fatalf("first step = %+v", normalized[0].Steps[0])
 	}
 	if normalized[0].Steps[1].ExpectedTool != dynamicExecuteTool || normalized[0].Steps[1].ExpectedAction != "repository.file_get" {
+		t.Fatalf("second step = %+v", normalized[0].Steps[1])
+	}
+}
+
+// TestNormalizeTasksForRoutes_RewritesCatalogActionIDs verifies unified action
+// IDs in fixtures are mapped back to domain meta-tools when no super-dispatcher
+// is present.
+func TestNormalizeTasksForRoutes_RewritesCatalogActionIDs(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_group": {
+			"security_settings_update": {},
+		},
+		"gitlab_project": {
+			"get": {},
+		},
+	}
+	tasks := []evalTask{{
+		ID:             "single",
+		ExpectedTool:   "gitlab",
+		ExpectedAction: "group.security_settings_update",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+			{ExpectedTool: "gitlab", ExpectedAction: actionDiscoverProjectResolve},
+		},
+	}}
+
+	normalized := normalizeTasksForRoutes(tasks, routes)
+	if normalized[0].ExpectedTool != "gitlab_group" || normalized[0].ExpectedAction != "security_settings_update" {
+		t.Fatalf("top-level expectation = %s/%s", normalized[0].ExpectedTool, normalized[0].ExpectedAction)
+	}
+	if normalized[0].Steps[0].ExpectedTool != "gitlab_project" || normalized[0].Steps[0].ExpectedAction != "get" {
+		t.Fatalf("first step = %+v", normalized[0].Steps[0])
+	}
+	if normalized[0].Steps[1].ExpectedTool != "gitlab_discover_project" || normalized[0].Steps[1].ExpectedAction != "" {
 		t.Fatalf("second step = %+v", normalized[0].Steps[1])
 	}
 }

@@ -31,8 +31,14 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 		return fmt.Errorf("failed to build action catalog: %w", err)
 	}
 	RegisterMetaCatalog(server, catalog)
-	registerStandaloneUtilities(server, client)
+	RegisterMetaStandaloneTools(server, client)
 	return nil
+}
+
+// RegisterMetaStandaloneTools wires standalone utility tools that remain visible
+// alongside the catalog-backed meta-tools.
+func RegisterMetaStandaloneTools(server *mcp.Server, client *gitlabclient.Client) {
+	registerStandaloneUtilities(server, client)
 }
 
 func registerAllMetaGroups(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {

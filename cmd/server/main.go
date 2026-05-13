@@ -656,6 +656,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		actionCatalog = filteredCatalog
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
+		gitlabtools.RegisterMetaStandaloneTools(server, client)
 	default:
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)

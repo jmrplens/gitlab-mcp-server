@@ -1096,17 +1096,17 @@ func taskHasEnterpriseStep(task evalTask) bool {
 
 // routeLooksEnterprise is an internal helper for the main package.
 func routeLooksEnterprise(tool, action string) bool {
-	domain := tool
-	if action != "" {
-		domain = action
+	domain := canonicalRouteID(tool, action)
+	if domain == "" {
+		domain = strings.TrimPrefix(tool, "gitlab_")
 	}
-	domain = strings.TrimPrefix(domain, "gitlab_")
 	for _, prefix := range []string{
 		"attestation.", "audit_event.", "compliance_policy.", "dependency.", "dora_metrics.", "enterprise_user.", "external_status_check.", "geo.", "group_analytics.", "group_credential.", "group_epic_board.", "group_iteration.", "group_ldap.", "group_protected_branch.", "group_protected_env.", "group_release.", "group_saml.", "group_scim.", "group_service_account.", "group_ssh_cert.", "group_wiki.", "member_role.", "merge_train.", "project_alias.", "project_iteration.", "security_finding.", "security_setting.", "storage_move.", "vulnerability.",
 		"epic.", "epic_discussion.", "epic_issue.", "epic_note.",
 		"project.mirror_", "project.push_rule_", "project.security_settings_",
-		"group.analytics_", "group.credential_", "group.epic_", "group.iteration_", "group.ldap_", "group.protected_branch_", "group.protected_env_", "group.release_", "group.saml_", "group.service_account_", "group.ssh_cert_", "group.wiki_",
+		"group.analytics_", "group.credential_", "group.epic_", "group.iteration_", "group.ldap_", "group.protected_branch_", "group.protected_env_", "group.release_", "group.saml_", "group.security_settings_", "group.service_account_", "group.ssh_cert_", "group.wiki_",
 		"issue.iteration_",
+		"user.create_service_account", "user.list_service_accounts",
 	} {
 		if strings.HasPrefix(domain, prefix) {
 			return true
@@ -1522,10 +1522,6 @@ func dynamicActionCandidates(tool, action string) []string {
 
 // normalizeTasksForRoutes is an internal helper for the main package.
 func normalizeTasksForRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
-	if _, hasSuperDispatcher := routes["gitlab"]; !hasSuperDispatcher {
-		return tasks
-	}
-
 	out := make([]evalTask, len(tasks))
 	copy(out, tasks)
 	for i := range out {
@@ -1543,7 +1539,19 @@ func normalizeTasksForRoutes(tasks []evalTask, routes map[string]toolutil.Action
 
 // normalizeExpectedRoute is an internal helper for the main package.
 func normalizeExpectedRoute(tool, action string, routes map[string]toolutil.ActionMap) (normalizedTool, normalizedAction string) {
-	if action == "" || tool == "gitlab" || tool == "gitlab_server" || !strings.HasPrefix(tool, "gitlab_") {
+	if action == "" || tool == "gitlab_server" || !strings.HasPrefix(tool, "gitlab") {
+		return tool, action
+	}
+	if tool == "gitlab" {
+		if _, ok := routes["gitlab"][action]; ok {
+			return tool, action
+		}
+		if standaloneTool, ok := standaloneMetaToolForAction(action); ok {
+			return standaloneTool, ""
+		}
+		if metaTool, metaAction, ok := metaToolRouteForAction(action, routes); ok {
+			return metaTool, metaAction
+		}
 		return tool, action
 	}
 	superAction := superDispatcherAction(tool, action)
@@ -1551,6 +1559,35 @@ func normalizeExpectedRoute(tool, action string, routes map[string]toolutil.Acti
 		return "gitlab", superAction
 	}
 	return tool, action
+}
+
+func standaloneMetaToolForAction(action string) (string, bool) {
+	switch action {
+	case actionDiscoverProjectResolve:
+		return "gitlab_discover_project", true
+	case "interactive.issue_create":
+		return "gitlab_interactive_issue_create", true
+	case "interactive.mr_create":
+		return "gitlab_interactive_mr_create", true
+	case "interactive.project_create":
+		return "gitlab_interactive_project_create", true
+	case "interactive.release_create":
+		return "gitlab_interactive_release_create", true
+	default:
+		return "", false
+	}
+}
+
+func metaToolRouteForAction(action string, routes map[string]toolutil.ActionMap) (toolName, actionName string, ok bool) {
+	domain, routeAction, found := strings.Cut(action, ".")
+	if !found || domain == "" || routeAction == "" {
+		return "", "", false
+	}
+	toolName = "gitlab_" + domain
+	if _, exists := routes[toolName][routeAction]; exists {
+		return toolName, routeAction, true
+	}
+	return "", "", false
 }
 
 // superDispatcherAction is an internal helper for the main package.
@@ -3364,6 +3401,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
 		tools.RegisterMetaCatalog(server, actionCatalog)
+		tools.RegisterMetaStandaloneTools(server, client)
 		routes = actionCatalog.ActionMaps()
 	default:
 		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)

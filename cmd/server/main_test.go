@@ -1022,6 +1022,36 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	}
 }
 
+// TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities verifies the
+// catalog-backed meta surface keeps standalone helper tools available.
+func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceMeta})
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	wantTools := map[string]bool{
+		"gitlab_discover_project":           false,
+		"gitlab_interactive_issue_create":   false,
+		"gitlab_interactive_mr_create":      false,
+		"gitlab_interactive_project_create": false,
+		"gitlab_interactive_release_create": false,
+	}
+	for _, tool := range toolsResult.Tools {
+		if _, ok := wantTools[tool.Name]; ok {
+			wantTools[tool.Name] = true
+		}
+	}
+	for name, found := range wantTools {
+		if !found {
+			t.Fatalf("meta standalone tool %q was not registered", name)
+		}
+	}
+}
+
 // TestCreateServer_DynamicTwoToolSurface verifies the experimental two-tool
 // dynamic surface exposes find and execute while retaining catalog schemas.
 func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
