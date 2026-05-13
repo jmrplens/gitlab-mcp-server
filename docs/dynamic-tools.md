@@ -377,7 +377,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 
 ### Registering New Actions
 
-Add or change GitLab actions in the domain route definitions that feed `internal/tools/register_meta.go`, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and schema resources can expose `gitlab://schema/meta/{tool}/{action}`.
+Add or change GitLab actions in the domain route definitions that feed `internal/tools/register_meta.go`, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
 
 Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions. Keep `dynamic-2` as an evaluation-only comparison surface unless the project explicitly decides otherwise.
 

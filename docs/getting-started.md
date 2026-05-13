@@ -158,7 +158,7 @@ To register the low-token dynamic toolset instead, set:
 TOOL_SURFACE=dynamic
 ```
 
-For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources and prompts. Dynamic action search, describe, and execute remain available. Experimental variant selectors are also available for testing dynamic toolset configurations: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
+For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources, prompts, and meta-schema resources. Dynamic action search, describe, and execute remain available because dynamic discovery returns action schemas inline. Experimental variant selectors are also available for testing dynamic toolset configurations: `TOOL_SURFACE=dynamic-3` explicitly selects the current three-tool dynamic mode, and `TOOL_SURFACE=dynamic-2` selects `gitlab_find_action` plus `gitlab_execute_tool`.
 
 See [Meta-Tools](meta-tools.md) for the full reference.
 

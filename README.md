@@ -246,7 +246,7 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
-For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources and prompts. The default remains `full`.
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources, prompts, and meta-schema resources. The default remains `full`.
 
 Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware search ranking model, fuzzy fallback, response shapes, search/describe/execute workflow, diagrams, and migration guidance.
 
