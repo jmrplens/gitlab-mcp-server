@@ -76,3 +76,45 @@ func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing
 		}
 	}
 }
+
+// TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals verifies the
+// metadata audit catches actions in crowded groups when their only searchable
+// text is the canonical identifier, while ignoring actions with targeted tags
+// or schema-derived parameter signals.
+func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
+	for index := range 8 {
+		action := actioncatalog.Action{Name: "weak_action_" + string(rune('a'+index)), Route: weakRoute}
+		if index == 0 {
+			action.Tags = []string{"project cleanup"}
+		}
+		if index == 1 {
+			action.Route.InputSchema = map[string]any{"properties": map[string]any{"project_id": map[string]any{}}}
+		}
+		group.SetAction(action)
+	}
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	findings := AuditCatalogDiscoveryTerms(catalog)
+	registryFindings := AuditRegistryDiscoveryTerms(NewRegistryFromCatalog(catalog))
+	if len(registryFindings) != len(findings) {
+		t.Fatalf("AuditRegistryDiscoveryTerms() returned %d findings, want %d", len(registryFindings), len(findings))
+	}
+	if len(findings) != 6 {
+		t.Fatalf("AuditCatalogDiscoveryTerms() returned %d findings, want 6: %+v", len(findings), findings)
+	}
+	for _, ignored := range []string{"project.weak_action_a", "project.weak_action_b"} {
+		if slices.ContainsFunc(findings, func(finding CatalogDiscoveryFinding) bool { return finding.ID == ignored }) {
+			t.Fatalf("findings = %+v, want %s ignored because it has discovery signals", findings, ignored)
+		}
+	}
+	for _, finding := range findings {
+		if finding.Severity != "warning" || finding.Problem != "weak_discovery_terms" || finding.Tool != "gitlab_project" || finding.Message == "" {
+			t.Fatalf("finding = %+v, want populated weak discovery warning", finding)
+		}
+	}
+}

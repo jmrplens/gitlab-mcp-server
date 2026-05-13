@@ -1093,10 +1093,18 @@ func TestDescribe_CanonicalizesProviderSpecificAliases(t *testing.T) {
 		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
 		"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
 		"generic_package.list":                       "package.list",
+		"job.token_scope_remove_inbound":             "job.token_scope_remove_project",
 		"issue_note.create":                          "issue.note_create",
 		"issue_note.delete":                          "issue.note_delete",
 		"issue_note.update":                          "issue.note_update",
+		"mr_review.draft_notes_publish_all":          "mr_review.draft_note_publish_all",
+		"package.list_project_packages":              "package.list",
+		"release.asset_link.delete":                  "release.link_delete",
+		"release.asset_link.get":                     "release.link_get",
+		"release.asset_link.list":                    "release.link_list",
+		"release.asset_link.update":                  "release.link_update",
 		"release_link.link_list":                     "release.link_list",
+		"repository.tag.delete":                      "tag.delete",
 		"wiki.show":                                  "wiki.get",
 		"gitlab_interactive_issue.create":            "interactive.issue_create",
 	}
@@ -1123,13 +1131,21 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
 	tests := map[string]string{
-		"admin.settings_get":            "current instance/application settings",
-		"job.download_single_artifact":  "one artifact file path",
-		"package.list":                  "package registry packages",
-		"runner.remove":                 "numeric runner_id",
-		"repository.compare":            "params.from and params.to",
-		"analyze.release_notes":         "after requested release/compare",
-		"package.registry_list_project": "container registry image repositories",
+		"admin.settings_get":               "current instance/application settings",
+		"access.deploy_key_list_project":   "deploy keys, not deploy tokens",
+		"access.deploy_token_list_project": "deploy tokens/credentials",
+		"environment.protected_get":        "protected environment",
+		"environment.deployment_list":      "Lists deployments",
+		"feature_flags.ff_user_list_get":   "params.user_list_iid",
+		"issue.note_get":                   "params.note_id",
+		"job.download_single_artifact":     "one artifact file path",
+		"mr_review.draft_note_publish_all": "Publishes all pending draft MR review notes",
+		"package.list":                     "package registry packages",
+		"runner.remove":                    "numeric runner_id",
+		"release.link_get":                 "release asset link by link_id",
+		"repository.compare":               "params.from and params.to",
+		"analyze.release_notes":            "after requested release/compare",
+		"package.registry_list_project":    "container registry image repositories",
 	}
 
 	for actionID, wantSubstring := range tests {
@@ -2256,6 +2272,10 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "generic package list", query: "list package registry packages", want: []string{"package.list"}},
 		{name: "runner removal by id", query: "remove runner by numeric runner_id", want: []string{"runner.remove"}},
 		{name: "issue time tracking sequence", query: "issue time tracking set estimate add spent time reset spent time reset estimate", limit: 8, want: []string{"issue.time_estimate_set", "issue.spent_time_add", "issue.spent_time_reset", "issue.time_estimate_reset"}},
+		{name: "deploy token inventory", query: "list project deploy tokens credentials not deploy keys", limit: 8, want: []string{"access.deploy_token_list_project"}},
+		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.protected_get", "environment.deployment_list", "environment.deployment_approve_or_reject"}},
+		{name: "feature flag user list lifecycle", query: "feature flag user list get user_list_iid update delete", limit: 8, want: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}},
+		{name: "issue note lifecycle", query: "issue note get by note_id update delete comment", limit: 8, want: []string{"issue.note_get", "issue.note_update", "issue.note_delete"}},
 	}
 
 	for _, tt := range tests {

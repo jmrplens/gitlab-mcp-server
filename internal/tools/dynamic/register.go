@@ -1324,6 +1324,7 @@ var searchSynonymsMap = map[string][]string{
 	"current":       {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
 	"deploy":        {"deployment", "environment", "key"},
 	"deployment":    {"deploy", "environment"},
+	"deployments":   {"deployment", "deploy", "environment"},
 	"details":       {"get"},
 	"discussion":    {"comment", "thread", "note"},
 	"draft":         {"wip", "work_in_progress", "proposal"},
@@ -1361,12 +1362,15 @@ var searchSynonymsMap = map[string][]string{
 	"repo":          {"repository", "file", "tree", "branch", "tag"},
 	"runner":        {"job", "ci", "pipeline"},
 	"secret":        {"variable", "ci_variable", "token", "password"},
+	"credential":    {"credentials", "token"},
+	"credentials":   {"credential", "token"},
 	"show":          {"get"},
 	"state":         {"status", "condition", "filter", "list"},
 	"ticket":        {"issue", "work_item"},
 	"unresolved":    {"open", "active", "list"},
 	"user":          {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 	"users":         {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
+	"tokens":        {"token"},
 	"verify":        {"get", "exists"},
 	"webhook":       {"hook"},
 	"webhooks":      {"hook"},
@@ -1432,6 +1436,8 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		add("webhook", "web hook", "project webhook", "webhook create", "webhook add", "project hook add", "hook add")
 	case strings.Contains(id, "deploy_key"):
 		add("deploy key", "ssh key", "access key")
+	case strings.Contains(id, "deploy_token"):
+		add("deploy token", "deploy tokens", "project deploy token", "project deploy tokens", "deployment token", "credential", "credentials", "token list", "deploy token list")
 	case strings.Contains(id, "member_") && domain == "project":
 		add("project member", "project membership")
 	case strings.Contains(id, "member_") && domain == "group":
@@ -1460,6 +1466,14 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		add("ci variable", "ci secret", "secret", "environment variable")
 	case domain == "environment":
 		add("env", "deployment")
+		switch {
+		case strings.HasPrefix(action, "protected_"):
+			add("protected environment", "environment protection", "protected environment get", "protected environment list")
+		case strings.HasPrefix(action, "deployment_"):
+			add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
+		}
+	case domain == "feature_flags" && strings.HasPrefix(action, "ff_user_list_"):
+		add("feature flag user list", "user list", "user_list_iid", "feature flag users")
 	case domain == "job":
 		add("ci job", "pipeline job")
 		switch action {
@@ -1533,6 +1547,16 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		}
 	case domain == "issue":
 		switch action {
+		case "note_create":
+			add("issue note", "issue comment", "create note", "create comment")
+		case "note_get":
+			add("issue note", "issue comment", "get note", "note_id", "read one note")
+		case "note_list":
+			add("issue notes", "issue comments", "list notes", "list comments")
+		case "note_update":
+			add("issue note", "issue comment", "update note", "edit comment", "note_id")
+		case "note_delete":
+			add("issue note", "issue comment", "delete note", "remove comment", "note_id")
 		case "time_estimate_set":
 			add("issue time tracking", "set estimate", "time estimate", "estimate", "2h")
 		case "spent_time_add":
@@ -1865,6 +1889,66 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		Usage:          "Creates a broadcast message after any requested settings read; message text goes in params.message.",
 		RelatedActions: []string{"admin.settings_get", "admin.broadcast_message_list"},
 	},
+	"access.deploy_key_list_project": {
+		Usage:          "Lists deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.",
+		RelatedActions: []string{"access.deploy_token_list_project"},
+	},
+	"access.deploy_token_list_project": {
+		Usage:          "Lists deploy tokens/credentials for a project; use access.deploy_key_list_project for SSH deploy keys.",
+		RelatedActions: []string{"access.deploy_key_list_project"},
+	},
+	"environment.protected_get": {
+		Usage:          "Gets one protected environment by params.name; environment.get reads a normal environment by environment_id.",
+		RelatedActions: []string{"environment.protected_list", "environment.deployment_list"},
+	},
+	"environment.deployment_list": {
+		Usage:          "Lists deployments for an environment/project; use after environment.list or protected environment lookup when deployment approval context is needed.",
+		RelatedActions: []string{"environment.list", "environment.deployment_approve_or_reject"},
+	},
+	"environment.deployment_approve_or_reject": {
+		Usage:          "Approves or rejects a deployment and requires params.deployment_id plus params.status.",
+		RelatedActions: []string{"environment.deployment_list"},
+	},
+	"feature_flags.ff_user_list_get": {
+		Usage:          "Gets one feature flag user list by params.user_list_iid; ff_user_list_list lists all user lists and does not accept user_list_iid.",
+		RelatedActions: []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update"},
+	},
+	"feature_flags.ff_user_list_list": {
+		Usage:          "Lists feature flag user lists for a project; use ff_user_list_get when a specific user_list_iid is known.",
+		RelatedActions: []string{"feature_flags.ff_user_list_get"},
+	},
+	"feature_flags.ff_user_list_update": {
+		Usage:          "Updates one feature flag user list and requires params.user_list_iid.",
+		RelatedActions: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"},
+	},
+	"feature_flags.ff_user_list_delete": {
+		Usage:          "Deletes one feature flag user list and requires params.user_list_iid.",
+		RelatedActions: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"},
+	},
+	"issue.note_create": {
+		Usage:          "Creates a note/comment on an issue; subsequent get/update/delete steps need the returned note_id.",
+		RelatedActions: []string{"issue.note_get", "issue.note_update", "issue.note_delete"},
+	},
+	"issue.note_get": {
+		Usage:          "Gets one issue note by params.note_id; issue.note_list lists notes and does not fetch a specific note.",
+		RelatedActions: []string{"issue.note_list", "issue.note_update", "issue.note_delete"},
+	},
+	"issue.note_list": {
+		Usage:          "Lists issue notes/comments; use issue.note_get when a specific note_id is known.",
+		RelatedActions: []string{"issue.note_get"},
+	},
+	"issue.note_update": {
+		Usage:          "Updates one issue note/comment and requires params.note_id.",
+		RelatedActions: []string{"issue.note_get", "issue.note_delete"},
+	},
+	"issue.note_delete": {
+		Usage:          "Deletes one issue note/comment and requires params.note_id.",
+		RelatedActions: []string{"issue.note_get", "issue.note_update"},
+	},
+	"mr_review.draft_note_publish_all": {
+		Usage:          "Publishes all pending draft MR review notes; use draft_note_create first when adding draft comments.",
+		RelatedActions: []string{"mr_review.draft_note_create", "mr_review.draft_note_list"},
+	},
 	"project.get": {
 		RelatedActions: []string{"project.archive", "project.delete", "project.update"},
 	},
@@ -1879,6 +1963,18 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	"release.link_list": {
 		Usage:          "Lists asset links for an existing release tag; it is not a release existence check.",
 		RelatedActions: []string{"release.get", "release.link_create", "release.link_delete"},
+	},
+	"release.link_get": {
+		Usage:          "Gets one release asset link by link_id; use release.link_list to discover link IDs for a tag.",
+		RelatedActions: []string{"release.link_list", "release.link_update", "release.link_delete"},
+	},
+	"release.link_update": {
+		Usage:          "Updates one release asset link by link_id; use release.link_list or release.link_get before editing when the ID is unknown.",
+		RelatedActions: []string{"release.link_get", "release.link_list", "release.link_delete"},
+	},
+	"release.link_delete": {
+		Usage:          "Deletes one release asset link by link_id; use release.link_list before deletion when the ID is unknown.",
+		RelatedActions: []string{"release.link_get", "release.link_list"},
 	},
 	"repository.compare": {
 		Usage:          "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.",
@@ -2178,9 +2274,14 @@ func actionAliases() []actionAlias {
 		{Alias: "issue_note.create", Canonical: "issue.note_create"},
 		{Alias: "release.create_link", Canonical: "release.link_create"},
 		{Alias: "release.asset_link.create", Canonical: "release.link_create"},
+		{Alias: "release.asset_link.delete", Canonical: "release.link_delete"},
+		{Alias: "release.asset_link.get", Canonical: "release.link_get"},
+		{Alias: "release.asset_link.list", Canonical: "release.link_list"},
+		{Alias: "release.asset_link.update", Canonical: "release.link_update"},
 		{Alias: "release_link.link_list", Canonical: "release.link_list"},
 		{Alias: "release.generate_notes", Canonical: "analyze.release_notes"},
 		{Alias: "package.list_project", Canonical: "package.list"},
+		{Alias: "package.list_project_packages", Canonical: "package.list"},
 		{Alias: "variable.create", Canonical: "ci_variable.create"},
 		{Alias: "group.variable.create", Canonical: "ci_variable.group_create"},
 		{Alias: "group.audit_events", Canonical: "audit_event.list_group"},
@@ -2192,6 +2293,9 @@ func actionAliases() []actionAlias {
 		{Alias: "gitlab_interactive_mr_create", Canonical: "interactive.mr_create"},
 		{Alias: "gitlab_interactive_project_create", Canonical: "interactive.project_create"},
 		{Alias: "gitlab_interactive_release_create", Canonical: "interactive.release_create"},
+		{Alias: "job.token_scope_remove_inbound", Canonical: "job.token_scope_remove_project"},
+		{Alias: "mr_review.draft_notes_publish_all", Canonical: "mr_review.draft_note_publish_all"},
+		{Alias: "repository.tag.delete", Canonical: "tag.delete"},
 		{Alias: "runner.delete", Canonical: "runner.remove"},
 		{Alias: "wiki.show", Canonical: "wiki.get"},
 		{Alias: "webhook.add", Canonical: "project.hook_add"},
