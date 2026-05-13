@@ -179,7 +179,7 @@ Always write idiomatic Go code that follows the official SDK patterns and Go com
 - **Case-sensitive JSON**: Uses `segmentio/encoding` instead of `encoding/json` — field names are case-sensitive
 - **Schema caching**: `SchemaFor[T]()` caches JSON schemas per type for performance — call at init time
 - **Extensions field**: `mcp.Extensions` map for MCP Apps (SEP-2133) — forward-compatible metadata
-- **MCPGODEBUG**: Environment variable for behavior change compatibility (`MCPGODEBUG=x]1,y=2`)
+- **MCPGODEBUG**: Environment variable for behavior change compatibility (`MCPGODEBUG=x=1,y=2`)
 - **Input validation errors**: Return as tool results (not JSON-RPC errors) so LLMs can self-correct
 - **Tool name validation**: `/^[a-zA-Z0-9_-]+$/` — no dots, spaces, or special chars
 - **Icons**: SVG icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973)

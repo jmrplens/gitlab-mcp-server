@@ -45,7 +45,7 @@ This must be set for the server to start in stdio mode:
 :::tip
 **Meta-tools mode** (`META_TOOLS=true`) is strongly recommended. It groups tools by domain (e.g., `gitlab_issue` handles list, get, create, update, delete) which reduces token usage and improves AI tool selection accuracy.
 
-Use `TOOL_SURFACE=dynamic` for the current lowest-token catalog: only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` are visible, while the same GitLab actions remain available through the canonical action catalog. `TOOL_SURFACE=dynamic-3` selects the same current three-tool surface explicitly for A/B reports or pinned configs. Use `TOOL_SURFACE=dynamic-2` only for the parked find/execute candidate.
+Use `TOOL_SURFACE=dynamic` for the current lowest-token catalog: only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` are visible, while the same GitLab actions remain available through the canonical action catalog. `TOOL_SURFACE=dynamic-3` selects the same current three-tool surface explicitly for pinned configs. Use `TOOL_SURFACE=dynamic-2` only when you intentionally want the experimental find/execute variant.
 
 See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for the search, describe, execute workflow.
 

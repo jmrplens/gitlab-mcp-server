@@ -30,7 +30,7 @@ Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes
 | `gitlab_describe_tools` | Return exact input schemas, examples, safety metadata, and output summaries for selected action IDs |
 | `gitlab_execute_tool` | Execute one selected action by canonical `domain.action` ID with runtime validation and safety checks |
 
-The parked comparison surface `TOOL_SURFACE=dynamic-2` exposes `gitlab_find_action` and `gitlab_execute_tool`. It exists for evaluation and A/B testing. Do not treat dynamic-2 as the main migration target.
+The experimental two-tool surface `TOOL_SURFACE=dynamic-2` exposes `gitlab_find_action` and `gitlab_execute_tool`. Do not treat dynamic-2 as the main migration target.
 
 ## Configuration
 
@@ -356,11 +356,11 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 | Initial tool count | 32/47/48 | 3 |
 | Model selection | Choose a domain tool and action | Search an action registry, describe, execute |
 | Schema discovery | `action` enum plus optional schema resources | `gitlab_describe_tools` returns action schemas inline |
-| Compatibility | Best current default | Best low-token candidate |
+| Compatibility | Best current default | Best low-token alternative |
 | Failure mode | Wrong domain/action choice | Skipped search/describe or wrong action ID |
 | Rollback | Default path | Switch back to `TOOL_SURFACE=meta` or unset `TOOL_SURFACE` |
 
-For most users today, meta-tools remain the conservative default. Dynamic mode is recommended for low-token clients, evaluations, and deployments preparing for the expected future default.
+For most users today, meta-tools remain the conservative default. Dynamic mode is recommended for low-token clients, evaluations, and deployments that benefit from progressive discovery.
 
 ## Developer Notes
 
@@ -411,7 +411,7 @@ Model-facing evaluations can compare surfaces with `cmd/eval_meta_tools`:
 go run ./cmd/eval_meta_tools --tool-surface=dynamic --dry-run --partition base-read
 ```
 
-Use `dynamic-3` when you need an explicit name for the current three-tool candidate in A/B reports. Use `dynamic` for production-like configuration.
+Use `dynamic-3` when you need to pin the explicit three-tool selector. Use `dynamic` for production-like configuration.
 
 ## Troubleshooting
 

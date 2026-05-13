@@ -99,8 +99,6 @@ Guidelines for setting annotations:
 - **Update tools**: `ReadOnlyHint=false, DestructiveHint=false, IdempotentHint=true`
 - **Delete tools**: `ReadOnlyHint=false, DestructiveHint=true, IdempotentHint=true`
 
-```text
-
 ## Adding Resources
 
 Use `mcp.AddResource` for providing accessible data:

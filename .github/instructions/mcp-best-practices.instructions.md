@@ -54,7 +54,7 @@ For list operations:
 
 - Default to 20-50 items per page
 - Always respect the `per_page` / `limit` parameter
-- Return metadata: `has_more`, `total_count`, `page`, `total_pages`
+- Return metadata: `has_more`, `total_items`, `page`, `total_pages`
 - Never load all results into memory for large datasets
 - Use cursor-based pagination when offset-based becomes expensive
 

@@ -1,6 +1,6 @@
 # Dynamic Search Ranker
 
-This document describes the current dynamic action search ranker and records the baseline used before the field-aware ranking improvement work.
+This document describes the current dynamic action search ranker.
 
 ## Current Behavior
 
@@ -87,36 +87,47 @@ The explanation data records parameter names, source, and notes only. It never r
 
 Registry build:
 
-```text
-for each visible catalog route:
-	create canonical domain.action entry
-	collect searchable aliases and unsearchable compatibility aliases
-	build searchDocument from IDs, aliases, tags, schema fields, backend metadata
-	register entry by canonical ID and unambiguous aliases
-build lightweight inverted index over aliases, domain, action, and document tokens
+```mermaid
+flowchart TD
+	route[Visible catalog route]
+	entry[Create canonical domain.action entry]
+	aliases[Collect searchable and compatibility aliases]
+	document[Build searchDocument from IDs, aliases, tags, schemas, and backend metadata]
+	register[Register canonical ID and unambiguous aliases]
+	index[Build lightweight inverted index]
+
+	route --> entry --> aliases --> document --> register --> index
 ```
 
 Candidate generation and scoring:
 
-```text
-normalize query into terms and synonym alternatives
-candidate indexes = inverted-index matches or full catalog fallback
-for each candidate:
-	score exact ID, aliases, tags, domain/action, params, schema enums, schema text
-	subtract action-specificity penalties for unmatched action words
-	add compound workflow boosts such as release link or pipeline trigger
-sort by score, destructive safety, and canonical ID stability
+```mermaid
+flowchart TD
+	query[Normalize query terms\nand synonym alternatives]
+	candidates[Generate candidates from inverted index\nor full catalog fallback]
+	score[Score ID, aliases, tags, domain/action, params, enums, and schema text]
+	penalties[Apply specificity penalties]
+	boosts[Apply workflow boosts]
+	sort[Sort by score, safety, and canonical ID stability]
+
+	query --> candidates --> score --> penalties --> boosts --> sort
 ```
 
 Fuzzy, ambiguity, and metrics:
 
-```text
-if lexical results are empty or low-confidence:
-	run bounded fuzzy matching over tokenized entries
-	suppress weak destructive fuzzy matches
-if query is an ambiguous alias:
-	annotate results and require canonical IDs for execute
-record search runtime counters and debug log metadata without raw query text
+```mermaid
+flowchart TD
+	lexical{Lexical results confident?}
+	fuzzy[Run bounded fuzzy matching]
+	suppress[Suppress weak destructive fuzzy matches]
+	ambiguous{Ambiguous alias?}
+	canonical[Require canonical IDs for execute]
+	metrics[Record counters and debug metadata\nwithout raw query text]
+
+	lexical -->|No| fuzzy --> suppress --> ambiguous
+	lexical -->|Yes| ambiguous
+	ambiguous -->|Yes| canonical --> metrics
+	ambiguous -->|No| metrics
 ```
 
 ## Observability
@@ -149,7 +160,7 @@ The internal search document includes backend-oriented fields: `Backend`, `Capab
 
 This does not expose non-GitLab actions. It prepares the ranker for future DADL-like or cross-backend catalogs by giving each action a stable place for provider, resource, operation, and scope metadata. Backend terms such as `github`, `jira`, `pull request`, `merge request`, `pr`, `mr`, `issue`, and `ticket` normalize to the current GitLab catalog vocabulary so searches remain useful while action IDs stay GitLab-only.
 
-## Baseline Checks
+## Regression Checks
 
 The following checks passed before ranker refactoring began:
 
@@ -157,13 +168,7 @@ The following checks passed before ranker refactoring began:
 go test ./internal/tools/dynamic/ -run 'Test.*Search|Test.*Describe|Test.*Execute|Test.*Fuzzy' -count=1
 ```
 
-Result:
-
-```text
-ok github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic 1.177s
-```
-
-## Baseline Benchmark
+## Benchmark Command
 
 The current benchmark command is:
 
@@ -171,19 +176,7 @@ The current benchmark command is:
 go test ./internal/tools/dynamic/ -bench BenchmarkSearch_BaselineMetaCatalog -benchmem -run '^$'
 ```
 
-Baseline on Linux amd64 with Intel Core Ultra 7 255H:
-
-| Query | Time | Bytes | Allocations |
-| --- | ---: | ---: | ---: |
-| `merge request list open author project` | 16.22 ms/op | 1,192,905 B/op | 765 allocs/op |
-| `list open issues` | 2.30 ms/op | 477,497 B/op | 465 allocs/op |
-| `pipeline run trigger` | 1.93 ms/op | 61,904 B/op | 149 allocs/op |
-| `ci variable secret` | 2.79 ms/op | 117,907 B/op | 204 allocs/op |
-| `project delete` | 0.22 ms/op | 76,409 B/op | 109 allocs/op |
-| `discover project from remote` | 0.87 ms/op | 3,002 B/op | 28 allocs/op |
-| `merje requesy` | 1.89 ms/op | 1,193,185 B/op | 22,238 allocs/op |
-
-These numbers show that the current linear scan is acceptable for the current catalog size but allocates heavily for some lexical and fuzzy paths. Field-aware candidate generation and a lightweight inverted index should preserve accuracy while reducing unnecessary scoring work.
+Keep benchmark snapshots in ignored local reports or implementation plans when they are needed for a specific optimization decision. This reference document keeps the reproducible command and architecture, not run-specific timing data.
 
 ## Known Limitations
 

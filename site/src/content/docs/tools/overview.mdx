@@ -32,7 +32,7 @@ In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into 
 
 ### Dynamic toolset
 
-Dynamic mode (`TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`) is the current low-token candidate for a future default. It exposes only three public tools: `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` (the singular `gitlab_execute_tool` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant searches for an action, describes the exact schema, then executes the canonical `domain.action` ID.
+Dynamic mode (`TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`) is the low-token alternative. It exposes only three public tools: `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` (the singular `gitlab_execute_tool` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant searches for an action, describes the exact schema, then executes the canonical `domain.action` ID.
 
 ```mermaid
 flowchart LR

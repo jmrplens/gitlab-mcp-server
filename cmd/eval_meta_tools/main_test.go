@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -219,11 +220,18 @@ func TestFilterTasksByMutation_RejectsConflictingFlags(t *testing.T) {
 func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab": {
+			"admin.terraform_state_unlock":             {},
+			"ci_variable.instance_delete":              {},
+			"custom_emoji.delete":                      {},
 			"environment.deployment_approve_or_reject": {},
-			"issue.list":                  {},
-			"model_registry.download":     {},
-			"mr_review.draft_note_create": {},
-			"project.get":                 {},
+			"issue.list":                               {},
+			"job.retry":                                {},
+			"merge_request.merge":                      {},
+			"model_registry.download":                  {},
+			"mr_review.draft_note_create":              {},
+			"mr_review.draft_note_publish_all":         {},
+			"project.mirror_force_push":                {},
+			"project.get":                              {},
 		},
 		"gitlab_model_registry": {
 			"download": {},
@@ -231,21 +239,29 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	}
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
+		{ID: "MT-017", ExpectedTool: "gitlab", ExpectedAction: "merge_request.merge"},
+		{ID: "MT-023", ExpectedTool: "gitlab", ExpectedAction: "job.retry"},
+		{ID: "MT-069", ExpectedTool: "gitlab", ExpectedAction: "ci_variable.instance_delete"},
+		{ID: "MT-063", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_publish_all"},
 		{ID: "deployment-unavailable", ExpectedTool: "gitlab", ExpectedAction: "environment.deployment_approve_or_reject"},
 		{ID: "missing", ExpectedTool: "gitlab", ExpectedAction: "dependency.list"},
 		{ID: "ce-unavailable", ExpectedTool: "gitlab", ExpectedAction: "model_registry.download"},
 		{ID: "split-ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
-		{ID: "docker-unavailable", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
+		{ID: "draft-notes-ce", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
+		{ID: "MT-107", ExpectedTool: "gitlab", ExpectedAction: "custom_emoji.delete"},
+		{ID: "MT-114", ExpectedTool: "gitlab", ExpectedAction: "admin.terraform_state_unlock"},
+		{ID: "MT-116", ExpectedTool: "gitlab", ExpectedAction: "project.mirror_force_push"},
 		{ID: "MT-105", ExpectedTool: "gitlab", ExpectedAction: "user.disable_two_factor"},
 		{ID: "MT-115", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
 		{ID: "standalone", ExpectedTool: "gitlab_discover_project"},
 		{ID: "interactive", ExpectedTool: "gitlab_interactive_issue_create"},
+		{ID: "unknown-standalone", ExpectedTool: "gitlab_unknown_standalone"},
 		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "dependency.list"}}},
 	}
 
 	filtered := filterTasksByAvailableRoutes(tasks, routes)
-	if got := taskIDs(filtered); got != "read,standalone" {
-		t.Fatalf("filtered IDs = %q, want read,standalone", got)
+	if got := taskIDs(filtered); got != "read,MT-017,MT-023,MT-069,MT-063,draft-notes-ce,MT-107,MT-114,MT-116,standalone,interactive" {
+		t.Fatalf("filtered IDs = %q, want reactivated CE/docker-safe tasks plus standalone interactive tools", got)
 	}
 }
 
@@ -336,6 +352,31 @@ func TestOrderSharedFixtureDestructiveLast(t *testing.T) {
 
 	if got := taskIDs(ordered); got != "MT-060,MT-065,MT-064,MT-024,MT-055" {
 		t.Fatalf("ordered IDs = %q, want MT-060,MT-065,MT-064,MT-024,MT-055", got)
+	}
+}
+
+// TestTerraformStateUnlockProjectID_IgnoresStateName verifies Terraform state fixture setup reads the project path, not the state name.
+func TestTerraformStateUnlockProjectID_IgnoresStateName(t *testing.T) {
+	got, ok := terraformStateUnlockProjectID("Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.")
+	if !ok {
+		t.Fatal("terraformStateUnlockProjectID() ok = false, want true")
+	}
+	if got != "my-org/tools/gitlab-mcp-server" {
+		t.Fatalf("terraformStateUnlockProjectID() = %q, want project path", got)
+	}
+}
+
+// TestTerraformStateLockEndpoint_PreservesEscapedProjectPath verifies GitLab project paths are escaped exactly once.
+func TestTerraformStateLockEndpoint_PreservesEscapedProjectPath(t *testing.T) {
+	baseURL, err := url.Parse("http://localhost:8929")
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	got := terraformStateLockEndpoint(baseURL, "my-org/tools/gitlab-mcp-server", "eval-unlock")
+	want := "http://localhost:8929/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/terraform/state/eval-unlock/lock"
+	if got != want {
+		t.Fatalf("terraformStateLockEndpoint() = %q, want %q", got, want)
 	}
 }
 

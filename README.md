@@ -243,12 +243,12 @@ Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is the explicit current candidate and `dynamic-2` remains the parked find/execute comparison surface. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is an explicit alias for the current three-tool surface, and `dynamic-2` is an experimental find/execute variant. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources, prompts, and meta-schema resources. The default remains `full`.
 
-Meta-tools remain the default today. Dynamic mode is the current low-token candidate for a future default; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware search ranking model, fuzzy fallback, response shapes, search/describe/execute workflow, diagrams, and migration guidance.
+Meta-tools remain the default. Dynamic mode is the low-token search/describe/execute alternative; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware search ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance.
 
 Meta-tool summary:
 
@@ -337,16 +337,16 @@ action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
 <!-- START MODEL EVAL META SUMMARY -->
-Current published result: **2026-05-05 Full Docker Economy Run**.
+Current published result: **2026-05-13 Docker CE meta opaque full plus reactivated**.
 
 | Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
 | --- | --- | --- | ---: | ---: | --- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | No repairs | 100.0% final across 240 ops |
-| Google | `gemini-3.1-flash-lite-preview` | OK | 100.0% | 100.0% (1/1) | 100.0% final across 240 ops |
-| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 50.0% (2/4) | 100.0% final across 240 ops |
-| Qwen | `qwen3.6-flash` | OK | 100.0% | No repairs | 100.0% final across 84 ops |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 25.0% (1/4) | 100.0% final across 271 ops |
+| Google | `gemini-3.1-flash-lite-preview` | Review | 98.6% | 40.0% (2/5) | 98.6% final across 271 ops |
+| OpenAI | `gpt-5.4-nano` | Review | 99.3% | 18.2% (2/11) | 98.6% final across 271 ops |
+| Qwen | `qwen3.6-flash` | Review | 100.0% | 16.7% (1/6) | 99.3% final across 271 ops |
 
-The published model-evaluation set covers 419 task attempts and 804 expected MCP operations. Across the selected reports, models emitted 809 tool calls over 809 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 560 task attempts and 1084 expected MCP operations. Across the selected reports, models emitted 1094 tool calls over 1096 model requests, with 99.1% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC2 SUMMARY -->
@@ -354,16 +354,16 @@ No Dynamic 2-tool evaluation summary has been published yet.
 <!-- END MODEL EVAL DYNAMIC2 SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC3 SUMMARY -->
-Current published result: **2026-05-12 Dynamic all-models hardening**.
+Current published result: **2026-05-13 Docker CE dynamic-3 full reactivated**.
 
 | Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |
 | --- | --- | --- | ---: | ---: | --- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 14.3% (1/7) | 100.0% final across 256 ops |
-| Google | `gemini-3.1-flash-lite-preview` | Review | 100.0% | 11.1% (1/9) | 100.0% final across 256 ops |
-| OpenAI | `gpt-5.4-nano` | OK | 100.0% | 27.3% (3/11) | 100.0% final across 256 ops |
-| Qwen | `qwen3.6-flash` | OK | 100.0% | 25.0% (2/8) | 100.0% final across 256 ops |
+| Anthropic | `claude-haiku-4-5-20251001` | OK | 100.0% | 25.0% (2/8) | 100.0% final across 272 ops |
+| Google | `gemini-3.1-flash-lite-preview` | Review | 100.0% | 11.1% (1/9) | 100.0% final across 272 ops |
+| OpenAI | `gpt-5.4-nano` | Review | 100.0% | 21.4% (3/14) | 99.3% final across 272 ops |
+| Qwen | `qwen3.6-flash` | OK | 100.0% | 14.3% (1/7) | 100.0% final across 272 ops |
 
-The published model-evaluation set covers 512 task attempts and 1024 expected MCP operations. Across the selected reports, models emitted 1284 tool calls over 1284 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 564 task attempts and 1088 expected MCP operations. Across the selected reports, models emitted 1356 tool calls over 1356 model requests, with 99.8% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC3 SUMMARY -->
 
 ## Documentation
@@ -472,19 +472,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 660 | 142,547 |
-| Unit tests (`_test.go`) | 418 | 227,423 |
+| Source (`.go`, non-test) | 667 | 141,580 |
+| Unit tests (`_test.go`) | 421 | 227,710 |
 | End-to-end tests | 111 | 24,070 |
-| **Total** | **1,189** | **394,040** |
+| **Total** | **1,199** | **393,360** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 4,339 |
-| — exported (public) | 2,277 |
-| — unexported (private) | 2,062 |
-| Unit test functions (`TestXxx`) | 9,356 |
+| Source functions | 4,317 |
+| — exported (public) | 2,230 |
+| — unexported (private) | 2,087 |
+| Unit test functions (`TestXxx`) | 9,336 |
 | Subtests (`t.Run(...)`) | 2,026 |
 | End-to-end test functions | 248 |
 
@@ -492,19 +492,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.60× more tests than code |
-| Average source file length | ~215 lines |
-| Average test file length | ~544 lines |
-| Comment lines in source | 10,696 (~7.5% of source) |
+| Test lines vs source lines | 1.61× more tests than code |
+| Average source file length | ~212 lines |
+| Average test file length | ~540 lines |
+| Comment lines in source | 10,740 (~7.6% of source) |
 | Test functions per source function | 2.2× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 6,014 |
-| `defer` statements | 733 |
-| `struct` types defined | 2,078 |
+| `if err != nil` checks | 6,002 |
+| `defer` statements | 729 |
+| `struct` types defined | 2,082 |
 | `//nolint` suppressions | 51 |
 | `TODO` / `FIXME` / `HACK` comments | 1 |
 
@@ -515,22 +515,22 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 199 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 114 |
+| Git commits | 130 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 7,206 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 7,309 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,591 pages of A4 |
-| Source lines mentioning `"gitlab"` | 11,175 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,574 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,910 (impossible to avoid) |
 | Longest function name in source | `NormalizeParamAliasesForSchemaWithExplanation` (45 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

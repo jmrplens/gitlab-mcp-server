@@ -75,12 +75,19 @@ An MCP server like gitlab-mcp-server is excellent at **fetching data** from GitL
 
 Sampling bridges this gap. It lets the server collect GitLab data and then **ask the AI to analyze it**, all within a single tool call. The user sees a polished result — not a wall of JSON, but a structured analysis written in natural language.
 
-```text
-Without sampling:
-  User → "Analyze MR !15" → AI reads raw diffs (thousands of lines) → AI struggles with context limits
+```mermaid
+flowchart TD
+    subgraph Direct[Without sampling]
+        directUser[User asks for MR analysis] --> directAI[AI assistant reads raw diffs]
+        directAI --> directLimit[Large context and noisy input]
+    end
 
-With sampling:
-  User → "Analyze MR !15" → Server fetches diffs → Server asks AI to analyze → Focused, structured result
+    subgraph Sampling[With sampling]
+        sampleUser[User asks for MR analysis] --> sampleServer[MCP server fetches GitLab data]
+        sampleServer --> samplePrep[Server curates and sanitizes input]
+        samplePrep --> sampleAI[AI analyzes focused context]
+        sampleAI --> sampleResult[Structured result]
+    end
 ```
 
 The server acts as a **data curator**: it collects, filters, and formats the right information. The AI acts as an **analyst**: it reads the curated data and produces insights. This division of labor produces better results than either could achieve alone.
@@ -142,19 +149,24 @@ Every sampling tool follows the same four-phase pattern:
 
 ### Internal Data Flow
 
-```text
-Tool handler
-  ├─ Collect GitLab data (MR diffs, issue notes, commits)
-  ├─ Format into Markdown document
-  └─ sampling.Client.Analyze(ctx, prompt, formattedData)
-       ├─ Sanitize: strip credentials, prevent XML injection
-       ├─ Truncate: enforce 100 KB limit
-       ├─ Wrap: <gitlab_data>...</gitlab_data>
-       ├─ Build: system prompt + user message
-       └─ session.CreateMessage(ctx, params)
-            └─ MCP client shows human-in-the-loop approval
-                 └─ LLM generates response
-                      └─ AnalysisResult returned to tool
+```mermaid
+flowchart TD
+    handler[Tool handler]
+    collect[Collect GitLab data\nMR diffs, notes, commits]
+    format[Format Markdown document]
+    analyze[sampling.Client.Analyze]
+    sanitize[Strip credentials\nand prevent XML injection]
+    truncate[Enforce size limit]
+    wrap[Wrap data in gitlab_data]
+    build[Build system prompt\nand user message]
+    create[session.CreateMessage]
+    approval[Client approval checkpoint]
+    llm[LLM generates response]
+    result[AnalysisResult returned]
+
+    handler --> collect --> format --> analyze
+    analyze --> sanitize --> truncate --> wrap --> build --> create
+    create --> approval --> llm --> result
 ```
 
 ### Human-in-the-Loop

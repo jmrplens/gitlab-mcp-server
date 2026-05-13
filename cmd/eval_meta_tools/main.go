@@ -19,9 +19,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +42,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	customemoji "github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -938,7 +941,7 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 	}
 	for _, step := range taskSteps(task) {
 		if step.ExpectedAction == "" {
-			if standaloneUnavailableInLiveEvaluator(step.ExpectedTool) {
+			if !standaloneToolAvailableInLiveEvaluator(step.ExpectedTool) {
 				return false
 			}
 			continue
@@ -951,6 +954,19 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 		}
 	}
 	return true
+}
+
+func standaloneToolAvailableInLiveEvaluator(tool string) bool {
+	switch tool {
+	case "gitlab_discover_project",
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create":
+		return true
+	default:
+		return false
+	}
 }
 
 // filterTasksByPartition performs the filter tasks by partition operation using the GitLab API and returns [[]evalTask].
@@ -1181,7 +1197,7 @@ func canonicalRouteID(tool, action string) string {
 func routeUnavailableOnCE(tool, action string) bool {
 	route := canonicalRouteID(tool, action)
 	switch route {
-	case "environment.deployment_approve_or_reject", "model_registry.download", "mr_review.draft_note_create":
+	case "environment.deployment_approve_or_reject", "model_registry.download":
 		return true
 	default:
 		return false
@@ -1191,16 +1207,11 @@ func routeUnavailableOnCE(tool, action string) bool {
 // taskUnavailableInLiveEvaluator is an internal helper for the main package.
 func taskUnavailableInLiveEvaluator(id string) bool {
 	switch id {
-	case "MT-008", "MT-017", "MT-023", "MT-049", "MT-054", "MT-063", "MT-066", "MT-069", "MT-105", "MT-107", "MT-114", "MT-115", "MT-116":
+	case "MT-105", "MT-115":
 		return true
 	default:
 		return false
 	}
-}
-
-// standaloneUnavailableInLiveEvaluator is an internal helper for the main package.
-func standaloneUnavailableInLiveEvaluator(tool string) bool {
-	return strings.HasPrefix(tool, "gitlab_interactive_")
 }
 
 // taskHasMutatingStep is an internal helper for the main package.
@@ -1998,8 +2009,12 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, nil
 	}
 	switch task.ID {
+	case "MT-008":
+		return ensureLiveSubgroupDeleteTarget(ctx, client, task)
 	case "MT-013":
 		return ensureLiveIssueDeleteTarget(ctx, client, task)
+	case "MT-017":
+		return ensureLiveMergeRequestMergeTarget(ctx, client, task)
 	case "MT-027":
 		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
 	case "MT-028":
@@ -2018,6 +2033,20 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	case "MT-044":
 		return ensureLivePackageDeleteTarget(ctx, client, task)
+	case "MT-049":
+		return ensureLiveEnvironmentStopTarget(ctx, client, task)
+	case "MT-054":
+		return ensureLiveBroadcastMessageDeleteTarget(ctx, client, task)
+	case "MT-063":
+		return ensureLiveDraftNotePublishAllTarget(ctx, client, task)
+	case "MT-066":
+		return ensureLiveJobTokenScopeRemoveProjectTarget(ctx, client, task)
+	case "MT-107":
+		return ensureLiveCustomEmojiDeleteTarget(ctx, client, task)
+	case "MT-114":
+		return ensureLiveTerraformStateUnlockTarget(ctx, task)
+	case "MT-116":
+		return ensureLiveMirrorForcePushTarget(ctx, client, task)
 	case "MS-004":
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	case "MS-007":
@@ -2030,7 +2059,7 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return ensureLiveSnippetDeleteTarget(ctx, client, task)
 	case "MT-057":
 		return ensureLiveHookDeleteTarget(ctx, client, task)
-	case "MT-024", "MT-065":
+	case "MT-023", "MT-024", "MT-065":
 		return ensureLiveFailedJobTarget(ctx, client, task)
 	}
 	switch task.ID {
@@ -2091,6 +2120,39 @@ func ensureLiveProjectActive(ctx context.Context, client *gitlabclient.Client) e
 	return nil
 }
 
+func ensureLiveSubgroupDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	parent, _, err := client.GL().Groups.GetGroup(liveFixtureGroupPath, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-008 fixture parent group: %w", err)
+	}
+	path := fmt.Sprintf("eval-temp-%d", time.Now().UnixNano())
+	visibility := gl.PrivateVisibility
+	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
+		Name:       new(path),
+		Path:       new(path),
+		ParentID:   new(parent.ID),
+		Visibility: &visibility,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-008 fixture subgroup: %w", err)
+	}
+	groupID := group.FullPath
+	if groupID == "" {
+		groupID = fmt.Sprintf("%s/%s", liveFixtureGroupPath, path)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "subgroup ", groupID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
 // ensureLiveIssueDeleteTarget performs the ensure live issue delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
@@ -2110,6 +2172,248 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
 	}
 	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveMergeRequestMergeTarget creates a mergeable MR in a disposable project and rewrites MT-017 to use it.
+func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	project, err := createLiveTemporaryProject(setupCtx, client, "merge-mr")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture project: %w", err)
+	}
+	projectID := project.PathWithNamespace
+	targetBranch := project.DefaultBranch
+	if targetBranch == "" {
+		targetBranch = liveFixtureDefaultRef
+	}
+	sourceBranch := fmt.Sprintf("eval-merge-%d", time.Now().UnixNano())
+	if branchErr := ensureLiveBranchExists(setupCtx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture branch: %w", branchErr)
+	}
+	ciContent := "stages:\n  - test\n\nvariables:\n  GIT_STRATEGY: none\n\neval-pass:\n  stage: test\n  script:\n    - echo evaluation merge fixture\n"
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, ".gitlab-ci.yml", &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       &ciContent,
+		CommitMessage: new("Seed passing CI for merge evaluation"),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return task, fmt.Errorf("prepare MT-017 fixture CI: %w", err)
+	}
+	filePath := fmt.Sprintf("tmp/eval-merge-%d.txt", time.Now().UnixNano())
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       new("evaluation merge request fixture\n"),
+		CommitMessage: new("Seed merge request evaluation fixture"),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture file: %w", err)
+	}
+	removeSource := false
+	mergeRequest, _, err := client.GL().MergeRequests.CreateMergeRequest(projectID, &gl.CreateMergeRequestOptions{
+		SourceBranch:       &sourceBranch,
+		TargetBranch:       &targetBranch,
+		Title:              new("Evaluation merge target"),
+		RemoveSourceBranch: &removeSource,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture merge request: %w", err)
+	}
+	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &sourceBranch}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture pipeline: %w", err)
+	}
+	if waitErr := waitForLivePipelineStatus(setupCtx, client, projectID, pipeline.ID, "success"); waitErr != nil {
+		return task, waitErr
+	}
+	if waitErr := waitForLiveMergeRequestReady(setupCtx, client, projectID, mergeRequest.IID); waitErr != nil {
+		return task, waitErr
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, projectID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "merge request ", mergeRequest.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveDraftNotePublishAllTarget creates an MR draft note and rewrites MT-063 to publish it.
+func ensureLiveDraftNotePublishAllTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	projectID, mergeRequestIID, err := createLiveDraftNoteMergeRequest(setupCtx, client)
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-063 fixture merge request: %w", err)
+	}
+	note := "Draft note ready for evaluator publish_all coverage."
+	_, _, err = client.GL().DraftNotes.CreateDraftNote(projectID, mergeRequestIID, &gl.CreateDraftNoteOptions{
+		Note: &note,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-063 fixture draft note: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, projectID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptMergeRequestIID(prompt, mergeRequestIID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// createLiveDraftNoteMergeRequest creates a small disposable MR suitable for draft-note lifecycle tasks.
+func createLiveDraftNoteMergeRequest(ctx context.Context, client *gitlabclient.Client) (projectID string, mergeRequestIID int64, err error) {
+	project, err := createLiveTemporaryProject(ctx, client, "draft-note")
+	if err != nil {
+		return "", 0, err
+	}
+	projectID = project.PathWithNamespace
+	targetBranch := project.DefaultBranch
+	if targetBranch == "" {
+		targetBranch = liveFixtureDefaultRef
+	}
+	sourceBranch := fmt.Sprintf("eval-draft-note-%d", time.Now().UnixNano())
+	if branchErr := ensureLiveBranchExists(ctx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
+		return "", 0, branchErr
+	}
+	filePath := fmt.Sprintf("tmp/eval-draft-note-%d.txt", time.Now().UnixNano())
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       new("evaluation draft note fixture\n"),
+		CommitMessage: new("Seed draft note evaluation fixture"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", 0, err
+	}
+	mergeRequest, _, err := client.GL().MergeRequests.CreateMergeRequest(projectID, &gl.CreateMergeRequestOptions{
+		SourceBranch: &sourceBranch,
+		TargetBranch: &targetBranch,
+		Title:        new("Evaluation draft note target"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", 0, err
+	}
+	return projectID, mergeRequest.IID, nil
+}
+
+func replacePromptMergeRequestIID(prompt string, mergeRequestIID int64) (string, error) {
+	prompt, err := replacePromptBacktickValueAfter(prompt, promptMarkerMergeRequest, mergeRequestIID)
+	if err == nil {
+		return prompt, nil
+	}
+	return replacePromptBacktickValueAfter(prompt, "MR ", mergeRequestIID)
+}
+
+// ensureLiveCustomEmojiDeleteTarget creates a disposable custom emoji and rewrites MT-107 to delete it.
+func ensureLiveCustomEmojiDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	groupPath, err := createLiveTemporaryGroup(setupCtx, client, "emoji")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-107 fixture group: %w", err)
+	}
+	emojiURL := strings.TrimRight(os.Getenv("E2E_FIXTURE_URL"), "/") + "/emoji.png"
+	if emojiURL == "/emoji.png" {
+		emojiURL = "http://e2e-fixture:8080/emoji.png"
+	}
+	created, err := customemoji.Create(setupCtx, client, customemoji.CreateInput{
+		GroupPath: groupPath,
+		Name:      fmt.Sprintf("eval_delete_%d", time.Now().UnixNano()),
+		URL:       emojiURL,
+	})
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-107 fixture emoji: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "custom emoji GID ", created.Emoji.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveTerraformStateUnlockTarget locks a state through the Terraform HTTP backend and rewrites MT-114.
+func ensureLiveTerraformStateUnlockTarget(ctx context.Context, task evalTask) (evalTask, error) {
+	projectID, ok := terraformStateUnlockProjectID(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-114 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	stateName := fmt.Sprintf("eval-unlock-%d", time.Now().UnixNano())
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	if err := createLiveTerraformStateLock(setupCtx, projectID, stateName); err != nil {
+		return task, err
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "state ", stateName)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func terraformStateUnlockProjectID(prompt string) (string, bool) {
+	if value, ok := backtickValueAfter(prompt, " in project "); ok {
+		return value, true
+	}
+	return exampleProjectIDValue(prompt)
+}
+
+// ensureLiveMirrorForcePushTarget creates a push mirror and rewrites MT-116 to use it.
+func ensureLiveMirrorForcePushTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	source, err := createLiveTemporaryProject(setupCtx, client, "mirror-source")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-116 fixture source project: %w", err)
+	}
+	target, err := createLiveTemporaryProject(setupCtx, client, "mirror-target")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-116 fixture target project: %w", err)
+	}
+	mirrorURL, err := liveRemoteMirrorTargetURL(target)
+	if err != nil {
+		return task, err
+	}
+	enabled := true
+	authMethod := "password"
+	mirror, _, err := client.GL().ProjectMirrors.AddProjectMirror(source.PathWithNamespace, &gl.AddProjectMirrorOptions{
+		URL:        &mirrorURL,
+		Enabled:    &enabled,
+		AuthMethod: &authMethod,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, errors.New("prepare MT-116 fixture mirror add failed")
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, source.PathWithNamespace)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "mirror ID ", mirror.ID)
 	if err != nil {
 		return task, err
 	}
@@ -2387,6 +2691,285 @@ func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func ensureLiveEnvironmentStopTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-049 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	name := fmt.Sprintf("eval-stop-%d", time.Now().UnixNano())
+	env, _, err := client.GL().Environments.CreateEnvironment(projectID, &gl.CreateEnvironmentOptions{
+		Name:        new(name),
+		Description: new("Temporary environment for destructive evaluator coverage"),
+		Tier:        new("testing"),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-049 fixture environment: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "environment ID ", env.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveBroadcastMessageDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	startsAt := time.Now().UTC().Add(24 * time.Hour)
+	endsAt := startsAt.Add(time.Hour)
+	message := fmt.Sprintf("Evaluation broadcast safe to delete %d", time.Now().UnixNano())
+	broadcastType := "banner"
+	dismissable := true
+	msg, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(&gl.CreateBroadcastMessageOptions{
+		Message:       &message,
+		StartsAt:      &startsAt,
+		EndsAt:        &endsAt,
+		BroadcastType: &broadcastType,
+		Dismissable:   &dismissable,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-054 fixture broadcast message: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "broadcast message ID ", msg.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveJobTokenScopeRemoveProjectTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := backtickValueAfter(task.Prompt, "allowlist of project ")
+	if !ok {
+		return task, fmt.Errorf("prepare MT-066 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	source, _, err := client.GL().Projects.GetProject(projectID, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture source project: %w", err)
+	}
+	target, err := createLiveTemporaryProject(setupCtx, client, "token-scope")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture target project: %w", err)
+	}
+	_, err = client.GL().JobTokenScope.PatchProjectJobTokenAccessSettings(source.ID, &gl.PatchProjectJobTokenAccessSettingsOptions{
+		Enabled: true,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture token scope settings: %w", err)
+	}
+	_, _, err = client.GL().JobTokenScope.AddProjectToJobScopeAllowList(source.ID, &gl.JobTokenInboundAllowOptions{
+		TargetProjectID: new(target.ID),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return task, fmt.Errorf("prepare MT-066 fixture allowlist project: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "project ID ", target.ID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "allowlist of project ", source.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client, prefix string) (*gl.Project, error) {
+	toolsGroup, _, err := client.GL().Groups.GetGroup(liveFixtureToolsPath, nil, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("get tools group %s: %w", liveFixtureToolsPath, err)
+	}
+	path := fmt.Sprintf("eval-%s-%d", prefix, time.Now().UnixNano())
+	visibility := gl.PrivateVisibility
+	project, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
+		Name:                 new(path),
+		Path:                 new(path),
+		NamespaceID:          new(toolsGroup.ID),
+		InitializeWithReadme: new(true),
+		Visibility:           &visibility,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("create project %s/%s: %w", liveFixtureToolsPath, path, err)
+	}
+	return project, nil
+}
+
+func createLiveTemporaryGroup(ctx context.Context, client *gitlabclient.Client, prefix string) (string, error) {
+	parent, _, err := client.GL().Groups.GetGroup(liveFixtureGroupPath, nil, gl.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("get parent group %s: %w", liveFixtureGroupPath, err)
+	}
+	path := fmt.Sprintf("eval-%s-%d", prefix, time.Now().UnixNano())
+	visibility := gl.PrivateVisibility
+	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
+		Name:       new(path),
+		Path:       new(path),
+		ParentID:   new(parent.ID),
+		Visibility: &visibility,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("create group %s/%s: %w", liveFixtureGroupPath, path, err)
+	}
+	if group.FullPath != "" {
+		return group.FullPath, nil
+	}
+	return fmt.Sprintf("%s/%s", liveFixtureGroupPath, path), nil
+}
+
+func waitForLivePipelineStatus(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, wantedStatus string) error {
+	deadline := time.Now().Add(4 * time.Minute)
+	lastStatus := "unknown"
+	for time.Now().Before(deadline) {
+		pipeline, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("prepare MT-017 fixture pipeline %d: %w", pipelineID, err)
+		}
+		lastStatus = pipeline.Status
+		if pipeline.Status == wantedStatus {
+			return nil
+		}
+		if isLivePipelineTerminal(pipeline.Status) {
+			return fmt.Errorf("prepare MT-017 fixture pipeline %d ended with status %s", pipelineID, pipeline.Status)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("prepare MT-017 fixture pipeline %d did not reach %s before timeout; last status %s", pipelineID, wantedStatus, lastStatus)
+}
+
+func isLivePipelineTerminal(status string) bool {
+	switch status {
+	case "success", "failed", "canceled", "skipped", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
+func waitForLiveMergeRequestReady(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
+	deadline := time.Now().Add(90 * time.Second)
+	lastStatus := "unknown"
+	for time.Now().Before(deadline) {
+		mergeRequest, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, mergeRequestIID, nil, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("prepare MT-017 fixture MR !%d: %w", mergeRequestIID, err)
+		}
+		lastStatus = mergeRequest.DetailedMergeStatus
+		if mergeRequest.DetailedMergeStatus == "mergeable" {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return fmt.Errorf("prepare MT-017 fixture MR !%d did not become mergeable before timeout; last status %s", mergeRequestIID, lastStatus)
+}
+
+func createLiveTerraformStateLock(ctx context.Context, projectID, stateName string) error {
+	baseURL, err := liveDockerGitLabBaseURL()
+	if err != nil {
+		return err
+	}
+	token := os.Getenv("GITLAB_TOKEN")
+	if token == "" {
+		return errors.New("prepare MT-114 fixture requires GITLAB_TOKEN")
+	}
+	lockBody, err := json.Marshal(map[string]string{
+		"ID":        fmt.Sprintf("eval-lock-%d", time.Now().UnixNano()),
+		"Operation": "OperationTypeApply",
+		"Info":      "eval_meta_tools terraform unlock fixture",
+		"Who":       "eval_meta_tools",
+		"Version":   "1.6.0",
+		"Created":   time.Now().UTC().Format(time.RFC3339Nano),
+		"Path":      stateName,
+	})
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture lock body: %w", err)
+	}
+	endpoint := terraformStateLockEndpoint(baseURL, projectID, stateName)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(lockBody)) // #nosec G107,G704 -- endpoint is constrained by liveDockerGitLabBaseURL and uses a fixed API path.
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture request: %w", err)
+	}
+	request.Header.Set("PRIVATE-TOKEN", token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request) // #nosec G704 -- request URL is constrained to the configured Docker GitLab base URL.
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture lock: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+	return fmt.Errorf("prepare MT-114 fixture lock for project %q state %q: GitLab returned %s: %s", projectID, stateName, response.Status, strings.TrimSpace(string(body)))
+}
+
+func terraformStateLockEndpoint(baseURL *url.URL, projectID, stateName string) string {
+	root := strings.TrimRight(baseURL.String(), "/")
+	return root + "/api/v4/projects/" + url.PathEscape(projectID) + "/terraform/state/" + url.PathEscape(stateName) + "/lock"
+}
+
+func liveDockerGitLabBaseURL() (*url.URL, error) {
+	rawURL := strings.TrimRight(os.Getenv("GITLAB_URL"), "/")
+	if rawURL == "" {
+		return nil, errors.New("prepare MT-114 fixture requires GITLAB_URL")
+	}
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("prepare MT-114 fixture GitLab URL: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("prepare MT-114 fixture GitLab URL has unsupported scheme %q", parsedURL.Scheme)
+	}
+	if parsedURL.Host == "" || parsedURL.User != nil {
+		return nil, errors.New("prepare MT-114 fixture GitLab URL must include a host and no credentials")
+	}
+	return parsedURL, nil
+}
+
+func liveRemoteMirrorTargetURL(project *gl.Project) (string, error) {
+	token := os.Getenv("GITLAB_TOKEN")
+	if token == "" {
+		return "", errors.New("prepare MT-116 fixture requires GITLAB_TOKEN")
+	}
+	baseURL := strings.TrimRight(os.Getenv("E2E_GITLAB_INTERNAL_URL"), "/")
+	if baseURL == "" {
+		baseURL = "http://gitlab-e2e"
+	}
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("prepare MT-116 fixture internal URL: %w", err)
+	}
+	projectPath := strings.TrimPrefix(project.PathWithNamespace, "/")
+	if projectPath == "" {
+		return "", errors.New("prepare MT-116 fixture target project path is empty")
+	}
+	parsedURL.User = url.UserPassword("oauth2", token)
+	parsedURL.Path = strings.TrimRight(parsedURL.Path, "/") + "/" + projectPath + ".git"
+	return parsedURL.String(), nil
 }
 
 // ensureLiveProjectMemberAbsent is an internal helper for the main package.

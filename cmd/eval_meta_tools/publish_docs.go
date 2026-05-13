@@ -40,10 +40,11 @@ const (
 	publishSamplingContinue       = "sampling_unsupported_continue"
 	publishElicitationContinue    = "elicitation_unsupported_continue"
 
-	publishSectionMeta     = "meta"
-	publishSectionDynamic2 = "dynamic2"
-	publishSectionDynamic3 = "dynamic3"
-	publishSectionUnknown  = "unknown"
+	publishSectionMeta       = "meta"
+	publishSectionDynamic2   = "dynamic2"
+	publishSectionDynamic3   = "dynamic3"
+	publishSectionUnknown    = "unknown"
+	maxPublishTraceLineBytes = 64 << 20
 
 	usageModelRequests    = "Model requests"
 	usageToolCallsEmitted = "Tool calls emitted"
@@ -402,7 +403,7 @@ func publishRowsByPresetFromTraces(report publishReport, content string) ([]publ
 
 	accumulators := map[string]*publishTraceAccumulator{}
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), maxResponseBytes)
+	scanner.Buffer(make([]byte, 64*1024), maxPublishTraceLineBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

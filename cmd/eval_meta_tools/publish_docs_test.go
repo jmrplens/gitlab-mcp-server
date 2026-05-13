@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -374,6 +375,32 @@ func TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts(t *testing.T)
 	}
 	if rows[presetDockerDestructiveSafe].DestructiveSafety != 100 {
 		t.Fatalf("destructive safety = %.1f, want 100", rows[presetDockerDestructiveSafe].DestructiveSafety)
+	}
+}
+
+// TestReadPublishReport_AllowsLargeTraceLines verifies provider-body traces do not exceed the publisher scanner buffer.
+func TestReadPublishReport_AllowsLargeTraceLines(t *testing.T) {
+	tmp := t.TempDir()
+	traceDir := filepath.Join(tmp, "traces")
+	if err := os.MkdirAll(traceDir, 0o700); err != nil {
+		t.Fatalf("mkdir traces: %v", err)
+	}
+	largeBody := strings.Repeat("x", maxResponseBytes+1)
+	trace := fmt.Sprintf(`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","large_body":%q,"expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`, largeBody) + "\n"
+	if err := os.WriteFile(filepath.Join(traceDir, "traces.jsonl"), []byte(trace), 0o600); err != nil {
+		t.Fatalf("write traces: %v", err)
+	}
+	reportPath := filepath.Join(tmp, "dynamic-report.md")
+	if err := os.WriteFile(reportPath, []byte(dynamicFullRunPublishReportNoPreset()), 0o600); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+
+	report, err := readPublishReport(reportPath)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	if len(report.Rows) != 1 || report.Rows[0].Attempts != 1 {
+		t.Fatalf("rows = %+v, want one row with one attempt", report.Rows)
 	}
 }
 

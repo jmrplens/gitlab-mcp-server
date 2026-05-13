@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern for A/B reports, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
+| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |

@@ -15,7 +15,7 @@ The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the co
 | `gitlab_describe_tools` | Returns the exact parameters, examples, and safety metadata for one or more actions                      |
 | `gitlab_execute_tool`   | Executes the selected action after validating the action ID and parameters                               |
 
-Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the current low-token candidate for a future default.
+Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the low-token alternative.
 
 ## Why dynamic mode exists
 
@@ -74,9 +74,9 @@ gitlab-mcp-server --http \
 ```
 
 :::tip[Current names]
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` both select the current three-tool surface. Use `dynamic` for normal configuration and `dynamic-3` only when you need an explicit candidate name in evaluations.
+`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` both select the current three-tool surface. Use `dynamic` for normal configuration and `dynamic-3` only when you need to pin the three-tool variant explicitly.
 
-`TOOL_SURFACE=dynamic-2` is a parked comparison mode with `gitlab_find_action` plus `gitlab_execute_tool`.
+`TOOL_SURFACE=dynamic-2` is an experimental two-tool variant with `gitlab_find_action` plus `gitlab_execute_tool`.
 :::
 
 ## The model workflow
