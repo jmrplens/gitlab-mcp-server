@@ -154,6 +154,23 @@ timeout 180s go run ./cmd/eval_meta_tools \
   --out dist/evaluation/meta-tools/comparison/version-summary.md
 ```
 
+Check Dynamic-3 call-efficiency gates from trace JSONL without parsing Markdown reports:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --check-efficiency dist/evaluation/meta-tools/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
+  --out dist/evaluation/meta-tools/dynamic-3-efficiency-check.md
+```
+
+Compare Dynamic-3 and meta-tool traces on identical task/model rows only:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --compare-traces dist/evaluation/meta-tools/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
+  --compare-traces dist/evaluation/meta-tools/meta-default-opaque-full-plus-reactivated-2026-05-13.traces/traces.jsonl \
+  --out dist/evaluation/meta-tools/meta-vs-dynamic-3-trace-comparison.md
+```
+
 Publish reviewed Docker reports into managed documentation blocks:
 
 ```bash

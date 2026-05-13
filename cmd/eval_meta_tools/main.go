@@ -122,6 +122,9 @@ type options struct {
 	Models              string
 	ToolsFile           string
 	CompareReports      stringList
+	CheckEfficiency     stringList
+	CompareTraces       stringList
+	EfficiencyAllowTask stringList
 	PublishFrom         stringList
 	PublishResults      string
 	PublishReadme       string
@@ -484,6 +487,12 @@ func run() (runErr error) {
 	if opts.PublishDocs || opts.CheckDocs {
 		return publishEvaluationDocs(opts)
 	}
+	if len(opts.CheckEfficiency) > 0 {
+		return runEfficiencyCheck(opts)
+	}
+	if len(opts.CompareTraces) > 0 {
+		return runTraceComparison(opts)
+	}
 	if len(opts.CompareReports) > 0 {
 		if opts.Output == "" {
 			opts.Output = defaultComparisonOutputPath()
@@ -719,6 +728,9 @@ func parseFlags() options {
 	flag.StringVar(&opts.Models, "models", "", "Comma-separated provider:model list for local multi-model evaluation; defaults to EVAL_MODELS when --model is not set")
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.Var(&opts.CompareReports, "compare", "Evaluation or token report file to include in a comparison summary; repeat for multiple reports")
+	flag.Var(&opts.CheckEfficiency, "check-efficiency", "Trace JSONL path to validate against model-call efficiency gates; repeat for multiple trace files")
+	flag.Var(&opts.CompareTraces, "compare-traces", "Trace JSONL path for direct Dynamic-3 versus meta comparison; provide dynamic trace first and meta trace second")
+	flag.Var(&opts.EfficiencyAllowTask, "efficiency-allow-task", "Task ID allowed to exceed the per-attempt call budget in --check-efficiency; repeat or comma-separate values")
 	flag.Var(&opts.PublishFrom, "publish-from", "Reviewed evaluation report to publish into docs; repeat for multiple reports")
 	flag.StringVar(&opts.PublishResults, "publish-results-doc", defaultPublishResultsDoc, "Markdown results document updated by --publish-docs")
 	flag.StringVar(&opts.PublishReadme, "publish-readme", defaultPublishReadme, "README updated by --publish-docs")
@@ -4296,11 +4308,13 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 	steps := taskSteps(task)
 	userPrompt := taskPromptForSurface(task, r.toolSurface)
 	systemPrompt := systemPromptForTask(task, r.toolSurface)
+	callBudget := callBudgetForTask(task, r.toolSurface)
 	result := taskResult{Task: task, Model: r.modelLabel, ToolSurface: r.toolSurface, DestructiveSafe: true, Trace: newTaskTrace(task, systemPrompt, userPrompt)}
 	result.Trace.Model = r.modelLabel
 	messages := []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: userPrompt}}}}
 	firstFinalAttempt := true
 	repairCount := 0
+	lastInvalidFingerprint := ""
 	repairLimit := repairAttemptLimitForTask(r.toolSurface, len(steps))
 	stepIndex := 0
 	simulationAttempts := map[int]int{}
@@ -4335,6 +4349,14 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
 			if isSchemaLookup(toolUse) {
 				result.SchemaLookupUsed = true
+				if stepIndex < len(steps) {
+					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
+						block := toolResultBlock(toolUse.ID, message, errors.New(message))
+						followups = append(followups, block)
+						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+						continue
+					}
+				}
 				payload, lookupErr := schemaLookupResult(routes, toolUse.Input)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
@@ -4346,6 +4368,14 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			}
 			if isDynamicDiscovery(toolUse) {
 				result.SchemaLookupUsed = true
+				if stepIndex < len(steps) {
+					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
+						block := toolResultBlock(toolUse.ID, message, errors.New(message))
+						followups = append(followups, block)
+						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+						continue
+					}
+				}
 				payload, lookupErr := dynamicDiscoveryResult(ctx, routes, toolUse)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
@@ -4388,6 +4418,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			result.FinalAction = validation.Action
 			result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
 			if validation.Valid {
+				lastInvalidFingerprint = ""
 				completedStep := steps[stepIndex]
 				simulation := r.validatedToolResult(ctx, steps[stepIndex], toolUse, simulationAttempts[stepIndex], stepIndex+1, len(steps))
 				if simulation.Injected {
@@ -4434,6 +4465,12 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 				continue
 			}
 
+			invalidFingerprint := invalidToolUseFingerprint(toolUse)
+			if invalidFingerprint != "" && invalidFingerprint == lastInvalidFingerprint {
+				result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+				return result
+			}
+			lastInvalidFingerprint = invalidFingerprint
 			result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
 			if repairAlreadySent {
 				return result
@@ -4508,6 +4545,17 @@ func isReadOnlyUnexpectedAction(action string) bool {
 	return leaf == "get" || leaf == "list" || strings.HasPrefix(leaf, "get_") || strings.HasPrefix(leaf, "list_") || strings.HasSuffix(leaf, "_get") || strings.HasSuffix(leaf, "_list")
 }
 
+func invalidToolUseFingerprint(toolUse modelContentBlock) string {
+	data, err := json.Marshal(struct {
+		Name  string         `json:"name"`
+		Input map[string]any `json:"input"`
+	}{Name: toolUse.Name, Input: toolUse.Input})
+	if err != nil {
+		return toolUse.Name
+	}
+	return string(data)
+}
+
 // taskToolCallLimit is an internal helper for the main package.
 func taskToolCallLimit(stepCount int) int {
 	limit := stepCount*3 + 4
@@ -4530,6 +4578,69 @@ func taskToolCallLimitForSurface(stepCount int, toolSurface string) int {
 		return dynamicLimit
 	}
 	return limit
+}
+
+type taskCallBudget struct {
+	ExpectedSteps         int
+	AllowedDiscoveryCalls int
+	AllowedRepairCalls    int
+	MaxCalls              int
+	SuppressDiscovery     bool
+}
+
+func callBudgetForTask(task evalTask, toolSurface string) taskCallBudget {
+	steps := taskSteps(task)
+	budget := taskCallBudget{
+		ExpectedSteps:         len(steps),
+		AllowedDiscoveryCalls: 0,
+		AllowedRepairCalls:    repairAttemptLimitForTask(toolSurface, len(steps)),
+	}
+	if isDynamicThreeToolEvalSurface(toolSurface) {
+		switch {
+		case exactDynamicCallAvailable(task, steps):
+			budget.AllowedDiscoveryCalls = 0
+			budget.SuppressDiscovery = true
+		case len(steps) == 1:
+			budget.AllowedDiscoveryCalls = 2
+		case dynamicWorkflowPlanPreamble(task) != "":
+			budget.AllowedDiscoveryCalls = 1
+		default:
+			budget.AllowedDiscoveryCalls = len(steps)
+		}
+	}
+	budget.MaxCalls = max(budget.ExpectedSteps, budget.ExpectedSteps+budget.AllowedDiscoveryCalls+budget.AllowedRepairCalls)
+	return budget
+}
+
+func discoveryBudgetFeedback(task evalTask, step evalStep, toolUse modelContentBlock, budget taskCallBudget) (string, bool) {
+	if !budget.SuppressDiscovery || !isRedundantDiscoveryTool(toolUse.Name) {
+		return "", false
+	}
+	if !exactDynamicCallAvailable(task, []evalStep{step}) {
+		return "", false
+	}
+	return fmt.Sprintf("The exact gitlab_execute_tool call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no search, describe, or schema lookup is needed.", step.ExpectedAction), true
+}
+
+func isRedundantDiscoveryTool(toolName string) bool {
+	switch toolName {
+	case dynamicSearchTool, dynamicDescribeTool, dynamicFindTool, "gitlab":
+		return true
+	default:
+		return false
+	}
+}
+
+func exactDynamicCallAvailable(task evalTask, steps []evalStep) bool {
+	if len(steps) != 1 {
+		return false
+	}
+	step := steps[0]
+	if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+		return false
+	}
+	_, provenances := exactCallParams(step, task.Prompt, false)
+	return exactCallParamsAreSafe(provenances)
 }
 
 func repairAttemptLimitForSurface(toolSurface string) int {
@@ -4871,7 +4982,57 @@ func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	if step.Simulation != "" {
 		return fmt.Sprintf("step %d simulation %s: %s", stepNumber, step.Simulation, err.Error())
 	}
-	return fmt.Sprintf("step %d MCP execution: %s", stepNumber, err.Error())
+	message := fmt.Sprintf("step %d MCP execution: %s", stepNumber, err.Error())
+	payload := repairPayloadForExecutionError(step, err, message)
+	data, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return message
+	}
+	return string(data)
+}
+
+func repairPayloadForExecutionError(step evalStep, err error, message string) repairPayload {
+	return repairPayload{
+		ErrorKind:    executionErrorKind(step, err),
+		FailedAction: step.ExpectedAction,
+		BadParam:     executionErrorBadParam(step, err),
+		ExpectedType: "GitLab API request accepted by the selected action",
+		LikelyFix:    strings.TrimSpace(message + roleSensitiveRepairHint(step)),
+		RetryAllowed: true,
+		Message:      message,
+	}
+}
+
+func executionErrorKind(step evalStep, err error) string {
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "400") && roleSensitiveRepairHint(step) != "":
+		return "gitlab_bad_request_role_confusion"
+	case strings.Contains(text, "400") || strings.Contains(text, "bad request"):
+		return "gitlab_bad_request"
+	case strings.Contains(text, "404") || strings.Contains(text, "not found"):
+		return "gitlab_not_found"
+	case strings.Contains(text, "403") || strings.Contains(text, "forbidden"):
+		return "gitlab_forbidden"
+	default:
+		return "mcp_execution_error"
+	}
+}
+
+func executionErrorBadParam(step evalStep, err error) string {
+	if executionErrorKind(step, err) != "gitlab_bad_request_role_confusion" {
+		return ""
+	}
+	switch step.ExpectedAction {
+	case "job.token_scope_remove_project":
+		return "project_id,target_project_id"
+	case "issue.link_create":
+		return "project_id,issue_iid,target_project_id,target_issue_iid"
+	case "merge_request.create":
+		return "source_branch,target_branch"
+	default:
+		return ""
+	}
 }
 
 // newTaskTrace is an internal helper for the main package.
@@ -5326,7 +5487,54 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	if isDynamicTwoToolEvalSurface(toolSurface) {
 		return joinDynamicPrompt(exactPreamble, prompt, "Dynamic-2 mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. Use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
 	}
+	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task), dynamicCallBudgetPreamble(task, toolSurface))
 	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool. If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool. When an exact required call is present above, execute it directly without an extra describe call. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the described input schema, or to the supplied input object when an exact required call is present. Always include top-level params, using params:{} only for actions with no parameters. Canonical action IDs do not include gitlab_ prefixes. Never use angle-bracket placeholder values. Never send confirm:false; omit confirm unless the action is destructive. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+}
+
+func joinNonEmpty(separator string, values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, separator)
+}
+
+func dynamicCallBudgetPreamble(task evalTask, toolSurface string) string {
+	if !isDynamicThreeToolEvalSurface(toolSurface) {
+		return ""
+	}
+	budget := callBudgetForTask(task, toolSurface)
+	return fmt.Sprintf("Dynamic call budget: expected_steps=%d; allowed_discovery_calls=%d; allowed_repair_calls=%d; max_calls=%d.", budget.ExpectedSteps, budget.AllowedDiscoveryCalls, budget.AllowedRepairCalls, budget.MaxCalls)
+}
+
+func dynamicWorkflowPlanPreamble(task evalTask) string {
+	steps := taskSteps(task)
+	if len(steps) <= 1 {
+		return ""
+	}
+	lines := []string{"Dynamic workflow plan:"}
+	for index, step := range steps {
+		if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+			return ""
+		}
+		required := "none"
+		if len(step.RequiredParams) > 0 {
+			required = strings.Join(step.RequiredParams, ", ")
+		}
+		parts := []string{
+			fmt.Sprintf("action=%s", step.ExpectedAction),
+			fmt.Sprintf("required_params=%s", required),
+		}
+		if step.Destructive {
+			parts = append(parts, "destructive_confirm=true")
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
+	}
+	lines = append(lines, "Use this order. The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_search_tools or gitlab_describe_tools for these planned actions. Execute each action directly when its required values are present. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	return strings.Join(lines, "\n")
 }
 
 func joinDynamicPrompt(preamble, prompt, override string) string {
@@ -5361,12 +5569,12 @@ func dynamicConfirmPrompt(prompt string) string {
 
 func dynamicFirstStepGuidance(task evalTask) string {
 	steps := taskSteps(task)
-	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" || len(steps[0].RequiredParams) == 0 {
+	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" {
 		return ""
 	}
-	params := make(map[string]any, len(steps[0].RequiredParams))
-	for _, param := range steps[0].RequiredParams {
-		params[param] = dynamicExampleParamValue(steps[0].ExpectedAction, param, task.Prompt)
+	params, provenances := exactCallParams(steps[0], task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return ""
 	}
 	arguments := actionGuidanceExample(steps[0], params)
 	data, err := marshalGuidanceExample(arguments)
@@ -5410,6 +5618,17 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		}
 	}
 	switch action {
+	case "release.create":
+		switch param {
+		case "tag_name":
+			if value, ok := backtickValueAfter(prompt, "release "); ok {
+				return value
+			}
+		case "name":
+			if value, ok := backtickValueAfter(prompt, "named "); ok {
+				return value
+			}
+		}
 	case "merge_request.time_estimate_set":
 		if param == "duration" {
 			if value, ok := backtickValueAfter(prompt, "estimate "); ok {
@@ -5459,6 +5678,19 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		if param == "description" {
 			if value, ok := backtickValueAfter(prompt, "create trigger "); ok {
 				return value
+			}
+		}
+	case "pipeline.schedule_create":
+		switch param {
+		case "description":
+			for _, marker := range []string{"inactive schedule ", "active schedule ", "create schedule ", "schedule named "} {
+				if value, ok := backtickValueAfter(prompt, marker); ok {
+					return value
+				}
+			}
+		case "active":
+			if strings.Contains(strings.ToLower(prompt), "inactive") {
+				return false
 			}
 		}
 	}
@@ -5674,12 +5906,9 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
 		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
 	}
-	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
-	for _, param := range step.RequiredParams {
-		params[param] = exampleParamValue(param, task.Prompt)
-	}
-	for _, param := range step.OptionalParams {
-		params[param] = exampleParamValue(param, task.Prompt)
+	params, provenances := exactCallParams(step, task.Prompt, true)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
 	}
 
 	example := actionGuidanceExample(step, params)
@@ -5725,9 +5954,9 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
 		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
 	}
-	params := make(map[string]any, len(step.RequiredParams)+1)
-	for _, param := range step.RequiredParams {
-		params[param] = exampleParamValue(param, task.Prompt)
+	params, provenances := exactCallParams(step, task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
 	}
 	if slices.Contains(step.OptionalParams, "confirm") {
 		params["confirm"] = true
@@ -5767,6 +5996,216 @@ func compactExactPromptUsesID(requiredParams []string) bool {
 		}
 	}
 	return false
+}
+
+// paramProvenance records where an exact-call parameter value came from.
+type paramProvenance struct {
+	ParamName    string
+	Value        any
+	SourceText   string
+	SourceMarker string
+	SemanticRole string
+	Confidence   float64
+}
+
+func exactCallParams(step evalStep, prompt string, includeOptional bool) (map[string]any, []paramProvenance) {
+	allParams := exactCallParamSet(step)
+	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
+	provenances := make([]paramProvenance, 0, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	for _, param := range step.OptionalParams {
+		if value, ok := exampleOptionalParamValue(param, prompt); ok {
+			params[param] = value
+			provenances = append(provenances, paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "optional-prompt", SemanticRole: paramSemanticRole(param), Confidence: 0.9})
+			continue
+		}
+		if !includeOptional {
+			continue
+		}
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	return params, provenances
+}
+
+func exactCallParamSet(step evalStep) map[string]bool {
+	allParams := make(map[string]bool, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		allParams[param] = true
+	}
+	for _, param := range step.OptionalParams {
+		allParams[param] = true
+	}
+	return allParams
+}
+
+func resolveExactParamProvenance(action, param, prompt string, allParams map[string]bool) paramProvenance {
+	if provenance, ok := roleParamProvenance(param, prompt, allParams); ok {
+		return provenance
+	}
+	if exactParamNeedsResolvedRole(param, allParams) {
+		return fallbackParamProvenance(param)
+	}
+	value := dynamicExampleParamValue(action, param, prompt)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "inferred", SemanticRole: paramSemanticRole(param), Confidence: 0.7}
+}
+
+func roleParamProvenance(param, prompt string, allParams map[string]bool) (paramProvenance, bool) {
+	switch param {
+	case "project_id":
+		if allParams["target_project_id"] {
+			return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"allowlist of project ", "of project ", "source project ", "owning project ", "in project ", "from project ", "on project "})
+		}
+		return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"in project ", "from project ", "on project "})
+	case "target_project_id":
+		return firstBacktickProvenance(param, prompt, "target_project", []string{"target project ID ", "target project ", "project ID ", "remove project ID "}, true)
+	case "target_group_id":
+		return firstBacktickProvenance(param, prompt, "target_group", []string{"target group ID ", "target group "}, true)
+	case "issue_iid":
+		if allParams["target_issue_iid"] {
+			return firstBacktickProvenance(param, prompt, "source_issue", []string{"source issue IID ", "source issue ", "issue IID ", promptMarkerIssue}, true)
+		}
+	case "target_issue_iid":
+		return firstBacktickProvenance(param, prompt, "target_issue", []string{"target issue IID ", "target issue "}, true)
+	case "child_iid":
+		return firstBacktickProvenance(param, prompt, "child_issue", []string{"child issue IID ", "issue IID "}, true)
+	case "source_branch":
+		return firstBacktickProvenance(param, prompt, "source_branch", []string{promptMarkerFrom, "source branch "}, false)
+	case "target_branch":
+		return firstBacktickProvenance(param, prompt, "target_branch", []string{" into ", "target branch ", "against "}, false)
+	case "full_path":
+		return firstBacktickProvenance(param, prompt, "parent_group_path", []string{"group full path ", "parent group full path ", "group path "}, false)
+	case "child_project_path":
+		return firstBacktickProvenance(param, prompt, "child_project_path", []string{"child project path "}, false)
+	case "parent_id":
+		return firstBacktickProvenance(param, prompt, "parent_group_id", []string{"under group ID ", "parent group ID ", "group ID "}, true)
+	}
+	return paramProvenance{}, false
+}
+
+func firstBacktickProvenance(param, prompt, role string, markers []string, numeric bool) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if numeric {
+			parsed = numericExampleValue(value)
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+func firstProjectIDProvenance(param, prompt, role string, markers []string) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if _, err := strconv.Atoi(value); err == nil {
+			parsed = numericExampleValue(value)
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+func fallbackParamProvenance(param string) paramProvenance {
+	value := fallbackExampleParamValue(param)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "fallback", SemanticRole: paramSemanticRole(param), Confidence: 0}
+}
+
+func exactParamNeedsResolvedRole(param string, allParams map[string]bool) bool {
+	switch param {
+	case "target_project_id", "target_group_id", "target_issue_iid", "source_branch", "target_branch", "full_path", "child_project_path", "parent_id", "child_iid":
+		return true
+	case "project_id":
+		return allParams["target_project_id"] || allParams["target_issue_iid"]
+	case "issue_iid":
+		return allParams["target_issue_iid"]
+	default:
+		return false
+	}
+}
+
+func paramSemanticRole(param string) string {
+	switch param {
+	case "project_id":
+		return "scope_owner_project"
+	case "target_project_id":
+		return "target_project"
+	case "group_id", "full_path":
+		return "group_scope"
+	case "target_group_id":
+		return "target_group"
+	case "issue_iid", "child_iid":
+		return "source_issue"
+	case "target_issue_iid":
+		return "target_issue"
+	case "source_branch":
+		return "source_branch"
+	case "target_branch":
+		return "target_branch"
+	case "child_project_path":
+		return "child_project_path"
+	default:
+		return param
+	}
+}
+
+func exactCallParamsAreSafe(provenances []paramProvenance) bool {
+	allParams := make(map[string]bool, len(provenances))
+	for _, provenance := range provenances {
+		allParams[provenance.ParamName] = true
+	}
+	for _, provenance := range provenances {
+		if exactParamValueIsPlaceholder(provenance.Value) {
+			return false
+		}
+		if exactParamNeedsResolvedRole(provenance.ParamName, allParams) && provenance.Confidence <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func exactParamValueIsPlaceholder(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		return trimmed == "" || trimmed == "..." || strings.Contains(trimmed, "<") && strings.Contains(trimmed, ">")
+	case []map[string]any:
+		return slices.ContainsFunc(typed, func(item map[string]any) bool {
+			return exactParamValueIsPlaceholder(item)
+		})
+	case []any:
+		return slices.ContainsFunc(typed, exactParamValueIsPlaceholder)
+	case map[string]any:
+		for _, item := range typed {
+			if exactParamValueIsPlaceholder(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func schemaFirstTaskPrompt(task evalTask, destructive string, step evalStep) string {
+	toolName := step.ExpectedTool
+	if toolName == "" {
+		toolName = "gitlab"
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nRequired parameters for action %s could not be resolved safely from the task text. Do not use placeholder values. Look up or describe the action schema first, bind only concrete values from the prompt or prior tool results, then call %s with action %s and the required params.", task.ID, task.Prompt, destructive, step.ExpectedAction, toolName, step.ExpectedAction)
 }
 
 // marshalGuidanceExample performs the marshal guidance example operation using the GitLab API and returns [string].
@@ -5821,6 +6260,7 @@ var stringExampleParamMarkers = map[string][]string{
 	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
 	"key":                {"public key ", "variable "},
 	"value":              {"value "},
+	"query":              {"for "},
 	"title":              {"titled "},
 	"user_xids":          {"user IDs ", "user_xids "},
 	"version":            {"version "},
@@ -5967,6 +6407,22 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	case "enabled":
 		if strings.Contains(strings.ToLower(prompt), "disabled") {
 			return false, true
+		}
+	case "active":
+		if strings.Contains(strings.ToLower(prompt), "inactive") {
+			return false, true
+		}
+	case "order_by":
+		if strings.Contains(strings.ToLower(prompt), "recently updated") || strings.Contains(strings.ToLower(prompt), "updated") {
+			return "updated_at", true
+		}
+	case "sort":
+		if strings.Contains(strings.ToLower(prompt), "most recently") || strings.Contains(strings.ToLower(prompt), "latest") || strings.Contains(strings.ToLower(prompt), "recently updated") {
+			return "desc", true
+		}
+	case "per_page":
+		if strings.Contains(strings.ToLower(prompt), "10 most") || strings.Contains(strings.ToLower(prompt), "most recently updated projects") {
+			return 10, true
 		}
 	case "primary":
 		if strings.Contains(strings.ToLower(prompt), "secondary") {
@@ -6324,6 +6780,60 @@ func requiredParamPresent(params map[string]any, required string) bool {
 
 // validationRepairMessage is an internal helper for the main package.
 func validationRepairMessage(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
+	text := validationRepairText(task, step, validation, attemptedInput)
+	payload := repairPayloadForValidation(task, step, validation, attemptedInput, text)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return text
+	}
+	return string(data)
+}
+
+type repairPayload struct {
+	ErrorKind     string         `json:"error_kind"`
+	FailedAction  string         `json:"failed_action,omitempty"`
+	BadParam      string         `json:"bad_param,omitempty"`
+	ExpectedType  string         `json:"expected_type,omitempty"`
+	SentValue     any            `json:"sent_value,omitempty"`
+	RetryEnvelope map[string]any `json:"retry_envelope,omitempty"`
+	LikelyFix     string         `json:"likely_fix"`
+	RetryAllowed  bool           `json:"retry_allowed"`
+	Message       string         `json:"message"`
+}
+
+func repairPayloadForValidation(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any, text string) repairPayload {
+	badParam := validationBadParam(validation.Message)
+	payload := repairPayload{
+		ErrorKind:     validationErrorKind(validation.Message, validation),
+		FailedAction:  validation.Action,
+		BadParam:      badParam,
+		ExpectedType:  validationExpectedType(validation.Message, badParam),
+		SentValue:     attemptedParamValue(attemptedInput, badParam),
+		RetryEnvelope: repairRetryEnvelope(task, step, attemptedInput),
+		LikelyFix:     strings.TrimSpace(text + roleSensitiveRepairHint(step)),
+		RetryAllowed:  true,
+		Message:       text,
+	}
+	if payload.FailedAction == "" {
+		payload.FailedAction = step.ExpectedAction
+	}
+	if payload.FailedAction == "" {
+		payload.FailedAction = step.ExpectedTool
+	}
+	_ = task
+	return payload
+}
+
+func repairRetryEnvelope(task evalTask, step evalStep, attemptedInput map[string]any) map[string]any {
+	data := expectedActionCallExample(task, step, attemptedInput)
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+		return nil
+	}
+	return envelope
+}
+
+func validationRepairText(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
 	var b strings.Builder
 	b.WriteString(validation.Message)
 	if step.ExpectedAction == "" {
@@ -6352,16 +6862,111 @@ func validationRepairMessage(task evalTask, step evalStep, validation validation
 	return b.String()
 }
 
+func validationErrorKind(message string, validation validationResult) string {
+	switch {
+	case strings.Contains(message, "missing required"):
+		return "missing_required_param"
+	case strings.Contains(message, diagnosticUnknownParams):
+		return "unknown_param"
+	case strings.Contains(message, "integer") || strings.Contains(message, "expected type"):
+		return "wrong_type"
+	case strings.Contains(message, "destructive") && strings.Contains(message, "confirm"):
+		return "destructive_confirmation_missing"
+	case !validation.ActionMatches:
+		return "wrong_action"
+	case !validation.ToolMatches:
+		return "wrong_tool"
+	case strings.Contains(message, "unexpected top-level parameter") || strings.Contains(message, "top-level input fields"):
+		return "invalid_envelope"
+	default:
+		return "validation_error"
+	}
+}
+
+func validationBadParam(message string) string {
+	for _, marker := range []string{"missing required params.", "missing required "} {
+		if after, ok := strings.CutPrefix(message, marker); ok {
+			return firstRepairParam(after)
+		}
+		if _, after, ok := strings.Cut(message, marker); ok {
+			return firstRepairParam(after)
+		}
+	}
+	if _, after, ok := strings.Cut(message, diagnosticUnknownParams); ok {
+		if _, params, hasColon := strings.Cut(after, ":"); hasColon {
+			return firstRepairParam(params)
+		}
+	}
+	if _, after, ok := strings.Cut(message, "params."); ok {
+		return firstRepairParam(after)
+	}
+	if strings.Contains(message, "confirm") {
+		return "confirm"
+	}
+	return ""
+}
+
+func firstRepairParam(text string) string {
+	text = strings.TrimSpace(strings.Trim(text, ".;:"))
+	if index := strings.IndexAny(text, ",; "); index >= 0 {
+		text = text[:index]
+	}
+	return strings.TrimSpace(strings.Trim(text, ".`"))
+}
+
+func validationExpectedType(message, badParam string) string {
+	if badParam == "confirm" {
+		return "boolean true"
+	}
+	if strings.Contains(message, "integer") {
+		return "integer"
+	}
+	if strings.Contains(message, "missing required") {
+		return "present concrete value"
+	}
+	if strings.Contains(message, diagnosticUnknownParams) {
+		return "parameter allowed by the selected action schema"
+	}
+	return "valid value for selected action schema"
+}
+
+func attemptedParamValue(input map[string]any, param string) any {
+	if param == "" || input == nil {
+		return nil
+	}
+	if value, ok := input[param]; ok {
+		return value
+	}
+	params, _ := input["params"].(map[string]any)
+	return params[param]
+}
+
+func roleSensitiveRepairHint(step evalStep) string {
+	if step.ExpectedTool != dynamicExecuteTool {
+		return ""
+	}
+	switch step.ExpectedAction {
+	case "job.token_scope_remove_project":
+		return ". Parameter role hint: project_id is the owning project whose allowlist changes; target_project_id is the project being added or removed"
+	case "issue.link_create":
+		return ". Parameter role hint: project_id and issue_iid identify the source issue; target_project_id and target_issue_iid identify the linked target issue"
+	case "merge_request.create":
+		return ". Parameter role hint: source_branch is the branch merged from; target_branch is the branch merged into"
+	}
+	return ""
+}
+
 // expectedActionCallExample is an internal helper for the main package.
 func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[string]any) string {
 	params := map[string]any{}
 	attemptedParams, _ := attemptedInput["params"].(map[string]any)
+	allParams := exactCallParamSet(step)
 	for _, required := range step.RequiredParams {
 		if value, ok := attemptedParams[required]; ok {
 			params[required] = value
 			continue
 		}
-		params[required] = dynamicExampleParamValue(step.ExpectedAction, required, task.Prompt)
+		params[required] = resolveExactParamProvenance(step.ExpectedAction, required, task.Prompt, allParams).Value
 	}
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
 	if step.ExpectedTool == dynamicExecuteTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {

@@ -55,6 +55,7 @@ type SearchResult struct {
 	Destructive    bool                `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
 	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the action input schema."`
 	Usage          string              `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
+	WhyThisAction  string              `json:"why_this_action,omitempty" jsonschema:"Compact reason included only for close or ambiguous alternatives."`
 	RelatedActions []string            `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	Score          int                 `json:"score" jsonschema:"Lexical relevance score for the query."`
 	Explanation    *ScoringExplanation `json:"explanation,omitempty" jsonschema:"Optional scoring explanation returned only when explain is true."`
@@ -84,18 +85,19 @@ type ActionExample struct {
 
 // ActionDescription describes one GitLab catalog action.
 type ActionDescription struct {
-	ID             string         `json:"id" jsonschema:"Canonical action ID."`
-	Tool           string         `json:"tool" jsonschema:"Backing meta-tool name."`
-	Domain         string         `json:"domain" jsonschema:"Canonical action domain."`
-	Action         string         `json:"action" jsonschema:"Action name inside the catalog group."`
-	SchemaURI      string         `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
-	Destructive    bool           `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string       `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
-	Usage          string         `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
-	RelatedActions []string       `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
-	InputSchema    map[string]any `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
-	OutputSchema   map[string]any `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
-	Example        ActionExample  `json:"example" jsonschema:"Example gitlab_execute_tool call."`
+	ID             string                                `json:"id" jsonschema:"Canonical action ID."`
+	Tool           string                                `json:"tool" jsonschema:"Backing meta-tool name."`
+	Domain         string                                `json:"domain" jsonschema:"Canonical action domain."`
+	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
+	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
+	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
+	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
+	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
+	InputSchema    map[string]any                        `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
+	OutputSchema   map[string]any                        `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
+	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_tool call."`
 }
 
 // DescribeOutput is the structured output for gitlab_describe_tools.
@@ -113,22 +115,23 @@ type FindInput struct {
 
 // FindResult is a matching catalog action with schema details and an execute example.
 type FindResult struct {
-	ID             string              `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
-	Tool           string              `json:"tool" jsonschema:"Backing meta-tool name."`
-	Domain         string              `json:"domain" jsonschema:"Canonical action domain."`
-	Action         string              `json:"action" jsonschema:"Action name inside the catalog group."`
-	SchemaURI      string              `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
-	Destructive    bool                `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
-	Usage          string              `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
-	RelatedActions []string            `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
-	Score          int                 `json:"score" jsonschema:"Lexical relevance score for the query."`
-	Explanation    *ScoringExplanation `json:"explanation,omitempty" jsonschema:"Optional scoring explanation returned only when explain is true."`
-	LowConfidence  bool                `json:"low_confidence,omitempty" jsonschema:"Whether the top result is below the high-confidence score or margin threshold."`
-	AmbiguousWith  []string            `json:"ambiguous_with,omitempty" jsonschema:"Other canonical action IDs that share the exact ambiguous alias used in the query."`
-	InputSchema    map[string]any      `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
-	OutputSchema   map[string]any      `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
-	Example        ActionExample       `json:"example" jsonschema:"Example gitlab_execute_tool call."`
+	ID             string                                `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
+	Tool           string                                `json:"tool" jsonschema:"Backing meta-tool name."`
+	Domain         string                                `json:"domain" jsonschema:"Canonical action domain."`
+	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
+	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
+	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
+	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
+	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
+	Score          int                                   `json:"score" jsonschema:"Lexical relevance score for the query."`
+	Explanation    *ScoringExplanation                   `json:"explanation,omitempty" jsonschema:"Optional scoring explanation returned only when explain is true."`
+	LowConfidence  bool                                  `json:"low_confidence,omitempty" jsonschema:"Whether the top result is below the high-confidence score or margin threshold."`
+	AmbiguousWith  []string                              `json:"ambiguous_with,omitempty" jsonschema:"Other canonical action IDs that share the exact ambiguous alias used in the query."`
+	InputSchema    map[string]any                        `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
+	OutputSchema   map[string]any                        `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
+	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_tool call."`
 }
 
 // FindOutput is the structured output for gitlab_find_action.
@@ -358,6 +361,9 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 			LowConfidence:  match.lowConfidence,
 			AmbiguousWith:  append([]string(nil), match.ambiguousWith...),
 		}
+		if match.lowConfidence || len(match.ambiguousWith) > 0 {
+			result.WhyThisAction = whyThisActionForEntry(entry)
+		}
 		if input.Explain {
 			explanation := match.explanation
 			result.Explanation = &explanation
@@ -413,6 +419,7 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 			RequiredParams: append([]string(nil), description.RequiredParams...),
 			Usage:          description.Usage,
 			RelatedActions: append([]string(nil), description.RelatedActions...),
+			ParamGuidance:  cloneParameterGuidance(description.ParamGuidance),
 			Score:          match.score,
 			LowConfidence:  match.lowConfidence,
 			AmbiguousWith:  append([]string(nil), match.ambiguousWith...),
@@ -1849,6 +1856,7 @@ func describeEntry(entry actionEntry) ActionDescription {
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
 		Usage:          usageHintForEntry(entry),
 		RelatedActions: relatedActionsForEntry(entry),
+		ParamGuidance:  cloneParameterGuidance(entry.Route.ParameterGuidance),
 		InputSchema:    inputSchema,
 		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
 		Example:        exampleFor(entry, inputSchema),
@@ -2006,8 +2014,27 @@ func usageHintForEntry(entry actionEntry) string {
 	return actionUXMetadataByID[entry.ID].Usage
 }
 
+func whyThisActionForEntry(entry actionEntry) string {
+	if usage := usageHintForEntry(entry); usage != "" {
+		return usage
+	}
+	return fmt.Sprintf("Matches canonical action %s with required params %s.", entry.ID, strings.Join(entry.RequiredParams, ", "))
+}
+
 func relatedActionsForEntry(entry actionEntry) []string {
 	return append([]string(nil), actionUXMetadataByID[entry.ID].RelatedActions...)
+}
+
+func cloneParameterGuidance(guidance map[string]toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {
+	if len(guidance) == 0 {
+		return nil
+	}
+	out := make(map[string]toolutil.ParameterGuidance, len(guidance))
+	for name, item := range guidance {
+		item.CommonConfusions = append([]string(nil), item.CommonConfusions...)
+		out[name] = item
+	}
+	return out
 }
 
 func (r *Registry) resolveAction(id string) (actionEntry, bool) {

@@ -59,7 +59,117 @@ func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actioncatalog.
 	}
 	sort.Strings(actionNames)
 	for _, actionName := range actionNames {
-		group.SetAction(actioncatalog.Action{Name: actionName, Route: def.Routes[actionName]})
+		route := withCatalogParameterGuidance(def.Name, actionName, def.Routes[actionName])
+		group.SetAction(actioncatalog.Action{Name: actionName, Route: route})
 	}
 	return group
+}
+
+func withCatalogParameterGuidance(toolName, actionName string, route toolutil.ActionRoute) toolutil.ActionRoute {
+	actionID := actioncatalog.DomainFromToolName(toolName) + "." + actionName
+	guidance := catalogParameterGuidance(actionID)
+	if len(guidance) == 0 {
+		return route
+	}
+	merged := make(map[string]toolutil.ParameterGuidance, len(route.ParameterGuidance)+len(guidance))
+	for name, item := range route.ParameterGuidance {
+		item.CommonConfusions = append([]string(nil), item.CommonConfusions...)
+		merged[name] = item
+	}
+	for name, item := range guidance {
+		item.CommonConfusions = append([]string(nil), item.CommonConfusions...)
+		merged[name] = item
+	}
+	route.ParameterGuidance = merged
+	return route
+}
+
+func catalogParameterGuidance(actionID string) map[string]toolutil.ParameterGuidance {
+	switch actionID {
+	case "job.token_scope_remove_project":
+		return map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_owner_project",
+				ValueSource:      "Owning project whose CI job token allowlist is being changed.",
+				CommonConfusions: []string{"Do not use the project being removed as project_id."},
+				ExampleBinding:   "Remove project ID 51 from allowlist of project 1 => project_id=1.",
+			},
+			"target_project_id": {
+				SemanticRole:     "target_project",
+				ValueSource:      "Project being removed from or added to the allowlist.",
+				CommonConfusions: []string{"Do not put the allowlist owner project here."},
+				ExampleBinding:   "Remove project ID 51 from allowlist of project 1 => target_project_id=51.",
+			},
+		}
+	case "issue.link_create":
+		return map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "source_project",
+				ValueSource:      "Project that owns the source issue.",
+				CommonConfusions: []string{"Use target_project_id for the linked issue's project when it differs."},
+			},
+			"issue_iid": {
+				SemanticRole:     "source_issue",
+				ValueSource:      "IID of the source issue receiving the link.",
+				CommonConfusions: []string{"Do not use the target issue IID here."},
+			},
+			"target_project_id": {
+				SemanticRole:     "target_project",
+				ValueSource:      "Project that owns the target issue.",
+				CommonConfusions: []string{"For same-project links this may equal project_id; otherwise keep it distinct."},
+			},
+			"target_issue_iid": {
+				SemanticRole:     "target_issue",
+				ValueSource:      "IID of the issue being linked to.",
+				CommonConfusions: []string{"Do not use the source issue IID here."},
+			},
+		}
+	case "merge_request.create":
+		return map[string]toolutil.ParameterGuidance{
+			"source_branch": {
+				SemanticRole:     "source_branch",
+				ValueSource:      "Branch named after 'from'.",
+				CommonConfusions: []string{"Do not use ref, tag_name, target_branch, or value for the source branch."},
+				ExampleBinding:   "from feature/eval into main => source_branch=feature/eval.",
+			},
+			"target_branch": {
+				SemanticRole:     "target_branch",
+				ValueSource:      "Branch named after 'into' or the merge target.",
+				CommonConfusions: []string{"Do not use source_branch, ref, tag_name, or to for the target branch."},
+				ExampleBinding:   "from feature/eval into main => target_branch=main.",
+			},
+		}
+	case "group.epic_issue_assign":
+		return map[string]toolutil.ParameterGuidance{
+			"full_path": {
+				SemanticRole:     "parent_group_path",
+				ValueSource:      "Group full path that owns the epic.",
+				CommonConfusions: []string{"Do not use the child project path as full_path."},
+			},
+			"child_project_path": {
+				SemanticRole:     "child_project_path",
+				ValueSource:      "Project path that owns the issue being assigned to the epic.",
+				CommonConfusions: []string{"Do not use project_id or target_full_path for this parameter."},
+			},
+			"child_iid": {
+				SemanticRole:     "child_issue_iid",
+				ValueSource:      "Issue IID in child_project_path.",
+				CommonConfusions: []string{"Do not use epic_iid as child_iid."},
+			},
+		}
+	case "access.deploy_token_delete_project":
+		return map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole: "scope_owner_project",
+				ValueSource:  "Project that owns the deploy token.",
+			},
+			"deploy_token_id": {
+				SemanticRole:     "deploy_token",
+				ValueSource:      "Deploy token ID, not a project, deploy key, personal token, or runner ID.",
+				CommonConfusions: []string{"Do not use deploy_key_id or token_id for project deploy token deletion."},
+			},
+		}
+	default:
+		return nil
+	}
 }

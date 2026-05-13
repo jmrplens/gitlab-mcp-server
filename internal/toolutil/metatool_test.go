@@ -1385,6 +1385,39 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	}
 }
 
+// TestMetaToolDescriptionPrefix_IncludesParameterGuidance verifies generated
+// guidance appears only when routes define role-sensitive parameter metadata.
+func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
+	routes := ActionMap{
+		"token_scope_remove_project": {
+			ParameterGuidance: map[string]ParameterGuidance{
+				"project_id": {
+					SemanticRole:     "scope_owner_project",
+					ValueSource:      "Owning project whose allowlist is being changed.",
+					CommonConfusions: []string{"Do not use the project being removed as project_id."},
+				},
+			},
+		},
+	}
+
+	got := MetaToolDescriptionPrefix("gitlab_job", routes)
+	for _, want := range []string{
+		"Parameter guidance:",
+		"token_scope_remove_project.project_id: scope_owner_project",
+		"source: Owning project whose allowlist is being changed.",
+		"avoid: Do not use the project being removed as project_id.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prefix missing %q: %q", want, got)
+		}
+	}
+
+	description := got + "Manage GitLab CI job token scope."
+	if stripped := StripMetaToolDescriptionPrefix(description); stripped != "Manage GitLab CI job token scope." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want base description", stripped)
+	}
+}
+
 // TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix verifies the generated
 // concise prefix is removed before documentation summaries are rendered.
 func TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix(t *testing.T) {

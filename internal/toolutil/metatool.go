@@ -54,10 +54,20 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 // typed params (nil for routes constructed via the untyped Route and
 // DestructiveRoute constructors).
 type ActionRoute struct {
-	Handler      ActionFunc
-	Destructive  bool
-	InputSchema  map[string]any
-	OutputSchema map[string]any
+	Handler           ActionFunc
+	Destructive       bool
+	InputSchema       map[string]any
+	OutputSchema      map[string]any
+	ParameterGuidance map[string]ParameterGuidance
+}
+
+// ParameterGuidance carries compact model-facing hints for parameters that are
+// easy to confuse across similar GitLab actions.
+type ParameterGuidance struct {
+	SemanticRole     string   `json:"semantic_role,omitempty"`
+	ValueSource      string   `json:"value_source,omitempty"`
+	CommonConfusions []string `json:"common_confusions,omitempty"`
+	ExampleBinding   string   `json:"example_binding,omitempty"`
 }
 
 // ActionMap maps action names to their route definitions (handler + metadata).
@@ -270,7 +280,20 @@ func cloneActionMap(routes ActionMap) ActionMap {
 	for action, route := range routes {
 		route.InputSchema = cloneSchemaMap(route.InputSchema)
 		route.OutputSchema = cloneSchemaMap(route.OutputSchema)
+		route.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
 		out[action] = route
+	}
+	return out
+}
+
+func cloneParameterGuidanceMap(guidance map[string]ParameterGuidance) map[string]ParameterGuidance {
+	if len(guidance) == 0 {
+		return nil
+	}
+	out := make(map[string]ParameterGuidance, len(guidance))
+	for name, item := range guidance {
+		item.CommonConfusions = append([]string(nil), item.CommonConfusions...)
+		out[name] = item
 	}
 	return out
 }
@@ -2025,10 +2048,48 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	}
 	sort.Strings(actions)
 	first := actions[0]
+	guidance := metaToolParameterGuidanceSummary(routes, actions)
 	return fmt.Sprintf(
-		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.\n\n",
+		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.%s\n\n",
 		first, toolName,
+		guidance,
 	)
+}
+
+func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) string {
+	var lines []string
+	for _, action := range actionNames {
+		guidance := routes[action].ParameterGuidance
+		if len(guidance) == 0 {
+			continue
+		}
+		params := make([]string, 0, len(guidance))
+		for name := range guidance {
+			params = append(params, name)
+		}
+		sort.Strings(params)
+		for _, name := range params {
+			item := guidance[name]
+			if item.SemanticRole == "" && item.ValueSource == "" && len(item.CommonConfusions) == 0 {
+				continue
+			}
+			line := fmt.Sprintf("- %s.%s", action, name)
+			if item.SemanticRole != "" {
+				line += ": " + item.SemanticRole
+			}
+			if item.ValueSource != "" {
+				line += "; source: " + item.ValueSource
+			}
+			if len(item.CommonConfusions) > 0 {
+				line += "; avoid: " + strings.Join(item.CommonConfusions, " ")
+			}
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\nParameter guidance:\n" + strings.Join(lines, "\n")
 }
 
 // StripMetaToolDescriptionPrefix removes the generated meta-tool usage header
@@ -2049,6 +2110,12 @@ func StripMetaToolDescriptionPrefix(description string) string {
 	}
 
 	start := 2
+	if start < len(lines) && strings.TrimSpace(lines[start]) == "Parameter guidance:" {
+		start++
+		for start < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[start]), "- ") {
+			start++
+		}
+	}
 	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
 		start++
 	}

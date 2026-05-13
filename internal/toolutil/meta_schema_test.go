@@ -60,6 +60,9 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 				OutputSchema: map[string]any{
 					"required": []string{"id"},
 				},
+				ParameterGuidance: map[string]ParameterGuidance{
+					"project_id": {CommonConfusions: []string{"do not use target_project_id"}},
+				},
 			},
 		},
 	}
@@ -69,6 +72,7 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 	cloneRoute.InputSchema["required"].([]string)[0] = "changed"
 	cloneRoute.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"] = "integer"
 	cloneRoute.OutputSchema["required"].([]string)[0] = "changed"
+	cloneRoute.ParameterGuidance["project_id"].CommonConfusions[0] = "changed"
 
 	original := routes["gitlab_project"]["create"]
 	if got := original.InputSchema["required"].([]string)[0]; got != "name" {
@@ -79,6 +83,9 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 	}
 	if got := original.OutputSchema["required"].([]string)[0]; got != "id" {
 		t.Fatalf("original output required = %q, want id", got)
+	}
+	if got := original.ParameterGuidance["project_id"].CommonConfusions[0]; got != "do not use target_project_id" {
+		t.Fatalf("original guidance confusion = %q, want unchanged", got)
 	}
 }
 
@@ -221,6 +228,49 @@ func TestLookupMetaActionSchema_DeepClonesSliceFields(t *testing.T) {
 	originalOneOf := original["oneOf"].([]any)[0].(map[string]any)
 	if got := originalOneOf["required"].([]string)[0]; got != "name" {
 		t.Fatalf("original oneOf required[0] = %q, want name", got)
+	}
+}
+
+// TestLookupMetaActionSchema_IncludesParameterGuidance verifies guidance is
+// exposed as schema extension metadata without mutating registered routes.
+func TestLookupMetaActionSchema_IncludesParameterGuidance(t *testing.T) {
+	routes := map[string]ActionMap{
+		"gitlab_job": {
+			"token_scope_remove_project": {
+				InputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id":        map[string]any{"type": "integer"},
+						"target_project_id": map[string]any{"type": "integer"},
+					},
+				},
+				ParameterGuidance: map[string]ParameterGuidance{
+					"project_id": {
+						SemanticRole:     "scope_owner_project",
+						ValueSource:      "Owning project whose allowlist is being changed.",
+						CommonConfusions: []string{"Do not use the project being removed as project_id."},
+						ExampleBinding:   "Remove project 51 from project 1 => project_id=1.",
+					},
+				},
+			},
+		},
+	}
+
+	schema, ok := LookupMetaActionSchema(routes, "gitlab_job", "token_scope_remove_project")
+	if !ok {
+		t.Fatal("LookupMetaActionSchema() ok = false, want true")
+	}
+	extension, ok := schema["x_parameter_guidance"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema missing x_parameter_guidance: %#v", schema)
+	}
+	projectGuidance := extension["project_id"].(map[string]any)
+	if projectGuidance["semantic_role"] != "scope_owner_project" {
+		t.Fatalf("project_id guidance = %#v, want scope_owner_project", projectGuidance)
+	}
+	projectGuidance["semantic_role"] = "changed"
+	if got := routes["gitlab_job"]["token_scope_remove_project"].ParameterGuidance["project_id"].SemanticRole; got != "scope_owner_project" {
+		t.Fatalf("original guidance semantic role = %q, want unchanged", got)
 	}
 }
 

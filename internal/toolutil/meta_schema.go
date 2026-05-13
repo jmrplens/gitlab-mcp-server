@@ -95,6 +95,7 @@ func CloneMetaSchemaRoutes(routes map[string]ActionMap) map[string]ActionMap {
 			if route.OutputSchema != nil {
 				routeCopy.OutputSchema = cloneSchemaMap(route.OutputSchema)
 			}
+			routeCopy.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
 			actionCopy[action] = routeCopy
 		}
 		out[tool] = actionCopy
@@ -167,9 +168,9 @@ func LookupMetaActionSchema(routes map[string]ActionMap, tool, action string) (m
 			"description":          "This action has no captured parameter schema. Send an empty object {} or consult the meta-tool description for required fields.",
 			"additionalProperties": true,
 		}
-		return enrichDestructiveSchema(schema, route.Destructive), true
+		return enrichParameterGuidanceSchema(enrichDestructiveSchema(schema, route.Destructive), route.ParameterGuidance), true
 	}
-	return enrichDestructiveSchema(cloneSchemaMap(route.InputSchema), route.Destructive), true
+	return enrichParameterGuidanceSchema(enrichDestructiveSchema(cloneSchemaMap(route.InputSchema), route.Destructive), route.ParameterGuidance), true
 }
 
 func enrichDestructiveSchema(schema map[string]any, destructive bool) map[string]any {
@@ -188,6 +189,35 @@ func enrichDestructiveSchema(schema map[string]any, destructive bool) map[string
 		}
 	}
 	schema["x_destructive"] = true
+	return schema
+}
+
+func enrichParameterGuidanceSchema(schema map[string]any, guidance map[string]ParameterGuidance) map[string]any {
+	if len(guidance) == 0 {
+		return schema
+	}
+	encoded := make(map[string]any, len(guidance))
+	for name, item := range guidance {
+		entry := make(map[string]any, 4)
+		if item.SemanticRole != "" {
+			entry["semantic_role"] = item.SemanticRole
+		}
+		if item.ValueSource != "" {
+			entry["value_source"] = item.ValueSource
+		}
+		if len(item.CommonConfusions) > 0 {
+			entry["common_confusions"] = append([]string(nil), item.CommonConfusions...)
+		}
+		if item.ExampleBinding != "" {
+			entry["example_binding"] = item.ExampleBinding
+		}
+		if len(entry) > 0 {
+			encoded[name] = entry
+		}
+	}
+	if len(encoded) > 0 {
+		schema["x_parameter_guidance"] = encoded
+	}
 	return schema
 }
 
