@@ -41,6 +41,53 @@ const (
 	fmtListToolsErr = "ListTools() error: %v"
 )
 
+type registerMetaSourceFile struct {
+	path    string
+	content string
+}
+
+func readRegisterMetaSources(t *testing.T) []registerMetaSourceFile {
+	t.Helper()
+
+	paths, err := filepath.Glob("register_meta*.go")
+	if err != nil {
+		t.Fatalf("glob register_meta*.go: %v", err)
+	}
+	nonTestPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		nonTestPaths = append(nonTestPaths, path)
+	}
+	if len(nonTestPaths) == 0 {
+		t.Fatal("no register_meta*.go files found")
+	}
+
+	sources := make([]registerMetaSourceFile, 0, len(nonTestPaths))
+	for _, path := range nonTestPaths {
+		src, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read %s: %v", path, readErr)
+		}
+		sources = append(sources, registerMetaSourceFile{path: path, content: string(src)})
+	}
+
+	return sources
+}
+
+func readRegisterMetaSource(t *testing.T) string {
+	t.Helper()
+
+	var builder strings.Builder
+	for _, sourceFile := range readRegisterMetaSources(t) {
+		builder.WriteString(sourceFile.content)
+		builder.WriteByte('\n')
+	}
+
+	return builder.String()
+}
+
 // newMCPSession creates an MCP session with individual tools registered.
 // When enterprise is true, Enterprise/Premium tools are included.
 func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.ClientSession {
@@ -1632,13 +1679,10 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 	}
 
-	// Also add meta-tool names from register_meta.go.
-	metaSrc, err := os.ReadFile("register_meta.go")
-	if err != nil {
-		t.Fatalf("ReadFile register_meta.go: %v", err)
-	}
+	// Also add meta-tool names from register_meta*.go files.
+	metaSrc := readRegisterMetaSource(t)
 	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
-	for _, m := range reMetaTool.FindAllStringSubmatch(string(metaSrc), -1) {
+	for _, m := range reMetaTool.FindAllStringSubmatch(metaSrc, -1) {
 		validTools[m[1]] = true
 	}
 
@@ -1651,19 +1695,19 @@ func TestAllHintReferencesValid(t *testing.T) {
 
 	// 2. Build set of all meta-tool action keys from route maps.
 	validActions := make(map[string]bool)
-	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
+	// Pattern for register_meta*.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
 	reInlineAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`)
-	for _, m := range reInlineAction.FindAllStringSubmatch(string(metaSrc), -1) {
+	for _, m := range reInlineAction.FindAllStringSubmatch(metaSrc, -1) {
 		validActions[m[1]] = true
 	}
-	// Pattern for register_meta.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
+	// Pattern for register_meta*.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
 	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`)
-	for _, m := range reRouteAssign.FindAllStringSubmatch(string(metaSrc), -1) {
+	for _, m := range reRouteAssign.FindAllStringSubmatch(metaSrc, -1) {
 		validActions[m[1]] = true
 	}
 	// Also match custom action variables wrapped in route/destructiveRoute (e.g., "publish": route(publishAction)).
 	reCustomAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`)
-	for _, m := range reCustomAction.FindAllStringSubmatch(string(metaSrc), -1) {
+	for _, m := range reCustomAction.FindAllStringSubmatch(metaSrc, -1) {
 		validActions[m[1]] = true
 	}
 
@@ -1871,13 +1915,13 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		destructive bool
 	}
 
-	// Regex patterns for register_meta.go (lowercase wrappers, no package prefix).
+	// Regex patterns for register_meta*.go files (lowercase wrappers, no package prefix).
 	reMetaMapDestructive := regexp.MustCompile(
-		`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`)
+		`"(\w+)":\s+destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
 	reMetaMapNonDestructive := regexp.MustCompile(
 		`"(\w+)":\s+route(?:Action|VoidAction|ActionWithRequest)\b`)
 	reMetaAssignDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`)
+		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
 	reMetaAssignNonDestructive := regexp.MustCompile(
 		`routes\["(\w+)"\]\s*=\s*route(?:Action|VoidAction|ActionWithRequest)\b`)
 
@@ -1889,28 +1933,26 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 	var allRoutes []routeEntry
 
-	// Scan register_meta.go for inline route definitions.
-	metaSrc, err := os.ReadFile("register_meta.go")
-	if err != nil {
-		t.Fatalf("failed to read register_meta.go: %v", err)
-	}
-	metaLines := strings.Split(string(metaSrc), "\n")
-	for i, line := range metaLines {
-		lineNum := i + 1
-		for _, re := range []*regexp.Regexp{reMetaMapDestructive, reMetaAssignDestructive} {
-			for _, m := range re.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: "register_meta.go", line: lineNum,
-					action: m[1], destructive: true,
-				})
+	// Scan register_meta*.go files for inline route definitions.
+	for _, sourceFile := range readRegisterMetaSources(t) {
+		metaLines := strings.Split(sourceFile.content, "\n")
+		for i, line := range metaLines {
+			lineNum := i + 1
+			for _, re := range []*regexp.Regexp{reMetaMapDestructive, reMetaAssignDestructive} {
+				for _, m := range re.FindAllStringSubmatch(line, -1) {
+					allRoutes = append(allRoutes, routeEntry{
+						file: sourceFile.path, line: lineNum,
+						action: m[1], destructive: true,
+					})
+				}
 			}
-		}
-		for _, re := range []*regexp.Regexp{reMetaMapNonDestructive, reMetaAssignNonDestructive} {
-			for _, m := range re.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: "register_meta.go", line: lineNum,
-					action: m[1], destructive: false,
-				})
+			for _, re := range []*regexp.Regexp{reMetaMapNonDestructive, reMetaAssignNonDestructive} {
+				for _, m := range re.FindAllStringSubmatch(line, -1) {
+					allRoutes = append(allRoutes, routeEntry{
+						file: sourceFile.path, line: lineNum,
+						action: m[1], destructive: false,
+					})
+				}
 			}
 		}
 	}
@@ -2018,23 +2060,21 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *testing.T) {
 	// Regex patterns matching all destructive wrapper usages.
 	destructivePatterns := []*regexp.Regexp{
-		// register_meta.go inline patterns.
-		regexp.MustCompile(`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`),
-		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`),
+		// register_meta*.go inline patterns.
+		regexp.MustCompile(`"(\w+)":\s+destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`),
+		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`),
 		// Sub-package patterns.
 		regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`),
 	}
 
 	uniqueActions := make(map[string]bool) // "file:action" dedup key
 
-	// Scan register_meta.go.
-	metaSrc, err := os.ReadFile("register_meta.go")
-	if err != nil {
-		t.Fatalf("read register_meta.go: %v", err)
-	}
-	for _, re := range destructivePatterns {
-		for _, m := range re.FindAllStringSubmatch(string(metaSrc), -1) {
-			uniqueActions["register_meta.go:"+m[1]] = true
+	// Scan register_meta*.go files.
+	for _, sourceFile := range readRegisterMetaSources(t) {
+		for _, re := range destructivePatterns {
+			for _, m := range re.FindAllStringSubmatch(sourceFile.content, -1) {
+				uniqueActions["meta:"+m[1]] = true
+			}
 		}
 	}
 
@@ -2061,7 +2101,7 @@ func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *test
 
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count
-	// across register_meta.go inline routes and the remaining delegated
+	// across register_meta*.go inline routes and the remaining delegated
 	// sub-package routes. Observed: 136 as of 2026-05-13 after removing
 	// unreferenced legacy RegisterMeta route maps.
 	const minExpectedDestructiveRoutes = 136
