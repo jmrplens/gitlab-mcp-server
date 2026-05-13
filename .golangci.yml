@@ -185,8 +185,9 @@ linters:
       strconcat: false
 
   exclusions:
-    # Log a warning if an exclusion rule is unused.
-    warn-unused: true
+    # Keep focused package runs warning-free when exclusions for unrelated
+    # packages are not exercised by the selected target.
+    warn-unused: false
     # Default exclusion presets
     presets:
       - comments
