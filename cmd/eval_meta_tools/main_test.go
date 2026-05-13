@@ -4567,6 +4567,63 @@ func TestDefaultOutputPath_UsesShortNameForMultiModel(t *testing.T) {
 	}
 }
 
+// TestWriteStartupReport_CreatesPlaceholder verifies that startup reports are written before model evaluation finishes.
+func TestWriteStartupReport_CreatesPlaceholder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "report.md")
+	opts := options{
+		Model:       "test:model",
+		ToolSurface: config.ToolSurfaceDynamic,
+		Backend:     backendGitLab,
+		Output:      path,
+		TraceDir:    defaultTraceDir(path),
+	}
+
+	if err := writeStartupReport(path, opts); err != nil {
+		t.Fatalf("writeStartupReport() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read startup report: %v", err)
+	}
+	requireContainsAll(t, "startup report", string(data), []string{
+		"# Meta-Tool Model Evaluation",
+		"Status: `running`",
+		"Tool surface: `dynamic`",
+		"Backend: `gitlab`",
+		"It will be replaced by the final metrics report",
+	})
+}
+
+// TestWriteErrorReport_RecordsFailure verifies that early failures replace the startup placeholder with an error report.
+func TestWriteErrorReport_RecordsFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.md")
+	opts := options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, Output: path}
+	runErr := errors.New("fixture validation failed\nmissing project fixture")
+
+	if err := writeStartupReport(path, opts); err != nil {
+		t.Fatalf("writeStartupReport() error = %v", err)
+	}
+
+	if err := writeErrorReport(path, opts, runErr); err != nil {
+		t.Fatalf("writeErrorReport() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read error report: %v", err)
+	}
+	requireContainsAll(t, "error report", string(data), []string{
+		"Status: `failed`",
+		"The evaluator stopped before it could write the final metrics report.",
+		"fixture validation failed",
+		"missing project fixture",
+	})
+	if strings.Contains(string(data), "Status: `running`") {
+		t.Fatalf("error report still contains startup placeholder content: %s", data)
+	}
+}
+
 // TestResolveModelSpecs_UsesEvalModels verifies that ResolveModelSpecs handles the uses eval models scenario correctly.
 func TestResolveModelSpecs_UsesEvalModels(t *testing.T) {
 	t.Setenv("EVAL_MODELS", "anthropic:claude-sonnet-4-6, google:gemini-3.0-flash, openai:gpt-5.4-mini, qwen:qwen3.6-flash")

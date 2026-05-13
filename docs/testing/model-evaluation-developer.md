@@ -191,11 +191,15 @@ Each model-backed run writes:
 
 | Output | Purpose |
 | --- | --- |
-| `*.md` report | Summary metrics, task results, API usage, failure triage. |
+| `*.md` report | Startup placeholder, then final summary metrics, task results, API usage, and failure triage. If the run stops before final metrics, the file is replaced with a failure report. |
 | `*.traces/index.md` | Trace index. |
 | `*.traces/*.json` | Per-task trace with prompts, tool calls, validation, MCP results, and repairs. |
 | `*.traces/traces.jsonl` | JSONL stream for programmatic analysis. |
 | `e2e-fixtures.json` | Docker model-evaluation fixture IDs; generated and ignored. |
+
+For long runs, always pass an explicit `--out` path and redirect stdout/stderr
+to a sibling `.log` file. The Markdown report is the review artifact; terminal
+output is only progress logging.
 
 ## Triage Workflow
 

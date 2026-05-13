@@ -214,13 +214,21 @@ tool name.
 - `internal/tools/dynamic` may import `internal/tools/actioncatalog` and `internal/toolutil`, but must not depend on visible individual MCP tools.
 - `cmd/server` is the composition root for selecting and filtering the active surface.
 
+## Catalog Metadata Guidance
+
+The canonical catalog should stay compact and executable first. Route definitions must carry the stable action ID, typed input/output schemas, read-only and destructive flags, schema resource links, icons, and markdown formatter metadata. Dynamic search derives most discovery signals from that source: canonical ID words, domain and action names, required params, schema properties, enum values, aliases, tags, usage hints, and related actions.
+
+Add hand-authored dynamic aliases, tags, usage hints, or related actions only when there is evidence of model confusion. Evidence can come from the deterministic dynamic search corpus, provider traces, targeted model-backed evaluations, or a real user prompt that mapped to the wrong action. Keep additions narrow to the confused family and prefer terms that disambiguate competing routes instead of generic keywords that would match many actions.
+
+Use the alias and discovery audits in `internal/tools/dynamic` after metadata changes. If a registry is already built, call `AuditRegistryDiscoveryTerms`; use `AuditCatalogDiscoveryTerms` when only a catalog is available. A dense action family should either be discoverable from schemas and route names or have compact targeted guidance.
+
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.
 2. Register the individual tool through that package's `RegisterTools` when the individual surface should expose it.
 3. Add the catalog-backed route to the central route definitions or an approved delegated meta group using typed `ActionRoute` constructors.
 4. Keep destructive classification on the route metadata, not in dynamic-only code.
-5. Add dynamic search tags or aliases only when natural language discovery is weak.
+5. Add dynamic search tags or aliases only when natural language discovery is weak and there is evidence from tests, traces, evaluations, or user prompts.
 6. Update tests, generated docs, and schema resources as required.
 
 ## Useful Checks
