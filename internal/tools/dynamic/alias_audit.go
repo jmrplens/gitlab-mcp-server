@@ -19,6 +19,17 @@ type AliasAuditFinding struct {
 	Message   string
 }
 
+// CatalogDiscoveryFinding describes one catalog action whose dynamic search
+// metadata is weak enough to deserve review.
+type CatalogDiscoveryFinding struct {
+	Severity string
+	Problem  string
+	Tool     string
+	Action   string
+	ID       string
+	Message  string
+}
+
 // AuditDefaultActionAliases returns governance findings for built-in dynamic
 // compatibility aliases. It reports duplicate alias/canonical pairs, aliases
 // that map to missing canonical actions when a catalog is provided, and
@@ -30,6 +41,87 @@ type AliasAuditFinding struct {
 // informational states such as intentionally unsearchable aliases.
 func AuditDefaultActionAliases(catalog *actioncatalog.Catalog) []AliasAuditFinding {
 	return auditActionAliases(catalog, actionAliases())
+}
+
+// AuditCatalogDiscoveryTerms reports actions in dense catalog groups that have
+// no discovery signal beyond their canonical ID/domain/action words. It is a
+// deterministic audit helper for targeted metadata work, not a hard production
+// validation gate.
+func AuditCatalogDiscoveryTerms(catalog *actioncatalog.Catalog) []CatalogDiscoveryFinding {
+	if catalog == nil {
+		return nil
+	}
+	return AuditRegistryDiscoveryTerms(NewRegistryFromCatalog(catalog))
+}
+
+// AuditRegistryDiscoveryTerms reports actions in dense dynamic registry groups
+// that have no discovery signal beyond their canonical ID/domain/action words.
+// Use this variant when a caller already has a dynamic registry available.
+func AuditRegistryDiscoveryTerms(registry *Registry) []CatalogDiscoveryFinding {
+	if registry == nil {
+		return nil
+	}
+	denseGroups := denseRegistryGroups(registry)
+	if len(denseGroups) == 0 {
+		return nil
+	}
+
+	findings := make([]CatalogDiscoveryFinding, 0)
+	for _, entry := range registry.entries {
+		if !denseGroups[entry.Tool] || hasActionDiscoverySignal(entry) {
+			continue
+		}
+		findings = append(findings, CatalogDiscoveryFinding{
+			Severity: "warning",
+			Problem:  "weak_discovery_terms",
+			Tool:     entry.Tool,
+			Action:   entry.Action,
+			ID:       entry.ID,
+			Message:  "dense catalog action has no aliases, tags, usage guidance, related actions, parameter names, schema descriptions, or enum values beyond its canonical ID",
+		})
+	}
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Severity != findings[j].Severity {
+			return findings[i].Severity < findings[j].Severity
+		}
+		if findings[i].Tool != findings[j].Tool {
+			return findings[i].Tool < findings[j].Tool
+		}
+		return findings[i].ID < findings[j].ID
+	})
+	return findings
+}
+
+// denseRegistryGroups returns tool groups large enough that weak per-action
+// discovery metadata can make adjacent actions hard to distinguish.
+func denseRegistryGroups(registry *Registry) map[string]bool {
+	const minDenseGroupActions = 8
+	groupCounts := make(map[string]int)
+	for _, entry := range registry.entries {
+		groupCounts[entry.Tool]++
+	}
+
+	dense := make(map[string]bool)
+	for toolName, count := range groupCounts {
+		if count >= minDenseGroupActions {
+			dense[toolName] = true
+		}
+	}
+	return dense
+}
+
+// hasActionDiscoverySignal reports whether an action has any searchable signal
+// beyond its derived canonical ID, domain, and action words.
+func hasActionDiscoverySignal(entry actionEntry) bool {
+	if len(entry.Aliases) > 0 || len(entry.Tags) > 0 || usageHintForEntry(entry) != "" || len(relatedActionsForEntry(entry)) > 0 {
+		return true
+	}
+	document := entry.Document
+	return len(entry.RequiredParams) > 0 ||
+		len(document.OptionalParams) > 0 ||
+		len(document.SchemaProperties) > 0 ||
+		len(document.SchemaEnums) > 0 ||
+		len(document.SchemaDescTerms) > 0
 }
 
 func auditActionAliases(catalog *actioncatalog.Catalog, aliases []actionAlias) []AliasAuditFinding {
