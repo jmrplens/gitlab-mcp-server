@@ -4601,6 +4601,10 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 	opts := options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, Output: path}
 	runErr := errors.New("fixture validation failed\nmissing project fixture")
 
+	if err := writeStartupReport(path, opts); err != nil {
+		t.Fatalf("writeStartupReport() error = %v", err)
+	}
+
 	if err := writeErrorReport(path, opts, runErr); err != nil {
 		t.Fatalf("writeErrorReport() error = %v", err)
 	}
@@ -4615,6 +4619,9 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 		"fixture validation failed",
 		"missing project fixture",
 	})
+	if strings.Contains(string(data), "Status: `running`") {
+		t.Fatalf("error report still contains startup placeholder content: %s", data)
+	}
 }
 
 // TestResolveModelSpecs_UsesEvalModels verifies that ResolveModelSpecs handles the uses eval models scenario correctly.

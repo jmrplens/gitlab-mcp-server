@@ -6370,14 +6370,8 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 		return fmt.Errorf("create report directory: %w", err)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Meta-Tool Model Evaluation\n\n")
-	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
+	writeReportHeader(&b, opts, opts.DryRun)
 	fmt.Fprintf(&b, "Status: `%s`\n", status)
-	fmt.Fprintf(&b, "Mode: %s\n", reportMode(opts.DryRun))
-	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
-	fmt.Fprintf(&b, "Tool surface: `%s`\n", opts.ToolSurface)
-	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
-	fmt.Fprintf(&b, "Tool execution: `%s`\n", toolExecutionMode(opts))
 	if opts.TraceDir != "" && !opts.DryRun {
 		fmt.Fprintf(&b, "Trace artifacts: `%s`\n", opts.TraceDir)
 	}
@@ -6392,6 +6386,34 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 		return fmt.Errorf("write status report: %w", err)
 	}
 	return nil
+}
+
+// writeReportHeader is an internal helper for the main package.
+func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
+	fmt.Fprintf(b, "# Meta-Tool Model Evaluation\n\n")
+	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
+	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
+		if branch != "" {
+			fmt.Fprintf(b, "Git branch: `%s`\n", branch)
+		}
+		if commit != "" {
+			fmt.Fprintf(b, "Git commit: `%s`\n", commit)
+		}
+	}
+	fmt.Fprintf(b, "Mode: %s\n", reportMode(dryRun))
+	fmt.Fprintf(b, "Model: `%s`\n", opts.Model)
+	fmt.Fprintf(b, "Tool surface: `%s`\n", opts.ToolSurface)
+	fmt.Fprintf(b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
+	if opts.Preset != "" {
+		fmt.Fprintf(b, "Preset: `%s`\n", opts.Preset)
+	}
+	fmt.Fprintf(b, "Tool execution: `%s`\n", toolExecutionMode(opts))
+	if opts.ToolsFile != "" {
+		fmt.Fprintf(b, "Tools file: `%s`\n", opts.ToolsFile)
+	}
+	if opts.Partition != "" {
+		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
+	}
 }
 
 // reportMode is an internal helper for the main package.
@@ -6409,30 +6431,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	var b strings.Builder
 	metrics := calculateMetrics(results)
-	fmt.Fprintf(&b, "# Meta-Tool Model Evaluation\n\n")
-	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
-	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
-		if branch != "" {
-			fmt.Fprintf(&b, "Git branch: `%s`\n", branch)
-		}
-		if commit != "" {
-			fmt.Fprintf(&b, "Git commit: `%s`\n", commit)
-		}
-	}
-	fmt.Fprintf(&b, "Mode: %s\n", reportMode(dryRun))
-	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
-	fmt.Fprintf(&b, "Tool surface: `%s`\n", opts.ToolSurface)
-	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
-	if opts.Preset != "" {
-		fmt.Fprintf(&b, "Preset: `%s`\n", opts.Preset)
-	}
-	fmt.Fprintf(&b, "Tool execution: `%s`\n", toolExecutionMode(opts))
-	if opts.ToolsFile != "" {
-		fmt.Fprintf(&b, "Tools file: `%s`\n", opts.ToolsFile)
-	}
-	if opts.Partition != "" {
-		fmt.Fprintf(&b, "Partition: `%s`\n", opts.Partition)
-	}
+	writeReportHeader(&b, opts, dryRun)
 	fmt.Fprintf(&b, "Catalog tools: %d\n", len(catalog))
 	fmt.Fprintf(&b, "Runs: %d\n", opts.Repeat)
 	fmt.Fprintf(&b, "Task attempts: %d\n\n", len(results))

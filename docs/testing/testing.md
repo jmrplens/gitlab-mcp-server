@@ -292,7 +292,7 @@
 | cmd/audit_output | 23.0% |
 | cmd/audit_tokens | 19.0% |
 | cmd/audit_tools | 37.7% |
-| cmd/eval_meta_tools | 57.6% |
+| cmd/eval_meta_tools | 57.8% |
 | cmd/gen_llms | 7.2% |
 | cmd/gen_readme | 14.6% |
 | cmd/gen_testing_docs | 20.7% |
@@ -500,7 +500,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_output** (23.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tools** (37.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_meta_tools** (57.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_meta_tools** (57.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (77.7%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
