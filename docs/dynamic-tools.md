@@ -343,6 +343,12 @@ The goal is not to make the model guess blindly. The model should use search to 
 
 Search returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
 
+### Metadata Guidance
+
+Dynamic search intentionally keeps most action metadata derived from canonical IDs, route schemas, required params, enum values, and route safety flags. Add hand-authored aliases, tags, usage hints, or related-action guidance only when deterministic corpus tests or model-backed Docker evaluations show that models confuse a specific family of actions.
+
+Prefer compact metadata that teaches the distinction rather than broad synonyms on every action. Good candidates are dense domains where similar verbs compete, such as deploy keys versus deploy tokens, protected environments versus deployment approvals, release assets versus release links, issue notes versus issue discussions, and feature-flag user lists versus feature flags. After adding metadata, run the dynamic search corpus and a targeted Docker-backed model evaluation for the affected tasks.
+
 ## Dynamic vs Meta-Tools
 
 | Concern | Meta-tools | Dynamic toolset |

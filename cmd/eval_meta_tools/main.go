@@ -458,7 +458,7 @@ func main() {
 }
 
 // run is an internal helper for the main package.
-func run() error {
+func run() (runErr error) {
 	opts := parseFlags()
 	var presetErr error
 	opts, presetErr = applyPresetDefaults(opts)
@@ -503,6 +503,20 @@ func run() error {
 	}
 	if opts.TraceDir == "" && !opts.DryRun {
 		opts.TraceDir = defaultTraceDir(opts.Output)
+	}
+	finalReportWritten := false
+	if shouldWriteStartupReport(opts) {
+		if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
+			return writeErr
+		}
+		defer func() {
+			if runErr == nil || finalReportWritten {
+				return
+			}
+			if writeErr := writeErrorReport(opts.Output, opts, runErr); writeErr != nil {
+				runErr = errors.Join(runErr, writeErr)
+			}
+		}()
 	}
 	var fixtures *liveFixtureState
 	if opts.PrepareFixtures {
@@ -614,6 +628,7 @@ func run() error {
 		if err := writeReport(opts.Output, opts, results, catalog, routes, true); err != nil {
 			return err
 		}
+		finalReportWritten = true
 		return writeCoverageReportIfRequested(opts, results, routes)
 	}
 
@@ -684,6 +699,7 @@ func run() error {
 	if writeErr := writeReport(opts.Output, opts, results, catalog, routes, false); writeErr != nil {
 		return writeErr
 	}
+	finalReportWritten = true
 	if err := writeCoverageReportIfRequested(opts, results, routes); err != nil {
 		return err
 	}
@@ -6333,6 +6349,59 @@ func valueOrZero(value string) string {
 	return escapeTable(value)
 }
 
+// shouldWriteStartupReport is an internal helper for the main package.
+func shouldWriteStartupReport(opts options) bool {
+	return opts.Output != "" && !opts.FixturesOnly
+}
+
+// writeStartupReport is an internal helper for the main package.
+func writeStartupReport(path string, opts options) error {
+	return writeStatusReport(path, opts, "running", "The evaluator created this placeholder at startup. It will be replaced by the final metrics report when the run completes.", nil)
+}
+
+// writeErrorReport is an internal helper for the main package.
+func writeErrorReport(path string, opts options, runErr error) error {
+	return writeStatusReport(path, opts, "failed", "The evaluator stopped before it could write the final metrics report.", runErr)
+}
+
+// writeStatusReport is an internal helper for the main package.
+func writeStatusReport(path string, opts options, status, message string, runErr error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Meta-Tool Model Evaluation\n\n")
+	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "Status: `%s`\n", status)
+	fmt.Fprintf(&b, "Mode: %s\n", reportMode(opts.DryRun))
+	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
+	fmt.Fprintf(&b, "Tool surface: `%s`\n", opts.ToolSurface)
+	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
+	fmt.Fprintf(&b, "Tool execution: `%s`\n", toolExecutionMode(opts))
+	if opts.TraceDir != "" && !opts.DryRun {
+		fmt.Fprintf(&b, "Trace artifacts: `%s`\n", opts.TraceDir)
+	}
+	fmt.Fprintf(&b, "\n## Status\n\n%s\n", message)
+	if runErr != nil {
+		fmt.Fprintf(&b, "\n## Error\n\n")
+		for line := range strings.SplitSeq(runErr.Error(), "\n") {
+			fmt.Fprintf(&b, "    %s\n", line)
+		}
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		return fmt.Errorf("write status report: %w", err)
+	}
+	return nil
+}
+
+// reportMode is an internal helper for the main package.
+func reportMode(dryRun bool) string {
+	if dryRun {
+		return "static route/schema validation"
+	}
+	return "model tool-calling"
+}
+
 // writeReport is an internal helper for the main package.
 func writeReport(path string, opts options, results []taskResult, catalog []modelTool, routes map[string]toolutil.ActionMap, dryRun bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -6340,10 +6409,6 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	var b strings.Builder
 	metrics := calculateMetrics(results)
-	mode := "model tool-calling"
-	if dryRun {
-		mode = "static route/schema validation"
-	}
 	fmt.Fprintf(&b, "# Meta-Tool Model Evaluation\n\n")
 	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
 	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
@@ -6354,7 +6419,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 			fmt.Fprintf(&b, "Git commit: `%s`\n", commit)
 		}
 	}
-	fmt.Fprintf(&b, "Mode: %s\n", mode)
+	fmt.Fprintf(&b, "Mode: %s\n", reportMode(dryRun))
 	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(&b, "Tool surface: `%s`\n", opts.ToolSurface)
 	fmt.Fprintf(&b, "Backend: `%s`\n", normalizedBackend(opts.Backend))

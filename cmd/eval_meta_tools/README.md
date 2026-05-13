@@ -193,6 +193,8 @@ E2E_MODE=docker timeout 900s go run ./cmd/eval_meta_tools \
 
 The Docker presets apply safe defaults for `--backend=gitlab`, `--gitlab-env-file test/e2e/.env.docker`, `--execute-tools`, `--use-fixtures`, `--skip-unavailable`, and the matching partition. Override any of those flags explicitly when debugging a narrower case.
 
+Long model-backed runs create the selected `--out` Markdown file at startup with a `Status: running` placeholder. The placeholder is replaced by the final metrics report when the run completes, or by a failure report if the evaluator stops before final metrics are available. For long local runs, always set an explicit `--out` path and redirect stdout/stderr to a sibling `.log` file so the terminal does not become the report artifact.
+
 Use `scripts/eval-compare-version.sh` to orchestrate the standard snapshot, token audit, schema dry-run, optional model-backed run, and optional comparison report for one target label.
 
 ## Safety
