@@ -32,18 +32,24 @@
 Capabilities are declared in `cmd/server/main.go` when constructing the MCP server:
 
 ```go
-mcp.ServerCapabilities{
+serverCapabilities := &mcp.ServerCapabilities{
     Logging:   &mcp.LoggingCapabilities{},
     Tools:     &mcp.ToolCapabilities{ListChanged: true},
     Resources: &mcp.ResourceCapabilities{ListChanged: true},
-    Prompts:   &mcp.PromptCapabilities{ListChanged: true},
+}
+if capabilitySurface == config.CapabilitySurfaceFull {
+    serverCapabilities.Prompts = &mcp.PromptCapabilities{ListChanged: true}
 }
 ```
 
-The three `ListChanged: true` flags advertise that the server will emit
-`notifications/tools/list_changed`, `notifications/resources/list_changed`, and
-`notifications/prompts/list_changed` whenever the corresponding catalog
-changes. The Go SDK debounces these notifications (10 ms window) and sends
+The `tools` and `resources` `ListChanged: true` flags are always advertised.
+The `prompts` capability is advertised only when `CAPABILITY_SURFACE=full`.
+`CAPABILITY_SURFACE=minimal` keeps tool execution, logging, completions, roots
+handling, progress handling, and the `gitlab://workspace/roots` resource, but
+omits optional prompts, static GitLab resources, workflow guides, and
+meta-schema resources.
+
+The Go SDK debounces list-changed notifications (10 ms window) and sends
 them automatically when `AddTool`, `AddResource`, `AddPrompt`, or their
 `Remove*` counterparts are invoked at runtime — no manual emission is
 required from handler code.

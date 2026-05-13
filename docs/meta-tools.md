@@ -57,7 +57,7 @@ Meta-tools remain the default today because they are the most broadly compatible
 The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It consumes the same
 canonical action catalog as meta-tools, including typed schemas, destructive-action metadata, Markdown formatters, read-only filtering, safe-mode previews, and token-scope filtering. The difference is packaging: dynamic keeps the full catalog out of the initial `tools/list` response and reveals actions through search and describe calls.
 The experimental `dynamic-2` candidate exposes `gitlab_find_action` and `gitlab_execute_tool`; it combines search and schema lookup into one discovery call for A/B evaluation.
-Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources and prompts.
+Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources, prompts, and meta-schema resources.
 
 See [Dynamic Toolset](dynamic-tools.md) for the full user workflow, architecture diagrams, safety model, and troubleshooting guidance.
 

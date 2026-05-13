@@ -194,7 +194,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
 | `TOOL_SURFACE`           | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `META_TOOLS` | _(empty)_          |
 | `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
-| `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action schema always discoverable via `gitlab://schema/meta/{tool}/{action}` resource | `opaque` (default) |
+| `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |

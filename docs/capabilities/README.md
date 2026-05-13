@@ -37,6 +37,8 @@ Capabilities are declared in `cmd/server/main.go` when constructing the MCP serv
 server := mcp.NewServer(
     &mcp.ServerCapabilities{
         Logging:     &mcp.LoggingCapabilities{},
+        Tools:       &mcp.ToolCapabilities{ListChanged: true},
+        Resources:   &mcp.ResourceCapabilities{ListChanged: true},
     },
     &mcp.ServerOptions{
         CompletionHandler:           completionHandler.Complete,
@@ -45,6 +47,12 @@ server := mcp.NewServer(
     },
 )
 ```
+
+`CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
+and registers the full prompt/resource catalog. `CAPABILITY_SURFACE=minimal`
+omits the prompt capability and keeps only the workspace roots resource while
+leaving tool execution, completions, roots handling, logging, and progress
+handling available.
 
 Client capabilities (Roots, Sampling, Elicitation) are not declared by the server — they are advertised by the client during the `initialize` handshake. The server checks for their presence at tool execution time via `FromRequest()` helpers.
 

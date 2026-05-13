@@ -242,7 +242,7 @@ make analyze-report                        # generate LLM-consumable report
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; default is an empty string (not set), matching `--tool-surface`, so `TOOL_SURFACE` does not override `META_TOOLS` unless explicitly set to a non-empty value |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps only `gitlab://workspace/roots` and is useful with dynamic mode |
-| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action JSON Schema is always discoverable via `gitlab://schema/meta/{tool}/{action}` resource |
+| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating tools and returns a JSON preview (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |

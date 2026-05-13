@@ -332,6 +332,90 @@ func TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities(t *testing.T) 
 	}
 }
 
+// TestHTTPHandler_Initialize_CapabilitySurfaceControlsPromptsCapability verifies
+// that the initialize handshake mirrors the selected resource and prompt surface.
+func TestHTTPHandler_Initialize_CapabilitySurfaceControlsPromptsCapability(t *testing.T) {
+	client := newMockGitLabClient(t)
+	testCases := []struct {
+		name                  string
+		capabilitySurface     string
+		wantPromptsCapability bool
+	}{
+		{name: "full", capabilitySurface: config.CapabilitySurfaceFull, wantPromptsCapability: true},
+		{name: "minimal", capabilitySurface: config.CapabilitySurfaceMinimal, wantPromptsCapability: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: tc.capabilitySurface,
+			})
+			handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+				return server
+			}, nil)
+			ts := httptest.NewServer(handler)
+			t.Cleanup(ts.Close)
+
+			body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			req.Header.Set(hdrContentType, mimeJSON)
+			req.Header.Set("Accept", mimeJSONSSE)
+
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			sessionID := resp.Header.Get(hdrMCPSessionID)
+			t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
+
+			result := parseJSONRPCResponse(t, resp)
+			res, ok := result["result"].(map[string]any)
+			if !ok {
+				t.Fatalf("response missing 'result' field: %v", result)
+			}
+			caps, ok := res["capabilities"].(map[string]any)
+			if !ok {
+				t.Fatalf("response missing 'capabilities' field: %v", res)
+			}
+
+			for _, key := range []string{"tools", "resources"} {
+				group, gok := caps[key].(map[string]any)
+				if !gok {
+					t.Fatalf("capabilities.%s missing or not an object: %v", key, caps[key])
+				}
+				if got := group["listChanged"]; got != true {
+					t.Fatalf("capabilities.%s.listChanged = %v, want true", key, got)
+				}
+			}
+
+			promptsCapabilityValue, hasPromptsCapability := caps["prompts"]
+			if tc.wantPromptsCapability {
+				if !hasPromptsCapability {
+					t.Fatal("full capability surface should advertise prompts")
+				}
+				promptsCapability, promptCapabilityIsObject := promptsCapabilityValue.(map[string]any)
+				if !promptCapabilityIsObject {
+					t.Fatalf("capabilities.prompts is not an object: %v", promptsCapabilityValue)
+				}
+				if got := promptsCapability["listChanged"]; got != true {
+					t.Fatalf("capabilities.prompts.listChanged = %v, want true", got)
+				}
+				return
+			}
+			if hasPromptsCapability {
+				t.Fatalf("minimal capability surface advertised prompts: %v", promptsCapabilityValue)
+			}
+		})
+	}
+}
+
 // TestHTTPHandler_ToolsList_ReturnsAllTools verifies the full MCP handshake
 // (initialize → initialized notification → tools/list) and asserts that all
 // registered tools are returned.
@@ -425,7 +509,6 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 	go func() {
 		errCh <- serveHTTP(ctx, cfg, ":0")
 	}()
-
 	// Allow HTTP server to start listening
 	time.Sleep(100 * time.Millisecond)
 
@@ -1006,40 +1089,117 @@ func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
 	}
 }
 
-// TestCreateServer_MinimalCapabilitySurface verifies the explicit low-token
-// capability surface keeps workspace roots while omitting optional schema,
-// workflow, static data resources, and prompts.
-func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
+// TestCreateServer_CapabilitySurfaceParity verifies that resource, prompt, and
+// meta-schema exposure follows CAPABILITY_SURFACE consistently across
+// catalog-backed tool surfaces.
+func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{
-		MetaTools:         true,
-		ToolSurface:       config.ToolSurfaceDynamic,
-		CapabilitySurface: config.CapabilitySurfaceMinimal,
-	})
-	session := newInMemorySession(t, server)
-
-	resourcesResult, err := session.ListResources(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("ListResources() error = %v", err)
-	}
-	if len(resourcesResult.Resources) != 1 || resourcesResult.Resources[0].URI != "gitlab://workspace/roots" {
-		t.Fatalf("minimal resources = %+v, want only workspace_roots", resourcesResult.Resources)
-	}
-
-	templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("ListResourceTemplates() error = %v", err)
-	}
-	if len(templatesResult.ResourceTemplates) != 0 {
-		t.Fatalf("minimal resource templates = %+v, want none", templatesResult.ResourceTemplates)
+	testCases := []struct {
+		name              string
+		toolSurface       string
+		capabilitySurface string
+		wantFullCatalog   bool
+		wantSchema        bool
+		wantDescribe      bool
+	}{
+		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
+		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
+		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true, wantDescribe: true},
+		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal, wantDescribe: true},
+		{name: "dynamic-2 full", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
+		{name: "dynamic-2 minimal", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceMinimal},
+		{name: "dynamic-3 full", toolSurface: config.ToolSurfaceDynamic3, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true, wantDescribe: true},
+		{name: "dynamic-3 minimal", toolSurface: config.ToolSurfaceDynamic3, capabilitySurface: config.CapabilitySurfaceMinimal, wantDescribe: true},
 	}
 
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
-	if err == nil {
-		t.Fatal("minimal capability surface should omit meta-schema resources")
-	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       tc.toolSurface,
+				CapabilitySurface: tc.capabilitySurface,
+			})
+			session := newInMemorySession(t, server)
 
+			resourcesResult, err := session.ListResources(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListResources() error = %v", err)
+			}
+			if !resourceListHasURI(resourcesResult.Resources, "gitlab://workspace/roots") {
+				t.Fatalf("resources = %+v, want workspace roots", resourcesResult.Resources)
+			}
+			if tc.wantFullCatalog {
+				for _, uri := range []string{"gitlab://user/current", "gitlab://guides/git-workflow"} {
+					if !resourceListHasURI(resourcesResult.Resources, uri) {
+						t.Fatalf("full resources missing %q: %+v", uri, resourcesResult.Resources)
+					}
+				}
+			} else if len(resourcesResult.Resources) != 1 {
+				t.Fatalf("minimal resources = %+v, want only workspace roots", resourcesResult.Resources)
+			}
+
+			templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListResourceTemplates() error = %v", err)
+			}
+			hasSchemaTemplate := resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/meta/{tool}/{action}")
+			if tc.wantSchema && !hasSchemaTemplate {
+				t.Fatalf("resource templates missing meta schema template: %+v", templatesResult.ResourceTemplates)
+			}
+			if !tc.wantSchema && hasSchemaTemplate {
+				t.Fatalf("minimal resource templates unexpectedly include meta schema: %+v", templatesResult.ResourceTemplates)
+			}
+			if !tc.wantFullCatalog && len(templatesResult.ResourceTemplates) != 0 {
+				t.Fatalf("minimal resource templates = %+v, want none", templatesResult.ResourceTemplates)
+			}
+
+			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+			if tc.wantSchema && err != nil {
+				t.Fatalf("meta-schema resource should be readable: %v", err)
+			}
+			if !tc.wantSchema && err == nil {
+				t.Fatal("minimal capability surface should omit meta-schema resources")
+			}
+
+			assertPromptSurface(t, session, tc.wantFullCatalog)
+			assertCompletionHandlerAvailable(t, session)
+			if tc.wantDescribe {
+				assertDynamicDescribeIncludesSchema(t, session)
+			}
+		})
+	}
+}
+
+func resourceListHasURI(items []*mcp.Resource, uri string) bool {
+	for _, item := range items {
+		if item.URI == uri {
+			return true
+		}
+	}
+	return false
+}
+
+func resourceTemplateListHasURI(items []*mcp.ResourceTemplate, uri string) bool {
+	for _, item := range items {
+		if item.URITemplate == uri {
+			return true
+		}
+	}
+	return false
+}
+
+func assertPromptSurface(t *testing.T, session *mcp.ClientSession, wantPrompts bool) {
+	t.Helper()
 	promptsResult, err := session.ListPrompts(t.Context(), nil)
+	if wantPrompts {
+		if err != nil {
+			t.Fatalf("ListPrompts() error = %v", err)
+		}
+		if len(promptsResult.Prompts) == 0 {
+			t.Fatal("full capability surface registered no prompts")
+		}
+		return
+	}
 	if err != nil {
 		if !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			t.Fatalf("ListPrompts() error = %v", err)
@@ -1048,6 +1208,50 @@ func TestCreateServer_MinimalCapabilitySurface(t *testing.T) {
 	}
 	if len(promptsResult.Prompts) > 0 {
 		t.Fatalf("minimal prompts = %+v, want none", promptsResult.Prompts)
+	}
+}
+
+func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	result, err := session.Complete(t.Context(), &mcp.CompleteParams{
+		Ref: &mcp.CompleteReference{
+			Type: "ref/prompt",
+			Name: "summarize_mr_changes",
+		},
+		Argument: mcp.CompleteParamsArgument{
+			Name:  "unknown_argument",
+			Value: "",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if len(result.Completion.Values) != 0 {
+		t.Fatalf("Complete() values = %v, want empty result for unknown argument", result.Completion.Values)
+	}
+}
+
+func assertDynamicDescribeIncludesSchema(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "gitlab_describe_tools",
+		Arguments: map[string]any{"action": "project.get"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(gitlab_describe_tools) error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("gitlab_describe_tools result = %+v, want non-error", result)
+	}
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal describe structured content: %v", err)
+	}
+	text := string(structured)
+	for _, want := range []string{"project.get", "input_schema", "project_id"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("gitlab_describe_tools structured content missing %q: %s", want, text)
+		}
 	}
 }
 
