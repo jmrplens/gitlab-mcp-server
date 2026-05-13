@@ -20,6 +20,11 @@ GitLab business logic.
 Individual tools are a direct compatibility surface. Meta-tools and dynamic
 tools are catalog-backed surfaces over the same action core.
 
+Catalog-first generation for individual tools has been evaluated and deferred.
+See [Catalog-First Individual Tools Evaluation](catalog-first-individual-tools.md)
+for the current decision and the metadata gaps that must be closed before any
+future generator is considered.
+
 ## Canonical Action Core
 
 The canonical action core is the intermediate layer between typed GitLab domain
