@@ -43,6 +43,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
@@ -73,6 +74,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstatistics"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedpackages"
@@ -88,6 +90,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
@@ -148,6 +151,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildSearchActionSpecs,
 		buildSecurityFindingActionSpecs,
 		buildSnippetActionSpecs,
+		buildStorageMoveActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
 		buildVulnerabilityActionSpecs,
@@ -399,6 +403,17 @@ func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	specs = append(specs, snippetnotes.ActionSpecs(client)...)
 	specs = append(specs, awardemoji.SnippetActionSpecs(client)...)
 	return actionSpecGroup("gitlab_snippet", specs)
+}
+
+func buildStorageMoveActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	specs := make([]toolutil.ActionSpec, 0, 18)
+	specs = append(specs, projectstoragemoves.ActionSpecs(client)...)
+	specs = append(specs, groupstoragemoves.ActionSpecs(client)...)
+	specs = append(specs, snippetstoragemoves.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_storage_move", specs)
 }
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
