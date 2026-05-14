@@ -9,6 +9,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/adminspecs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/avatar"
@@ -162,6 +163,7 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
+		buildAdminActionSpecs,
 		buildAccessActionSpecs,
 		buildAnalyzeActionSpecs,
 		buildAttestationActionSpecs,
@@ -205,6 +207,10 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildVulnerabilityActionSpecs,
 		buildWikiActionSpecs,
 	}
+}
+
+func buildAdminActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_admin", adminspecs.ActionSpecs(client))
 }
 
 func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
