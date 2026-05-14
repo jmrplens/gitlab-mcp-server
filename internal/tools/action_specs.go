@@ -38,7 +38,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstatistics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
@@ -46,6 +48,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
@@ -148,8 +151,8 @@ func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []Action
 	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
 }
 
-func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 50)
+func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 68)
 	specs = append(specs, uploads.ActionSpecs(client)...)
 	specs = append(specs, projectstatistics.ActionSpecs(client)...)
 	specs = append(specs, projectimportexport.ActionSpecs(client)...)
@@ -159,6 +162,11 @@ func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	specs = append(specs, badges.ProjectActionSpecs(client)...)
 	specs = append(specs, boards.ActionSpecs(client)...)
 	specs = append(specs, integrations.ActionSpecs(client)...)
+	specs = append(specs, pages.ActionSpecs(client)...)
+	specs = append(specs, projectmirrors.ActionSpecs(client)...)
+	if enterprise {
+		specs = append(specs, securitysettings.ProjectActionSpecs(client)...)
+	}
 	return actionSpecGroup("gitlab_project", specs)
 }
 
