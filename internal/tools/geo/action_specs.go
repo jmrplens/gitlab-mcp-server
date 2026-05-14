@@ -1,0 +1,54 @@
+package geo
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for Geo site management actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		geoCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_geo_site"),
+		geoReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_geo_sites"),
+		geoReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_get_geo_site"),
+		geoUpdateSpec("edit", toolutil.RouteAction(client, Edit), "gitlab_edit_geo_site"),
+		geoDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_geo_site"),
+		geoUpdateSpec("repair", toolutil.RouteAction(client, Repair), "gitlab_repair_geo_site"),
+		geoReadSpec("list_status", toolutil.RouteAction(client, ListStatus), "gitlab_list_status_all_geo_sites"),
+		geoReadSpec("get_status", toolutil.RouteAction(client, GetStatus), "gitlab_get_status_geo_site"),
+	}
+}
+
+func geoReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := geoOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func geoCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, geoOptions(individualTool))
+}
+
+func geoUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := geoOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func geoDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := geoOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func geoOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"geo", "replication"},
+		OpenWorld:      true,
+		Edition:        "premium",
+		OwnerPackage:   "geo",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

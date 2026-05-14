@@ -108,6 +108,12 @@ govulncheck -version
 
 | Target | Description |
 | --- | --- |
+| `make audit-output` | Run the MCP output quality audit on all tools |
+| `make audit-tokens` | Measure exposed tool token overhead |
+| `make audit-tools` | Audit MCP tool metadata violations |
+| `make audit-metrics` | Report MCP tool/resource/prompt counts |
+| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability |
+| `make audit-test-names` | Audit test function naming convention compliance |
 | `make audit-godocs` | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
 | `make audit-godocs-check` | Run the same Godoc audit and fail if findings remain |
 

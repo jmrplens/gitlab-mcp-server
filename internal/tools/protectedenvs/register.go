@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // RegisterTools registers the five protected environment management tools with the MCP server.
-func RegisterTools(server *mcp.Server, client *gitlab.Client) {
+func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_protected_environment_list",
 		Title:       toolutil.TitleFromName("gitlab_protected_environment_list"),

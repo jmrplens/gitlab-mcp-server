@@ -39,15 +39,16 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		catalog = catalog.Clone()
 	}
 	if !standaloneExcluded(opts.ExcludeTools, "gitlab_discover_project") {
-		if err := catalog.AddAction("gitlab_discover_project", actioncatalog.Action{
-			Name:  "resolve",
-			Route: toolutil.RouteAction(client, projectdiscovery.Resolve),
-		}, actioncatalog.GroupOptions{
+		group, groupErr := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
 			ToolName:    "gitlab_discover_project",
 			Description: "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
 			Icons:       toolutil.IconProject,
 			ReadOnly:    true,
-		}); err != nil {
+		}, projectdiscovery.ActionSpecs(client))
+		if groupErr != nil {
+			return nil, fmt.Errorf("build standalone dynamic group gitlab_discover_project: %w", groupErr)
+		}
+		if err := catalog.AddGroup(group); err != nil {
 			return nil, fmt.Errorf("add standalone dynamic action gitlab_discover_project.resolve: %w", err)
 		}
 	}
@@ -55,22 +56,19 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		return catalog, nil
 	}
 
-	interactive := actioncatalog.NewGroup(actioncatalog.GroupOptions{
+	interactiveSpecs := slices.DeleteFunc(elicitationtools.ActionSpecs(client), func(spec toolutil.ActionSpec) bool {
+		return standaloneExcluded(opts.ExcludeTools, spec.IndividualTool.Name)
+	})
+	if len(interactiveSpecs) == 0 {
+		return catalog, nil
+	}
+	interactive, groupErr := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
 		ToolName:    "gitlab_interactive",
 		Description: "Guided interactive creation flows for issues, merge requests, projects, and releases. Mutating; use only when the task explicitly asks for a guided flow.",
 		Icons:       toolutil.IconServer,
-	})
-	if !standaloneExcluded(opts.ExcludeTools, "gitlab_interactive_issue_create") {
-		interactive.SetAction(actioncatalog.Action{Name: "issue_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.IssueCreate)})
-	}
-	if !standaloneExcluded(opts.ExcludeTools, "gitlab_interactive_mr_create") {
-		interactive.SetAction(actioncatalog.Action{Name: "mr_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.MRCreate)})
-	}
-	if !standaloneExcluded(opts.ExcludeTools, "gitlab_interactive_project_create") {
-		interactive.SetAction(actioncatalog.Action{Name: "project_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.ProjectCreate)})
-	}
-	if !standaloneExcluded(opts.ExcludeTools, "gitlab_interactive_release_create") {
-		interactive.SetAction(actioncatalog.Action{Name: "release_create", Route: toolutil.RouteActionWithRequest(client, elicitationtools.ReleaseCreate)})
+	}, interactiveSpecs)
+	if groupErr != nil {
+		return nil, fmt.Errorf("build standalone dynamic group gitlab_interactive: %w", groupErr)
 	}
 	if len(interactive.Actions) > 0 {
 		if err := catalog.AddGroup(interactive); err != nil {

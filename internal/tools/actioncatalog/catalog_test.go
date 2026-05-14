@@ -98,6 +98,16 @@ func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	if len(actions) != 2 || actions[0].Name != "a" || actions[1].Name != "z" {
 		t.Fatalf("ActionsInOrder() = %+v, want sorted fallback order", actions)
 	}
+
+	withStaleOrder := Group{
+		ToolName:    "gitlab_project",
+		ActionOrder: []string{"get", "missing", "get"},
+		Actions:     map[string]Action{"get": {Name: "get", Route: testRoute(false)}},
+	}
+	ordered := withStaleOrder.ActionsInOrder()
+	if len(ordered) != 1 || ordered[0].Name != "get" {
+		t.Fatalf("ActionsInOrder(stale order) = %+v, want only get", ordered)
+	}
 }
 
 func TestCatalog_CloneDefensivelyCopiesRoutes(t *testing.T) {
@@ -167,6 +177,20 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	if err := NewCatalog().AddGroup(duplicateID); err == nil {
 		t.Fatal("AddGroup(duplicate action ID) error = nil, want error")
 	}
+
+	invalidAction := Group{ToolName: "gitlab_project", Actions: map[string]Action{"": {Route: testRoute(false)}}}
+	if err := NewCatalog().AddGroup(invalidAction); err == nil {
+		t.Fatal("AddGroup(empty action name) error = nil, want error")
+	}
+}
+
+func TestMustAddCatalogGroup_PanicsOnInvariantDrift(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("mustAddCatalogGroup() did not panic")
+		}
+	}()
+	mustAddCatalogGroup(nil, Group{}, "test operation")
 }
 
 func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {

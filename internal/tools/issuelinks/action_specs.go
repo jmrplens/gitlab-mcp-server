@@ -1,0 +1,70 @@
+package issuelinks
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for issue link actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		issueLinkReadSpec("link_list", toolutil.RouteAction(client, List), "gitlab_issue_link_list"),
+		issueLinkReadSpec("link_get", toolutil.RouteAction(client, Get), "gitlab_issue_link_get"),
+		toolutil.NewActionSpec("link_create",
+			toolutil.RouteAction(client, Create),
+			toolutil.ActionSpecOptions{
+				Tags:           []string{"issue", "link"},
+				Usage:          "Use to create a relationship from a source issue to a target issue, optionally across projects.",
+				RelatedActions: []string{"issue.link_list", "issue.link_get", "issue.link_delete", "issue.get"},
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{
+					"project_id": {
+						SemanticRole:     "source_project",
+						ValueSource:      "Project that owns the source issue.",
+						CommonConfusions: []string{"Use target_project_id for the linked issue's project when it differs."},
+					},
+					"issue_iid": {
+						SemanticRole:     "source_issue",
+						ValueSource:      "IID of the source issue receiving the link.",
+						CommonConfusions: []string{"Do not use the target issue IID here."},
+					},
+					"target_project_id": {
+						SemanticRole:     "target_project",
+						ValueSource:      "Project that owns the target issue.",
+						CommonConfusions: []string{"For same-project links this may equal project_id; otherwise keep it distinct."},
+					},
+					"target_issue_iid": {
+						SemanticRole:     "target_issue",
+						ValueSource:      "IID of the issue being linked to.",
+						CommonConfusions: []string{"Do not use the source issue IID here."},
+					},
+				},
+				OpenWorld:      true,
+				OwnerPackage:   "issuelinks",
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_link_create", Title: toolutil.TitleFromName("gitlab_issue_link_create")},
+			}),
+		issueLinkDeleteSpec("link_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_issue_link_delete"),
+	}
+}
+
+func issueLinkReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueLinkOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueLinkOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueLinkOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"issue", "link"},
+		OpenWorld:      true,
+		OwnerPackage:   "issuelinks",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

@@ -4,7 +4,7 @@
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-metrics audit-test-names audit-godocs audit-godocs-check \
+	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
 	gen-llms gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -543,6 +543,10 @@ audit-tools:
 ## audit-metrics: report MCP tool metrics (tool/resource/prompt counts).
 audit-metrics:
 	go run ./cmd/audit_metrics/
+
+## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
+audit-dynamic-aliases:
+	go run ./cmd/audit_dynamic_aliases/
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

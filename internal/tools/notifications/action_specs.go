@@ -1,0 +1,40 @@
+package notifications
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for notification settings actions exposed through gitlab_user.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		notificationReadSpec("notification_global_get", toolutil.RouteAction(client, GetGlobalSettings), "gitlab_notification_global_get"),
+		notificationReadSpec("notification_project_get", toolutil.RouteAction(client, GetSettingsForProject), "gitlab_notification_project_get"),
+		notificationReadSpec("notification_group_get", toolutil.RouteAction(client, GetSettingsForGroup), "gitlab_notification_group_get"),
+		notificationUpdateSpec("notification_global_update", toolutil.RouteAction(client, UpdateGlobalSettings), "gitlab_notification_global_update"),
+		notificationUpdateSpec("notification_project_update", toolutil.RouteAction(client, UpdateSettingsForProject), "gitlab_notification_project_update"),
+		notificationUpdateSpec("notification_group_update", toolutil.RouteAction(client, UpdateSettingsForGroup), "gitlab_notification_group_update"),
+	}
+}
+
+func notificationReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := notificationOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func notificationUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := notificationOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func notificationOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"user", "notification"},
+		OpenWorld:      true,
+		OwnerPackage:   "notifications",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

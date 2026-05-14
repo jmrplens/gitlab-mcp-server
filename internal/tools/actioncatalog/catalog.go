@@ -22,15 +22,27 @@ type ActionID string
 
 // Action describes one executable GitLab action in the canonical catalog.
 type Action struct {
-	ID        ActionID
-	ToolName  string
-	Domain    string
-	Name      string
-	Route     toolutil.ActionRoute
-	SchemaURI string
-	Aliases   []string
-	Tags      []string
-	ReadOnly  bool
+	ID                     ActionID
+	ToolName               string
+	Domain                 string
+	Name                   string
+	Route                  toolutil.ActionRoute
+	SchemaURI              string
+	Aliases                []string
+	Tags                   []string
+	Usage                  string
+	RelatedActions         []string
+	ReadOnly               bool
+	Edition                string
+	GitLabDotComOnly       bool
+	OwnerPackage           string
+	IndividualTool         toolutil.IndividualToolSpec
+	ContentKind            string
+	NotFoundPolicy         string
+	EmbeddedResourcePolicy string
+	RichResultPolicy       string
+	RuntimeValidationNotes []string
+	SpecBacked             bool
 }
 
 // GroupOptions contains metadata for creating a catalog group.
@@ -536,8 +548,22 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 	if action.SchemaURI == "" {
 		action.SchemaURI = toolutil.MetaSchemaURI(action.ToolName, action.Name)
 	}
+	if len(action.Aliases) == 0 {
+		action.Aliases = action.Route.Aliases
+	}
+	if len(action.Tags) == 0 {
+		action.Tags = action.Route.Tags
+	}
+	if action.Usage == "" {
+		action.Usage = action.Route.Usage
+	}
+	if len(action.RelatedActions) == 0 {
+		action.RelatedActions = action.Route.RelatedActions
+	}
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
+	action.RelatedActions = cloneStrings(action.RelatedActions)
+	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return cloneAction(action), nil
 }
 
@@ -566,6 +592,8 @@ func cloneAction(action Action) Action {
 	action.Route = route
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
+	action.RelatedActions = cloneStrings(action.RelatedActions)
+	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return action
 }
 

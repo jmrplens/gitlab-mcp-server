@@ -524,22 +524,28 @@ func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testin
 func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_custom"})
+	route := toolutil.ActionRoute{
+		Handler: func(_ context.Context, params map[string]any) (any, error) {
+			return map[string]any{"target": params["target"]}, nil
+		},
+		InputSchema: map[string]any{
+			"type":     "object",
+			"required": []any{"target"},
+			"properties": map[string]any{
+				"target": map[string]any{"type": "string"},
+			},
+		},
+	}.
+		WithUsage("Use for custom catalog metadata.").
+		WithRelatedActions("custom.audit").
+		WithParameterGuidance(map[string]toolutil.ParameterGuidance{
+			"target": {SemanticRole: "custom_target", CommonConfusions: []string{"Do not use source."}},
+		})
 	group.SetAction(actioncatalog.Action{
 		Name:    "inspect",
 		Aliases: []string{"custom.lookup"},
 		Tags:    []string{"bespoke"},
-		Route: toolutil.ActionRoute{
-			Handler: func(_ context.Context, params map[string]any) (any, error) {
-				return map[string]any{"target": params["target"]}, nil
-			},
-			InputSchema: map[string]any{
-				"type":     "object",
-				"required": []any{"target"},
-				"properties": map[string]any{
-					"target": map[string]any{"type": "string"},
-				},
-			},
-		},
+		Route:   route,
 	})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
@@ -566,6 +572,18 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	}
 	if described.Count != 1 || described.Actions[0].ID != "custom.inspect" {
 		t.Fatalf("Describe() output = %+v, want custom.inspect", described)
+	}
+	description := described.Actions[0]
+	if description.Usage != "Use for custom catalog metadata." || len(description.RelatedActions) != 1 || description.RelatedActions[0] != "custom.audit" {
+		t.Fatalf("Describe() metadata = %+v, want route-derived usage and related actions", description)
+	}
+	description.ParamGuidance["target"] = toolutil.ParameterGuidance{SemanticRole: "changed"}
+	_, describedAgain, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "custom.lookup"})
+	if err != nil {
+		t.Fatalf("Describe() second call error = %v", err)
+	}
+	if got := describedAgain.Actions[0].ParamGuidance["target"].SemanticRole; got != "custom_target" {
+		t.Fatalf("second describe ParamGuidance target role = %q, want cloned custom_target", got)
 	}
 }
 

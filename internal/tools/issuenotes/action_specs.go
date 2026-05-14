@@ -1,0 +1,50 @@
+package issuenotes
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for issue note actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		issueNoteCreateSpec("note_create", toolutil.RouteAction(client, Create), "gitlab_issue_note_create"),
+		issueNoteReadSpec("note_list", toolutil.RouteAction(client, List), "gitlab_issue_note_list"),
+		issueNoteReadSpec("note_get", toolutil.RouteAction(client, GetNote), "gitlab_issue_note_get"),
+		issueNoteUpdateSpec("note_update", toolutil.RouteAction(client, Update), "gitlab_issue_note_update"),
+		issueNoteDeleteSpec("note_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_issue_note_delete"),
+	}
+}
+
+func issueNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueNoteOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueNoteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, issueNoteOptions(individualTool))
+}
+
+func issueNoteUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueNoteOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueNoteOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueNoteOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"issue", "note"},
+		OpenWorld:      true,
+		OwnerPackage:   "issuenotes",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

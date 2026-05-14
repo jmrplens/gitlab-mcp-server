@@ -1,0 +1,53 @@
+package projectmirrors
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for project remote mirror actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		mirrorReadSpec("mirror_list", toolutil.RouteAction(client, List), "gitlab_list_project_mirrors"),
+		mirrorReadSpec("mirror_get", toolutil.RouteAction(client, Get), "gitlab_get_project_mirror"),
+		mirrorReadSpec("mirror_get_public_key", toolutil.RouteAction(client, GetPublicKey), "gitlab_get_project_mirror_public_key"),
+		mirrorCreateSpec("mirror_add", toolutil.RouteAction(client, Add), "gitlab_add_project_mirror"),
+		mirrorUpdateSpec("mirror_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_project_mirror"),
+		mirrorDeleteSpec("mirror_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_project_mirror"),
+		mirrorDeleteSpec("mirror_force_push", toolutil.DestructiveVoidAction(client, ForcePushUpdate), "gitlab_force_push_mirror_update"),
+	}
+}
+
+func mirrorReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := mirrorOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mirrorCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, mirrorOptions(individualTool))
+}
+
+func mirrorUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := mirrorOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mirrorDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := mirrorOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"project", "mirror"},
+		RelatedActions: []string{"project.pull_mirror_get", "repository.commit_list"},
+		OpenWorld:      true,
+		OwnerPackage:   "projectmirrors",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

@@ -163,6 +163,8 @@ type actionEntry struct {
 	Action         string
 	Aliases        []string
 	Tags           []string
+	Usage          string
+	RelatedActions []string
 	SchemaURI      string
 	Destructive    bool
 	RequiredParams []string
@@ -302,6 +304,8 @@ func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlia
 				Action:         action.Name,
 				Aliases:        entryAliases,
 				Tags:           tags,
+				Usage:          action.Usage,
+				RelatedActions: append([]string(nil), action.RelatedActions...),
 				SchemaURI:      schemaURI,
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
@@ -2011,6 +2015,9 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 }
 
 func usageHintForEntry(entry actionEntry) string {
+	if entry.Usage != "" {
+		return entry.Usage
+	}
 	return actionUXMetadataByID[entry.ID].Usage
 }
 
@@ -2022,6 +2029,9 @@ func whyThisActionForEntry(entry actionEntry) string {
 }
 
 func relatedActionsForEntry(entry actionEntry) []string {
+	if len(entry.RelatedActions) > 0 {
+		return append([]string(nil), entry.RelatedActions...)
+	}
 	return append([]string(nil), actionUXMetadataByID[entry.ID].RelatedActions...)
 }
 

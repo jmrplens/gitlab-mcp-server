@@ -1517,6 +1517,7 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 var knownExceptions = map[string]string{
 	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
 	// it is registered in cmd/server/main.go.
+	"adminspecs":    "infrastructure package for gitlab_admin catalog metadata, not an MCP tool package",
 	"actioncatalog": "infrastructure package for catalog metadata, not an MCP tool package",
 	"dynamic":       "registered in cmd/server/main.go from the canonical action catalog",
 	"serverupdate":  "registered in cmd/server/main.go with *autoupdate.Updater",

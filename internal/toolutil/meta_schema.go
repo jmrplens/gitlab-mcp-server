@@ -96,6 +96,9 @@ func CloneMetaSchemaRoutes(routes map[string]ActionMap) map[string]ActionMap {
 				routeCopy.OutputSchema = cloneSchemaMap(route.OutputSchema)
 			}
 			routeCopy.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
+			routeCopy.Aliases = cloneRouteStrings(route.Aliases)
+			routeCopy.Tags = cloneRouteStrings(route.Tags)
+			routeCopy.RelatedActions = cloneRouteStrings(route.RelatedActions)
 			actionCopy[action] = routeCopy
 		}
 		out[tool] = actionCopy

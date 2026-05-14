@@ -1,0 +1,65 @@
+package snippets
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for personal and project snippet actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	createRoute := toolutil.RouteAction(client, Create)
+	createRoute.InputSchema = CreateInputSchemaMap()
+	projectCreateRoute := toolutil.RouteAction(client, ProjectCreate)
+	projectCreateRoute.InputSchema = ProjectCreateInputSchemaMap()
+
+	return []toolutil.ActionSpec{
+		snippetReadSpec("list", toolutil.RouteAction(client, List), "gitlab_snippet_list"),
+		snippetReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_snippet_list_all"),
+		snippetReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_snippet_get"),
+		snippetReadSpec("content", toolutil.RouteAction(client, Content), "gitlab_snippet_content"),
+		snippetReadSpec("file_content", toolutil.RouteAction(client, FileContent), "gitlab_snippet_file_content"),
+		snippetCreateSpec("create", createRoute, "gitlab_snippet_create"),
+		snippetUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_snippet_update"),
+		snippetDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_snippet_delete"),
+		snippetReadSpec("explore", toolutil.RouteAction(client, Explore), "gitlab_snippet_explore"),
+		snippetReadSpec("project_list", toolutil.RouteAction(client, ProjectList), "gitlab_project_snippet_list"),
+		snippetReadSpec("project_get", toolutil.RouteAction(client, ProjectGet), "gitlab_project_snippet_get"),
+		snippetReadSpec("project_content", toolutil.RouteAction(client, ProjectContent), "gitlab_project_snippet_content"),
+		snippetCreateSpec("project_create", projectCreateRoute, "gitlab_project_snippet_create"),
+		snippetUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_project_snippet_update"),
+		snippetDeleteSpec("project_delete", toolutil.DestructiveVoidAction(client, ProjectDelete), "gitlab_project_snippet_delete"),
+	}
+}
+
+func snippetReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := snippetOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func snippetCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, snippetOptions(individualTool))
+}
+
+func snippetUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := snippetOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func snippetDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := snippetOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func snippetOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"snippet"},
+		OpenWorld:      true,
+		OwnerPackage:   "snippets",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

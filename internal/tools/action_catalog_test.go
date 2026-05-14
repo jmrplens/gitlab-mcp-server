@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -206,29 +208,120 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	}
 }
 
-func TestWithCatalogParameterGuidance_MergesRouteGuidance(t *testing.T) {
-	route := toolutil.ActionRoute{
-		ParameterGuidance: map[string]toolutil.ParameterGuidance{
-			"project_id": {
-				SemanticRole:     "existing_scope",
-				CommonConfusions: []string{"Keep the source project."},
-			},
-		},
+func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
+	spec := toolutil.NewActionSpec("list", testCatalogActionRoute("search"), toolutil.ActionSpecOptions{
+		Aliases:           []string{"group.search"},
+		Tags:              []string{"Group"},
+		Usage:             "Use to list groups with optional search filtering.",
+		RelatedActions:    []string{"group.get"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{"search": {SemanticRole: "group_search_query"}},
+		ReadOnly:          true,
+		Idempotent:        true,
+		OpenWorld:         true,
+		OwnerPackage:      "groups",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: "gitlab_group_list", Title: "List groups"},
+	})
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_group", Specs: []toolutil.ActionSpec{spec}}}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	action, ok := catalog.Action("group.list")
+	if !ok {
+		t.Fatal("catalog missing group.list")
+	}
+	if action.Usage != "Use to list groups with optional search filtering." || action.OwnerPackage != "groups" {
+		t.Fatalf("action metadata = %+v, want spec metadata", action)
+	}
+	if !slices.Contains(action.Aliases, "group.search") || !slices.Contains(action.Tags, "group") || !slices.Contains(action.RelatedActions, "group.get") {
+		t.Fatalf("action search metadata = aliases %+v tags %+v related %+v", action.Aliases, action.Tags, action.RelatedActions)
+	}
+	if action.Route.ParameterGuidance["search"].SemanticRole != "group_search_query" {
+		t.Fatalf("route guidance = %+v, want spec guidance", action.Route.ParameterGuidance)
+	}
+}
+
+func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	action, ok := catalog.Action("job.token_scope_remove_project")
+	if !ok {
+		t.Fatal("catalog missing job.token_scope_remove_project")
+	}
+	if !action.SpecBacked {
+		t.Fatal("job.token_scope_remove_project is not spec-backed")
+	}
+	guidance := action.Route.ParameterGuidance
+	if guidance["project_id"].SemanticRole != "scope_owner_project" {
+		t.Fatalf("project_id guidance = %+v, want canonical spec guidance", guidance["project_id"])
+	}
+	if guidance["target_project_id"].SemanticRole != "target_project" {
+		t.Fatalf("target_project_id guidance = %+v, want canonical spec guidance", guidance["target_project_id"])
+	}
+}
+
+func TestBuildActionCatalog_ExplicitSpecOverridesCapturedRoute(t *testing.T) {
+	spec := toolutil.NewActionSpec("token_scope_add_project", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "spec_scope_project"}},
+	})
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_job", Specs: []toolutil.ActionSpec{spec}}}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	action, ok := catalog.Action("job.token_scope_add_project")
+	if !ok {
+		t.Fatal("catalog missing job.token_scope_add_project")
+	}
+	guidance := action.Route.ParameterGuidance
+	if guidance["project_id"].SemanticRole != "spec_scope_project" {
+		t.Fatalf("project_id guidance = %+v, want spec guidance", guidance["project_id"])
+	}
+}
+
+func TestBuildActionCatalog_RejectsSpecWithoutCapturedRoute(t *testing.T) {
+	spec := toolutil.NewActionSpec("not_captured", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{})
+
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_project", Specs: []toolutil.ActionSpec{spec}}}})
+	if err == nil || !strings.Contains(err.Error(), "spec actions missing captured routes") {
+		t.Fatalf("BuildActionCatalog() error = %v, want missing captured route rejection", err)
+	}
+}
+
+func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T) {
+	base := []ActionSpecGroup{{ToolName: "gitlab_project", Specs: []toolutil.ActionSpec{
+		toolutil.NewActionSpec("get", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{}),
+		toolutil.NewActionSpec("list", testCatalogActionRoute("search"), toolutil.ActionSpecOptions{}),
+	}}}
+	overrides := []ActionSpecGroup{
+		{ToolName: "", Specs: []toolutil.ActionSpec{toolutil.NewActionSpec("ignored", testCatalogActionRoute(), toolutil.ActionSpecOptions{})}},
+		{ToolName: "gitlab_project", Specs: []toolutil.ActionSpec{{Name: ""}, toolutil.NewActionSpec("get", testCatalogActionRoute("id"), toolutil.ActionSpecOptions{})}},
 	}
 
-	got := withCatalogParameterGuidance("gitlab_job", "token_scope_remove_project", route)
-	projectGuidance := got.ParameterGuidance["project_id"]
-	if projectGuidance.SemanticRole != "existing_scope" {
-		t.Fatalf("project_id SemanticRole = %q, want existing_scope", projectGuidance.SemanticRole)
+	merged := mergeActionSpecGroupOverrides(base, overrides)
+	if len(merged) != 3 {
+		t.Fatalf("merged groups = %+v, want base remainder plus original overrides", merged)
 	}
-	if projectGuidance.ValueSource == "" || projectGuidance.ExampleBinding == "" {
-		t.Fatalf("project_id guidance = %+v, want catalog value source and example", projectGuidance)
+	if len(merged[0].Specs) != 1 || merged[0].Specs[0].Name != "list" {
+		t.Fatalf("base remainder specs = %+v, want only list", merged[0].Specs)
 	}
-	if !slices.Contains(projectGuidance.CommonConfusions, "Keep the source project.") || !slices.Contains(projectGuidance.CommonConfusions, "Do not use the project being removed as project_id.") {
-		t.Fatalf("project_id CommonConfusions = %+v, want route and catalog guidance", projectGuidance.CommonConfusions)
+}
+
+func testCatalogActionRoute(params ...string) toolutil.ActionRoute {
+	properties := make(map[string]any, len(params))
+	for _, param := range params {
+		properties[param] = map[string]any{"type": "string"}
 	}
-	if _, ok := got.ParameterGuidance["target_project_id"]; !ok {
-		t.Fatalf("ParameterGuidance = %+v, want catalog-only target_project_id", got.ParameterGuidance)
+	return toolutil.ActionRoute{
+		Handler: func(context.Context, map[string]any) (any, error) {
+			return map[string]any{}, nil
+		},
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": properties,
+		},
 	}
 }
 
