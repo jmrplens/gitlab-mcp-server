@@ -472,39 +472,39 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 667 | 141,580 |
-| Unit tests (`_test.go`) | 421 | 227,710 |
+| Source (`.go`, non-test) | 836 | 148,017 |
+| Unit tests (`_test.go`) | 428 | 231,044 |
 | End-to-end tests | 111 | 24,070 |
-| **Total** | **1,199** | **393,360** |
+| **Total** | **1,375** | **403,131** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 4,317 |
-| — exported (public) | 2,230 |
-| — unexported (private) | 2,087 |
-| Unit test functions (`TestXxx`) | 9,336 |
-| Subtests (`t.Run(...)`) | 2,026 |
+| Source functions | 5,306 |
+| — exported (public) | 2,416 |
+| — unexported (private) | 2,890 |
+| Unit test functions (`TestXxx`) | 9,442 |
+| Subtests (`t.Run(...)`) | 2,042 |
 | End-to-end test functions | 248 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.61× more tests than code |
-| Average source file length | ~212 lines |
-| Average test file length | ~540 lines |
-| Comment lines in source | 10,740 (~7.6% of source) |
-| Test functions per source function | 2.2× |
+| Test lines vs source lines | 1.56× more tests than code |
+| Average source file length | ~177 lines |
+| Average test file length | ~539 lines |
+| Comment lines in source | 10,926 (~7.4% of source) |
+| Test functions per source function | 1.8× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 6,002 |
-| `defer` statements | 729 |
-| `struct` types defined | 2,082 |
+| `if err != nil` checks | 6,168 |
+| `defer` statements | 748 |
+| `struct` types defined | 2,105 |
 | `//nolint` suppressions | 51 |
 | `TODO` / `FIXME` / `HACK` comments | 1 |
 
@@ -512,25 +512,25 @@ Numbers nobody asked for, but here they are anyway.
 
 | Metric | Value |
 | --- | ---: |
-| Go packages | 199 |
+| Go packages | 201 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 47 |
-| Git commits | 130 |
+| Git commits | 204 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 7,309 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 8,540 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,574 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,910 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,691 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,878 (impossible to avoid) |
 | Longest function name in source | `NormalizeParamAliasesForSchemaWithExplanation` (45 chars) |
 | Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

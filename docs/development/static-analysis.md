@@ -112,12 +112,24 @@ govulncheck -version
 | `make audit-tokens` | Measure exposed tool token overhead |
 | `make audit-tools` | Audit MCP tool metadata violations |
 | `make audit-metrics` | Report MCP tool/resource/prompt counts |
+| `make audit-action-spec-coverage` | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json` |
 | `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability |
 | `make audit-test-names` | Audit test function naming convention compliance |
 | `make audit-godocs` | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
 | `make audit-godocs-check` | Run the same Godoc audit and fail if findings remain |
 
 See [Godoc Compliance](godoc.md) for the detailed policy, categories, and local pkgsite workflow.
+
+### ActionSpec Migration Audit
+
+Run `make audit-action-spec-coverage` after changing tool registration,
+`ActionSpec` builders, dynamic standalone actions, or meta-tool composition. The
+command discovers `internal/tools/*` packages from source, cross-checks
+individual, meta, dynamic, and standalone surfaces, and writes
+`dist/action-spec-coverage.json`. Normal GitLab API domains should be
+`spec-backed`; documented exceptions are catalog-only aggregation packages,
+dynamic catalog surfaces, server-update standalone tools, and infrastructure
+packages without a GitLab action surface.
 
 ### LLM Workflow
 

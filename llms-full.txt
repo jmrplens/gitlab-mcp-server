@@ -17,6 +17,9 @@ operations under a single tool with an `action` parameter.
 
 Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_access/<action>.
+Parameter guidance:
+- deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
+- deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
@@ -28,7 +31,7 @@ Returns:
 - token_*_revoke / deploy_token_delete_* / deploy_key_delete / deny_* : {success, message}.
 Errors: 401/403 (hint: requires Maintainer+ to manage project tokens, Owner for group, admin for instance / deploy_token_list_all / deploy_key_list_all / deploy_key_add_instance), 404 (hint: token_id and deploy_key_id are scoped to the project/group), 400 (hint: scopes must be a subset of {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future ISO date).
 
-Param conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.
+Param conventions: * = required. List actions accept page, per_page. Project/group token actions use project_id* or group_id*; personal token actions use user_id where documented, and self actions take no scope ID. Deploy token/key delete and token revoke are irreversible.
 
 Access tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:
 - token_project_list / token_group_list: project_id* or group_id*
@@ -1588,7 +1591,7 @@ Errors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requir
 Param conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).
 
 - list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first (max 100), after (cursor)
-- get: id OR full_path* (exactly one)
+- get: exactly one of id* or full_path* (mutually exclusive)
 
 See also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).
 
@@ -3463,6 +3466,11 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
+Parameter guidance:
+- link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
+- link_create.project_id: source_project; source: Project that owns the source issue.; avoid: Use target_project_id for the linked issue's project when it differs.
+- link_create.target_issue_iid: target_issue; source: IID of the issue being linked to.; avoid: Do not use the source issue IID here.
+- link_create.target_project_id: target_project; source: Project that owns the target issue.; avoid: For same-project links this may equal project_id; otherwise keep it distinct.
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 When to use: issue lifecycle — create, update, close, move, comment, link, time-track, and manage Work Items (including Epics). NOT for: merge requests (use gitlab_merge_request), project settings (use gitlab_project), CI/CD (use gitlab_pipeline).
@@ -3624,7 +3632,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -3640,7 +3648,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -3648,7 +3656,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3656,7 +3664,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_note_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -3672,7 +3680,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_note_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -3680,7 +3688,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_issue_note_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -4059,6 +4067,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"artifacts","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_job/<action>.
+Parameter guidance:
+- token_scope_remove_project.project_id: scope_owner_project; source: Owning project whose CI job token allowlist is being changed.; avoid: Do not use the project being removed as project_id.
+- token_scope_remove_project.target_project_id: target_project; source: Project being removed from or added to the allowlist.; avoid: Do not put the allowlist owner project here.
 
 Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.
 When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
@@ -4308,6 +4319,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"approval_config","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
+Parameter guidance:
+- create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
+- create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
 
 Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -4574,7 +4588,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -4590,7 +4604,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -4598,7 +4612,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -4606,7 +4620,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_note_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -4622,7 +4636,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_note_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -4630,7 +4644,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_mr_note_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -5135,13 +5149,13 @@ NOT for: release asset links — these are managed by gitlab_release link_*; sec
 Behavior:
 - Idempotent reads: list / file_list / registry_list_project / registry_list_group / registry_get / registry_tag_list / registry_tag_get / registry_rule_list / protection_rule_list / download.
 - publish / publish_directory / publish_and_link create a NEW package version (NON-idempotent — re-publishing the same (package_name, package_version, file_name) returns 400/409 or creates a duplicate file depending on package_type). registry_rule_update / protection_rule_update are idempotent; *_create are non-idempotent on duplicate keys.
-- Side effects: publish_and_link also creates a release link visible to release subscribers; download streams large files to disk when output_path is set; protection_rule_create / registry_rule_create take effect immediately and may block subsequent publish/delete calls.
+- Side effects: publish_and_link also creates a release link visible to release subscribers; download streams files to the required output_path on disk; protection_rule_create / registry_rule_create take effect immediately and may block subsequent publish/delete calls.
 - Destructive: delete (entire package), file_delete (single file), registry_delete (entire image repo), registry_tag_delete / registry_tag_delete_bulk (image tags — name_regex_delete may match many tags) and *_rule_delete are irreversible. Protection rules can return 403 ('forbidden by protection rule') instead of executing the delete.
 
 Returns:
 - list / file_list / registry_list_project / registry_list_group / registry_tag_list / registry_rule_list / protection_rule_list: arrays with pagination.
 - publish / publish_and_link / publish_directory / registry_get / registry_tag_get / registry_rule_create / registry_rule_update / protection_rule_create / protection_rule_update: package / image / rule object. publish_and_link also returns the created release link.
-- download: {file_name, content_base64 (or saved_to)} — large files are streamed to disk when output_path is set.
+- download: {output_path, size, sha256} — files are streamed to the required output_path on disk.
 - delete / file_delete / registry_delete / registry_tag_delete / registry_tag_delete_bulk / registry_rule_delete / protection_rule_delete: {success, message}.
 Errors: 404 (hint: package_id, repository_id and tag_name are project-scoped), 403 (hint: requires Maintainer+ to delete; protection rules may block delete with a 'forbidden by protection rule' message), 400 (hint: file_path must exist locally; content_base64 must be valid base64; package_type must be one of GitLab's supported types).
 
@@ -7380,6 +7394,21 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"controller_create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_runner/<action>.
+Parameter guidance:
+- delete_registered.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- disable_project.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
+- disable_project.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- enable_project.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
+- enable_project.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- get.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- jobs.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- list_group.group_id: scope_owner_group; source: Use gitlab_group get/list outputs; accepts numeric ID or full group path.
+- list_project.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
+- remove.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- reset_group_reg_token.group_id: scope_owner_group; source: Use gitlab_group get/list outputs; accepts numeric ID or full group path.
+- reset_project_reg_token.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
+- reset_token.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
+- update.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
 
 Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
 Valid actions: controller_create, controller_delete, controller_get, controller_list, controller_scope_add_instance, controller_scope_add_runner, controller_scope_list, controller_scope_remove_instance, controller_scope_remove_runner, controller_token_create, controller_token_get, controller_token_list, controller_token_revoke, controller_token_rotate, controller_update, delete_by_token, delete_registered, disable_project, enable_project, get, jobs, list, list_all, list_group, list_managers, list_project, register, remove, reset_group_reg_token, reset_instance_reg_token, reset_project_reg_token, reset_token, update, verify
@@ -7965,7 +7994,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -7981,7 +8010,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -7989,7 +8018,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -7997,7 +8026,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_note_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -8013,7 +8042,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_note_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
+{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"}
 ```
 
 </details>
@@ -8021,7 +8050,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>emoji_snippet_note_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"award_emoji":{"items":{"additionalProperties":false,"properties":{"awardable_id":{"type":"integer"},"awardable_type":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_id":{"type":"integer"},"user_web_url":{"type":"string"},"username":{"type":"string"}},"required":["id","name","user_id","username","awardable_id","awardable_type"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["award_emoji","pagination"],"type":"object"}
 ```
 
 </details>
@@ -9230,7 +9259,7 @@ Common optional params: created_after (YYYY-MM-DD), created_before, page, per_pa
 
 See also: gitlab_admin
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Action Output Schemas:**
 
@@ -9290,7 +9319,7 @@ Use {"action":"get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_compliance_policy/<action>.
 
 Get and update admin compliance policy settings (CSP namespace configuration).
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: JSON with resource data for get/update actions. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - get: no params
 - update: csp_namespace_id (int64)
@@ -9325,7 +9354,7 @@ Use {"action":"export_create","params":{...}}; only top-level keys are action an
 Action params schema: gitlab://schema/meta/gitlab_dependency/<action>.
 
 List project dependencies and create/download SBOM exports (CycloneDX).
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: JSON with resource data. The list action includes pagination (page, per_page, total, next_page). export_create/export_get return export metadata, and export_download returns the CycloneDX payload. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - list: project_id*, package_manager, page, per_page
 - export_create: pipeline_id*, export_type (default: sbom)
@@ -9378,7 +9407,7 @@ Use {"action":"group","params":{...}}; only top-level keys are action and params
 Action params schema: gitlab://schema/meta/gitlab_dora_metrics/<action>.
 
 Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+	Returns: JSON with metric data. Errors: 404 not found, 403 forbidden — with actionable hints.
 
 Common params: metric* (deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date, interval (daily/monthly/all), environment_tiers (array).
 
@@ -9387,7 +9416,7 @@ Common params: metric* (deployment_frequency|lead_time_for_changes|time_to_resto
 
 See also: gitlab_environment, gitlab_pipeline
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Action Output Schemas:**
 
@@ -9949,7 +9978,7 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_security_finding/<action>.
 
 List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden — with actionable hints.
 
 - list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after
 
@@ -10161,7 +10190,7 @@ Use {"action":"confirm","params":{...}}; only top-level keys are action and para
 Action params schema: gitlab://schema/meta/gitlab_vulnerability/<action>.
 
 List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. GID format: gid://gitlab/Vulnerability/42.
 

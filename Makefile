@@ -544,6 +544,10 @@ audit-tools:
 audit-metrics:
 	go run ./cmd/audit_metrics/
 
+## audit-action-spec-coverage: generate ActionSpec surface coverage inventory.
+audit-action-spec-coverage:
+	go run ./cmd/audit_action_spec_coverage/
+
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:
 	go run ./cmd/audit_dynamic_aliases/
