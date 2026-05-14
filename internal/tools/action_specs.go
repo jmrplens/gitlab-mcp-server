@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
@@ -20,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/containerregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploykeys"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploymentmergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
@@ -34,6 +37,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/invites"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
@@ -115,7 +119,13 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 }
 
 func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_access", deploytokens.ActionSpecs(client))
+	specs := make([]toolutil.ActionSpec, 0, 48)
+	specs = append(specs, accesstokens.ActionSpecs(client)...)
+	specs = append(specs, deploytokens.ActionSpecs(client)...)
+	specs = append(specs, deploykeys.ActionSpecs(client)...)
+	specs = append(specs, accessrequests.ActionSpecs(client)...)
+	specs = append(specs, invites.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_access", specs)
 }
 
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {

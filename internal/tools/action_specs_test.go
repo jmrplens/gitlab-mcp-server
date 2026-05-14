@@ -9,6 +9,7 @@ import (
 
 func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 	captured := toolutil.CaptureMetaToolDefinitions(func() {
+		registerAccessMeta(nil, nil)
 		registerBranchMeta(nil, nil)
 		registerCICatalogMeta(nil, nil)
 		registerCIVariableMeta(nil, nil)
@@ -37,7 +38,7 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
 
-	for _, toolName := range []string{"gitlab_branch", "gitlab_ci_catalog", "gitlab_ci_variable", "gitlab_custom_emoji", "gitlab_environment", "gitlab_feature_flags", "gitlab_job", "gitlab_model_registry", "gitlab_package", "gitlab_pipeline", "gitlab_project", "gitlab_release", "gitlab_repository", "gitlab_snippet", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
+	for _, toolName := range []string{"gitlab_access", "gitlab_branch", "gitlab_ci_catalog", "gitlab_ci_variable", "gitlab_custom_emoji", "gitlab_environment", "gitlab_feature_flags", "gitlab_job", "gitlab_model_registry", "gitlab_package", "gitlab_pipeline", "gitlab_project", "gitlab_release", "gitlab_repository", "gitlab_snippet", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
 		t.Run(toolName, func(t *testing.T) {
 			definition, ok := capturedByTool[toolName]
 			if !ok {

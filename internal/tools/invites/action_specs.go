@@ -1,0 +1,36 @@
+package invites
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for project and group invitation actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		inviteReadSpec("invite_list_project", toolutil.RouteAction(client, ListPendingProjectInvitations), "gitlab_project_invite_list_pending"),
+		inviteReadSpec("invite_list_group", toolutil.RouteAction(client, ListPendingGroupInvitations), "gitlab_group_invite_list_pending"),
+		inviteCreateSpec("invite_project", toolutil.RouteAction(client, ProjectInvites), "gitlab_project_invite"),
+		inviteCreateSpec("invite_group", toolutil.RouteAction(client, GroupInvites), "gitlab_group_invite"),
+	}
+}
+
+func inviteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := inviteOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, inviteOptions(individualTool))
+}
+
+func inviteOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"access", "invite"},
+		OpenWorld:      true,
+		OwnerPackage:   "invites",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
