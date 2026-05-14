@@ -14,26 +14,19 @@ import (
 
 // RegisterTools registers all project feature flag individual tools.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_feature_flag_list",
-		Title:       toolutil.TitleFromName("gitlab_feature_flag_list"),
-		Description: "List feature flags for a project.\n\nReturns: JSON with feature flags array including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_ff_user_list_list",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	specs := ActionSpecs(client)
+	featureFlagTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconConfig})
+	}
+
+	mcp.AddTool(server, featureFlagTool("gitlab_feature_flag_list", "List feature flags for a project.\n\nReturns: JSON with feature flags array including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_ff_user_list_list"), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := ListFeatureFlags(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_feature_flag_list", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListFeatureFlagsMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_feature_flag_get",
-		Title:       toolutil.TitleFromName("gitlab_feature_flag_get"),
-		Description: "Get a single feature flag by name.\n\nReturns: JSON with feature flag details including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_update",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, featureFlagTool("gitlab_feature_flag_get", "Get a single feature flag by name.\n\nReturns: JSON with feature flag details including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_update"), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetFeatureFlag(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_feature_flag_get", start, err)
@@ -46,39 +39,21 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_feature_flag_create",
-		Title:       toolutil.TitleFromName("gitlab_feature_flag_create"),
-		Description: "Create a new feature flag for a project.\n\nReturns: JSON with created feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_ff_user_list_create",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, featureFlagTool("gitlab_feature_flag_create", "Create a new feature flag for a project.\n\nReturns: JSON with created feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_ff_user_list_create"), func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := CreateFeatureFlag(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_feature_flag_create", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatFeatureFlagMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_feature_flag_update",
-		Title:       toolutil.TitleFromName("gitlab_feature_flag_update"),
-		Description: "Update an existing feature flag.\n\nReturns: JSON with updated feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_feature_flag_delete",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, featureFlagTool("gitlab_feature_flag_update", "Update an existing feature flag.\n\nReturns: JSON with updated feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_feature_flag_delete"), func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := UpdateFeatureFlag(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_feature_flag_update", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatFeatureFlagMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_feature_flag_delete",
-		Title:       toolutil.TitleFromName("gitlab_feature_flag_delete"),
-		Description: "Delete a feature flag.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_create",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, featureFlagTool("gitlab_feature_flag_delete", "Delete a feature flag.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_create"), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete feature flag %q from project %s?", input.Name, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil
