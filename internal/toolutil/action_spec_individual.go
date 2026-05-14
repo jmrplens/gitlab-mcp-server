@@ -15,6 +15,39 @@ type IndividualToolProjectionOptions struct {
 	Icons       []mcp.Icon
 }
 
+// IndividualToolFromSpecs projects the spec that owns an individual tool name.
+func IndividualToolFromSpecs(specs []ActionSpec, individualName string, opts IndividualToolProjectionOptions) (*mcp.Tool, error) {
+	name := strings.TrimSpace(individualName)
+	if name == "" {
+		return nil, errors.New("individual tool name is required")
+	}
+	var found *ActionSpec
+	for index := range specs {
+		if strings.TrimSpace(specs[index].IndividualTool.Name) != name {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("individual tool %q has multiple action specs", name)
+		}
+		found = &specs[index]
+	}
+	if found == nil {
+		return nil, fmt.Errorf("individual tool %q action spec not found", name)
+	}
+	return IndividualToolFromActionSpec(*found, opts)
+}
+
+// MustIndividualToolFromSpecs projects an individual tool or panics on invalid
+// registration metadata. Use it from package RegisterTools functions, where a
+// missing spec is a startup-time programming error.
+func MustIndividualToolFromSpecs(specs []ActionSpec, individualName string, opts IndividualToolProjectionOptions) *mcp.Tool {
+	tool, err := IndividualToolFromSpecs(specs, individualName, opts)
+	if err != nil {
+		panic(err)
+	}
+	return tool
+}
+
 // IndividualToolFromActionSpec projects canonical action metadata into an MCP
 // tool definition for the individual-tool surface.
 func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjectionOptions) (*mcp.Tool, error) {

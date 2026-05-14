@@ -213,6 +213,47 @@ func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testi
 	}
 }
 
+func TestIndividualToolFromSpecs_ProjectsMatchingSpec(t *testing.T) {
+	specs := []ActionSpec{
+		NewActionSpec("list", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+			ReadOnly:       true,
+			IndividualTool: IndividualToolSpec{Name: "gitlab_project_list", Description: "List projects."},
+		}),
+		NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+			ReadOnly:       true,
+			IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
+		}),
+	}
+
+	tool, err := IndividualToolFromSpecs(specs, "gitlab_project_get", IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromSpecs() error = %v", err)
+	}
+	if tool.Name != "gitlab_project_get" {
+		t.Fatalf("tool name = %q, want gitlab_project_get", tool.Name)
+	}
+}
+
+func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
+	specs := []ActionSpec{
+		NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+			ReadOnly:       true,
+			IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
+		}),
+		NewActionSpec("show", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+			ReadOnly:       true,
+			IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Show a project."},
+		}),
+	}
+
+	if _, err := IndividualToolFromSpecs(specs[:1], "gitlab_project_missing", IndividualToolProjectionOptions{}); err == nil {
+		t.Fatal("IndividualToolFromSpecs() missing error = nil, want error")
+	}
+	if _, err := IndividualToolFromSpecs(specs, "gitlab_project_get", IndividualToolProjectionOptions{}); err == nil {
+		t.Fatal("IndividualToolFromSpecs() duplicate error = nil, want error")
+	}
+}
+
 func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 	testCases := []struct {
 		name string
