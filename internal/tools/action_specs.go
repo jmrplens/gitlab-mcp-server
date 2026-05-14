@@ -40,6 +40,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ffuserlists"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
@@ -125,6 +126,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildEnterpriseUserActionSpecs,
 		buildExternalStatusCheckActionSpecs,
 		buildFeatureFlagsActionSpecs,
+		buildGeoActionSpecs,
 		buildGroupActionSpecs,
 		buildGroupSCIMActionSpecs,
 		buildIssueActionSpecs,
@@ -244,6 +246,13 @@ func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 	specs = append(specs, featureflags.ActionSpecs(client)...)
 	specs = append(specs, ffuserlists.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_feature_flags", specs)
+}
+
+func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_geo", geo.ActionSpecs(client))
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
