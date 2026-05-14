@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/avatar"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
@@ -35,6 +36,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ffuserlists"
@@ -56,6 +58,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuestatistics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/keys"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
@@ -72,6 +75,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/namespaces"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/notifications"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/orbit"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
@@ -104,6 +109,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
@@ -480,7 +486,15 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 }
 
 func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_user", users.ActionSpecs(client, enterprise))
+	specs := make([]toolutil.ActionSpec, 0, 56)
+	specs = append(specs, users.ActionSpecs(client, enterprise)...)
+	specs = append(specs, todos.ActionSpecs(client)...)
+	specs = append(specs, events.UserActionSpecs(client)...)
+	specs = append(specs, notifications.ActionSpecs(client)...)
+	specs = append(specs, keys.ActionSpecs(client)...)
+	specs = append(specs, namespaces.ActionSpecs(client)...)
+	specs = append(specs, avatar.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_user", specs)
 }
 
 func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
