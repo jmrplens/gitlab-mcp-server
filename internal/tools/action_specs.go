@@ -58,6 +58,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelinetriggers"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectaliases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
@@ -116,6 +117,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildMRReviewActionSpecs,
 		buildPackageActionSpecs,
 		buildPipelineActionSpecs,
+		buildProjectAliasActionSpecs,
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
@@ -232,6 +234,13 @@ func buildPipelineActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	specs = append(specs, resourcegroups.ActionSpecs(client)...)
 	specs = append(specs, pipelineschedules.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_pipeline", specs)
+}
+
+func buildProjectAliasActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_project_alias", projectaliases.ActionSpecs(client))
 }
 
 func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
