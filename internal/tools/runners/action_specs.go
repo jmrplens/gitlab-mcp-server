@@ -15,15 +15,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_runner_list_all"),
 		runnerReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_runner_get"),
 		runnerUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_runner_update"),
-		runnerDeleteSpec("remove", toolutil.DestructiveVoidAction(client, Remove), "gitlab_runner_remove"),
+		runnerUpdateSpec("remove", toolutil.DestructiveVoidAction(client, Remove), "gitlab_runner_remove"),
 		runnerReadSpec("jobs", toolutil.RouteAction(client, ListJobs), "gitlab_runner_jobs"),
 		runnerReadSpec("list_project", toolutil.RouteAction(client, ListProject), "gitlab_runner_list_project"),
 		runnerCreateSpec("enable_project", toolutil.RouteAction(client, EnableProject), "gitlab_runner_enable_project"),
-		runnerDeleteSpec("disable_project", toolutil.DestructiveVoidAction(client, DisableProject), "gitlab_runner_disable_project"),
+		runnerUpdateSpec("disable_project", toolutil.DestructiveVoidAction(client, DisableProject), "gitlab_runner_disable_project"),
 		runnerReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_runner_list_group"),
 		runnerCreateSpec("register", toolutil.RouteAction(client, Register), "gitlab_runner_register"),
-		runnerDeleteSpec("delete_registered", toolutil.DestructiveVoidAction(client, DeleteByID), "gitlab_runner_delete_registered"),
-		runnerDeleteSpec("delete_by_token", toolutil.DestructiveVoidAction(client, DeleteByToken), "gitlab_runner_delete_by_token"),
+		runnerUpdateSpec("delete_registered", toolutil.DestructiveVoidAction(client, DeleteByID), "gitlab_runner_delete_registered"),
+		runnerUpdateSpec("delete_by_token", toolutil.DestructiveVoidAction(client, DeleteByToken), "gitlab_runner_delete_by_token"),
 		runnerReadSpec("verify", toolutil.RouteVoidAction(client, Verify), "gitlab_runner_verify"),
 		runnerUpdateSpec("reset_token", toolutil.RouteAction(client, ResetAuthToken), "gitlab_runner_reset_token"),
 		runnerUpdateSpec("reset_instance_reg_token", toolutil.RouteAction(client, ResetInstanceRegToken), "gitlab_runner_reset_instance_reg_token"),
@@ -49,12 +49,6 @@ func runnerCreateSpec(name string, route toolutil.ActionRoute, individualTool st
 }
 
 func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
-}
-
-func runnerDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := runnerOptions(individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)

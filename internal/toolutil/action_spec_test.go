@@ -64,8 +64,19 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	if len(spec.Tags) != 1 || spec.Tags[0] != "admin" {
 		t.Fatalf("tags = %+v, want normalized unique tag", spec.Tags)
 	}
-	if spec.RelatedActions[0] != "project.get" || spec.RuntimeValidationNotes[0] != "validate project ownership." {
+	if spec.RelatedActions[0] != "project.get" || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
 		t.Fatalf("related/actions notes = %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.RuntimeValidationNotes)
+	}
+}
+
+func TestNewActionSpec_SyncsOptionDestructiveToRoute(t *testing.T) {
+	spec := NewActionSpec("delete", ActionRoute{}, ActionSpecOptions{Destructive: true})
+
+	if !spec.Destructive || !spec.Route.Destructive {
+		t.Fatalf("destructive flags = spec:%t route:%t, want both true", spec.Destructive, spec.Route.Destructive)
+	}
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
@@ -175,6 +186,32 @@ func TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields(t
 	}
 	if len(guidance.CommonConfusions) != 2 || guidance.CommonConfusions[0] != "route confusion" || guidance.CommonConfusions[1] != "spec confusion" {
 		t.Fatalf("CommonConfusions = %+v, want route then spec", guidance.CommonConfusions)
+	}
+}
+
+func TestActionSpecsToMapWithError_DeduplicatesCommonConfusions(t *testing.T) {
+	route := ActionRoute{
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+		},
+		ParameterGuidance: map[string]ParameterGuidance{
+			"project_id": {CommonConfusions: []string{"do not use target_project_id", "do not use target_project_id"}},
+		},
+	}
+	spec := NewActionSpec("remove", route, ActionSpecOptions{
+		ParameterGuidance: map[string]ParameterGuidance{
+			"project_id": {CommonConfusions: []string{"do not use target_project_id", "do not use source_project_id"}},
+		},
+	})
+
+	routes, err := ActionSpecsToMapWithError([]ActionSpec{spec})
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+	confusions := routes["remove"].ParameterGuidance["project_id"].CommonConfusions
+	if len(confusions) != 2 || confusions[0] != "do not use target_project_id" || confusions[1] != "do not use source_project_id" {
+		t.Fatalf("CommonConfusions = %+v, want deduplicated route then spec values", confusions)
 	}
 }
 

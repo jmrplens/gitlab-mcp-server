@@ -64,6 +64,9 @@ type ActionSpecOptions struct {
 // NewActionSpec creates a defensive canonical action specification.
 func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
 	route = cloneActionRoute(route)
+	if opts.Destructive {
+		route.Destructive = true
+	}
 	return ActionSpec{
 		Name:                   strings.TrimSpace(name),
 		Route:                  route,
@@ -73,7 +76,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		RelatedActions:         mergeActionSpecStrings(route.RelatedActions, opts.RelatedActions),
 		ParameterGuidance:      cloneParameterGuidanceMap(opts.ParameterGuidance),
 		ReadOnly:               opts.ReadOnly,
-		Destructive:            route.Destructive || opts.Destructive,
+		Destructive:            route.Destructive,
 		Idempotent:             opts.Idempotent,
 		OpenWorld:              opts.OpenWorld,
 		Edition:                strings.TrimSpace(opts.Edition),
@@ -84,7 +87,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		NotFoundPolicy:         strings.TrimSpace(opts.NotFoundPolicy),
 		EmbeddedResourcePolicy: strings.TrimSpace(opts.EmbeddedResourcePolicy),
 		RichResultPolicy:       strings.TrimSpace(opts.RichResultPolicy),
-		RuntimeValidationNotes: normalizeActionSpecStrings(opts.RuntimeValidationNotes),
+		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
 	}
 }
 
@@ -192,7 +195,7 @@ func mergeActionSpecGuidance(routeGuidance, specGuidance map[string]ParameterGui
 			if existing.ExampleBinding == "" {
 				existing.ExampleBinding = item.ExampleBinding
 			}
-			existing.CommonConfusions = append(existing.CommonConfusions, item.CommonConfusions...)
+			existing.CommonConfusions = mergeActionSpecNotes(existing.CommonConfusions, item.CommonConfusions)
 			merged[key] = existing
 			continue
 		}
@@ -214,6 +217,30 @@ func normalizeActionSpecStrings(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		value = strings.TrimSpace(strings.ToLower(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func normalizeActionSpecNotes(values []string) []string {
+	return mergeActionSpecNotes(nil, values)
+}
+
+func mergeActionSpecNotes(left, right []string) []string {
+	if len(left)+len(right) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(left)+len(right))
+	out := make([]string, 0, len(left)+len(right))
+	for _, value := range append(append([]string(nil), left...), right...) {
+		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}

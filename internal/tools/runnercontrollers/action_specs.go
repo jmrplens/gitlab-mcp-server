@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerControllerReadSpec("controller_get", toolutil.RouteAction(client, Get), "gitlab_runner_controller_get"),
 		runnerControllerCreateSpec("controller_create", toolutil.RouteAction(client, Create), "gitlab_runner_controller_create"),
 		runnerControllerUpdateSpec("controller_update", toolutil.RouteAction(client, Update), "gitlab_runner_controller_update"),
-		runnerControllerDeleteSpec("controller_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_runner_controller_delete"),
+		runnerControllerUpdateSpec("controller_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_runner_controller_delete"),
 	}
 }
 
@@ -28,12 +28,6 @@ func runnerControllerCreateSpec(name string, route toolutil.ActionRoute, individ
 }
 
 func runnerControllerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
-}
-
-func runnerControllerDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := runnerControllerOptions(individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)

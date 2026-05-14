@@ -56,10 +56,12 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 }
 
 func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
+	destructive := spec.Destructive
+	openWorld := spec.OpenWorld
 	return &mcp.ToolAnnotations{
 		ReadOnlyHint:    spec.ReadOnly,
-		DestructiveHint: new(spec.Destructive),
+		DestructiveHint: &destructive,
 		IdempotentHint:  spec.Idempotent,
-		OpenWorldHint:   new(spec.OpenWorld),
+		OpenWorldHint:   &openWorld,
 	}
 }
