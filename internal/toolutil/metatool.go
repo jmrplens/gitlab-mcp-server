@@ -2081,7 +2081,7 @@ func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) st
 				line += "; source: " + item.ValueSource
 			}
 			if len(item.CommonConfusions) > 0 {
-				line += "; avoid: " + strings.Join(item.CommonConfusions, " ")
+				line += "; avoid: " + strings.Join(item.CommonConfusions, ", ")
 			}
 			lines = append(lines, line)
 		}

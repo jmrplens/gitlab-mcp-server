@@ -764,6 +764,9 @@ func TestSearch_WhyThisActionOnlyAppearsForCloseAlternatives(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search(straightforward) error = %v", err)
 	}
+	if straightforward.Count == 0 || len(straightforward.Results) == 0 {
+		t.Fatalf("Search(straightforward) returned no matches: %+v", straightforward)
+	}
 	if straightforward.Results[0].WhyThisAction != "" {
 		t.Fatalf("straightforward WhyThisAction = %q, want empty", straightforward.Results[0].WhyThisAction)
 	}

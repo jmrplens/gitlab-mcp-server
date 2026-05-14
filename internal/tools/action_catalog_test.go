@@ -206,6 +206,32 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	}
 }
 
+func TestWithCatalogParameterGuidance_MergesRouteGuidance(t *testing.T) {
+	route := toolutil.ActionRoute{
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "existing_scope",
+				CommonConfusions: []string{"Keep the source project."},
+			},
+		},
+	}
+
+	got := withCatalogParameterGuidance("gitlab_job", "token_scope_remove_project", route)
+	projectGuidance := got.ParameterGuidance["project_id"]
+	if projectGuidance.SemanticRole != "existing_scope" {
+		t.Fatalf("project_id SemanticRole = %q, want existing_scope", projectGuidance.SemanticRole)
+	}
+	if projectGuidance.ValueSource == "" || projectGuidance.ExampleBinding == "" {
+		t.Fatalf("project_id guidance = %+v, want catalog value source and example", projectGuidance)
+	}
+	if !slices.Contains(projectGuidance.CommonConfusions, "Keep the source project.") || !slices.Contains(projectGuidance.CommonConfusions, "Do not use the project being removed as project_id.") {
+		t.Fatalf("project_id CommonConfusions = %+v, want route and catalog guidance", projectGuidance.CommonConfusions)
+	}
+	if _, ok := got.ParameterGuidance["target_project_id"]; !ok {
+		t.Fatalf("ParameterGuidance = %+v, want catalog-only target_project_id", got.ParameterGuidance)
+	}
+}
+
 func mustBuildActionCatalog(t *testing.T, client *gitlabclient.Client, opts ActionCatalogOptions) *actioncatalog.Catalog {
 	t.Helper()
 	catalog, err := BuildActionCatalog(client, opts)

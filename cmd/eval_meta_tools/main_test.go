@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -31,6 +32,41 @@ func requireContainsAll(t *testing.T, name, content string, wants []string) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("%s = %q, want content containing %q", name, content, want)
 		}
+	}
+}
+
+func TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues(t *testing.T) {
+	first := liveUniqueSuffix()
+	second := liveUniqueSuffix()
+	if first == "" || second == "" {
+		t.Fatalf("liveUniqueSuffix() returned empty values: %q %q", first, second)
+	}
+	if first == second {
+		t.Fatalf("liveUniqueSuffix() returned duplicate values: %q", first)
+	}
+}
+
+func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	got, err := gitlabSkipTLSVerify()
+	if err != nil {
+		t.Fatalf("gitlabSkipTLSVerify() error = %v", err)
+	}
+	if !got {
+		t.Fatal("gitlabSkipTLSVerify() = false, want true")
+	}
+
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "not-bool")
+	if _, parseErr := gitlabSkipTLSVerify(); parseErr == nil {
+		t.Fatal("gitlabSkipTLSVerify() error = nil, want invalid bool error")
+	}
+}
+
+func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := waitForContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitForContext() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -1249,6 +1285,13 @@ func TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCa
 				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
 			absent: []string{"Dynamic first-step exact call", `"target_project_id":123`, "<target_project_id>"},
+		},
+		{
+			name: "non numeric target project",
+			task: evalTask{ID: "MT-066", Prompt: "Remove project ID `not-a-number` from the CI job token allowlist of project `1`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			absent: []string{"Dynamic first-step exact call", `"target_project_id":123`},
 		},
 		{
 			name: "missing target branch",

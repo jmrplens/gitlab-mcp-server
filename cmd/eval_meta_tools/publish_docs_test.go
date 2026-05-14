@@ -386,7 +386,7 @@ func TestReadPublishReport_AllowsLargeTraceLines(t *testing.T) {
 		t.Fatalf("mkdir traces: %v", err)
 	}
 	largeBody := strings.Repeat("x", maxResponseBytes+1)
-	trace := fmt.Sprintf(`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","large_body":%q,"expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`, largeBody) + "\n"
+	trace := fmt.Sprintf(`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"kind":"assistant_message","content":%q,"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`, largeBody) + "\n"
 	if err := os.WriteFile(filepath.Join(traceDir, "traces.jsonl"), []byte(trace), 0o600); err != nil {
 		t.Fatalf("write traces: %v", err)
 	}
@@ -401,6 +401,13 @@ func TestReadPublishReport_AllowsLargeTraceLines(t *testing.T) {
 	}
 	if len(report.Rows) != 1 || report.Rows[0].Attempts != 1 {
 		t.Fatalf("rows = %+v, want one row with one attempt", report.Rows)
+	}
+	traces, err := readTraceJSONL(filepath.Join(traceDir, "traces.jsonl"))
+	if err != nil {
+		t.Fatalf("readTraceJSONL() error = %v", err)
+	}
+	if got := traces[0].Events[0].Content; got != largeBody {
+		t.Fatalf("trace content length = %d, want %d", len(got), len(largeBody))
 	}
 }
 

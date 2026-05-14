@@ -78,6 +78,20 @@ func withCatalogParameterGuidance(toolName, actionName string, route toolutil.Ac
 	}
 	for name, item := range guidance {
 		item.CommonConfusions = append([]string(nil), item.CommonConfusions...)
+		if existing, ok := merged[name]; ok {
+			if existing.SemanticRole == "" {
+				existing.SemanticRole = item.SemanticRole
+			}
+			if existing.ValueSource == "" {
+				existing.ValueSource = item.ValueSource
+			}
+			if existing.ExampleBinding == "" {
+				existing.ExampleBinding = item.ExampleBinding
+			}
+			existing.CommonConfusions = append(existing.CommonConfusions, item.CommonConfusions...)
+			merged[name] = existing
+			continue
+		}
 		merged[name] = item
 	}
 	route.ParameterGuidance = merged

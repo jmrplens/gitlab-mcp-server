@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,82 @@ func TestEfficiencyGateViolations_OverBudgetTrace_ReportsAndAllowsTask(t *testin
 	}
 }
 
+func TestRunEfficiencyCheck_EmptyTraceFails(t *testing.T) {
+	tracePath := writeSyntheticTraceJSONL(t, nil)
+
+	err := runEfficiencyCheck(options{CheckEfficiency: stringList{tracePath}, Output: filepath.Join(t.TempDir(), "efficiency.md")})
+	if err == nil || !strings.Contains(err.Error(), "requires at least one trace attempt") {
+		t.Fatalf("runEfficiencyCheck() error = %v, want empty trace failure", err)
+	}
+}
+
+func TestRunEfficiencyCheck_WritesPassingReport(t *testing.T) {
+	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-001", "model-a", 1, 1, 1, traceSummary{FinalSuccess: true}),
+	})
+	outputPath := filepath.Join(t.TempDir(), "efficiency.md")
+
+	if err := runEfficiencyCheck(options{CheckEfficiency: stringList{tracePath}, Output: outputPath}); err != nil {
+		t.Fatalf("runEfficiencyCheck() error = %v", err)
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read efficiency report: %v", err)
+	}
+	text := string(content)
+	for _, want := range []string{"# Trace Efficiency Check", "Status: `pass`", "| Attempts | 1 |", "## By Model"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("efficiency report = %q, want %q", text, want)
+		}
+	}
+}
+
+func TestRunEfficiencyCheck_WritesViolationReportAndFails(t *testing.T) {
+	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-066", "model-a", 1, 1, 6, traceSummary{FinalSuccess: true}),
+	})
+	outputPath := filepath.Join(t.TempDir(), "efficiency.md")
+
+	err := runEfficiencyCheck(options{CheckEfficiency: stringList{tracePath}, Output: outputPath})
+	if err == nil || !strings.Contains(err.Error(), "efficiency check failed") {
+		t.Fatalf("runEfficiencyCheck() error = %v, want gate failure", err)
+	}
+	content, readErr := os.ReadFile(outputPath)
+	if readErr != nil {
+		t.Fatalf("read efficiency report: %v", readErr)
+	}
+	text := string(content)
+	for _, want := range []string{"Status: `fail`", "## Violations", "per_attempt_call_budget"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("efficiency report = %q, want %q", text, want)
+		}
+	}
+}
+
+func TestTraceJSONLPath_DirectoryAndInvalidInputs(t *testing.T) {
+	dir := t.TempDir()
+	got, err := traceJSONLPath(dir)
+	if err != nil {
+		t.Fatalf("traceJSONLPath(dir) error = %v", err)
+	}
+	if got != filepath.Join(dir, "traces.jsonl") {
+		t.Fatalf("traceJSONLPath(dir) = %q, want traces.jsonl in dir", got)
+	}
+	if _, emptyErr := traceJSONLPath(" "); emptyErr == nil {
+		t.Fatal("traceJSONLPath(empty) error = nil, want error")
+	}
+	if _, missingErr := readTraceJSONL(filepath.Join(dir, "missing.jsonl")); missingErr == nil {
+		t.Fatal("readTraceJSONL(missing) error = nil, want stat/open error")
+	}
+	invalidPath := filepath.Join(dir, "invalid.jsonl")
+	if writeErr := os.WriteFile(invalidPath, []byte("{bad-json}\n"), 0o600); writeErr != nil {
+		t.Fatalf("write invalid trace: %v", writeErr)
+	}
+	if _, decodeErr := readTraceJSONL(invalidPath); decodeErr == nil {
+		t.Fatal("readTraceJSONL(invalid) error = nil, want decode error")
+	}
+}
+
 func TestCompareTraceMetricSets_OverlappingRows_ReportsComparableAndExclusiveRows(t *testing.T) {
 	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 3, traceSummary{FinalSuccess: true}),
@@ -83,6 +160,119 @@ func TestCompareTraceMetricSets_OverlappingRows_ReportsComparableAndExclusiveRow
 	modelAggregate := comparison.ByModel["model-a"]
 	if modelAggregate.DynamicCalls != 4 || modelAggregate.MetaCalls != 2 || modelAggregate.NetExtra != 2 || modelAggregate.DynamicGreater != 1 || modelAggregate.DynamicEqual != 1 {
 		t.Fatalf("model aggregate = %+v, want dynamic=4 meta=2 net=2 greater=1 equal=1", modelAggregate)
+	}
+}
+
+func TestCompareTraceMetricSets_ScalesCallsToComparableRows(t *testing.T) {
+	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-001", "model-a", 1, 1, 4, traceSummary{FinalSuccess: true}),
+		syntheticTrace("MT-001", "model-a", 2, 1, 6, traceSummary{FinalSuccess: true}),
+	})
+	metaPath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-001", "model-a", 1, 1, 3, traceSummary{FinalSuccess: true}),
+	})
+
+	comparison, err := compareTraceMetricSets(dynamicPath, metaPath)
+	if err != nil {
+		t.Fatalf("compareTraceMetricSets() error = %v", err)
+	}
+	modelAggregate := comparison.ByModel["model-a"]
+	if modelAggregate.Rows != 1 || modelAggregate.DynamicCalls != 5 || modelAggregate.MetaCalls != 3 || modelAggregate.NetExtra != 2 {
+		t.Fatalf("model aggregate = %+v, want rows=1 dynamic=5 meta=3 net=2", modelAggregate)
+	}
+}
+
+func TestRunTraceComparison_WritesReport(t *testing.T) {
+	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-001", "model-a", 1, 1, 2, traceSummary{FinalSuccess: true}),
+	})
+	metaPath := writeSyntheticTraceJSONL(t, []taskTrace{
+		syntheticTrace("MT-001", "model-a", 1, 1, 1, traceSummary{FinalSuccess: true}),
+	})
+	outputPath := filepath.Join(t.TempDir(), "comparison.md")
+
+	if err := runTraceComparison(options{CompareTraces: stringList{dynamicPath, metaPath}, Output: outputPath}); err != nil {
+		t.Fatalf("runTraceComparison() error = %v", err)
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read comparison report: %v", err)
+	}
+	for _, want := range []string{"# Trace Surface Comparison", "| Comparable rows | 1 |", "## Largest Dynamic-3 Overheads"} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("comparison report = %q, want %q", string(content), want)
+		}
+	}
+}
+
+func TestRunTraceComparison_RequiresTwoPaths(t *testing.T) {
+	err := runTraceComparison(options{CompareTraces: stringList{"one.jsonl"}})
+	if err == nil || !strings.Contains(err.Error(), "requires exactly two trace JSONL paths") {
+		t.Fatalf("runTraceComparison() error = %v, want arity failure", err)
+	}
+}
+
+func TestEfficiencyOrderingHelpers_SortByHighestRisk(t *testing.T) {
+	tasks := map[string]traceAggregate{
+		"MT-A": {Attempts: 1, ExpectedOps: 1, ActualCalls: 4, MinCalls: 4, MaxCalls: 4},
+		"MT-B": {Attempts: 1, ExpectedOps: 1, ActualCalls: 3, MinCalls: 1, MaxCalls: 3},
+		"MT-C": {Attempts: 1, ExpectedOps: 1, ActualCalls: 2, MinCalls: 2, MaxCalls: 2, FinalFailures: 1},
+	}
+	if got := sortedTaskOutliers(tasks); !slices.Equal(got, []string{"MT-C", "MT-B", "MT-A"}) {
+		t.Fatalf("sortedTaskOutliers() = %+v, want failure, spread, extra order", got)
+	}
+
+	comparisonTasks := map[string]traceComparisonAggregate{
+		"MT-A": {PositiveExtra: 2, NetExtra: 5},
+		"MT-B": {PositiveExtra: 3, NetExtra: 1},
+		"MT-C": {PositiveExtra: 2, NetExtra: 7},
+	}
+	if got := sortedComparisonTasks(comparisonTasks); !slices.Equal(got, []string{"MT-B", "MT-C", "MT-A"}) {
+		t.Fatalf("sortedComparisonTasks() = %+v, want positive then net order", got)
+	}
+}
+
+func TestEfficiencyScalarHelpers_HandleZeroValues(t *testing.T) {
+	if got := traceOverheadPercent(traceAggregate{}); got != 0 {
+		t.Fatalf("traceOverheadPercent(zero) = %.1f, want 0", got)
+	}
+	if got := traceAverageCalls(traceAggregate{}); got != 0 {
+		t.Fatalf("traceAverageCalls(zero) = %.1f, want 0", got)
+	}
+	if got := scaledComparableCalls(10, 0, 1); got != 0 {
+		t.Fatalf("scaledComparableCalls(zero attempts) = %d, want 0", got)
+	}
+	if got := scaledComparableCalls(5, 2, 1); got != 3 {
+		t.Fatalf("scaledComparableCalls(round) = %d, want 3", got)
+	}
+	if got := stringSet([]string{"MT-001", "", "MT-002"}); len(got) != 2 || !got["MT-001"] || !got["MT-002"] {
+		t.Fatalf("stringSet() = %+v, want non-empty values only", got)
+	}
+}
+
+func TestMetricFromTrace_FallsBackToEventCounts(t *testing.T) {
+	trace := taskTrace{
+		TaskID:   "MT-001",
+		Expected: []traceExpectedStep{{Step: 1}, {Step: 2}},
+		Events: []traceEvent{
+			{Kind: "assistant_message"},
+			{Kind: "assistant_message"},
+			{Kind: "tool_use"},
+			{Kind: "tool_use"},
+			{Kind: "tool_result"},
+		},
+	}
+
+	metric := metricFromTrace("trace.jsonl", trace)
+	if metric.Model != "default" || metric.ExpectedSteps != 2 || metric.ModelCalls != 2 || metric.ToolCalls != 2 || metric.ActualCalls != 2 {
+		t.Fatalf("metricFromTrace() = %+v, want default model and event-derived counts", metric)
+	}
+}
+
+func TestWriteOptionalMarkdownReport_InvalidDirectory(t *testing.T) {
+	err := writeOptionalMarkdownReport(string([]byte{0}), "content", "test")
+	if err == nil || !strings.Contains(err.Error(), "invalid") {
+		t.Fatalf("writeOptionalMarkdownReport() error = %v, want invalid path", err)
 	}
 }
 

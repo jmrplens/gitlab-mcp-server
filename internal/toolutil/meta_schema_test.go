@@ -264,7 +264,10 @@ func TestLookupMetaActionSchema_IncludesParameterGuidance(t *testing.T) {
 	if !ok {
 		t.Fatalf("schema missing x_parameter_guidance: %#v", schema)
 	}
-	projectGuidance := extension["project_id"].(map[string]any)
+	projectGuidance, ok := extension["project_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("x_parameter_guidance[project_id] missing or invalid: %#v", extension["project_id"])
+	}
 	if projectGuidance["semantic_role"] != "scope_owner_project" {
 		t.Fatalf("project_id guidance = %#v, want scope_owner_project", projectGuidance)
 	}

@@ -101,6 +101,9 @@ func runEfficiencyCheck(opts options) error {
 	if err != nil {
 		return err
 	}
+	if metrics.Overall.Attempts == 0 {
+		return errors.New("efficiency check requires at least one trace attempt")
+	}
 	violations := efficiencyGateViolations(metrics, allowedTasks)
 	report := buildEfficiencyCheckReport(paths, metrics, violations, allowedTasks)
 	if writeErr := writeOptionalMarkdownReport(opts.Output, report, "efficiency check"); writeErr != nil {
@@ -534,6 +537,9 @@ func compareTraceMetricSets(dynamicPath, metaPath string) (traceComparison, erro
 
 func (comparison *traceComparison) addComparable(key traceAttemptKey, dynamicAggregate, metaAggregate traceAggregate) {
 	rows := min(dynamicAggregate.Attempts, metaAggregate.Attempts)
+	if rows == 0 {
+		return
+	}
 	comparison.ComparableRows += rows
 	modelAggregate := comparison.ByModel[key.Model]
 	modelAggregate.addComparable(dynamicAggregate, metaAggregate, rows)
@@ -545,20 +551,30 @@ func (comparison *traceComparison) addComparable(key traceAttemptKey, dynamicAgg
 }
 
 func (aggregate *traceComparisonAggregate) addComparable(dynamicAggregate, metaAggregate traceAggregate, rows int) {
+	dynamicCalls := scaledComparableCalls(dynamicAggregate.ActualCalls, dynamicAggregate.Attempts, rows)
+	metaCalls := scaledComparableCalls(metaAggregate.ActualCalls, metaAggregate.Attempts, rows)
+	netExtra := dynamicCalls - metaCalls
+
 	aggregate.Rows += rows
-	aggregate.DynamicCalls += dynamicAggregate.ActualCalls
-	aggregate.MetaCalls += metaAggregate.ActualCalls
-	netExtra := dynamicAggregate.ActualCalls - metaAggregate.ActualCalls
+	aggregate.DynamicCalls += dynamicCalls
+	aggregate.MetaCalls += metaCalls
 	aggregate.NetExtra += netExtra
 	if netExtra > 0 {
 		aggregate.PositiveExtra += netExtra
 	}
-	if dynamicAggregate.ActualCalls > metaAggregate.ActualCalls {
+	if dynamicCalls > metaCalls {
 		aggregate.DynamicGreater++
 	}
-	if dynamicAggregate.ActualCalls == metaAggregate.ActualCalls {
+	if dynamicCalls == metaCalls {
 		aggregate.DynamicEqual++
 	}
+}
+
+func scaledComparableCalls(totalCalls, attempts, rows int) int {
+	if totalCalls == 0 || attempts <= 0 || rows <= 0 {
+		return 0
+	}
+	return (totalCalls*rows + attempts/2) / attempts
 }
 
 func buildTraceComparisonReport(comparison traceComparison) string {

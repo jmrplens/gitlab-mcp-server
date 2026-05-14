@@ -138,7 +138,7 @@ func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) 
 		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.EscapedPath(), "/api/v4/projects/") && strings.Contains(r.URL.EscapedPath(), "gitlab-mcp-server"):
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":                  101,
 				"path_with_namespace": liveFixtureProjectPath,

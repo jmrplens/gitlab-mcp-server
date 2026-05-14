@@ -89,45 +89,45 @@ Registry build:
 
 ```mermaid
 flowchart TD
-	route[Visible catalog route]
-	entry[Create canonical domain.action entry]
-	aliases[Collect searchable and compatibility aliases]
-	document[Build searchDocument from IDs, aliases, tags, schemas, and backend metadata]
-	register[Register canonical ID and unambiguous aliases]
-	index[Build lightweight inverted index]
+    route[Visible catalog route]
+    entry[Create canonical domain.action entry]
+    aliases[Collect searchable and compatibility aliases]
+    document[Build searchDocument from IDs, aliases, tags, schemas, and backend metadata]
+    register[Register canonical ID and unambiguous aliases]
+    index[Build lightweight inverted index]
 
-	route --> entry --> aliases --> document --> register --> index
+    route --> entry --> aliases --> document --> register --> index
 ```
 
 Candidate generation and scoring:
 
 ```mermaid
 flowchart TD
-	query[Normalize query terms\nand synonym alternatives]
-	candidates[Generate candidates from inverted index\nor full catalog fallback]
-	score[Score ID, aliases, tags, domain/action, params, enums, and schema text]
-	penalties[Apply specificity penalties]
-	boosts[Apply workflow boosts]
-	sort[Sort by score, safety, and canonical ID stability]
+    query[Normalize query terms\nand synonym alternatives]
+    candidates[Generate candidates from inverted index\nor full catalog fallback]
+    score[Score ID, aliases, tags, domain/action, params, enums, and schema text]
+    penalties[Apply specificity penalties]
+    boosts[Apply workflow boosts]
+    sort[Sort by score, safety, and canonical ID stability]
 
-	query --> candidates --> score --> penalties --> boosts --> sort
+    query --> candidates --> score --> penalties --> boosts --> sort
 ```
 
 Fuzzy, ambiguity, and metrics:
 
 ```mermaid
 flowchart TD
-	lexical{Lexical results confident?}
-	fuzzy[Run bounded fuzzy matching]
-	suppress[Suppress weak destructive fuzzy matches]
-	ambiguous{Ambiguous alias?}
-	canonical[Require canonical IDs for execute]
-	metrics[Record counters and debug metadata\nwithout raw query text]
+    lexical{Lexical results confident?}
+    fuzzy[Run bounded fuzzy matching]
+    suppress[Suppress weak destructive fuzzy matches]
+    ambiguous{Ambiguous alias?}
+    canonical[Require canonical IDs for execute]
+    metrics[Record counters and debug metadata\nwithout raw query text]
 
-	lexical -->|No| fuzzy --> suppress --> ambiguous
-	lexical -->|Yes| ambiguous
-	ambiguous -->|Yes| canonical --> metrics
-	ambiguous -->|No| metrics
+    lexical -->|No| fuzzy --> suppress --> ambiguous
+    lexical -->|Yes| ambiguous
+    ambiguous -->|Yes| canonical --> metrics
+    ambiguous -->|No| metrics
 ```
 
 ## Observability
