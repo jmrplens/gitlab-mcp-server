@@ -46,6 +46,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/members"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
@@ -110,6 +111,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
+		buildMergeTrainActionSpecs,
 		buildModelRegistryActionSpecs,
 		buildMRReviewActionSpecs,
 		buildPackageActionSpecs,
@@ -193,6 +195,13 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+}
+
+func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_merge_train", mergetrains.ActionSpecs(client))
 }
 
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
