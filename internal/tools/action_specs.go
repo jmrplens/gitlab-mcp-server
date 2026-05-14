@@ -42,6 +42,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupiterations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
@@ -79,6 +80,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelinetriggers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectaliases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectiterations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstatistics"
@@ -301,14 +303,20 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []A
 	return actionSpecGroup("gitlab_group_scim", groupscim.ActionSpecs(client))
 }
 
-func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 44)
+func buildIssueActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 63)
 	specs = append(specs, issues.ActionSpecs(client)...)
 	specs = append(specs, issuenotes.ActionSpecs(client)...)
 	specs = append(specs, issuelinks.ActionSpecs(client)...)
 	specs = append(specs, issuediscussions.ActionSpecs(client)...)
 	specs = append(specs, issuestatistics.ActionSpecs(client)...)
 	specs = append(specs, workitems.ActionSpecs(client)...)
+	specs = append(specs, awardemoji.IssueActionSpecs(client)...)
+	specs = append(specs, resourceevents.IssueActionSpecs(client)...)
+	if enterprise {
+		specs = append(specs, projectiterations.IssueActionSpecs(client)...)
+		specs = append(specs, groupiterations.IssueActionSpecs(client)...)
+	}
 	return actionSpecGroup("gitlab_issue", specs)
 }
 

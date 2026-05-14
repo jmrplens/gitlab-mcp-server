@@ -19,6 +19,47 @@ func SnippetActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// IssueActionSpecs returns canonical specs for issue award emoji actions.
+func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		issueEmojiReadSpec("emoji_issue_list", toolutil.RouteAction(client, ListIssueAwardEmoji), "gitlab_issue_emoji_list"),
+		issueEmojiReadSpec("emoji_issue_get", toolutil.RouteAction(client, GetIssueAwardEmoji), "gitlab_issue_emoji_get"),
+		issueEmojiCreateSpec("emoji_issue_create", toolutil.RouteAction(client, CreateIssueAwardEmoji), "gitlab_issue_emoji_create"),
+		issueEmojiDeleteSpec("emoji_issue_delete", toolutil.DestructiveVoidAction(client, DeleteIssueAwardEmoji), "gitlab_issue_emoji_delete"),
+		issueEmojiReadSpec("emoji_issue_note_list", toolutil.RouteAction(client, ListIssueNoteAwardEmoji), "gitlab_issue_note_emoji_list"),
+		issueEmojiReadSpec("emoji_issue_note_get", toolutil.RouteAction(client, GetIssueNoteAwardEmoji), "gitlab_issue_note_emoji_get"),
+		issueEmojiCreateSpec("emoji_issue_note_create", toolutil.RouteAction(client, CreateIssueNoteAwardEmoji), "gitlab_issue_note_emoji_create"),
+		issueEmojiDeleteSpec("emoji_issue_note_delete", toolutil.DestructiveVoidAction(client, DeleteIssueNoteAwardEmoji), "gitlab_issue_note_emoji_delete"),
+	}
+}
+
+func issueEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueEmojiOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, issueEmojiOptions(individualTool))
+}
+
+func issueEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueEmojiOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"issue", "emoji"},
+		OpenWorld:      true,
+		OwnerPackage:   "awardemoji",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
 // MergeRequestActionSpecs returns canonical specs for merge request award emoji actions.
 func MergeRequestActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
