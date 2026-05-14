@@ -1,0 +1,52 @@
+package groupprotectedbranches
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for group protected branch actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		groupProtectedBranchReadSpec("protected_branch_list", toolutil.RouteAction(client, List), "gitlab_group_protected_branch_list"),
+		groupProtectedBranchReadSpec("protected_branch_get", toolutil.RouteAction(client, Get), "gitlab_group_protected_branch_get"),
+		groupProtectedBranchCreateSpec("protected_branch_protect", toolutil.RouteAction(client, Protect), "gitlab_group_protected_branch_protect"),
+		groupProtectedBranchUpdateSpec("protected_branch_update", toolutil.RouteAction(client, Update), "gitlab_group_protected_branch_update"),
+		groupProtectedBranchDeleteSpec("protected_branch_unprotect", toolutil.DestructiveVoidAction(client, Unprotect), "gitlab_group_protected_branch_unprotect"),
+	}
+}
+
+func groupProtectedBranchReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupProtectedBranchOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupProtectedBranchCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, groupProtectedBranchOptions(individualTool))
+}
+
+func groupProtectedBranchUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupProtectedBranchOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupProtectedBranchDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupProtectedBranchOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupProtectedBranchOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "protected-branch"},
+		RelatedActions: []string{"group.get"},
+		Edition:        "premium",
+		OpenWorld:      true,
+		OwnerPackage:   "groupprotectedbranches",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

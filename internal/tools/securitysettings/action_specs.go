@@ -13,6 +13,13 @@ func ProjectActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// GroupActionSpecs returns canonical specs for group security setting actions.
+func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		groupSecuritySettingUpdateSpec("security_settings_update", toolutil.RouteAction(client, UpdateGroup), "gitlab_update_group_secret_push_protection"),
+	}
+}
+
 func projectSecurityReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := projectSecurityOptions(individualTool)
 	options.ReadOnly = true
@@ -32,6 +39,23 @@ func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		Edition:        "ultimate",
+		OwnerPackage:   "securitysettings",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+func groupSecuritySettingUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupSecuritySettingsOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupSecuritySettingsOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "security"},
+		RelatedActions: []string{"group.get"},
+		Edition:        "premium",
+		OpenWorld:      true,
 		OwnerPackage:   "securitysettings",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}

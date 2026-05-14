@@ -8,6 +8,7 @@ import (
 // ActionSpecs returns canonical specs for epic issue hierarchy actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		epicIssueReadSpec("epic_issue_list", toolutil.RouteAction(client, List), "gitlab_epic_issue_list"),
 		toolutil.NewActionSpec("epic_issue_assign",
 			toolutil.RouteAction(client, Assign),
 			toolutil.ActionSpecOptions{
@@ -36,5 +37,38 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				OwnerPackage:   "epicissues",
 				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_epic_issue_assign", Title: toolutil.TitleFromName("gitlab_epic_issue_assign")},
 			}),
+		epicIssueDeleteSpec("epic_issue_remove", toolutil.DestructiveAction(client, Remove), "gitlab_epic_issue_remove"),
+		epicIssueUpdateSpec("epic_issue_update", toolutil.RouteAction(client, UpdateOrder), "gitlab_epic_issue_update"),
+	}
+}
+
+func epicIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := epicIssueOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func epicIssueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := epicIssueOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func epicIssueDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := epicIssueOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func epicIssueOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "epic", "issue"},
+		RelatedActions: []string{"group.epic_get", "issue.get"},
+		Edition:        "premium",
+		OpenWorld:      true,
+		OwnerPackage:   "epicissues",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

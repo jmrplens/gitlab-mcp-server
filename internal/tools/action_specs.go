@@ -35,7 +35,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dorametrics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicnotes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
@@ -44,18 +47,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupanalytics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupcredentials"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupepicboards"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupiterations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupldap"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmarkdownuploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmembers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmilestones"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupprotectedbranches"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupprotectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/grouprelationsexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupreleases"
 	grouptools "github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupsaml"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupserviceaccounts"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupsshcerts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupwikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/impersonationtokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
@@ -318,12 +332,27 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, groupboards.ActionSpecs(client)...)
 	specs = append(specs, groupmarkdownuploads.ActionSpecs(client)...)
 	specs = append(specs, groupimportexport.ActionSpecs(client)...)
+	specs = append(specs, grouprelationsexport.ActionSpecs(client)...)
 	specs = append(specs, groupreleases.ActionSpecs(client)...)
 	specs = append(specs, issues.GroupActionSpecs(client)...)
 	if !enterprise {
 		return actionSpecGroup("gitlab_group", specs)
 	}
+	specs = append(specs, groupserviceaccounts.ActionSpecs(client)...)
+	specs = append(specs, epicdiscussions.ActionSpecs(client)...)
+	specs = append(specs, epics.ActionSpecs(client)...)
 	specs = append(specs, epicissues.ActionSpecs(client)...)
+	specs = append(specs, epicnotes.ActionSpecs(client)...)
+	specs = append(specs, groupepicboards.ActionSpecs(client)...)
+	specs = append(specs, groupwikis.ActionSpecs(client)...)
+	specs = append(specs, groupprotectedbranches.ActionSpecs(client)...)
+	specs = append(specs, groupprotectedenvs.ActionSpecs(client)...)
+	specs = append(specs, groupldap.ActionSpecs(client)...)
+	specs = append(specs, groupsaml.ActionSpecs(client)...)
+	specs = append(specs, groupanalytics.ActionSpecs(client)...)
+	specs = append(specs, groupcredentials.ActionSpecs(client)...)
+	specs = append(specs, groupsshcerts.ActionSpecs(client)...)
+	specs = append(specs, securitysettings.GroupActionSpecs(client)...)
 	return actionSpecGroup("gitlab_group", specs)
 }
 
