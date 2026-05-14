@@ -210,8 +210,6 @@ var temporaryActionSpecMigrationAllowlist = map[actioncatalog.ActionID]struct{}{
 	"audit_event.list_group":                         {},
 	"audit_event.list_instance":                      {},
 	"audit_event.list_project":                       {},
-	"ci_catalog.get":                                 {},
-	"ci_catalog.list":                                {},
 	"ci_variable.create":                             {},
 	"ci_variable.delete":                             {},
 	"ci_variable.get":                                {},

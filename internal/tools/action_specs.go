@@ -9,6 +9,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
@@ -47,6 +48,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
 		buildBranchActionSpecs,
+		buildCICatalogActionSpecs,
 		buildCustomEmojiActionSpecs,
 		buildGroupActionSpecs,
 		buildIssueActionSpecs,
@@ -65,6 +67,10 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := append(branches.ActionSpecs(client), branchrules.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_branch", specs)
+}
+
+func buildCICatalogActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_ci_catalog", cicatalog.ActionSpecs(client))
 }
 
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
