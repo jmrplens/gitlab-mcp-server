@@ -35,6 +35,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ffuserlists"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
@@ -122,6 +123,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildDORAMetricsActionSpecs,
 		buildEnvironmentActionSpecs,
 		buildEnterpriseUserActionSpecs,
+		buildExternalStatusCheckActionSpecs,
 		buildFeatureFlagsActionSpecs,
 		buildGroupActionSpecs,
 		buildGroupSCIMActionSpecs,
@@ -228,6 +230,13 @@ func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, enterprise bool
 		return nil
 	}
 	return actionSpecGroup("gitlab_enterprise_user", enterpriseusers.ActionSpecs(client))
+}
+
+func buildExternalStatusCheckActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_external_status_check", externalstatuschecks.ActionSpecs(client))
 }
 
 func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
