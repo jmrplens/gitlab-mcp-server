@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
@@ -26,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
@@ -146,13 +149,16 @@ func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []Action
 }
 
 func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 30)
+	specs := make([]toolutil.ActionSpec, 0, 50)
 	specs = append(specs, uploads.ActionSpecs(client)...)
 	specs = append(specs, projectstatistics.ActionSpecs(client)...)
 	specs = append(specs, projectimportexport.ActionSpecs(client)...)
 	specs = append(specs, members.ActionSpecs(client)...)
 	specs = append(specs, labels.ActionSpecs(client)...)
 	specs = append(specs, milestones.ActionSpecs(client)...)
+	specs = append(specs, badges.ProjectActionSpecs(client)...)
+	specs = append(specs, boards.ActionSpecs(client)...)
+	specs = append(specs, integrations.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_project", specs)
 }
 
