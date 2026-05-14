@@ -52,6 +52,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuestatistics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
@@ -104,6 +105,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/workitems"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -300,11 +302,13 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []A
 }
 
 func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 36)
+	specs := make([]toolutil.ActionSpec, 0, 44)
 	specs = append(specs, issues.ActionSpecs(client)...)
 	specs = append(specs, issuenotes.ActionSpecs(client)...)
 	specs = append(specs, issuelinks.ActionSpecs(client)...)
 	specs = append(specs, issuediscussions.ActionSpecs(client)...)
+	specs = append(specs, issuestatistics.ActionSpecs(client)...)
+	specs = append(specs, workitems.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_issue", specs)
 }
 
