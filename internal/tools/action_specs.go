@@ -15,6 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -44,6 +45,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildTagActionSpecs,
+		buildWikiActionSpecs,
 	}
 }
 
@@ -77,6 +79,10 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_tag", tags.ActionSpecs(client))
+}
+
+func buildWikiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_wiki", wikis.ActionSpecs(client))
 }
 
 func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecGroup {

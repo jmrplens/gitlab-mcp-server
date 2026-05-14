@@ -11,6 +11,7 @@ func TestCollectedActionSpecs_BranchAndTagParity(t *testing.T) {
 	captured := toolutil.CaptureMetaToolDefinitions(func() {
 		registerBranchMeta(nil, nil)
 		registerTagMeta(nil, nil)
+		registerWikiMeta(nil, nil)
 	})
 	capturedByTool := make(map[string]toolutil.MetaToolDefinition, len(captured))
 	for _, definition := range captured {
@@ -22,7 +23,7 @@ func TestCollectedActionSpecs_BranchAndTagParity(t *testing.T) {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
 
-	for _, toolName := range []string{"gitlab_branch", "gitlab_tag"} {
+	for _, toolName := range []string{"gitlab_branch", "gitlab_tag", "gitlab_wiki"} {
 		t.Run(toolName, func(t *testing.T) {
 			definition, ok := capturedByTool[toolName]
 			if !ok {
