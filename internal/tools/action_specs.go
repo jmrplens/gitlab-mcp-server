@@ -45,6 +45,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelinetriggers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
@@ -56,6 +59,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
@@ -95,6 +99,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildMergeRequestActionSpecs,
 		buildModelRegistryActionSpecs,
 		buildPackageActionSpecs,
+		buildPipelineActionSpecs,
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
@@ -178,6 +183,15 @@ func buildPackageActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	specs = append(specs, containerregistry.ActionSpecs(client)...)
 	specs = append(specs, protectedpackages.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_package", specs)
+}
+
+func buildPipelineActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 33)
+	specs = append(specs, pipelines.ActionSpecs(client)...)
+	specs = append(specs, pipelinetriggers.ActionSpecs(client)...)
+	specs = append(specs, resourcegroups.ActionSpecs(client)...)
+	specs = append(specs, pipelineschedules.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_pipeline", specs)
 }
 
 func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
