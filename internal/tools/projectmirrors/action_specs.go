@@ -14,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mirrorCreateSpec("mirror_add", toolutil.RouteAction(client, Add), "gitlab_add_project_mirror"),
 		mirrorUpdateSpec("mirror_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_project_mirror"),
 		mirrorDeleteSpec("mirror_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_project_mirror"),
-		mirrorDeleteSpec("mirror_force_push", toolutil.DestructiveVoidAction(client, ForcePushUpdate), "gitlab_force_push_mirror_update"),
+		mirrorForcePushSpec(client),
 	}
 }
 
@@ -40,6 +40,15 @@ func mirrorDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := mirrorOptions("gitlab_force_push_mirror_update")
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec("mirror_force_push", toolutil.DestructiveVoidAction(client, ForcePushUpdate), options)
 }
 
 func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {

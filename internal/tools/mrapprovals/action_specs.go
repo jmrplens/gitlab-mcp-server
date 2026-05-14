@@ -11,7 +11,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		approvalReadSpec("approval_state", toolutil.RouteAction(client, State), "gitlab_mr_approval_state"),
 		approvalReadSpec("approval_rules", toolutil.RouteAction(client, Rules), "gitlab_mr_approval_rules"),
 		approvalReadSpec("approval_config", toolutil.RouteAction(client, Config), "gitlab_mr_approval_config"),
-		approvalDeleteSpec("approval_reset", toolutil.DestructiveVoidAction(client, Reset), "gitlab_mr_approval_reset"),
+		approvalResetSpec(client),
 		approvalCreateSpec("approval_rule_create", toolutil.RouteAction(client, CreateRule), "gitlab_mr_approval_rule_create"),
 		approvalUpdateSpec("approval_rule_update", toolutil.RouteAction(client, UpdateRule), "gitlab_mr_approval_rule_update"),
 		approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveVoidAction(client, DeleteRule), "gitlab_mr_approval_rule_delete"),
@@ -40,6 +40,15 @@ func approvalDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := approvalOptions("gitlab_mr_approval_reset")
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec("approval_reset", toolutil.DestructiveVoidAction(client, Reset), options)
 }
 
 func approvalOptions(individualTool string) toolutil.ActionSpecOptions {

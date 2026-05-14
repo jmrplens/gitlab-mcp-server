@@ -10,7 +10,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		enterpriseUserReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_enterprise_users"),
 		enterpriseUserReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_get_enterprise_user"),
-		enterpriseUserDestructiveSpec("disable_2fa", toolutil.DestructiveVoidAction(client, Disable2FA), "gitlab_disable_2fa_enterprise_user"),
+		enterpriseUserDisable2FASpec(client),
 		enterpriseUserDestructiveSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_enterprise_user"),
 	}
 }
@@ -27,6 +27,15 @@ func enterpriseUserDestructiveSpec(name string, route toolutil.ActionRoute, indi
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func enterpriseUserDisable2FASpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := enterpriseUserOptions("gitlab_disable_2fa_enterprise_user")
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec("disable_2fa", toolutil.DestructiveVoidAction(client, Disable2FA), options)
 }
 
 func enterpriseUserOptions(individualTool string) toolutil.ActionSpecOptions {

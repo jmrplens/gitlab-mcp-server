@@ -16,7 +16,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		commitReadSpec("commit_comments", toolutil.RouteAction(client, GetComments), "gitlab_commit_comments"),
 		commitCreateSpec("commit_comment_create", toolutil.RouteAction(client, PostComment), "gitlab_commit_comment_create"),
 		commitReadSpec("commit_statuses", toolutil.RouteAction(client, GetStatuses), "gitlab_commit_statuses"),
-		commitUpdateSpec("commit_status_set", toolutil.RouteAction(client, SetStatus), "gitlab_commit_status_set"),
+		commitCreateSpec("commit_status_set", toolutil.RouteAction(client, SetStatus), "gitlab_commit_status_set"),
 		commitReadSpec("commit_merge_requests", toolutil.RouteAction(client, ListMRsByCommit), "gitlab_commit_merge_requests"),
 		commitCreateSpec("commit_cherry_pick", toolutil.RouteAction(client, CherryPick), "gitlab_commit_cherry_pick"),
 		commitCreateSpec("commit_revert", toolutil.RouteAction(client, Revert), "gitlab_commit_revert"),
@@ -34,12 +34,6 @@ func commitReadSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func commitCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewActionSpec(name, route, commitOptions(individualTool))
-}
-
-func commitUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := commitOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
 }
 
 func commitOptions(individualTool string) toolutil.ActionSpecOptions {

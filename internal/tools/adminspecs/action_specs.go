@@ -47,7 +47,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("broadcast_message_delete", toolutil.DestructiveVoidAction(client, broadcastmessages.Delete), "gitlab_delete_broadcast_message"),
 		adminReadSpec("feature_list", toolutil.RouteAction(client, features.List), "gitlab_list_features"),
 		adminReadSpec("feature_list_definitions", toolutil.RouteAction(client, features.ListDefinitions), "gitlab_list_feature_definitions"),
-		adminUpdateSpec("feature_set", features.SetRoute(client), "gitlab_set_feature_flag"),
+		adminUpdateCreateIndividualSpec("feature_set", features.SetRoute(client), "gitlab_set_feature_flag"),
 		adminDeleteSpec("feature_delete", toolutil.DestructiveVoidAction(client, features.Delete), "gitlab_delete_feature_flag"),
 		adminReadSpec("license_get", toolutil.RouteAction(client, license.Get), "gitlab_get_license"),
 		adminCreateSpec("license_add", toolutil.RouteAction(client, license.Add), "gitlab_add_license"),
@@ -55,7 +55,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("system_hook_list", toolutil.RouteAction(client, systemhooks.List), "gitlab_list_system_hooks"),
 		adminReadSpec("system_hook_get", toolutil.RouteAction(client, systemhooks.Get), "gitlab_get_system_hook"),
 		adminCreateSpec("system_hook_add", toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
-		adminCreateSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), "gitlab_test_system_hook"),
+		adminSystemHookTestSpec(client),
 		adminDeleteSpec("system_hook_delete", toolutil.DestructiveVoidAction(client, systemhooks.Delete), "gitlab_delete_system_hook"),
 		adminReadSpec("sidekiq_queue_metrics", toolutil.RouteAction(client, sidekiq.GetQueueMetrics), "gitlab_get_sidekiq_queue_metrics"),
 		adminReadSpec("sidekiq_process_metrics", toolutil.RouteAction(client, sidekiq.GetProcessMetrics), "gitlab_get_sidekiq_process_metrics"),
@@ -69,7 +69,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("usage_data_metric_definitions", toolutil.RouteAction(client, usagedata.GetMetricDefinitions), "gitlab_get_metric_definitions"),
 		adminCreateSpec("usage_data_track_event", toolutil.RouteAction(client, usagedata.TrackEvent), "gitlab_track_event"),
 		adminCreateSpec("usage_data_track_events", toolutil.RouteAction(client, usagedata.TrackEvents), "gitlab_track_events"),
-		adminDeleteSpec("db_migration_mark", toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
+		adminDestructiveUpdateIndividualSpec("db_migration_mark", toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
 		adminReadSpec("application_list", toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
 		adminDeleteSpec("application_delete", toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
@@ -77,7 +77,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), "gitlab_get_metadata"),
 		adminReadSpec("custom_attr_list", toolutil.RouteAction(client, customattributes.List), "gitlab_list_custom_attributes"),
 		adminReadSpec("custom_attr_get", toolutil.RouteAction(client, customattributes.Get), "gitlab_get_custom_attribute"),
-		adminUpdateSpec("custom_attr_set", toolutil.RouteAction(client, customattributes.Set), "gitlab_set_custom_attribute"),
+		adminUpdateCreateIndividualSpec("custom_attr_set", toolutil.RouteAction(client, customattributes.Set), "gitlab_set_custom_attribute"),
 		adminDeleteSpec("custom_attr_delete", toolutil.DestructiveVoidAction(client, customattributes.Delete), "gitlab_delete_custom_attribute"),
 		adminCreateSpec("bulk_import_start", toolutil.RouteAction(client, bulkimports.StartMigration), "gitlab_start_bulk_import"),
 		adminReadSpec("bulk_import_list", toolutil.RouteAction(client, bulkimports.List), "gitlab_list_bulk_imports"),
@@ -103,7 +103,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("terraform_state_get", toolutil.RouteAction(client, terraformstates.Get), "gitlab_get_terraform_state"),
 		adminDeleteSpec("terraform_state_delete", toolutil.DestructiveVoidAction(client, terraformstates.Delete), "gitlab_delete_terraform_state"),
 		adminUpdateSpec("terraform_state_lock", toolutil.RouteAction(client, terraformstates.Lock), "gitlab_lock_terraform_state"),
-		adminDeleteSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), "gitlab_unlock_terraform_state"),
+		adminDestructiveUpdateIndividualSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), "gitlab_unlock_terraform_state"),
 		adminDeleteSpec("terraform_version_delete", toolutil.DestructiveVoidAction(client, terraformstates.DeleteVersion), "gitlab_delete_terraform_state_version"),
 		adminReadSpec("cluster_agent_list", toolutil.RouteAction(client, clusteragents.ListAgents), "gitlab_list_cluster_agents"),
 		adminReadSpec("cluster_agent_get", toolutil.RouteAction(client, clusteragents.GetAgent), "gitlab_get_cluster_agent"),
@@ -144,6 +144,32 @@ func adminDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func adminUpdateCreateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	individualIdempotent := false
+	options := adminOptions(individualTool)
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func adminDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	individualDestructive := false
+	options := adminOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualReadOnly := true
+	individualIdempotent := true
+	options := adminOptions("gitlab_test_system_hook")
+	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
+	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
+	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {

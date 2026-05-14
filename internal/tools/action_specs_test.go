@@ -396,28 +396,7 @@ func normalizeSchemaValue(key string, value any) {
 	}
 }
 
-var knownIndividualProjectionAnnotationGaps = map[string]string{
-	"gitlab_ban_user":                    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_block_user":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_commit_status_set":           "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_deactivate_user":             "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_disable_2fa_enterprise_user": "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_disable_two_factor":          "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_force_push_mirror_update":    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_issue_move":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_issue_spent_time_add":        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mark_migration":              "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_add_spent_time":           "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_approval_reset":           "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_draft_note_publish":       "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_draft_note_publish_all":   "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_merge":                    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_unapprove":                "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_set_custom_attribute":        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_set_feature_flag":            "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_test_system_hook":            "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_unlock_terraform_state":      "ActionSpec marks idempotent, historical individual metadata does not",
-}
+var knownIndividualProjectionAnnotationGaps = map[string]string{}
 
 var knownIndividualProjectionSchemaGaps = map[string]string{
 	"gitlab_analyze_ci_configuration":          "ActionSpec schema preserves optional content_ref while historical individual snapshot marks it required",
