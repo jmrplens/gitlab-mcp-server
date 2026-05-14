@@ -60,6 +60,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovals"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovalsettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
@@ -304,7 +306,11 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 }
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+	specs := make([]toolutil.ActionSpec, 0, 41)
+	specs = append(specs, mergerequests.ActionSpecs(client)...)
+	specs = append(specs, mrapprovals.ActionSpecs(client)...)
+	specs = append(specs, mrapprovalsettings.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_merge_request", specs)
 }
 
 func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
