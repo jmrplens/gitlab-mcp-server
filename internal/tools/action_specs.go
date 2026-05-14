@@ -19,6 +19,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ffuserlists"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
@@ -59,6 +61,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildCICatalogActionSpecs,
 		buildCustomEmojiActionSpecs,
 		buildEnvironmentActionSpecs,
+		buildFeatureFlagsActionSpecs,
 		buildGroupActionSpecs,
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
@@ -96,6 +99,13 @@ func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSp
 	specs = append(specs, deployments.ActionSpecs(client)...)
 	specs = append(specs, deploymentmergerequests.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_environment", specs)
+}
+
+func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 10)
+	specs = append(specs, featureflags.ActionSpecs(client)...)
+	specs = append(specs, ffuserlists.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_feature_flags", specs)
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
