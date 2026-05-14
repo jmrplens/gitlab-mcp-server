@@ -9,6 +9,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
@@ -20,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commitdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/compliancepolicy"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/containerregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dependencies"
@@ -28,6 +30,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dorametrics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
@@ -73,6 +76,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetnotes"
@@ -103,11 +107,14 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
+		buildAttestationActionSpecs,
 		buildBranchActionSpecs,
 		buildCICatalogActionSpecs,
 		buildCIVariableActionSpecs,
+		buildCompliancePolicyActionSpecs,
 		buildCustomEmojiActionSpecs,
 		buildDependencyActionSpecs,
+		buildDORAMetricsActionSpecs,
 		buildEnvironmentActionSpecs,
 		buildFeatureFlagsActionSpecs,
 		buildGroupActionSpecs,
@@ -124,6 +131,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
 		buildSearchActionSpecs,
+		buildSecurityFindingActionSpecs,
 		buildSnippetActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
@@ -139,6 +147,13 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 	specs = append(specs, accessrequests.ActionSpecs(client)...)
 	specs = append(specs, invites.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_access", specs)
+}
+
+func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_attestation", attestations.ActionSpecs(client))
 }
 
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
@@ -158,6 +173,13 @@ func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	return actionSpecGroup("gitlab_ci_variable", specs)
 }
 
+func buildCompliancePolicyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_compliance_policy", compliancepolicy.ActionSpecs(client))
+}
+
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_custom_emoji", customemoji.ActionSpecs(client))
 }
@@ -167,6 +189,13 @@ func buildDependencyActionSpecs(client *gitlabclient.Client, enterprise bool) []
 		return nil
 	}
 	return actionSpecGroup("gitlab_dependency", dependencies.ActionSpecs(client))
+}
+
+func buildDORAMetricsActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_dora_metrics", dorametrics.ActionSpecs(client))
 }
 
 func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
@@ -292,6 +321,13 @@ func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 
 func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_search", search.ActionSpecs(client))
+}
+
+func buildSecurityFindingActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_security_finding", securityfindings.ActionSpecs(client))
 }
 
 func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
