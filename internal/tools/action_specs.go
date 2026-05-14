@@ -34,6 +34,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
@@ -157,7 +158,10 @@ func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGrou
 }
 
 func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_job", jobtokenscope.ActionSpecs(client))
+	specs := make([]toolutil.ActionSpec, 0, 25)
+	specs = append(specs, jobs.ActionSpecs(client)...)
+	specs = append(specs, jobtokenscope.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_job", specs)
 }
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
