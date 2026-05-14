@@ -13,6 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/civariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commitdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
@@ -28,6 +29,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
@@ -78,6 +81,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildAccessActionSpecs,
 		buildBranchActionSpecs,
 		buildCICatalogActionSpecs,
+		buildCIVariableActionSpecs,
 		buildCustomEmojiActionSpecs,
 		buildEnvironmentActionSpecs,
 		buildFeatureFlagsActionSpecs,
@@ -106,6 +110,14 @@ func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 
 func buildCICatalogActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_ci_catalog", cicatalog.ActionSpecs(client))
+}
+
+func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 15)
+	specs = append(specs, civariables.ActionSpecs(client)...)
+	specs = append(specs, groupvariables.ActionSpecs(client)...)
+	specs = append(specs, instancevariables.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_ci_variable", specs)
 }
 
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
