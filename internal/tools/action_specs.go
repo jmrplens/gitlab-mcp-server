@@ -10,6 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
@@ -31,6 +32,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dorametrics"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
@@ -38,6 +40,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
@@ -48,6 +51,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/members"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergetrains"
@@ -108,6 +112,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
 		buildAttestationActionSpecs,
+		buildAuditEventActionSpecs,
 		buildBranchActionSpecs,
 		buildCICatalogActionSpecs,
 		buildCIVariableActionSpecs,
@@ -116,12 +121,15 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildDependencyActionSpecs,
 		buildDORAMetricsActionSpecs,
 		buildEnvironmentActionSpecs,
+		buildEnterpriseUserActionSpecs,
 		buildFeatureFlagsActionSpecs,
 		buildGroupActionSpecs,
+		buildGroupSCIMActionSpecs,
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildMergeTrainActionSpecs,
+		buildMemberRoleActionSpecs,
 		buildModelRegistryActionSpecs,
 		buildMRReviewActionSpecs,
 		buildPackageActionSpecs,
@@ -154,6 +162,13 @@ func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) [
 		return nil
 	}
 	return actionSpecGroup("gitlab_attestation", attestations.ActionSpecs(client))
+}
+
+func buildAuditEventActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_audit_event", auditevents.ActionSpecs(client))
 }
 
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
@@ -208,6 +223,13 @@ func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSp
 	return actionSpecGroup("gitlab_environment", specs)
 }
 
+func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_enterprise_user", enterpriseusers.ActionSpecs(client))
+}
+
 func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 10)
 	specs = append(specs, featureflags.ActionSpecs(client)...)
@@ -220,6 +242,13 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 		return nil
 	}
 	return actionSpecGroup("gitlab_group", epicissues.ActionSpecs(client))
+}
+
+func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_group_scim", groupscim.ActionSpecs(client))
 }
 
 func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
@@ -242,6 +271,13 @@ func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []
 		return nil
 	}
 	return actionSpecGroup("gitlab_merge_train", mergetrains.ActionSpecs(client))
+}
+
+func buildMemberRoleActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_member_role", memberroles.ActionSpecs(client))
 }
 
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
