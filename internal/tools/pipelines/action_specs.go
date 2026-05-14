@@ -11,7 +11,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineReadSpec("list", toolutil.RouteAction(client, List), "gitlab_pipeline_list"),
 		pipelineReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_pipeline_get"),
 		pipelineUpdateSpec("cancel", toolutil.RouteAction(client, Cancel), "gitlab_pipeline_cancel"),
-		pipelineMutationSpec("retry", toolutil.RouteAction(client, Retry), "gitlab_pipeline_retry"),
+		pipelineUpdateSpec("retry", toolutil.RouteAction(client, Retry), "gitlab_pipeline_retry"),
 		pipelineDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_pipeline_delete"),
 		pipelineReadSpec("variables", toolutil.RouteAction(client, GetVariables), "gitlab_pipeline_variables"),
 		pipelineReadSpec("test_report", toolutil.RouteAction(client, GetTestReport), "gitlab_pipeline_test_report"),

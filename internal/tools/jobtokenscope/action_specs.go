@@ -11,10 +11,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		jobTokenScopeReadSpec("token_scope_get", toolutil.RouteAction(client, GetAccessSettings), "gitlab_get_job_token_access_settings"),
 		jobTokenScopeUpdateSpec("token_scope_patch", toolutil.RouteAction(client, PatchAccessSettings), "gitlab_patch_job_token_access_settings"),
 		jobTokenScopeReadSpec("token_scope_list_inbound", toolutil.RouteAction(client, ListInboundAllowlist), "gitlab_list_job_token_inbound_allowlist"),
-		jobTokenScopeUpdateSpec("token_scope_add_project", toolutil.RouteAction(client, AddProjectAllowlist), "gitlab_add_project_job_token_allowlist"),
+		jobTokenScopeCreateSpec("token_scope_add_project", toolutil.RouteAction(client, AddProjectAllowlist), "gitlab_add_project_job_token_allowlist"),
 		jobTokenScopeRemoveProjectSpec(client),
 		jobTokenScopeReadSpec("token_scope_list_groups", toolutil.RouteAction(client, ListGroupAllowlist), "gitlab_list_job_token_group_allowlist"),
-		jobTokenScopeUpdateSpec("token_scope_add_group", toolutil.RouteAction(client, AddGroupAllowlist), "gitlab_add_group_job_token_allowlist"),
+		jobTokenScopeCreateSpec("token_scope_add_group", toolutil.RouteAction(client, AddGroupAllowlist), "gitlab_add_group_job_token_allowlist"),
 		jobTokenScopeDeleteSpec("token_scope_remove_group", toolutil.DestructiveVoidAction(client, RemoveGroupAllowlist), "gitlab_remove_group_job_token_allowlist"),
 	}
 }
@@ -47,6 +47,10 @@ func jobTokenScopeReadSpec(name string, route toolutil.ActionRoute, individualTo
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func jobTokenScopeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, jobTokenScopeOptions(individualTool))
 }
 
 func jobTokenScopeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

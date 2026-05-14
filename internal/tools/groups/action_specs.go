@@ -17,7 +17,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupUpdateSpec("archive", toolutil.RouteVoidAction(client, Archive), "gitlab_group_archive"),
 		groupUpdateSpec("unarchive", toolutil.RouteVoidAction(client, Unarchive), "gitlab_group_unarchive"),
 		groupReadSpec("search", toolutil.RouteAction(client, Search), "gitlab_group_search"),
-		groupCreateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
+		groupUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
 		groupReadSpec("members", toolutil.RouteAction(client, MembersList), "gitlab_group_members_list"),
 		groupReadSpec("subgroups", toolutil.RouteAction(client, SubgroupsList), "gitlab_subgroups_list"),

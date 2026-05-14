@@ -42,7 +42,9 @@ func deploymentDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 }
 
 func deploymentGateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, deploymentOptions(individualTool))
+	options := deploymentOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
 }
 
 func deploymentOptions(individualTool string) toolutil.ActionSpecOptions {

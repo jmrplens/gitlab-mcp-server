@@ -13,7 +13,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		environmentCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_environment_create"),
 		environmentUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_environment_update"),
 		environmentDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_environment_delete"),
-		environmentDeleteSpec("stop", toolutil.DestructiveAction(client, Stop), "gitlab_environment_stop"),
+		environmentStopSpec(client),
 	}
 }
 
@@ -39,6 +39,15 @@ func environmentDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := environmentOptions("gitlab_environment_stop")
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec("stop", toolutil.DestructiveAction(client, Stop), options)
 }
 
 func environmentOptions(individualTool string) toolutil.ActionSpecOptions {
