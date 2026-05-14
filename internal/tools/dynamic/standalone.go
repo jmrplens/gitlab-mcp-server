@@ -39,15 +39,16 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		catalog = catalog.Clone()
 	}
 	if !standaloneExcluded(opts.ExcludeTools, "gitlab_discover_project") {
-		if err := catalog.AddAction("gitlab_discover_project", actioncatalog.Action{
-			Name:  "resolve",
-			Route: toolutil.RouteAction(client, projectdiscovery.Resolve),
-		}, actioncatalog.GroupOptions{
+		group, groupErr := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
 			ToolName:    "gitlab_discover_project",
 			Description: "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
 			Icons:       toolutil.IconProject,
 			ReadOnly:    true,
-		}); err != nil {
+		}, projectdiscovery.ActionSpecs(client))
+		if groupErr != nil {
+			return nil, fmt.Errorf("build standalone dynamic group gitlab_discover_project: %w", groupErr)
+		}
+		if err := catalog.AddGroup(group); err != nil {
 			return nil, fmt.Errorf("add standalone dynamic action gitlab_discover_project.resolve: %w", err)
 		}
 	}

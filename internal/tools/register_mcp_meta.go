@@ -75,7 +75,19 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 		Icons:       toolutil.IconHealth,
 		ReadOnly:    updater == nil,
 	})
+	specActions, specErr := actioncatalog.ActionsFromSpecs(health.ActionSpecs(client))
+	if specErr != nil {
+		slog.Error("failed to build MCP health action specs", "error", specErr)
+	}
+	specActionByName := make(map[string]actioncatalog.Action, len(specActions))
+	for _, action := range specActions {
+		specActionByName[action.Name] = action
+	}
 	for name, route := range routes {
+		if action, ok := specActionByName[name]; ok {
+			group.SetAction(action)
+			continue
+		}
 		group.SetAction(actioncatalog.Action{Name: name, Route: route})
 	}
 	return group
