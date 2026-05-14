@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
@@ -46,6 +47,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
 		buildBranchActionSpecs,
+		buildCustomEmojiActionSpecs,
 		buildGroupActionSpecs,
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
@@ -63,6 +65,10 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := append(branches.ActionSpecs(client), branchrules.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_branch", specs)
+}
+
+func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_custom_emoji", customemoji.ActionSpecs(client))
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {

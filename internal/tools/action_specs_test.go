@@ -10,6 +10,7 @@ import (
 func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 	captured := toolutil.CaptureMetaToolDefinitions(func() {
 		registerBranchMeta(nil, nil)
+		registerCustomEmojiMeta(nil, nil)
 		registerTagMeta(nil, nil)
 		registerTemplateMeta(nil, nil)
 		registerWikiMeta(nil, nil)
@@ -24,7 +25,7 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
 
-	for _, toolName := range []string{"gitlab_branch", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
+	for _, toolName := range []string{"gitlab_branch", "gitlab_custom_emoji", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
 		t.Run(toolName, func(t *testing.T) {
 			definition, ok := capturedByTool[toolName]
 			if !ok {
