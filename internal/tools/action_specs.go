@@ -22,6 +22,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -54,6 +56,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
+		buildReleaseActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
 		buildWikiActionSpecs,
@@ -94,6 +97,13 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+}
+
+func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 12)
+	specs = append(specs, releases.ActionSpecs(client)...)
+	specs = append(specs, releaselinks.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_release", specs)
 }
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
