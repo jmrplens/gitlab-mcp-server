@@ -7,6 +7,11 @@ import (
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -28,7 +33,43 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 }
 
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
-	return nil
+	return []actionSpecGroupBuilder{
+		buildAccessActionSpecs,
+		buildGroupActionSpecs,
+		buildIssueActionSpecs,
+		buildJobActionSpecs,
+		buildMergeRequestActionSpecs,
+	}
+}
+
+func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_access", deploytokens.ActionSpecs(client))
+}
+
+func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_group", epicissues.ActionSpecs(client))
+}
+
+func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_issue", issuelinks.ActionSpecs(client))
+}
+
+func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_job", jobtokenscope.ActionSpecs(client))
+}
+
+func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+}
+
+func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecGroup {
+	if len(specs) == 0 {
+		return nil
+	}
+	return []ActionSpecGroup{{ToolName: toolName, Specs: specs}}
 }
 
 func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.ActionSpec, error) {

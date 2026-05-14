@@ -207,32 +207,6 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	}
 }
 
-func TestWithCatalogParameterGuidance_MergesRouteGuidance(t *testing.T) {
-	route := toolutil.ActionRoute{
-		ParameterGuidance: map[string]toolutil.ParameterGuidance{
-			"project_id": {
-				SemanticRole:     "existing_scope",
-				CommonConfusions: []string{"Keep the source project."},
-			},
-		},
-	}
-
-	got := withCatalogParameterGuidance("gitlab_job", "token_scope_remove_project", route)
-	projectGuidance := got.ParameterGuidance["project_id"]
-	if projectGuidance.SemanticRole != "existing_scope" {
-		t.Fatalf("project_id SemanticRole = %q, want existing_scope", projectGuidance.SemanticRole)
-	}
-	if projectGuidance.ValueSource == "" || projectGuidance.ExampleBinding == "" {
-		t.Fatalf("project_id guidance = %+v, want catalog value source and example", projectGuidance)
-	}
-	if !slices.Contains(projectGuidance.CommonConfusions, "Keep the source project.") || !slices.Contains(projectGuidance.CommonConfusions, "Do not use the project being removed as project_id.") {
-		t.Fatalf("project_id CommonConfusions = %+v, want route and catalog guidance", projectGuidance.CommonConfusions)
-	}
-	if _, ok := got.ParameterGuidance["target_project_id"]; !ok {
-		t.Fatalf("ParameterGuidance = %+v, want catalog-only target_project_id", got.ParameterGuidance)
-	}
-}
-
 func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	spec := toolutil.NewActionSpec("list", testCatalogActionRoute("search"), toolutil.ActionSpecOptions{
 		Aliases:           []string{"project.search"},
@@ -266,12 +240,8 @@ func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	}
 }
 
-func TestBuildActionCatalog_LegacyOverlayIsNotRequiredForSpecBackedActions(t *testing.T) {
-	spec := toolutil.NewActionSpec("token_scope_remove_project", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{
-		ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "spec_scope_project"}},
-	})
-
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_job", Specs: []toolutil.ActionSpec{spec}}}})
+func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{})
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
@@ -279,12 +249,34 @@ func TestBuildActionCatalog_LegacyOverlayIsNotRequiredForSpecBackedActions(t *te
 	if !ok {
 		t.Fatal("catalog missing job.token_scope_remove_project")
 	}
+	if !action.SpecBacked {
+		t.Fatal("job.token_scope_remove_project is not spec-backed")
+	}
+	guidance := action.Route.ParameterGuidance
+	if guidance["project_id"].SemanticRole != "scope_owner_project" {
+		t.Fatalf("project_id guidance = %+v, want canonical spec guidance", guidance["project_id"])
+	}
+	if guidance["target_project_id"].SemanticRole != "target_project" {
+		t.Fatalf("target_project_id guidance = %+v, want canonical spec guidance", guidance["target_project_id"])
+	}
+}
+
+func TestBuildActionCatalog_ExplicitSpecOverridesCapturedRoute(t *testing.T) {
+	spec := toolutil.NewActionSpec("token_scope_add_project", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "spec_scope_project"}},
+	})
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_job", Specs: []toolutil.ActionSpec{spec}}}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	action, ok := catalog.Action("job.token_scope_add_project")
+	if !ok {
+		t.Fatal("catalog missing job.token_scope_add_project")
+	}
 	guidance := action.Route.ParameterGuidance
 	if guidance["project_id"].SemanticRole != "spec_scope_project" {
 		t.Fatalf("project_id guidance = %+v, want spec guidance", guidance["project_id"])
-	}
-	if _, exists := guidance["target_project_id"]; exists {
-		t.Fatalf("guidance = %+v, want no legacy target_project_id overlay for spec-backed action", guidance)
 	}
 }
 
