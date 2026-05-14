@@ -296,6 +296,9 @@ The migration is enforced by source-level tests and audits:
   for historically ambiguous actions such as merge request creation, issue
   links, epic issue assignment, CI job token scope removal, and deploy token
   deletion.
+- `TestIndividualToolProjection_RepresentativeDomainParity` pilots the
+  `ActionSpec`-to-`mcp.Tool` projection adapter against registered individual
+  tools for project, issue, merge request, job, and group domains.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
 - `make audit-dynamic-aliases`, `go run ./cmd/audit_output/`,

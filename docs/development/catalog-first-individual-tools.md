@@ -26,9 +26,10 @@ embedded resources, and result variants such as image content through
 `RegisterTools` closures.
 
 Runtime generation is rejected for now because it would make the compatibility
-surface depend on incomplete per-action policy data. Build-time generation is
-also deferred until spec projection tests can prove exact parity with the
-current individual tool snapshot.
+surface depend on incomplete per-action policy data. A small
+`ActionSpec`-to-`mcp.Tool` projection adapter exists for tests and future
+generation work, but production registration remains hand-written until parity
+is proven against the current individual tool snapshot.
 
 ## Representative Comparison
 
@@ -106,12 +107,12 @@ tools must preserve handler validation and not imply the schema is complete.
 Keep individual tools as a separate hand-registered compatibility surface.
 Continue using the canonical action catalog for meta and dynamic surfaces.
 
-If this topic is revisited, the next design should first add an explicit
+If this topic is revisited, the next design should extend the existing
 individual-tool projection layer from `ActionSpec` to `mcp.Tool`. That layer
 must consume names, descriptions, annotations, content policy, not-found policy,
 embedded-resource policy, rich-result policy, and runtime validation notes. Only
-after that should a build-time generator or test-only prototype compare
-generated tool definitions against `internal/tools/testdata/tools_individual.json`.
+after that should a build-time generator compare generated tool definitions
+against `internal/tools/testdata/tools_individual.json`.
 
 Runtime generation should remain off the table until snapshot parity and MCP
 round-trip parity are proven. The individual surface is the compatibility API;
