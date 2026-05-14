@@ -12,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commitdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploymentmergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
@@ -21,17 +23,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ffuserlists"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -68,6 +74,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildMergeRequestActionSpecs,
 		buildModelRegistryActionSpecs,
 		buildReleaseActionSpecs,
+		buildRepositoryActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
 		buildWikiActionSpecs,
@@ -136,6 +143,17 @@ func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	specs = append(specs, releases.ActionSpecs(client)...)
 	specs = append(specs, releaselinks.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_release", specs)
+}
+
+func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 41)
+	specs = append(specs, repository.ActionSpecs(client)...)
+	specs = append(specs, commits.ActionSpecs(client)...)
+	specs = append(specs, files.ActionSpecs(client)...)
+	specs = append(specs, repositorysubmodules.ActionSpecs(client)...)
+	specs = append(specs, markdown.ActionSpecs(client)...)
+	specs = append(specs, commitdiscussions.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_repository", specs)
 }
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
