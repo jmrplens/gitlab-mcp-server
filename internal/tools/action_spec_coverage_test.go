@@ -45,17 +45,12 @@ func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 		if action.SpecBacked {
 			continue
 		}
-		if _, ok := temporaryActionSpecMigrationAllowlist[action.ID]; ok {
-			continue
-		}
 		missing = append(missing, action.ID)
 	}
 	if len(missing) > 0 {
-		t.Fatalf("catalog actions must be spec-backed or explicitly allowlisted:\n%s", formatActionSpecMigrationAllowlist(missing))
+		t.Fatalf("catalog actions must be spec-backed:\n%s", formatMissingActionSpecs(missing))
 	}
 }
-
-var temporaryActionSpecMigrationAllowlist = map[actioncatalog.ActionID]struct{}{}
 
 func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
 	t.Helper()
@@ -67,10 +62,10 @@ func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Cli
 	return catalog
 }
 
-func formatActionSpecMigrationAllowlist(ids []actioncatalog.ActionID) string {
+func formatMissingActionSpecs(ids []actioncatalog.ActionID) string {
 	var builder strings.Builder
 	for _, id := range ids {
-		fmt.Fprintf(&builder, "\t%q: {},\n", id)
+		fmt.Fprintf(&builder, "\t%s\n", id)
 	}
 	return builder.String()
 }

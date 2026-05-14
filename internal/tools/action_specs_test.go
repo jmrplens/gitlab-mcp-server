@@ -2,58 +2,94 @@ package tools
 
 import (
 	"sort"
+	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
-	captured := toolutil.CaptureMetaToolDefinitions(func() {
-		registerAccessMeta(nil, nil)
-		registerBranchMeta(nil, nil)
-		registerCICatalogMeta(nil, nil)
-		registerCIVariableMeta(nil, nil)
-		registerCustomEmojiMeta(nil, nil)
-		registerEnvironmentMeta(nil, nil)
-		registerFeatureFlagsMeta(nil, nil)
-		registerJobMeta(nil, nil)
-		registerModelRegistryMeta(nil, nil)
-		registerMRReviewMeta(nil, nil)
-		registerPackageMeta(nil, nil)
-		registerPipelineMeta(nil, nil)
-		registerProjectMeta(nil, nil, false)
-		registerRepositoryMeta(nil, nil)
-		registerReleaseMeta(nil, nil)
-		runners.RegisterMeta(nil, nil)
-		search.RegisterMeta(nil, nil)
-		registerTagMeta(nil, nil)
-		registerSnippetMeta(nil, nil)
-		registerTemplateMeta(nil, nil)
-		registerWikiMeta(nil, nil)
-	})
-	capturedByTool := make(map[string]toolutil.MetaToolDefinition, len(captured))
-	for _, definition := range captured {
-		capturedByTool[definition.Name] = definition
+	testCases := []struct {
+		name       string
+		client     *gitlabclient.Client
+		enterprise bool
+	}{
+		{name: "base"},
+		{name: "self-managed enterprise", enterprise: true},
+		{name: "gitlab.com enterprise", client: newGitLabDotComClient(t), enterprise: true},
 	}
 
-	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(nil, false))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			captured := toolutil.CaptureMetaToolDefinitions(func() {
+				registerAllMetaGroups(nil, tc.client, tc.enterprise)
+			})
+			capturedByTool := make(map[string]toolutil.MetaToolDefinition, len(captured))
+			for _, definition := range captured {
+				capturedByTool[definition.Name] = definition
+			}
+
+			specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(tc.client, tc.enterprise))
+			if err != nil {
+				t.Fatalf("actionSpecGroupsByTool() error = %v", err)
+			}
+
+			toolNames := make([]string, 0, len(capturedByTool))
+			for toolName := range capturedByTool {
+				toolNames = append(toolNames, toolName)
+			}
+			sort.Strings(toolNames)
+
+			for _, toolName := range toolNames {
+				t.Run(toolName, func(t *testing.T) {
+					definition := capturedByTool[toolName]
+					specs, ok := specsByTool[toolName]
+					if !ok {
+						t.Fatalf("collected action specs missing %s", toolName)
+					}
+					specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specs)
+					if routeErr != nil {
+						t.Fatalf("ActionSpecsToMapWithError() error = %v", routeErr)
+					}
+					assertActionRouteParity(t, toolName, definition.Routes, specRoutes)
+					assertSpecProjectionParity(t, toolName, specs)
+				})
+			}
+		})
+	}
+}
+
+func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
+	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(newGitLabDotComClient(t), true))
 	if err != nil {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
 
-	for _, toolName := range []string{"gitlab_access", "gitlab_branch", "gitlab_ci_catalog", "gitlab_ci_variable", "gitlab_custom_emoji", "gitlab_environment", "gitlab_feature_flags", "gitlab_job", "gitlab_model_registry", "gitlab_mr_review", "gitlab_package", "gitlab_pipeline", "gitlab_project", "gitlab_release", "gitlab_repository", "gitlab_runner", "gitlab_search", "gitlab_snippet", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
-		t.Run(toolName, func(t *testing.T) {
-			definition, ok := capturedByTool[toolName]
-			if !ok {
-				t.Fatalf("captured meta definitions missing %s", toolName)
-			}
-			specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specsByTool[toolName])
+	testCases := []struct {
+		toolName string
+		action   string
+		keys     []string
+	}{
+		{toolName: "gitlab_merge_request", action: "create", keys: []string{"source_branch", "target_branch"}},
+		{toolName: "gitlab_issue", action: "link_create", keys: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+		{toolName: "gitlab_group", action: "epic_issue_assign", keys: []string{"full_path", "child_project_path", "child_iid"}},
+		{toolName: "gitlab_job", action: "token_scope_remove_project", keys: []string{"project_id", "target_project_id"}},
+		{toolName: "gitlab_access", action: "deploy_token_delete_project", keys: []string{"project_id", "deploy_token_id"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.toolName+"/"+tc.action, func(t *testing.T) {
+			routes, routeErr := toolutil.ActionSpecsToMapWithError(specsByTool[tc.toolName])
 			if routeErr != nil {
 				t.Fatalf("ActionSpecsToMapWithError() error = %v", routeErr)
 			}
-			assertActionRouteParity(t, toolName, definition.Routes, specRoutes)
+			route, ok := routes[tc.action]
+			if !ok {
+				t.Fatalf("%s specs missing action %q", tc.toolName, tc.action)
+			}
+			assertGuidanceKeys(t, tc.toolName, tc.action, route.ParameterGuidance, tc.keys)
 		})
 	}
 }
@@ -77,6 +113,46 @@ func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes
 		if specRoute.OutputSchema == nil {
 			t.Fatalf("%s.%s missing output schema", toolName, actionName)
 		}
+	}
+}
+
+func assertSpecProjectionParity(t *testing.T, toolName string, specs []toolutil.ActionSpec) {
+	t.Helper()
+	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{ToolName: toolName}, specs)
+	if err != nil {
+		t.Fatalf("GroupFromSpecs() error = %v", err)
+	}
+	if len(group.Actions) != len(specs) {
+		t.Fatalf("%s projected action count = %d, want %d", toolName, len(group.Actions), len(specs))
+	}
+	for _, spec := range specs {
+		action, ok := group.Actions[spec.Name]
+		if !ok {
+			t.Fatalf("%s projection missing action %q", toolName, spec.Name)
+		}
+		if !action.SpecBacked {
+			t.Fatalf("%s.%s projection is not spec-backed", toolName, spec.Name)
+		}
+		if action.ReadOnly != spec.ReadOnly {
+			t.Fatalf("%s.%s read-only = %t, want %t", toolName, spec.Name, action.ReadOnly, spec.ReadOnly)
+		}
+		if strings.TrimSpace(spec.IndividualTool.Name) == "" {
+			t.Fatalf("%s.%s missing individual tool metadata", toolName, spec.Name)
+		}
+	}
+}
+
+func assertGuidanceKeys(t *testing.T, toolName, actionName string, guidance map[string]toolutil.ParameterGuidance, want []string) {
+	t.Helper()
+	got := make([]string, 0, len(guidance))
+	for key := range guidance {
+		got = append(got, key)
+	}
+	sort.Strings(got)
+	want = append([]string(nil), want...)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("%s.%s guidance keys = %v, want %v", toolName, actionName, got, want)
 	}
 }
 
