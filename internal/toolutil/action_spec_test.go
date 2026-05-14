@@ -82,6 +82,18 @@ func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	}
 }
 
+func TestActionSpecsToMapWithError_RejectsAliasMatchingCanonicalActionName(t *testing.T) {
+	specs := []ActionSpec{
+		NewActionSpec("list", ActionRoute{}, ActionSpecOptions{Aliases: []string{"show"}}),
+		NewActionSpec("show", ActionRoute{}, ActionSpecOptions{}),
+	}
+
+	_, err := ActionSpecsToMapWithError(specs)
+	if err == nil || !strings.Contains(err.Error(), "duplicates canonical action name") {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v, want alias/canonical action collision", err)
+	}
+}
+
 func TestActionRouteFluentMetadata_FlowsToActionSpec(t *testing.T) {
 	guidance := map[string]ParameterGuidance{
 		"project_id": {SemanticRole: "scope_project", CommonConfusions: []string{"route confusion"}},
@@ -174,5 +186,21 @@ func TestActionSpecValidate_RejectsUnknownGuidanceParameter(t *testing.T) {
 
 	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "unknown parameter") {
 		t.Fatalf("Validate() error = %v, want unknown parameter rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsDestructiveMismatch(t *testing.T) {
+	spec := ActionSpec{Name: "delete", Route: ActionRoute{Destructive: true}}
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "destructive flag") {
+		t.Fatalf("Validate() error = %v, want destructive mismatch rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsNonNormalizedTags(t *testing.T) {
+	spec := ActionSpec{Name: "list", Tags: []string{"Needs Cleanup"}}
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "non-normalized tag") {
+		t.Fatalf("Validate() error = %v, want non-normalized tag rejection", err)
 	}
 }

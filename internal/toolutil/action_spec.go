@@ -126,6 +126,7 @@ func ActionSpecsToMap(specs []ActionSpec) ActionMap {
 func ActionSpecsToMapWithError(specs []ActionSpec) (ActionMap, error) {
 	routes := make(ActionMap, len(specs))
 	var errs []error
+	canonicalNames := actionSpecCanonicalNames(specs)
 	for _, spec := range specs {
 		name := strings.TrimSpace(spec.Name)
 		if name == "" {
@@ -140,11 +141,25 @@ func ActionSpecsToMapWithError(specs []ActionSpec) (ActionMap, error) {
 			errs = append(errs, err)
 			continue
 		}
+		if err := validateActionSpecAliasesAgainstNames(spec, canonicalNames); err != nil {
+			errs = append(errs, err)
+			continue
+		}
 		route := cloneActionRoute(spec.Route)
 		route.ParameterGuidance = mergeActionSpecGuidance(route.ParameterGuidance, spec.ParameterGuidance)
 		routes[name] = route
 	}
 	return routes, errors.Join(errs...)
+}
+
+func actionSpecCanonicalNames(specs []ActionSpec) map[string]struct{} {
+	names := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		if name := strings.ToLower(strings.TrimSpace(spec.Name)); name != "" {
+			names[name] = struct{}{}
+		}
+	}
+	return names
 }
 
 func cloneActionRoute(route ActionRoute) ActionRoute {
@@ -249,6 +264,19 @@ func validateActionSpecAliases(spec ActionSpec) error {
 		}
 		if slices.Contains(spec.RelatedActions, alias) {
 			return fmt.Errorf("action spec %q alias %q also appears in related actions", spec.Name, alias)
+		}
+	}
+	return nil
+}
+
+func validateActionSpecAliasesAgainstNames(spec ActionSpec, canonicalNames map[string]struct{}) error {
+	canonicalName := strings.ToLower(strings.TrimSpace(spec.Name))
+	for _, alias := range spec.Aliases {
+		if alias == canonicalName {
+			continue
+		}
+		if _, ok := canonicalNames[alias]; ok {
+			return fmt.Errorf("action spec %q alias %q duplicates canonical action name", spec.Name, alias)
 		}
 	}
 	return nil
