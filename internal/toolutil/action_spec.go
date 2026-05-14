@@ -29,6 +29,7 @@ type ActionSpec struct {
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
 	RichResultPolicy       string
+	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
 }
 
@@ -38,6 +39,27 @@ type IndividualToolSpec struct {
 	Title       string
 	Description string
 }
+
+const (
+	ActionSpecContentList      = "list"
+	ActionSpecContentDetail    = "detail"
+	ActionSpecContentMutate    = "mutate"
+	ActionSpecContentAssistant = "assistant"
+	ActionSpecContentImage     = "image"
+
+	ActionSpecNotFoundNone      = "none"
+	ActionSpecNotFoundResult    = "not_found_result"
+	ActionSpecNotFoundPropagate = "propagate_error"
+
+	ActionSpecEmbeddedNone     = "none"
+	ActionSpecEmbeddedOptional = "optional"
+	ActionSpecEmbeddedAlways   = "always"
+
+	ActionSpecRichStandard     = "standard"
+	ActionSpecRichImage        = "image"
+	ActionSpecRichResourceLink = "resource_link"
+	ActionSpecRichMixed        = "mixed"
+)
 
 // ActionSpecOptions contains optional metadata for NewActionSpec.
 type ActionSpecOptions struct {
@@ -58,6 +80,7 @@ type ActionSpecOptions struct {
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
 	RichResultPolicy       string
+	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
 }
 
@@ -87,6 +110,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		NotFoundPolicy:         strings.TrimSpace(opts.NotFoundPolicy),
 		EmbeddedResourcePolicy: strings.TrimSpace(opts.EmbeddedResourcePolicy),
 		RichResultPolicy:       strings.TrimSpace(opts.RichResultPolicy),
+		SchemaValidationNotes:  normalizeActionSpecNotes(opts.SchemaValidationNotes),
 		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
 	}
 }
@@ -101,6 +125,9 @@ func (spec ActionSpec) Validate() error {
 	}
 	if spec.ReadOnly && spec.Destructive {
 		return fmt.Errorf("action spec %q cannot be read-only and destructive", spec.Name)
+	}
+	if err := validateActionSpecPolicies(spec); err != nil {
+		return err
 	}
 	if err := validateActionSpecGuidance(spec); err != nil {
 		return err
@@ -264,6 +291,68 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func validateActionSpecPolicies(spec ActionSpec) error {
+	if err := validateOptionalActionSpecPolicy(spec.Name, "content kind", spec.ContentKind, actionSpecContentKinds()); err != nil {
+		return err
+	}
+	if err := validateOptionalActionSpecPolicy(spec.Name, "not-found policy", spec.NotFoundPolicy, actionSpecNotFoundPolicies()); err != nil {
+		return err
+	}
+	if err := validateOptionalActionSpecPolicy(spec.Name, "embedded resource policy", spec.EmbeddedResourcePolicy, actionSpecEmbeddedResourcePolicies()); err != nil {
+		return err
+	}
+	if err := validateOptionalActionSpecPolicy(spec.Name, "rich result policy", spec.RichResultPolicy, actionSpecRichResultPolicies()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateOptionalActionSpecPolicy(actionName, fieldName, value string, allowed map[string]struct{}) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if _, ok := allowed[value]; ok {
+		return nil
+	}
+	return fmt.Errorf("action spec %q has unsupported %s %q", actionName, fieldName, value)
+}
+
+func actionSpecContentKinds() map[string]struct{} {
+	return map[string]struct{}{
+		ActionSpecContentList:      {},
+		ActionSpecContentDetail:    {},
+		ActionSpecContentMutate:    {},
+		ActionSpecContentAssistant: {},
+		ActionSpecContentImage:     {},
+	}
+}
+
+func actionSpecNotFoundPolicies() map[string]struct{} {
+	return map[string]struct{}{
+		ActionSpecNotFoundNone:      {},
+		ActionSpecNotFoundResult:    {},
+		ActionSpecNotFoundPropagate: {},
+	}
+}
+
+func actionSpecEmbeddedResourcePolicies() map[string]struct{} {
+	return map[string]struct{}{
+		ActionSpecEmbeddedNone:     {},
+		ActionSpecEmbeddedOptional: {},
+		ActionSpecEmbeddedAlways:   {},
+	}
+}
+
+func actionSpecRichResultPolicies() map[string]struct{} {
+	return map[string]struct{}{
+		ActionSpecRichStandard:     {},
+		ActionSpecRichImage:        {},
+		ActionSpecRichResourceLink: {},
+		ActionSpecRichMixed:        {},
+	}
 }
 
 func validateActionSpecGuidance(spec ActionSpec) error {

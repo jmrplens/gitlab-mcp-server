@@ -43,6 +43,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			NotFoundPolicy:         spec.NotFoundPolicy,
 			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
 			RichResultPolicy:       spec.RichResultPolicy,
+			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
 			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),
 		})
 	}

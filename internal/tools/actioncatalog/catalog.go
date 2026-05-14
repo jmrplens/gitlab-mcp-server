@@ -41,6 +41,7 @@ type Action struct {
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
 	RichResultPolicy       string
+	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
 	SpecBacked             bool
 }
@@ -563,6 +564,7 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)
+	action.SchemaValidationNotes = cloneStrings(action.SchemaValidationNotes)
 	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return cloneAction(action), nil
 }
@@ -593,6 +595,7 @@ func cloneAction(action Action) Action {
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)
+	action.SchemaValidationNotes = cloneStrings(action.SchemaValidationNotes)
 	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return action
 }

@@ -22,6 +22,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases := []string{" Project.Delete ", "project.delete"}
 	tags := []string{" Admin ", "ADMIN"}
 	relatedActions := []string{"Project.Get"}
+	schemaNotes := []string{"Schema cannot express file source exclusivity."}
 	runtimeNotes := []string{"Validate project ownership."}
 	spec := NewActionSpec(" delete ", route, ActionSpecOptions{
 		Aliases:                aliases,
@@ -31,10 +32,11 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 		ReadOnly:               false,
 		OwnerPackage:           "projects",
 		IndividualTool:         IndividualToolSpec{Name: "gitlab_delete_project", Title: "Delete project", Description: "Delete a GitLab project."},
-		ContentKind:            "mutate",
-		NotFoundPolicy:         "not_found_result",
-		EmbeddedResourcePolicy: "none",
-		RichResultPolicy:       "standard",
+		ContentKind:            ActionSpecContentMutate,
+		NotFoundPolicy:         ActionSpecNotFoundResult,
+		EmbeddedResourcePolicy: ActionSpecEmbeddedNone,
+		RichResultPolicy:       ActionSpecRichStandard,
+		SchemaValidationNotes:  schemaNotes,
 		RuntimeValidationNotes: runtimeNotes,
 	})
 
@@ -44,6 +46,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases[0] = "changed"
 	tags[0] = "changed"
 	relatedActions[0] = "changed"
+	schemaNotes[0] = "changed"
 	runtimeNotes[0] = "changed"
 
 	if spec.Name != "delete" || !spec.Destructive {
@@ -64,8 +67,60 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	if len(spec.Tags) != 1 || spec.Tags[0] != "admin" {
 		t.Fatalf("tags = %+v, want normalized unique tag", spec.Tags)
 	}
-	if spec.RelatedActions[0] != "project.get" || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
-		t.Fatalf("related/actions notes = %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.RuntimeValidationNotes)
+	if spec.RelatedActions[0] != "project.get" || spec.SchemaValidationNotes[0] != "Schema cannot express file source exclusivity." || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
+		t.Fatalf("related/actions notes = %+v / %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.SchemaValidationNotes, spec.RuntimeValidationNotes)
+	}
+}
+
+func TestActionSpecValidate_RejectsUnsupportedIndividualPolicies(t *testing.T) {
+	testCases := []struct {
+		name string
+		opts ActionSpecOptions
+		want string
+	}{
+		{
+			name: "content kind",
+			opts: ActionSpecOptions{ContentKind: "summary"},
+			want: "unsupported content kind",
+		},
+		{
+			name: "not found policy",
+			opts: ActionSpecOptions{NotFoundPolicy: "custom_404"},
+			want: "unsupported not-found policy",
+		},
+		{
+			name: "embedded resource policy",
+			opts: ActionSpecOptions{EmbeddedResourcePolicy: "sometimes"},
+			want: "unsupported embedded resource policy",
+		},
+		{
+			name: "rich result policy",
+			opts: ActionSpecOptions{RichResultPolicy: "binary"},
+			want: "unsupported rich result policy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := NewActionSpec("get", ActionRoute{}, tc.opts)
+			err := spec.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestActionSpecValidate_AcceptsKnownIndividualPolicies(t *testing.T) {
+	spec := NewActionSpec("get", ActionRoute{}, ActionSpecOptions{
+		ContentKind:            ActionSpecContentDetail,
+		NotFoundPolicy:         ActionSpecNotFoundPropagate,
+		EmbeddedResourcePolicy: ActionSpecEmbeddedOptional,
+		RichResultPolicy:       ActionSpecRichImage,
+	})
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
 	}
 }
 
