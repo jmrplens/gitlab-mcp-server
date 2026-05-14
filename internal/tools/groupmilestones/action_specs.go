@@ -1,0 +1,54 @@
+package groupmilestones
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for group milestone actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		groupMilestoneReadSpec("group_milestone_list", toolutil.RouteAction(client, List), "gitlab_group_milestone_list"),
+		groupMilestoneReadSpec("group_milestone_get", toolutil.RouteAction(client, Get), "gitlab_group_milestone_get"),
+		groupMilestoneCreateSpec("group_milestone_create", toolutil.RouteAction(client, Create), "gitlab_group_milestone_create"),
+		groupMilestoneUpdateSpec("group_milestone_update", toolutil.RouteAction(client, Update), "gitlab_group_milestone_update"),
+		groupMilestoneDeleteSpec("group_milestone_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_milestone_delete"),
+		groupMilestoneReadSpec("group_milestone_issues", toolutil.RouteAction(client, GetIssues), "gitlab_group_milestone_issues"),
+		groupMilestoneReadSpec("group_milestone_merge_requests", toolutil.RouteAction(client, GetMergeRequests), "gitlab_group_milestone_merge_requests"),
+		groupMilestoneReadSpec("group_milestone_burndown", toolutil.RouteAction(client, GetBurndownChartEvents), "gitlab_group_milestone_burndown_events"),
+	}
+}
+
+func groupMilestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupMilestoneOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupMilestoneCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, groupMilestoneOptions(individualTool))
+}
+
+func groupMilestoneUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupMilestoneOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupMilestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupMilestoneOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupMilestoneOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "milestone"},
+		RelatedActions: []string{"group.get", "group.issues"},
+		OpenWorld:      true,
+		OwnerPackage:   "groupmilestones",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}

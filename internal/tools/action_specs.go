@@ -44,7 +44,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupiterations"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmarkdownuploads"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmembers"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmilestones"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupreleases"
 	grouptools "github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
@@ -302,8 +309,17 @@ func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionS
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 22)
+	specs := make([]toolutil.ActionSpec, 0, 96)
 	specs = append(specs, grouptools.ActionSpecs(client)...)
+	specs = append(specs, badges.GroupActionSpecs(client)...)
+	specs = append(specs, groupmembers.ActionSpecs(client)...)
+	specs = append(specs, grouplabels.ActionSpecs(client)...)
+	specs = append(specs, groupmilestones.ActionSpecs(client)...)
+	specs = append(specs, groupboards.ActionSpecs(client)...)
+	specs = append(specs, groupmarkdownuploads.ActionSpecs(client)...)
+	specs = append(specs, groupimportexport.ActionSpecs(client)...)
+	specs = append(specs, groupreleases.ActionSpecs(client)...)
+	specs = append(specs, issues.GroupActionSpecs(client)...)
 	if !enterprise {
 		return actionSpecGroup("gitlab_group", specs)
 	}

@@ -32,6 +32,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// GroupActionSpecs returns canonical specs for issue actions exposed through the group meta-tool.
+func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		groupIssueReadSpec("issues", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
+	}
+}
+
 func issueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := issueOptions(individualTool)
 	options.ReadOnly = true
@@ -59,6 +66,22 @@ func issueDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"issue"},
+		OpenWorld:      true,
+		OwnerPackage:   "issues",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupIssueOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "issue"},
 		OpenWorld:      true,
 		OwnerPackage:   "issues",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

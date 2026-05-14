@@ -17,6 +17,18 @@ func ProjectActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// GroupActionSpecs returns canonical specs for group badge actions.
+func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		groupBadgeReadSpec("badge_list", toolutil.RouteAction(client, ListGroup), "gitlab_list_group_badges"),
+		groupBadgeReadSpec("badge_get", toolutil.RouteAction(client, GetGroup), "gitlab_get_group_badge"),
+		groupBadgeCreateSpec("badge_add", toolutil.RouteAction(client, AddGroup), "gitlab_add_group_badge"),
+		groupBadgeUpdateSpec("badge_edit", toolutil.RouteAction(client, EditGroup), "gitlab_edit_group_badge"),
+		groupBadgeDeleteSpec("badge_delete", toolutil.DestructiveVoidAction(client, DeleteGroup), "gitlab_delete_group_badge"),
+		groupBadgeReadSpec("badge_preview", toolutil.RouteAction(client, PreviewGroup), "gitlab_preview_group_badge"),
+	}
+}
+
 func badgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := badgeOptions(individualTool)
 	options.ReadOnly = true
@@ -45,6 +57,40 @@ func badgeOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"project", "badge"},
 		RelatedActions: []string{"project.get"},
+		OpenWorld:      true,
+		OwnerPackage:   "badges",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+func groupBadgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupBadgeOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupBadgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, groupBadgeOptions(individualTool))
+}
+
+func groupBadgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupBadgeOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupBadgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupBadgeOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupBadgeOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"group", "badge"},
+		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "badges",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
