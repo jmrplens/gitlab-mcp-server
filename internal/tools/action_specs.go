@@ -63,6 +63,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovalsettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrcontextcommits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
@@ -85,6 +86,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
@@ -306,10 +308,13 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 }
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 41)
+	specs := make([]toolutil.ActionSpec, 0, 58)
 	specs = append(specs, mergerequests.ActionSpecs(client)...)
 	specs = append(specs, mrapprovals.ActionSpecs(client)...)
 	specs = append(specs, mrapprovalsettings.ActionSpecs(client)...)
+	specs = append(specs, mrcontextcommits.ActionSpecs(client)...)
+	specs = append(specs, awardemoji.MergeRequestActionSpecs(client)...)
+	specs = append(specs, resourceevents.MergeRequestActionSpecs(client)...)
 	return actionSpecGroup("gitlab_merge_request", specs)
 }
 

@@ -19,6 +19,47 @@ func SnippetActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// MergeRequestActionSpecs returns canonical specs for merge request award emoji actions.
+func MergeRequestActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		mergeRequestEmojiReadSpec("emoji_mr_list", toolutil.RouteAction(client, ListMRAwardEmoji), "gitlab_mr_emoji_list"),
+		mergeRequestEmojiReadSpec("emoji_mr_get", toolutil.RouteAction(client, GetMRAwardEmoji), "gitlab_mr_emoji_get"),
+		mergeRequestEmojiCreateSpec("emoji_mr_create", toolutil.RouteAction(client, CreateMRAwardEmoji), "gitlab_mr_emoji_create"),
+		mergeRequestEmojiDeleteSpec("emoji_mr_delete", toolutil.DestructiveVoidAction(client, DeleteMRAwardEmoji), "gitlab_mr_emoji_delete"),
+		mergeRequestEmojiReadSpec("emoji_mr_note_list", toolutil.RouteAction(client, ListMRNoteAwardEmoji), "gitlab_mr_note_emoji_list"),
+		mergeRequestEmojiReadSpec("emoji_mr_note_get", toolutil.RouteAction(client, GetMRNoteAwardEmoji), "gitlab_mr_note_emoji_get"),
+		mergeRequestEmojiCreateSpec("emoji_mr_note_create", toolutil.RouteAction(client, CreateMRNoteAwardEmoji), "gitlab_mr_note_emoji_create"),
+		mergeRequestEmojiDeleteSpec("emoji_mr_note_delete", toolutil.DestructiveVoidAction(client, DeleteMRNoteAwardEmoji), "gitlab_mr_note_emoji_delete"),
+	}
+}
+
+func mergeRequestEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := mergeRequestEmojiOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mergeRequestEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewActionSpec(name, route, mergeRequestEmojiOptions(individualTool))
+}
+
+func mergeRequestEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := mergeRequestEmojiOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"merge_request", "emoji"},
+		OpenWorld:      true,
+		OwnerPackage:   "awardemoji",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
 func snippetEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := snippetEmojiOptions(individualTool)
 	options.ReadOnly = true
