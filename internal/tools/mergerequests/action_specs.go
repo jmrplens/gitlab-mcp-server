@@ -37,9 +37,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mergeRequestReadSpec("list_global", toolutil.RouteAction(client, ListGlobal), "gitlab_mr_list_global"),
 		mergeRequestReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_mr_list_group"),
 		mergeRequestUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_mr_update"),
-		mergeRequestDeleteSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
+		mergeRequestDestructiveUpdateIndividualSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
 		mergeRequestUpdateSpec("approve", toolutil.RouteAction(client, Approve), "gitlab_mr_approve"),
-		mergeRequestDeleteSpec("unapprove", toolutil.DestructiveVoidAction(client, Unapprove), "gitlab_mr_unapprove"),
+		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.DestructiveVoidAction(client, Unapprove), "gitlab_mr_unapprove"),
 		mergeRequestReadSpec("commits", toolutil.RouteAction(client, Commits), "gitlab_mr_commits"),
 		mergeRequestReadSpec("pipelines", toolutil.RouteAction(client, Pipelines), "gitlab_mr_pipelines"),
 		mergeRequestDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_mr_delete"),
@@ -53,7 +53,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mergeRequestUpdateSpec("unsubscribe", toolutil.RouteAction(client, Unsubscribe), "gitlab_mr_unsubscribe"),
 		mergeRequestUpdateSpec("time_estimate_set", toolutil.RouteAction(client, SetTimeEstimate), "gitlab_mr_set_time_estimate"),
 		mergeRequestUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_mr_reset_time_estimate"),
-		mergeRequestCreateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_mr_add_spent_time"),
+		mergeRequestUpdateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_mr_add_spent_time"),
 		mergeRequestUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_mr_reset_spent_time"),
 		mergeRequestReadSpec("time_stats", toolutil.RouteAction(client, GetTimeStats), "gitlab_mr_time_stats"),
 		mergeRequestReadSpec("related_issues", toolutil.RouteAction(client, RelatedIssues), "gitlab_mr_related_issues"),
@@ -85,6 +85,15 @@ func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualT
 	options := mergeRequestOptions(individualTool)
 	options.Destructive = true
 	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	individualDestructive := false
+	options := mergeRequestOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewActionSpec(name, route, options)
 }
 

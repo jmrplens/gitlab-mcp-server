@@ -18,15 +18,15 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		userReadSpec("emails", toolutil.RouteAction(client, ListEmails), "gitlab_list_emails"),
 		userReadSpec("contribution_events", toolutil.RouteAction(client, ListContributionEvents), "gitlab_list_user_contribution_events"),
 		userReadSpec("associations_count", toolutil.RouteAction(client, GetAssociationsCount), "gitlab_get_user_associations_count"),
-		userDeleteSpec("block", toolutil.DestructiveAction(client, BlockUser), "gitlab_block_user"),
+		userDestructiveUpdateIndividualSpec("block", toolutil.DestructiveAction(client, BlockUser), "gitlab_block_user"),
 		userUpdateSpec("unblock", toolutil.RouteAction(client, UnblockUser), "gitlab_unblock_user"),
-		userDeleteSpec("ban", toolutil.DestructiveAction(client, BanUser), "gitlab_ban_user"),
+		userDestructiveUpdateIndividualSpec("ban", toolutil.DestructiveAction(client, BanUser), "gitlab_ban_user"),
 		userUpdateSpec("unban", toolutil.RouteAction(client, UnbanUser), "gitlab_unban_user"),
 		userUpdateSpec("activate", toolutil.RouteAction(client, ActivateUser), "gitlab_activate_user"),
-		userDeleteSpec("deactivate", toolutil.DestructiveAction(client, DeactivateUser), "gitlab_deactivate_user"),
+		userDestructiveUpdateIndividualSpec("deactivate", toolutil.DestructiveAction(client, DeactivateUser), "gitlab_deactivate_user"),
 		userUpdateSpec("approve", toolutil.RouteAction(client, ApproveUser), "gitlab_approve_user"),
 		userDeleteSpec("reject", toolutil.DestructiveAction(client, RejectUser), "gitlab_reject_user"),
-		userDeleteSpec("disable_two_factor", toolutil.DestructiveAction(client, DisableTwoFactor), "gitlab_disable_two_factor"),
+		userDestructiveUpdateIndividualSpec("disable_two_factor", toolutil.DestructiveAction(client, DisableTwoFactor), "gitlab_disable_two_factor"),
 		userCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_user"),
 		userUpdateSpec("modify", toolutil.RouteAction(client, Modify), "gitlab_modify_user"),
 		userDeleteSpec("delete", toolutil.DestructiveAction(client, Delete), "gitlab_delete_user"),
@@ -74,6 +74,15 @@ func userDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 	options := userOptions(individualTool)
 	options.Destructive = true
 	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func userDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	individualDestructive := false
+	options := userOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewActionSpec(name, route, options)
 }
 

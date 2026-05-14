@@ -12,13 +12,12 @@ import (
 
 // RegisterTools registers all issue statistics MCP tools on the given server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_issue_statistics",
-		Title:       toolutil.TitleFromName("gitlab_get_issue_statistics"),
-		Description: "Get global issue statistics (counts of all/opened/closed issues).\n\nReturns: JSON with issue counts (all, opened, closed).\n\nSee also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconAnalytics,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, StatisticsOutput, error) {
+	specs := ActionSpecs(client)
+	issueStatisticsTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconAnalytics})
+	}
+
+	mcp.AddTool(server, issueStatisticsTool("gitlab_get_issue_statistics", "Get global issue statistics (counts of all/opened/closed issues).\n\nReturns: JSON with issue counts (all, opened, closed).\n\nSee also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics"), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, StatisticsOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_issue_statistics", start, err)
@@ -28,13 +27,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatMarkdown("Global", out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_group_issue_statistics",
-		Title:       toolutil.TitleFromName("gitlab_get_group_issue_statistics"),
-		Description: "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list_group",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconAnalytics,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetGroupInput) (*mcp.CallToolResult, StatisticsOutput, error) {
+	mcp.AddTool(server, issueStatisticsTool("gitlab_get_group_issue_statistics", "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list_group"), func(ctx context.Context, req *mcp.CallToolRequest, input GetGroupInput) (*mcp.CallToolResult, StatisticsOutput, error) {
 		start := time.Now()
 		out, err := GetGroup(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_group_issue_statistics", start, err)
@@ -44,13 +37,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatMarkdown("Group", out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_project_issue_statistics",
-		Title:       toolutil.TitleFromName("gitlab_get_project_issue_statistics"),
-		Description: "Get issue statistics for a project.\n\nReturns: JSON with project issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconAnalytics,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetProjectInput) (*mcp.CallToolResult, StatisticsOutput, error) {
+	mcp.AddTool(server, issueStatisticsTool("gitlab_get_project_issue_statistics", "Get issue statistics for a project.\n\nReturns: JSON with project issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list"), func(ctx context.Context, req *mcp.CallToolRequest, input GetProjectInput) (*mcp.CallToolResult, StatisticsOutput, error) {
 		start := time.Now()
 		out, err := GetProject(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_project_issue_statistics", start, err)

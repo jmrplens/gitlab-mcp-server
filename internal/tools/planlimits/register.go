@@ -12,13 +12,12 @@ import (
 
 // RegisterTools registers all Plan Limits MCP tools.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_plan_limits",
-		Title:       toolutil.TitleFromName("gitlab_get_plan_limits"),
-		Description: "Get current plan limits (admin). Optionally filter by plan name (default, free, bronze, silver, gold, premium, ultimate).\n\nReturns: JSON with current plan limits.\n\nSee also: gitlab_change_plan_limits.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	specs := ActionSpecs(client)
+	planLimitTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconConfig})
+	}
+
+	mcp.AddTool(server, planLimitTool("gitlab_get_plan_limits", "Get current plan limits (admin). Optionally filter by plan name (default, free, bronze, silver, gold, premium, ultimate).\n\nReturns: JSON with current plan limits.\n\nSee also: gitlab_change_plan_limits."), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_plan_limits", start, err)
@@ -28,13 +27,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatGetMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_change_plan_limits",
-		Title:       toolutil.TitleFromName("gitlab_change_plan_limits"),
-		Description: "Change plan limits (admin). Requires plan_name; optionally set individual file size limits.\n\nReturns: JSON with the updated plan limits.\n\nSee also: gitlab_get_plan_limits.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ChangeInput) (*mcp.CallToolResult, ChangeOutput, error) {
+	mcp.AddTool(server, planLimitTool("gitlab_change_plan_limits", "Change plan limits (admin). Requires plan_name; optionally set individual file size limits.\n\nReturns: JSON with the updated plan limits.\n\nSee also: gitlab_get_plan_limits."), func(ctx context.Context, req *mcp.CallToolRequest, input ChangeInput) (*mcp.CallToolResult, ChangeOutput, error) {
 		start := time.Now()
 		out, err := Change(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_change_plan_limits", start, err)

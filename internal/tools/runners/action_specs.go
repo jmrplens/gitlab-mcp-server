@@ -38,27 +38,89 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func runnerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerOptions(individualTool)
+	options := runnerOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func runnerCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, runnerOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, runnerOptions(name, individualTool))
 }
 
 func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerOptions(individualTool)
+	options := runnerOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func runnerOptions(individualTool string) toolutil.ActionSpecOptions {
+func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"runner"},
-		OpenWorld:      true,
-		OwnerPackage:   "runners",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Tags:              []string{"runner"},
+		ParameterGuidance: runnerParameterGuidance(actionName),
+		OpenWorld:         true,
+		OwnerPackage:      "runners",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGuidance {
+	guidance := make(map[string]toolutil.ParameterGuidance)
+	if runnerActionUsesRunnerID(actionName) {
+		guidance["runner_id"] = toolutil.ParameterGuidance{
+			SemanticRole: "runner_identifier",
+			ValueSource:  "Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.",
+			CommonConfusions: []string{
+				"Do not pass project_id as runner_id.",
+				"For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.",
+			},
+		}
+	}
+	if runnerActionUsesProjectID(actionName) {
+		guidance["project_id"] = toolutil.ParameterGuidance{
+			SemanticRole: "scope_owner_project",
+			ValueSource:  "Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.",
+			CommonConfusions: []string{
+				"project_id identifies the project scope, not the runner.",
+				"Use runner_id for the runner to enable, disable, reset, or inspect.",
+			},
+		}
+	}
+	if runnerActionUsesGroupID(actionName) {
+		guidance["group_id"] = toolutil.ParameterGuidance{
+			SemanticRole: "scope_owner_group",
+			ValueSource:  "Use gitlab_group get/list outputs; accepts numeric ID or full group path.",
+		}
+	}
+	if len(guidance) == 0 {
+		return nil
+	}
+	return guidance
+}
+
+func runnerActionUsesRunnerID(actionName string) bool {
+	switch actionName {
+	case "get", "update", "remove", "jobs", "enable_project", "disable_project", "delete_registered", "reset_token":
+		return true
+	default:
+		return false
+	}
+}
+
+func runnerActionUsesProjectID(actionName string) bool {
+	switch actionName {
+	case "list_project", "enable_project", "disable_project", "reset_project_reg_token":
+		return true
+	default:
+		return false
+	}
+}
+
+func runnerActionUsesGroupID(actionName string) bool {
+	switch actionName {
+	case "list_group", "reset_group_reg_token":
+		return true
+	default:
+		return false
 	}
 }

@@ -13,7 +13,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineScheduleCreateSpec("schedule_create", toolutil.RouteAction(client, Create), "gitlab_pipeline_schedule_create"),
 		pipelineScheduleUpdateSpec("schedule_update", toolutil.RouteAction(client, Update), "gitlab_pipeline_schedule_update"),
 		pipelineScheduleDeleteSpec("schedule_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_pipeline_schedule_delete"),
-		pipelineScheduleCreateSpec("schedule_run", toolutil.RouteAction(client, Run), "gitlab_pipeline_schedule_run"),
+		pipelineScheduleUpdateSpec("schedule_run", toolutil.RouteAction(client, Run), "gitlab_pipeline_schedule_run"),
 		pipelineScheduleUpdateSpec("schedule_take_ownership", toolutil.RouteAction(client, TakeOwnership), "gitlab_pipeline_schedule_take_ownership"),
 		pipelineScheduleCreateSpec("schedule_create_variable", toolutil.RouteAction(client, CreateVariable), "gitlab_pipeline_schedule_create_variable"),
 		pipelineScheduleUpdateSpec("schedule_edit_variable", toolutil.RouteAction(client, EditVariable), "gitlab_pipeline_schedule_edit_variable"),

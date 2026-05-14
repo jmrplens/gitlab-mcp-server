@@ -647,7 +647,8 @@ func cloneActionSpecs(specs []toolutil.ActionSpec) []toolutil.ActionSpec {
 			NotFoundPolicy:         spec.NotFoundPolicy,
 			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
 			RichResultPolicy:       spec.RichResultPolicy,
-			RuntimeValidationNotes: spec.RuntimeValidationNotes,
+			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
+			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),
 		}))
 	}
 	return out

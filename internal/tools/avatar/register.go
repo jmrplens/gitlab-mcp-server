@@ -12,13 +12,8 @@ import (
 
 // RegisterTools registers all avatar tools with the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_avatar",
-		Title:       toolutil.TitleFromName("gitlab_get_avatar"),
-		Description: "Get the avatar URL for an email address.\n\nReturns: JSON with the avatar URL.\n\nSee also: gitlab_user_current.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconUser,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	specs := ActionSpecs(client)
+	mcp.AddTool(server, toolutil.MustIndividualToolFromSpecs(specs, "gitlab_get_avatar", toolutil.IndividualToolProjectionOptions{Description: "Get the avatar URL for an email address.\n\nReturns: JSON with the avatar URL.\n\nSee also: gitlab_user_current.", Icons: toolutil.IconUser}), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_avatar", start, err)

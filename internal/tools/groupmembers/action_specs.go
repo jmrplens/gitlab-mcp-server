@@ -14,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupMemberUpdateSpec("group_member_edit", toolutil.RouteAction(client, EditMember), "gitlab_group_member_edit"),
 		groupMemberDeleteSpec("group_member_remove", toolutil.DestructiveVoidAction(client, RemoveMember), "gitlab_group_member_remove"),
 		groupMemberCreateSpec("group_member_share", toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
-		groupMemberUpdateSpec("group_member_unshare", toolutil.RouteVoidAction(client, UnshareGroup), "gitlab_group_unshare"),
+		groupMemberUnshareSpec(client),
 	}
 }
 
@@ -40,6 +40,14 @@ func groupMemberDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func groupMemberUnshareSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := true
+	options := groupMemberOptions("gitlab_group_unshare")
+	options.Idempotent = true
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	return toolutil.NewActionSpec("group_member_unshare", toolutil.RouteVoidAction(client, UnshareGroup), options)
 }
 
 func groupMemberOptions(individualTool string) toolutil.ActionSpecOptions {

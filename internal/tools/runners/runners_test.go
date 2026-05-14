@@ -6,6 +6,7 @@ package runners
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1774,6 +1775,80 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterMeta(server, client)
+}
+
+// TestRegisterMeta_UsesActionSpecs verifies that gitlab_runner meta routes are
+// projected from the canonical ActionSpec definitions.
+func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, client)
+	})
+	got := runnerMetaRoutesFromDefinitions(t, definitions)
+	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("registered runner route count = %d, want %d", len(got), len(want))
+	}
+	for actionName, wantRoute := range want {
+		t.Run(actionName, func(t *testing.T) {
+			gotRoute, ok := got[actionName]
+			if !ok {
+				t.Fatalf("registered meta routes missing %q", actionName)
+			}
+			if gotRoute.Destructive != wantRoute.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			}
+			if !reflect.DeepEqual(gotRoute.ParameterGuidance, wantRoute.ParameterGuidance) {
+				t.Fatalf("parameter guidance = %+v, want %+v", gotRoute.ParameterGuidance, wantRoute.ParameterGuidance)
+			}
+			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+				t.Fatal("input schema differs from ActionSpec projection")
+			}
+			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+				t.Fatal("output schema differs from ActionSpec projection")
+			}
+		})
+	}
+}
+
+// TestActionSpecs_RunnerProjectGuidance verifies runner/project identifier
+// guidance on actions where those IDs are commonly confused.
+func TestActionSpecs_RunnerProjectGuidance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+
+	enableProject := routes["enable_project"].ParameterGuidance
+	if enableProject["runner_id"].SemanticRole != "runner_identifier" {
+		t.Fatalf("enable_project runner_id guidance = %+v", enableProject["runner_id"])
+	}
+	if enableProject["project_id"].SemanticRole != "scope_owner_project" {
+		t.Fatalf("enable_project project_id guidance = %+v", enableProject["project_id"])
+	}
+	if routes["remove"].ParameterGuidance["runner_id"].SemanticRole != "runner_identifier" {
+		t.Fatalf("remove runner_id guidance = %+v", routes["remove"].ParameterGuidance["runner_id"])
+	}
+}
+
+func runnerMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+	t.Helper()
+	for _, definition := range definitions {
+		if definition.Name == "gitlab_runner" {
+			return definition.Routes
+		}
+	}
+	t.Fatal("missing gitlab_runner meta definition")
+	return nil
 }
 
 // ---------------------------------------------------------------------------

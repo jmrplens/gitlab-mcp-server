@@ -13,8 +13,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mrDraftNoteCreateSpec("draft_note_create", toolutil.RouteAction(client, Create), "gitlab_mr_draft_note_create"),
 		mrDraftNoteUpdateSpec("draft_note_update", toolutil.RouteAction(client, Update), "gitlab_mr_draft_note_update"),
 		mrDraftNoteDeleteSpec("draft_note_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_mr_draft_note_delete"),
-		mrDraftNoteCreateSpec("draft_note_publish", toolutil.RouteVoidAction(client, Publish), "gitlab_mr_draft_note_publish"),
-		mrDraftNoteCreateSpec("draft_note_publish_all", toolutil.RouteVoidAction(client, PublishAll), "gitlab_mr_draft_note_publish_all"),
+		mrDraftNoteUpdateSpec("draft_note_publish", toolutil.RouteVoidAction(client, Publish), "gitlab_mr_draft_note_publish"),
+		mrDraftNoteUpdateSpec("draft_note_publish_all", toolutil.RouteVoidAction(client, PublishAll), "gitlab_mr_draft_note_publish_all"),
 	}
 }
 

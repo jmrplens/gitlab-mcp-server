@@ -13,13 +13,12 @@ import (
 
 // RegisterTools registers all cluster agent tools with the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_cluster_agents",
-		Title:       toolutil.TitleFromName("gitlab_list_cluster_agents"),
-		Description: "List cluster agents for a GitLab project\n\nSee also: gitlab_register_cluster_agent, gitlab_list_cluster_agent_tokens\n\nReturns: JSON array of cluster agents with pagination.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListAgentsInput) (*mcp.CallToolResult, ListAgentsOutput, error) {
+	specs := ActionSpecs(client)
+	clusterAgentTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconRunner})
+	}
+
+	mcp.AddTool(server, clusterAgentTool("gitlab_list_cluster_agents", "List cluster agents for a GitLab project\n\nSee also: gitlab_register_cluster_agent, gitlab_list_cluster_agent_tokens\n\nReturns: JSON array of cluster agents with pagination."), func(ctx context.Context, req *mcp.CallToolRequest, input ListAgentsInput) (*mcp.CallToolResult, ListAgentsOutput, error) {
 		start := time.Now()
 		out, err := ListAgents(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_cluster_agents", start, err)
@@ -29,13 +28,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatAgentsListMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_cluster_agent",
-		Title:       toolutil.TitleFromName("gitlab_get_cluster_agent"),
-		Description: "Get details of a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens\n\nReturns: JSON with cluster agent details.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetAgentInput) (*mcp.CallToolResult, AgentItem, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_get_cluster_agent", "Get details of a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens\n\nReturns: JSON with cluster agent details."), func(ctx context.Context, req *mcp.CallToolRequest, input GetAgentInput) (*mcp.CallToolResult, AgentItem, error) {
 		start := time.Now()
 		out, err := GetAgent(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_cluster_agent", start, err)
@@ -45,13 +38,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatAgentMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_register_cluster_agent",
-		Title:       toolutil.TitleFromName("gitlab_register_cluster_agent"),
-		Description: "Register a new cluster agent for a GitLab project\n\nSee also: gitlab_list_cluster_agents, gitlab_create_cluster_agent_token\n\nReturns: JSON with the registered agent details.",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input RegisterAgentInput) (*mcp.CallToolResult, AgentItem, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_register_cluster_agent", "Register a new cluster agent for a GitLab project\n\nSee also: gitlab_list_cluster_agents, gitlab_create_cluster_agent_token\n\nReturns: JSON with the registered agent details."), func(ctx context.Context, req *mcp.CallToolRequest, input RegisterAgentInput) (*mcp.CallToolResult, AgentItem, error) {
 		start := time.Now()
 		out, err := RegisterAgent(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_register_cluster_agent", start, err)
@@ -61,13 +48,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatAgentMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_delete_cluster_agent",
-		Title:       toolutil.TitleFromName("gitlab_delete_cluster_agent"),
-		Description: "Delete a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_revoke_cluster_agent_token\n\nReturns: confirmation message.",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteAgentInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_delete_cluster_agent", "Delete a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_revoke_cluster_agent_token\n\nReturns: confirmation message."), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteAgentInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete cluster agent %d from project %s?", input.AgentID, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil
@@ -81,13 +62,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_cluster_agent_tokens",
-		Title:       toolutil.TitleFromName("gitlab_list_cluster_agent_tokens"),
-		Description: "List tokens for a cluster agent\n\nSee also: gitlab_create_cluster_agent_token, gitlab_get_cluster_agent\n\nReturns: JSON array of agent tokens with pagination.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListAgentTokensInput) (*mcp.CallToolResult, ListAgentTokensOutput, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_list_cluster_agent_tokens", "List tokens for a cluster agent\n\nSee also: gitlab_create_cluster_agent_token, gitlab_get_cluster_agent\n\nReturns: JSON array of agent tokens with pagination."), func(ctx context.Context, req *mcp.CallToolRequest, input ListAgentTokensInput) (*mcp.CallToolResult, ListAgentTokensOutput, error) {
 		start := time.Now()
 		out, err := ListAgentTokens(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_cluster_agent_tokens", start, err)
@@ -97,13 +72,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatTokensListMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_cluster_agent_token",
-		Title:       toolutil.TitleFromName("gitlab_get_cluster_agent_token"),
-		Description: "Get details of a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token\n\nReturns: JSON with agent token details.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetAgentTokenInput) (*mcp.CallToolResult, AgentTokenItem, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_get_cluster_agent_token", "Get details of a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token\n\nReturns: JSON with agent token details."), func(ctx context.Context, req *mcp.CallToolRequest, input GetAgentTokenInput) (*mcp.CallToolResult, AgentTokenItem, error) {
 		start := time.Now()
 		out, err := GetAgentToken(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_cluster_agent_token", start, err)
@@ -113,13 +82,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatTokenMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_create_cluster_agent_token",
-		Title:       toolutil.TitleFromName("gitlab_create_cluster_agent_token"),
-		Description: "Create a token for a cluster agent\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_get_cluster_agent\n\nReturns: JSON with the created token details.",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateAgentTokenInput) (*mcp.CallToolResult, AgentTokenItem, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_create_cluster_agent_token", "Create a token for a cluster agent\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_get_cluster_agent\n\nReturns: JSON with the created token details."), func(ctx context.Context, req *mcp.CallToolRequest, input CreateAgentTokenInput) (*mcp.CallToolResult, AgentTokenItem, error) {
 		start := time.Now()
 		out, err := CreateAgentToken(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_create_cluster_agent_token", start, err)
@@ -129,13 +92,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatTokenMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_revoke_cluster_agent_token",
-		Title:       toolutil.TitleFromName("gitlab_revoke_cluster_agent_token"),
-		Description: "Revoke a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token\n\nReturns: confirmation message.",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconRunner,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input RevokeAgentTokenInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, clusterAgentTool("gitlab_revoke_cluster_agent_token", "Revoke a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token\n\nReturns: confirmation message."), func(ctx context.Context, req *mcp.CallToolRequest, input RevokeAgentTokenInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Revoke cluster agent token %d for agent %d in project %s?", input.TokenID, input.AgentID, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil

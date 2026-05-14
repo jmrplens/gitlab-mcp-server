@@ -64,41 +64,26 @@ func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
 
 // RegisterTools registers all snippet MCP tools (personal + project).
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	// Personal snippets.
+	specs := ActionSpecs(client)
+	snippetTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconSnippet})
+	}
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_list",
-		Title:       toolutil.TitleFromName("gitlab_snippet_list"),
-		Description: "List all snippets for the current authenticated user.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_list", "List all snippets for the current authenticated user.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create."), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_list", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_list_all",
-		Title:       toolutil.TitleFromName("gitlab_snippet_list_all"),
-		Description: "List all snippets across the GitLab instance (admin endpoint).\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListAllInput) (*mcp.CallToolResult, ListOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_list_all", "List all snippets across the GitLab instance (admin endpoint).\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create."), func(ctx context.Context, req *mcp.CallToolRequest, input ListAllInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := ListAll(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_list_all", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_get",
-		Title:       toolutil.TitleFromName("gitlab_snippet_get"),
-		Description: "Get a single personal snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_snippet_update.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_get", "Get a single personal snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_snippet_update."), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		if err != nil && toolutil.IsHTTPStatus(err, 404) {
@@ -119,40 +104,21 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_content",
-		Title:       toolutil.TitleFromName("gitlab_snippet_content"),
-		Description: "Get the raw content of a personal snippet.\n\nReturns: raw snippet content. See also: gitlab_snippet_get.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ContentInput) (*mcp.CallToolResult, ContentOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_content", "Get the raw content of a personal snippet.\n\nReturns: raw snippet content. See also: gitlab_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input ContentInput) (*mcp.CallToolResult, ContentOutput, error) {
 		start := time.Now()
 		out, err := Content(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_content", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatContentMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_file_content",
-		Title:       toolutil.TitleFromName("gitlab_snippet_file_content"),
-		Description: "Get the raw content of a specific file in a snippet by ref and filename.\n\nReturns: raw snippet file content. See also: gitlab_snippet_get.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input FileContentInput) (*mcp.CallToolResult, FileContentOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_file_content", "Get the raw content of a specific file in a snippet by ref and filename.\n\nReturns: raw snippet file content. See also: gitlab_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input FileContentInput) (*mcp.CallToolResult, FileContentOutput, error) {
 		start := time.Now()
 		out, err := FileContent(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_file_content", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatFileContentMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_create",
-		Title:       toolutil.TitleFromName("gitlab_snippet_create"),
-		Description: "Create a new personal snippet. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_snippet_get.",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconSnippet,
-		InputSchema: snippetCreateInputSchema[CreateInput](),
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_create", "Create a new personal snippet. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Create(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_create", start, err)
@@ -160,13 +126,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_update",
-		Title:       toolutil.TitleFromName("gitlab_snippet_update"),
-		Description: "Update an existing personal snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_snippet_get.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_update", "Update an existing personal snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Update(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_update", start, err)
@@ -174,13 +134,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_delete",
-		Title:       toolutil.TitleFromName("gitlab_snippet_delete"),
-		Description: "Delete a personal snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_snippet_list.",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_delete", "Delete a personal snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_snippet_list."), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete snippet %d? This cannot be undone.", input.SnippetID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil
@@ -193,41 +147,21 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult("snippet")
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_snippet_explore",
-		Title:       toolutil.TitleFromName("gitlab_snippet_explore"),
-		Description: "List all public snippets on the GitLab instance.\n\nReturns: JSON array of public snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_list.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ExploreInput) (*mcp.CallToolResult, ListOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_snippet_explore", "List all public snippets on the GitLab instance.\n\nReturns: JSON array of public snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_list."), func(ctx context.Context, req *mcp.CallToolRequest, input ExploreInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := Explore(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_explore", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 
-	// Project snippets.
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_list",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_list"),
-		Description: "List snippets for a GitLab project.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_project_snippet_get, gitlab_project_snippet_create.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectListInput) (*mcp.CallToolResult, ListOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_list", "List snippets for a GitLab project.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_project_snippet_get, gitlab_project_snippet_create."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := ProjectList(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_snippet_list", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_get",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_get"),
-		Description: "Get a single project snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_project_snippet_update.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectGetInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_get", "Get a single project snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_project_snippet_update."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectGetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := ProjectGet(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_snippet_get", start, err)
@@ -240,27 +174,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_content",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_content"),
-		Description: "Get the raw content of a project snippet.\n\nReturns: raw snippet content. See also: gitlab_project_snippet_get.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectContentInput) (*mcp.CallToolResult, ContentOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_content", "Get the raw content of a project snippet.\n\nReturns: raw snippet content. See also: gitlab_project_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectContentInput) (*mcp.CallToolResult, ContentOutput, error) {
 		start := time.Now()
 		out, err := ProjectContent(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_snippet_content", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatContentMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_create",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_create"),
-		Description: "Create a new snippet in a GitLab project. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_project_snippet_get.",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconSnippet,
-		InputSchema: snippetCreateInputSchema[ProjectCreateInput](),
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectCreateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_create", "Create a new snippet in a GitLab project. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_project_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectCreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := ProjectCreate(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_snippet_create", start, err)
@@ -268,13 +189,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_update",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_update"),
-		Description: "Update an existing project snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_project_snippet_get.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectUpdateInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_update", "Update an existing project snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_project_snippet_get."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectUpdateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := ProjectUpdate(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_snippet_update", start, err)
@@ -282,13 +197,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(result, out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_project_snippet_delete",
-		Title:       toolutil.TitleFromName("gitlab_project_snippet_delete"),
-		Description: "Delete a project snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_project_snippet_list.",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconSnippet,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProjectDeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, snippetTool("gitlab_project_snippet_delete", "Delete a project snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_project_snippet_list."), func(ctx context.Context, req *mcp.CallToolRequest, input ProjectDeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete snippet %d from project %s? This cannot be undone.", input.SnippetID, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil

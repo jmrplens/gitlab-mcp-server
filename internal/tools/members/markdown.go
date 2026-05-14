@@ -70,7 +70,7 @@ func FormatMarkdown(v Output) string {
 	}
 	toolutil.WriteHints(&b,
 		"Use action 'update' to change this member's access level",
-		"Use action 'remove' to remove this member from the project",
+		"Use action 'member_delete' to remove this member from the project",
 	)
 	return b.String()
 }

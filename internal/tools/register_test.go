@@ -1679,6 +1679,13 @@ func TestAllHintReferencesValid(t *testing.T) {
 			validTools[m[1]] = true
 		}
 	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Specs {
+			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
+				validTools[name] = true
+			}
+		}
+	}
 
 	// Also add meta-tool names from register_meta*.go files.
 	metaSrc := readRegisterMetaSource(t)
@@ -1730,6 +1737,13 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 		for _, m := range reDelegatedAssign.FindAllStringSubmatch(string(src), -1) {
 			validActions[m[1]] = true
+		}
+	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Specs {
+			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
+				validActions[actionName] = true
+			}
 		}
 	}
 
@@ -2054,58 +2068,23 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	t.Logf("scanned %d routes (%d failures)", len(allRoutes), failures)
 }
 
-// TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification verifies that the total number of
-// destructive routes across the entire codebase does not drop below a
-// known minimum. This prevents accidental mass reclassification of
-// destructive actions to non-destructive (e.g., a bad find-and-replace).
+// TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification verifies
+// that the total number of destructive actions in the canonical catalog does
+// not drop below a known minimum. This prevents accidental mass
+// reclassification of destructive actions to non-destructive.
 func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *testing.T) {
-	// Regex patterns matching all destructive wrapper usages.
-	destructivePatterns := []*regexp.Regexp{
-		// register_meta*.go inline patterns.
-		regexp.MustCompile(`"(\w+)":\s+destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`),
-		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`),
-		// Sub-package patterns.
-		regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`),
-	}
-
-	uniqueActions := make(map[string]bool) // "file:action" dedup key
-
-	// Scan register_meta*.go files.
-	for _, sourceFile := range readRegisterMetaSources(t) {
-		for _, re := range destructivePatterns {
-			for _, m := range re.FindAllStringSubmatch(sourceFile.content, -1) {
-				uniqueActions["meta:"+m[1]] = true
-			}
-		}
-	}
-
-	// Scan sub-package register.go files.
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		for _, re := range destructivePatterns {
-			for _, m := range re.FindAllStringSubmatch(string(src), -1) {
-				uniqueActions[e.Name()+":"+m[1]] = true
-			}
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	uniqueActions := make(map[string]bool)
+	for _, action := range catalog.Actions() {
+		if action.Route.Destructive {
+			uniqueActions[string(action.ID)] = true
 		}
 	}
 
 	// Current baseline: update this number when intentionally adding/removing
-	// destructive routes. This number represents the minimum expected count
-	// across register_meta*.go inline routes and the remaining delegated
-	// sub-package routes. Observed: 136 as of 2026-05-13 after removing
-	// unreferenced legacy RegisterMeta route maps.
-	const minExpectedDestructiveRoutes = 136
+	// destructive routes. This number represents the minimum expected count in
+	// the canonical action catalog, including GitLab.com Enterprise actions.
+	const minExpectedDestructiveRoutes = 163
 
 	total := len(uniqueActions)
 	if total < minExpectedDestructiveRoutes {

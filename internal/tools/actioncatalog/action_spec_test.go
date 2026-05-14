@@ -25,11 +25,12 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 		Edition:                "core",
 		OwnerPackage:           "projects",
 		IndividualTool:         toolutil.IndividualToolSpec{Name: "gitlab_get_project", Title: "Get project", Description: "Get one GitLab project."},
-		ContentKind:            "detail",
-		NotFoundPolicy:         "not_found_result",
-		EmbeddedResourcePolicy: "none",
-		RichResultPolicy:       "standard",
-		RuntimeValidationNotes: []string{"project_id accepts numeric ID or URL-encoded path"},
+		ContentKind:            toolutil.ActionSpecContentDetail,
+		NotFoundPolicy:         toolutil.ActionSpecNotFoundResult,
+		EmbeddedResourcePolicy: toolutil.ActionSpecEmbeddedNone,
+		RichResultPolicy:       toolutil.ActionSpecRichStandard,
+		SchemaValidationNotes:  []string{"project_id accepts numeric ID or URL-encoded path"},
+		RuntimeValidationNotes: []string{"handler converts GitLab API 404 into NotFoundResult"},
 	})
 
 	group, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{spec})
@@ -51,6 +52,12 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	}
 	if action.Route.ParameterGuidance["project_id"].SemanticRole != "scope_project" {
 		t.Fatalf("route guidance = %+v, want projected spec guidance", action.Route.ParameterGuidance)
+	}
+	if len(action.SchemaValidationNotes) != 1 || action.SchemaValidationNotes[0] != "project_id accepts numeric ID or URL-encoded path" {
+		t.Fatalf("schema validation notes = %+v, want projected schema note", action.SchemaValidationNotes)
+	}
+	if len(action.RuntimeValidationNotes) != 1 || action.RuntimeValidationNotes[0] != "handler converts GitLab API 404 into NotFoundResult" {
+		t.Fatalf("runtime validation notes = %+v, want projected runtime note", action.RuntimeValidationNotes)
 	}
 }
 

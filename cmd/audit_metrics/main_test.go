@@ -149,6 +149,100 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 	}
 }
 
+// TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta verifies the audit
+// separates spec-backed enterprise actions from legacy route-only actions.
+func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
+	base := catalogWithActions(t, catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true})
+	selfManagedEnterprise := catalogWithActions(t,
+		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_legacy", actionName: "list"},
+	)
+	gitLabComEnterprise := catalogWithActions(t,
+		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_orbit", actionName: "status", specBacked: true},
+	)
+
+	audit := auditEnterpriseActionSpecs(base, selfManagedEnterprise, gitLabComEnterprise)
+	if !slices.Equal(audit.SpecBacked, []string{"geo.list", "orbit.status"}) {
+		t.Fatalf("SpecBacked = %v, want [geo.list orbit.status]", audit.SpecBacked)
+	}
+	if !slices.Equal(audit.LegacyRouteOnly, []string{"legacy.list"}) {
+		t.Fatalf("LegacyRouteOnly = %v, want [legacy.list]", audit.LegacyRouteOnly)
+	}
+}
+
+// TestAuditEnterpriseActionSpecs_RealCatalogHasNoLegacyRoutes verifies phase 7
+// completion: every enterprise-only dynamic catalog action is spec-backed.
+func TestAuditEnterpriseActionSpecs_RealCatalogHasNoLegacyRoutes(t *testing.T) {
+	selfManagedClient := newAuditMetricsClient(t)
+	gitLabComClient, err := gitlabclient.NewClientWithToken(config.DefaultGitLabURL, "audit-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken(gitlab.com) error: %v", err)
+	}
+
+	audit := auditEnterpriseActionSpecs(
+		dynamicActionCatalog(selfManagedClient, false),
+		dynamicActionCatalog(selfManagedClient, true),
+		dynamicActionCatalog(gitLabComClient, true),
+	)
+	if len(audit.LegacyRouteOnly) != 0 {
+		t.Fatalf("LegacyRouteOnly = %v, want none", audit.LegacyRouteOnly)
+	}
+	if len(audit.SpecBacked) == 0 {
+		t.Fatal("SpecBacked is empty, want enterprise actions")
+	}
+	if !slices.Contains(audit.SpecBacked, "orbit.status") {
+		t.Fatalf("SpecBacked = %v, want orbit.status", audit.SpecBacked)
+	}
+}
+
+// TestPrintEnterpriseActionSpecAudit_IncludesLegacyZeroSection verifies the
+// audit output includes both lists, including the explicit zero legacy state.
+func TestPrintEnterpriseActionSpecAudit_IncludesLegacyZeroSection(t *testing.T) {
+	output := captureStdout(t, func() {
+		printEnterpriseActionSpecAudit(enterpriseActionSpecAudit{SpecBacked: []string{"geo.list"}})
+	})
+	for _, want := range []string{
+		"Enterprise ActionSpec Audit",
+		"Spec-backed enterprise actions (1)",
+		"geo.list",
+		"Legacy route-only enterprise actions (0)",
+		"none",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printEnterpriseActionSpecAudit() output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+type catalogActionFixture struct {
+	toolName   string
+	actionName string
+	specBacked bool
+}
+
+func catalogWithActions(t *testing.T, fixtures ...catalogActionFixture) *actioncatalog.Catalog {
+	t.Helper()
+	groups := map[string]actioncatalog.Group{}
+	for _, fixture := range fixtures {
+		group := groups[fixture.toolName]
+		if group.ToolName == "" {
+			group = actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: fixture.toolName})
+		}
+		group.SetAction(actioncatalog.Action{Name: fixture.actionName, SpecBacked: fixture.specBacked})
+		groups[fixture.toolName] = group
+	}
+	catalog := actioncatalog.NewCatalog()
+	for _, group := range groups {
+		if err := catalog.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup(%s) error: %v", group.ToolName, err)
+		}
+	}
+	return catalog
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout

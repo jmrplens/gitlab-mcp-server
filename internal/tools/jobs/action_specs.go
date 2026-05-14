@@ -44,7 +44,9 @@ func jobReadSpec(name string, route toolutil.ActionRoute, individualTool string,
 }
 
 func jobMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, jobOptions(individualTool, extraTags...))
+	options := jobOptions(individualTool, extraTags...)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
 }
 
 func jobUpdateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {

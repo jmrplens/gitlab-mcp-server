@@ -75,15 +75,19 @@ func main() {
 	metaBase := listServerTools(client, true, false)
 	metaEnterprise := listServerTools(client, true, true)
 	metaGitLabComEnterprise := listServerTools(gitLabComClient, true, true)
-	dynamicBaseRoutes := dynamicActionRoutes(client, false)
-	dynamicEnterpriseRoutes := dynamicActionRoutes(client, true)
-	dynamicGitLabComEnterpriseRoutes := dynamicActionRoutes(gitLabComClient, true)
-	dynamicBase := listDynamicTools(actioncatalog.FromActionMaps(dynamicBaseRoutes))
-	dynamicEnterprise := listDynamicTools(actioncatalog.FromActionMaps(dynamicEnterpriseRoutes))
-	dynamicGitLabComEnterprise := listDynamicTools(actioncatalog.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
-	dynamicBaseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicBaseRoutes))
-	dynamicEnterpriseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicEnterpriseRoutes))
-	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(actioncatalog.FromActionMaps(dynamicGitLabComEnterpriseRoutes))
+	dynamicBaseCatalog := dynamicActionCatalog(client, false)
+	dynamicEnterpriseCatalog := dynamicActionCatalog(client, true)
+	dynamicGitLabComEnterpriseCatalog := dynamicActionCatalog(gitLabComClient, true)
+	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
+	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
+	dynamicGitLabComEnterpriseRoutes := dynamicGitLabComEnterpriseCatalog.ActionMaps()
+	dynamicBase := listDynamicTools(dynamicBaseCatalog)
+	dynamicEnterprise := listDynamicTools(dynamicEnterpriseCatalog)
+	dynamicGitLabComEnterprise := listDynamicTools(dynamicGitLabComEnterpriseCatalog)
+	dynamicBaseMetrics := dynamicSearchMetrics(dynamicBaseCatalog)
+	dynamicEnterpriseMetrics := dynamicSearchMetrics(dynamicEnterpriseCatalog)
+	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(dynamicGitLabComEnterpriseCatalog)
+	enterpriseActionAudit := auditEnterpriseActionSpecs(dynamicBaseCatalog, dynamicEnterpriseCatalog, dynamicGitLabComEnterpriseCatalog)
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -129,6 +133,8 @@ func main() {
 	printRow("Dynamic catalog actions (self-managed enterprise)", countActionRoutes(dynamicEnterpriseRoutes))
 	printRow("Dynamic catalog actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
 	printDynamicSearchMetrics(dynamicBaseMetrics, dynamicEnterpriseMetrics, dynamicGitLabComEnterpriseMetrics)
+	printRow("Spec-backed enterprise catalog actions", len(enterpriseActionAudit.SpecBacked))
+	printRow("Legacy route-only enterprise catalog actions", len(enterpriseActionAudit.LegacyRouteOnly))
 	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
 	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
 	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
@@ -163,6 +169,9 @@ func main() {
 	printDomainTable(domains)
 	fmt.Println()
 
+	printEnterpriseActionSpecAudit(enterpriseActionAudit)
+	fmt.Println()
+
 	fmt.Println("## Meta-tools List")
 	fmt.Println()
 	fmt.Println("### Base (" + strconv.Itoa(len(metaBase)) + ")")
@@ -193,6 +202,61 @@ func main() {
 	}
 }
 
+type enterpriseActionSpecAudit struct {
+	SpecBacked      []string
+	LegacyRouteOnly []string
+}
+
+func auditEnterpriseActionSpecs(base, selfManagedEnterprise, gitLabComEnterprise *actioncatalog.Catalog) enterpriseActionSpecAudit {
+	baseIDs := catalogActionIDSet(base)
+	seen := map[actioncatalog.ActionID]bool{}
+	audit := enterpriseActionSpecAudit{}
+	for _, catalog := range []*actioncatalog.Catalog{selfManagedEnterprise, gitLabComEnterprise} {
+		for _, action := range catalog.Actions() {
+			if baseIDs[action.ID] || seen[action.ID] {
+				continue
+			}
+			seen[action.ID] = true
+			if action.SpecBacked {
+				audit.SpecBacked = append(audit.SpecBacked, string(action.ID))
+				continue
+			}
+			audit.LegacyRouteOnly = append(audit.LegacyRouteOnly, string(action.ID))
+		}
+	}
+	sort.Strings(audit.SpecBacked)
+	sort.Strings(audit.LegacyRouteOnly)
+	return audit
+}
+
+func catalogActionIDSet(catalog *actioncatalog.Catalog) map[actioncatalog.ActionID]bool {
+	ids := map[actioncatalog.ActionID]bool{}
+	for _, action := range catalog.Actions() {
+		ids[action.ID] = true
+	}
+	return ids
+}
+
+func printEnterpriseActionSpecAudit(audit enterpriseActionSpecAudit) {
+	fmt.Println("## Enterprise ActionSpec Audit")
+	fmt.Println()
+	fmt.Println("### Spec-backed enterprise actions (" + strconv.Itoa(len(audit.SpecBacked)) + ")")
+	printActionIDList(audit.SpecBacked)
+	fmt.Println()
+	fmt.Println("### Legacy route-only enterprise actions (" + strconv.Itoa(len(audit.LegacyRouteOnly)) + ")")
+	printActionIDList(audit.LegacyRouteOnly)
+}
+
+func printActionIDList(actionIDs []string) {
+	if len(actionIDs) == 0 {
+		fmt.Println("  - none")
+		return
+	}
+	for _, actionID := range actionIDs {
+		fmt.Printf(toolListFormat, actionID)
+	}
+}
+
 // dynamicSearchMetrics builds the dynamic registry and returns static search
 // index and alias metrics without changing the advertised MCP tool count.
 func dynamicSearchMetrics(catalog *actioncatalog.Catalog) dynamictools.RegistryMetrics {
@@ -220,9 +284,7 @@ func printDynamicSearchMetrics(base, enterprise, gitLabCom dynamictools.Registry
 	printRow("Dynamic aliases ambiguous (GitLab.com enterprise)", gitLabCom.AmbiguousAliasCount)
 }
 
-// dynamicActionRoutes builds the dynamic action catalog from canonical action
-// groups and the standalone tools included in dynamic mode.
-func dynamicActionRoutes(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
+func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build dynamic action catalog: %v\n", err)
@@ -233,7 +295,7 @@ func dynamicActionRoutes(client *gitlabclient.Client, enterprise bool) map[strin
 		fmt.Fprintf(os.Stderr, "add standalone dynamic actions: %v\n", err)
 		os.Exit(1)
 	}
-	return catalog.ActionMaps()
+	return catalog
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by

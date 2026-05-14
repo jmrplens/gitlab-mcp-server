@@ -12,13 +12,12 @@ import (
 
 // RegisterTools registers all Dockerfile template MCP tools.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_dockerfile_templates",
-		Title:       toolutil.TitleFromName("gitlab_list_dockerfile_templates"),
-		Description: "List all available Dockerfile templates.\n\nReturns: JSON array of Dockerfile templates with pagination.\n\nSee also: gitlab_get_dockerfile_template, gitlab_list_ci_yml_templates",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconTemplate,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	specs := ActionSpecs(client)
+	templateTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconTemplate})
+	}
+
+	mcp.AddTool(server, templateTool("gitlab_list_dockerfile_templates", "List all available Dockerfile templates.\n\nReturns: JSON array of Dockerfile templates with pagination.\n\nSee also: gitlab_get_dockerfile_template, gitlab_list_ci_yml_templates"), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_dockerfile_templates", start, err)
@@ -28,13 +27,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_dockerfile_template",
-		Title:       toolutil.TitleFromName("gitlab_get_dockerfile_template"),
-		Description: "Get a single Dockerfile template by key.\n\nReturns: JSON with the template name and content.\n\nSee also: gitlab_list_dockerfile_templates, gitlab_list_project_templates",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconTemplate,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	mcp.AddTool(server, templateTool("gitlab_get_dockerfile_template", "Get a single Dockerfile template by key.\n\nReturns: JSON with the template name and content.\n\nSee also: gitlab_list_dockerfile_templates, gitlab_list_project_templates"), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_dockerfile_template", start, err)

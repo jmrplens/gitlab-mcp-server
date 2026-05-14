@@ -1,119 +1,126 @@
-# Catalog-First Individual Tools Evaluation
+# Catalog-First Individual Tools Policy
 
 > **Diátaxis type**: Explanation
 > **Audience**: Developers changing tool registration surfaces
 > **Prerequisites**: Familiarity with `RegisterTools`, meta-tools, and the canonical action catalog
 
-This note evaluates whether the individual MCP tool surface should be generated
-from canonical action specifications. The conclusion is conservative: keep
-individual tools hand-registered for now, and only revisit generation after the
-spec metadata is fully populated and snapshot parity proves the generated
-surface exactly matches the compatibility contract in domain `RegisterTools`
-functions.
+The individual MCP tool surface is still registered by domain packages, but its
+visible tool metadata is now catalog-first. Each normal GitLab API tool should
+obtain its `mcp.Tool` definition from `toolutil.ActionSpec` projection while the
+package keeps the handler closure, logging, not-found behavior, embedded
+resources, rich results, and compatibility-specific runtime logic local.
 
-## Decision
+This policy keeps the individual surface stable for existing clients while
+removing duplicated metadata from hundreds of `RegisterTools` call sites.
 
-Do not generate the production individual surface from the canonical action
-catalog yet.
+## Current Policy
 
-The catalog is already the correct source for meta-tools and dynamic tools, and
-`toolutil.ActionSpec` now models the fields individual generation will need:
-stable visible tool name, title, description, content kind, not-found policy,
-embedded resource policy, rich result policy, and runtime validation notes.
-However, most of those fields are still only partially populated. Individual
-tools still own detailed descriptions, annotations, not-found handling,
-embedded resources, and result variants such as image content through
-`RegisterTools` closures.
+Individual tool registration has two layers:
 
-Runtime generation is rejected for now because it would make the compatibility
-surface depend on incomplete per-action policy data. A small
-`ActionSpec`-to-`mcp.Tool` projection adapter exists for tests and future
-generation work, but production registration remains hand-written until parity
-is proven against the current individual tool snapshot.
+| Layer | Owner | Policy |
+| --- | --- | --- |
+| Handler behavior | Domain `RegisterTools` function | Keep explicit closures for logging, request-aware handlers, not-found conversion, embedded resources, rich results, and compatibility behavior |
+| Visible tool metadata | `ActionSpec` projection | Derive title, description, icons, input/output schemas, annotations, and compatibility metadata from specs |
 
-## Representative Comparison
+Use `toolutil.MustIndividualToolFromSpecs` when registering normal individual
+GitLab API tools. The helper fails fast when the named individual tool has no
+matching spec or when spec metadata cannot produce a valid `mcp.Tool`.
 
-| Individual tool | Catalog action | Parity | Gaps |
-| --- | --- | --- | --- |
-| `gitlab_project_get` | `project.get` | Reuses `projects.Get`, input/output structs, and project markdown formatter. | The individual tool converts 404 responses to `NotFoundResult`, logs them at info level, embeds `gitlab://project/{id}`, and uses a focused per-tool description. |
-| `gitlab_issue_create` | `issue.create` | Reuses `issues.Create`, schemas, markdown, and runtime hints. | Mostly compatible. The individual tool still owns the visible tool name, description, and content annotation. |
-| `gitlab_package_publish` | `package.publish` | Catalog route uses `routeActionWithRequest`, so request-aware progress and local file handling are available. | The schema cannot express the `file_path` or `content_base64` exclusive choice, so runtime validation remains required. The individual description includes release-link guidance not modeled per action. |
-| `gitlab_pipeline_schedule_create` | `pipeline.schedule_create` | Straightforward handler, schemas, annotations, markdown, and hints. | Mostly compatible. This is a good future parity candidate once individual metadata is complete in specs. |
-| `gitlab_file_get` | `repository.file_get` | Reuses `files.Get`, schemas, and repository file markdown logic. | The individual tool name does not mechanically match the catalog action ID. It also converts 404 responses to `NotFoundResult` and may return image content through `ToolResultWithImage`. |
+Documented source-level exceptions are intentionally narrow:
 
-The representative set shows that typed business logic is already shared well.
-The remaining duplication is primarily MCP registration policy and user-facing
-metadata, not GitLab API logic.
+| Package | Reason |
+| --- | --- |
+| `internal/tools/dynamic/register.go` | Registers the dynamic search/describe/execute surface generated from the canonical catalog, not individual GitLab API tools |
+| `internal/tools/serverupdate/register.go` | Registers updater tools from `cmd/server` with `*autoupdate.Updater`, outside the GitLab client action catalog |
 
-## Blockers
+## Parity Checklist
 
-### Partially Populated Individual Tool Metadata
+When adding or changing an individual tool, verify each item before merging:
 
-`ActionSpec` stores per-action individual tool metadata, but the migration has
-only locked the historical individual tool name and title for catalog-backed
-actions. Generating individual tools requires the remaining metadata to be
-complete for every generated action:
+- The owning package exposes an `ActionSpecs` function for the action.
+- The spec sets the exact historical individual tool name in `IndividualTool.Name`.
+- The spec sets the individual title and any description override needed for the visible tool.
+- The spec carries the same input and output schemas as the registered handler route.
+- The spec annotations match the existing read-only, destructive, idempotent, and open-world semantics.
+- The spec sets content, not-found, embedded-resource, rich-result, schema-validation, and runtime-validation policies when the action needs non-default behavior.
+- `RegisterTools` uses `toolutil.MustIndividualToolFromSpecs` or an equivalent projection helper for the visible `mcp.Tool` metadata.
+- Any direct `&mcp.Tool{...}` construction is either removed or added to the documented standalone exception list with a reason.
+- Tool snapshots and ActionSpec guardrails pass without adding unexpected allowlist entries.
 
-- Per-tool description, not only the meta-tool group description.
-- MCP tool annotations such as read, create, update, and delete semantics.
-- Content annotation to distinguish list, detail, mutate, assistant, and image responses.
-- Icons when an individual action should differ from its group icon.
-- See-also guidance and action-specific usage warnings.
-- Not-found policy, embedded-resource policy, rich-result policy, and runtime validation notes.
+## Representative Patterns
 
-Without complete metadata, a generated individual tool can call the right
-handler but cannot preserve the current compatibility contract.
+### Standard Projected Tool
 
-### Not-Found Results And Logging
+Most tools follow the same shape: define the action spec near the domain
+handler, then use the projected tool metadata in `RegisterTools`.
 
-Many get tools intercept GitLab 404 responses in the `RegisterTools` closure,
-log the call as a non-error, and return `toolutil.NotFoundResult` with
-actionable hints. This behavior is intentionally different from propagating the
-handler error.
+```go
+func projectTool(client *gitlabclient.Client, enterprise bool, name, description string) *mcp.Tool {
+  return toolutil.MustIndividualToolFromSpecs(
+    ActionSpecs(client, enterprise),
+    name,
+    toolutil.IndividualToolProjectionOptions{
+      Description: description,
+      Icons:       toolutil.IconProject,
+    },
+  )
+}
+```
 
-Examples include projects, files, groups, branches, tags, labels, milestones,
-releases, users, badges, deployments, release links, issue links, award emoji,
-and draft notes. A catalog-generated individual surface would need explicit
-not-found policy metadata or a wrapper that can identify the resource name,
-identifier, and hints for each action.
+The explicit description option preserves long-form compatibility text while
+schemas, annotations, title, and shared metadata come from the matching spec.
 
-### Embedded Resources And Rich Results
+### Handler-Specific Compatibility
 
-Several individual tools attach embedded MCP resources after successful reads.
-`gitlab_project_get` embeds `gitlab://project/{id}`. Other domains embed branch,
-tag, label, milestone, group, deployment, and release resources.
+Keep compatibility behavior in the domain closure when it is not simple MCP tool
+metadata:
 
-File tools add another special case: `gitlab_file_get` can return image content
-when the repository file is an image. A generic action wrapper cannot infer that
-until rich-result policy is populated in `ActionSpec`.
+- `gitlab_project_get` can convert 404 responses to `toolutil.NotFoundResult`,
+  log them at info level, and embed `gitlab://project/{id}` after a successful
+  response.
+- `gitlab_file_get` can return image content through `ToolResultWithImage` when
+  the repository file is an image.
+- Package download and publish tools preserve request-aware progress, local file
+  validation, and disk output behavior in their handlers.
 
-### Naming Is Not Always Mechanical
+Those behaviors are documented in specs through policy fields and validation
+notes, but the runtime mechanics remain in domain code.
 
-Most dynamic action IDs follow `domain.action`, but individual tool names are
-historical compatibility names. The repository file action is the clearest
-example: the catalog exposes `repository.file_get`, while the individual tool is
-`gitlab_file_get`. Any generator would need an explicit name map rather than a
-pure string transform.
+## Guardrails
 
-### Runtime Validation Still Matters
+The migration is enforced by tests and audits:
 
-Some constraints are intentionally enforced by handlers instead of JSON Schema.
-Package publish requires exactly one content source, `file_path` or
-`content_base64`. That does not block catalog-backed execution, but generated
-tools must preserve handler validation and not imply the schema is complete.
+| Guardrail | What it proves |
+| --- | --- |
+| `TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection` | Source registration files do not reintroduce manual individual `mcp.Tool` metadata outside documented exceptions |
+| `TestIndividualToolProjection_GoldenSnapshotParity` | Projected metadata matches `internal/tools/testdata/tools_individual.json` except explicit, reviewed gaps |
+| `TestIndividualToolMetadata_CatalogBackedCoverage` | Every catalog-backed spec references a registered individual tool, and every individual tool without a spec is an explicit standalone exception |
+| `cmd/audit_action_spec_coverage` | Every source domain is classified across individual, meta, dynamic, and standalone surfaces |
+| `TestActionSpecCoverage_AllCatalogRoutesClassified` | Every GitLab.com Enterprise dynamic catalog route is spec-backed |
 
-## Recommendation
+Run the focused checks before changing individual registration policy:
 
-Keep individual tools as a separate hand-registered compatibility surface.
-Continue using the canonical action catalog for meta and dynamic surfaces.
+```bash
+go test ./internal/tools -run 'TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection|TestIndividualToolMetadata_CatalogBackedCoverage|TestIndividualToolProjection_GoldenSnapshotParity|TestActionSpecCoverage_AllCatalogRoutesClassified' -count=1
+make audit-action-spec-coverage
+```
 
-If this topic is revisited, the next design should extend the existing
-individual-tool projection layer from `ActionSpec` to `mcp.Tool`. That layer
-must consume names, descriptions, annotations, content policy, not-found policy,
-embedded-resource policy, rich-result policy, and runtime validation notes. Only
-after that should a build-time generator compare generated tool definitions
-against `internal/tools/testdata/tools_individual.json`.
+Regenerate snapshots only when intentional metadata changes occur:
 
-Runtime generation should remain off the table until snapshot parity and MCP
-round-trip parity are proven. The individual surface is the compatibility API;
-it should not inherit incomplete metadata from a catalog optimized for dispatch.
+```bash
+UPDATE_TOOLSNAPS=true go test ./internal/tools -run 'TestToolSnapshots_(Individual|Meta)$' -count=1
+```
+
+## What Not To Do
+
+- Do not generate production handler closures from the catalog. Domain packages
+  still own request handling, logging, special result shaping, and GitLab API
+  behavior.
+- Do not add dynamic-only action definitions for normal GitLab operations.
+  Ordinary actions belong in the owning `ActionSpec` builder and the canonical
+  catalog path.
+- Do not add broad allowlist entries for snapshot drift. If projection differs
+  from the historical individual surface, first decide whether the spec or the
+  historical snapshot is correct.
+- Do not keep parallel descriptions, annotations, schemas, or icon choices in
+  `RegisterTools` once they can be represented by `ActionSpec` projection.

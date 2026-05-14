@@ -12,13 +12,12 @@ import (
 
 // RegisterTools registers all Database Migrations MCP tools.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_mark_migration",
-		Title:       toolutil.TitleFromName("gitlab_mark_migration"),
-		Description: "Mark a pending database migration as successfully executed (admin). Params: version (required), database (optional).\n\nReturns: JSON with the migration mark confirmation.\n\nSee also: gitlab_server_status.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input MarkInput) (*mcp.CallToolResult, MarkOutput, error) {
+	specs := ActionSpecs(client)
+	databaseMigrationTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconConfig})
+	}
+
+	mcp.AddTool(server, databaseMigrationTool("gitlab_mark_migration", "Mark a pending database migration as successfully executed (admin). Params: version (required), database (optional).\n\nReturns: JSON with the migration mark confirmation.\n\nSee also: gitlab_server_status."), func(ctx context.Context, req *mcp.CallToolRequest, input MarkInput) (*mcp.CallToolResult, MarkOutput, error) {
 		start := time.Now()
 		out, err := Mark(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mark_migration", start, err)

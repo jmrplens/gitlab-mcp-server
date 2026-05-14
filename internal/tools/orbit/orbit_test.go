@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestStatus_Success_ExpectedOutput verifies that Status decodes the Orbit
@@ -446,6 +448,55 @@ func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
 	if names := registeredToolNames(t, server); !containsTool(names, "gitlab_orbit") {
 		t.Fatalf("RegisterMeta() missing gitlab_orbit in %v", names)
 	}
+}
+
+// TestOrbit_RegisterMeta_UsesActionSpecs verifies that gitlab_orbit meta routes
+// are projected from the canonical GitLab.com-only ActionSpec definitions.
+func TestOrbit_RegisterMeta_UsesActionSpecs(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, client)
+	})
+	got := orbitMetaRoutesFromDefinitions(t, definitions)
+	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("registered orbit route count = %d, want %d", len(got), len(want))
+	}
+	for actionName, wantRoute := range want {
+		t.Run(actionName, func(t *testing.T) {
+			gotRoute, ok := got[actionName]
+			if !ok {
+				t.Fatalf("registered meta routes missing %q", actionName)
+			}
+			if gotRoute.Destructive != wantRoute.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			}
+			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+				t.Fatal("input schema differs from ActionSpec projection")
+			}
+			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+				t.Fatal("output schema differs from ActionSpec projection")
+			}
+		})
+	}
+}
+
+func orbitMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+	t.Helper()
+	for _, definition := range definitions {
+		if definition.Name == "gitlab_orbit" {
+			return definition.Routes
+		}
+	}
+	t.Fatal("missing gitlab_orbit meta definition")
+	return nil
 }
 
 // TestOrbit_RegisterMeta_CallThroughMCP verifies that the consolidated Orbit

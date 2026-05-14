@@ -13,65 +13,40 @@ import (
 
 // RegisterTools registers all broadcast message tools on the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_broadcast_messages",
-		Title:       toolutil.TitleFromName("gitlab_list_broadcast_messages"),
-		Description: "List all broadcast messages. Requires admin access.\n\nReturns: JSON with array of broadcast messages and pagination info.\n\nSee also: gitlab_create_broadcast_message, gitlab_get_appearance",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconNotify,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	specs := ActionSpecs(client)
+	broadcastMessageTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconNotify})
+	}
+
+	mcp.AddTool(server, broadcastMessageTool("gitlab_list_broadcast_messages", "List all broadcast messages. Requires admin access.\n\nReturns: JSON with array of broadcast messages and pagination info.\n\nSee also: gitlab_create_broadcast_message, gitlab_get_appearance"), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_broadcast_messages", start, err)
 		return toolutil.WithHints(FormatListMarkdown(out), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_broadcast_message",
-		Title:       toolutil.TitleFromName("gitlab_get_broadcast_message"),
-		Description: "Get a specific broadcast message by ID. Requires admin access.\n\nReturns: JSON with broadcast message details (ID, message, type, dates, theme).\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconNotify,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	mcp.AddTool(server, broadcastMessageTool("gitlab_get_broadcast_message", "Get a specific broadcast message by ID. Requires admin access.\n\nReturns: JSON with broadcast message details (ID, message, type, dates, theme).\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message"), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_broadcast_message", start, err)
 		return toolutil.WithHints(FormatMessageMarkdown(out.Message), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_create_broadcast_message",
-		Title:       toolutil.TitleFromName("gitlab_create_broadcast_message"),
-		Description: "Create a broadcast message. Requires admin access.\n\nReturns: JSON with the created broadcast message details.\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconNotify,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, CreateOutput, error) {
+	mcp.AddTool(server, broadcastMessageTool("gitlab_create_broadcast_message", "Create a broadcast message. Requires admin access.\n\nReturns: JSON with the created broadcast message details.\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message"), func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, CreateOutput, error) {
 		start := time.Now()
 		out, err := Create(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_create_broadcast_message", start, err)
 		return toolutil.WithHints(FormatMessageMarkdown(out.Message), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_update_broadcast_message",
-		Title:       toolutil.TitleFromName("gitlab_update_broadcast_message"),
-		Description: "Update a broadcast message. Requires admin access.\n\nReturns: JSON with the updated broadcast message details.\n\nSee also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconNotify,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, UpdateOutput, error) {
+	mcp.AddTool(server, broadcastMessageTool("gitlab_update_broadcast_message", "Update a broadcast message. Requires admin access.\n\nReturns: JSON with the updated broadcast message details.\n\nSee also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message"), func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, UpdateOutput, error) {
 		start := time.Now()
 		out, err := Update(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_update_broadcast_message", start, err)
 		return toolutil.WithHints(FormatMessageMarkdown(out.Message), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_delete_broadcast_message",
-		Title:       toolutil.TitleFromName("gitlab_delete_broadcast_message"),
-		Description: "Delete a broadcast message. Requires admin access.\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_list_broadcast_messages, gitlab_create_broadcast_message",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconNotify,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, broadcastMessageTool("gitlab_delete_broadcast_message", "Delete a broadcast message. Requires admin access.\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_list_broadcast_messages, gitlab_create_broadcast_message"), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete broadcast message %d?", input.ID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil

@@ -15,6 +15,39 @@ type IndividualToolProjectionOptions struct {
 	Icons       []mcp.Icon
 }
 
+// IndividualToolFromSpecs projects the spec that owns an individual tool name.
+func IndividualToolFromSpecs(specs []ActionSpec, individualName string, opts IndividualToolProjectionOptions) (*mcp.Tool, error) {
+	name := strings.TrimSpace(individualName)
+	if name == "" {
+		return nil, errors.New("individual tool name is required")
+	}
+	var found *ActionSpec
+	for index := range specs {
+		if strings.TrimSpace(specs[index].IndividualTool.Name) != name {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("individual tool %q has multiple action specs", name)
+		}
+		found = &specs[index]
+	}
+	if found == nil {
+		return nil, fmt.Errorf("individual tool %q action spec not found", name)
+	}
+	return IndividualToolFromActionSpec(*found, opts)
+}
+
+// MustIndividualToolFromSpecs projects an individual tool or panics on invalid
+// registration metadata. Use it from package RegisterTools functions, where a
+// missing spec is a startup-time programming error.
+func MustIndividualToolFromSpecs(specs []ActionSpec, individualName string, opts IndividualToolProjectionOptions) *mcp.Tool {
+	tool, err := IndividualToolFromSpecs(specs, individualName, opts)
+	if err != nil {
+		panic(err)
+	}
+	return tool
+}
+
 // IndividualToolFromActionSpec projects canonical action metadata into an MCP
 // tool definition for the individual-tool surface.
 func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjectionOptions) (*mcp.Tool, error) {
@@ -32,6 +65,9 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 	if route.OutputSchema == nil {
 		return nil, fmt.Errorf("individual tool %q output schema is required", name)
 	}
+	applyIndividualRequiredFields(route)
+	normalizeSchemaDescriptions(route.InputSchema)
+	lockdownSchemaNode(route.InputSchema)
 	title := strings.TrimSpace(spec.IndividualTool.Title)
 	if title == "" {
 		title = TitleFromName(name)
@@ -55,13 +91,41 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 	}, nil
 }
 
+func applyIndividualRequiredFields(route ActionRoute) {
+	if route.InputType == nil || route.InputSchema == nil {
+		return
+	}
+	schema := schemaForType(route.InputType)
+	required, ok := schema["required"]
+	if !ok {
+		delete(route.InputSchema, "required")
+		return
+	}
+	route.InputSchema["required"] = cloneSchemaValue(required)
+}
+
 func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
+	readOnly := spec.ReadOnly
 	destructive := spec.Destructive
+	idempotent := spec.Idempotent
 	openWorld := spec.OpenWorld
+	overrides := spec.IndividualTool.AnnotationOverrides
+	if overrides.ReadOnly != nil {
+		readOnly = *overrides.ReadOnly
+	}
+	if overrides.Destructive != nil {
+		destructive = *overrides.Destructive
+	}
+	if overrides.Idempotent != nil {
+		idempotent = *overrides.Idempotent
+	}
+	if overrides.OpenWorld != nil {
+		openWorld = *overrides.OpenWorld
+	}
 	return &mcp.ToolAnnotations{
-		ReadOnlyHint:    spec.ReadOnly,
+		ReadOnlyHint:    readOnly,
 		DestructiveHint: &destructive,
-		IdempotentHint:  spec.Idempotent,
+		IdempotentHint:  idempotent,
 		OpenWorldHint:   &openWorld,
 	}
 }
