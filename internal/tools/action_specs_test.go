@@ -242,6 +242,41 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	}
 }
 
+func TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	manualRegistrations := make([]string, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(entry.Name(), "register.go")
+		src, readErr := os.ReadFile(path)
+		if os.IsNotExist(readErr) {
+			continue
+		}
+		if readErr != nil {
+			t.Fatalf("ReadFile %s: %v", path, readErr)
+		}
+		if !strings.Contains(string(src), "&mcp.Tool{") {
+			continue
+		}
+		if reason, ok := manualRegistrationExceptions[path]; ok {
+			t.Logf("allowing manual tool registration in %s: %s", path, reason)
+			continue
+		}
+		manualRegistrations = append(manualRegistrations, path)
+	}
+
+	if len(manualRegistrations) > 0 {
+		sort.Strings(manualRegistrations)
+		t.Fatalf("tool register.go files must use ActionSpec individual projection instead of manual mcp.Tool metadata: %v", manualRegistrations)
+	}
+}
+
 var standaloneIndividualToolExceptions = map[string]string{
 	"gitlab_discover_project":           "dynamic standalone project discovery helper",
 	"gitlab_interactive_issue_create":   "elicitation standalone multi-step workflow",
@@ -249,6 +284,11 @@ var standaloneIndividualToolExceptions = map[string]string{
 	"gitlab_interactive_project_create": "elicitation standalone multi-step workflow",
 	"gitlab_interactive_release_create": "elicitation standalone multi-step workflow",
 	"gitlab_server_status":              "server diagnostic helper outside the GitLab API catalog",
+}
+
+var manualRegistrationExceptions = map[string]string{
+	filepath.Join("dynamic", "register.go"):      "dynamic catalog search/describe/execute tools are generated from the canonical catalog surface, not individual GitLab API tools",
+	filepath.Join("serverupdate", "register.go"): "server auto-update tools use *autoupdate.Updater and are registered from cmd/server/main.go outside RegisterAll",
 }
 
 var sharedIndividualToolSpecNames = map[string]string{
