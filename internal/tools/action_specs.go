@@ -45,6 +45,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupiterations"
+	grouptools "github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
@@ -301,10 +302,13 @@ func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionS
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 22)
+	specs = append(specs, grouptools.ActionSpecs(client)...)
 	if !enterprise {
-		return nil
+		return actionSpecGroup("gitlab_group", specs)
 	}
-	return actionSpecGroup("gitlab_group", epicissues.ActionSpecs(client))
+	specs = append(specs, epicissues.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_group", specs)
 }
 
 func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
