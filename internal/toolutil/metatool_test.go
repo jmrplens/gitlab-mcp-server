@@ -1388,17 +1388,17 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 // TestMetaToolDescriptionPrefix_IncludesParameterGuidance verifies generated
 // guidance appears only when routes define role-sensitive parameter metadata.
 func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
-	routes := ActionMap{
-		"token_scope_remove_project": {
-			ParameterGuidance: map[string]ParameterGuidance{
-				"project_id": {
-					SemanticRole:     "scope_owner_project",
-					ValueSource:      "Owning project whose allowlist is being changed.",
-					CommonConfusions: []string{"Do not use the project being removed as project_id."},
-				},
-			},
+	guidance := map[string]ParameterGuidance{
+		"project_id": {
+			SemanticRole:     "scope_owner_project",
+			ValueSource:      "Owning project whose allowlist is being changed.",
+			CommonConfusions: []string{"Do not use the project being removed as project_id."},
 		},
 	}
+	routes := ActionMap{
+		"token_scope_remove_project": Route(nil).WithParameterGuidance(guidance),
+	}
+	guidance["project_id"] = ParameterGuidance{SemanticRole: "changed"}
 
 	got := MetaToolDescriptionPrefix("gitlab_job", routes)
 	for _, want := range []string{

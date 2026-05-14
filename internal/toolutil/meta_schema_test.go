@@ -51,6 +51,9 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 	routes := map[string]ActionMap{
 		"gitlab_project": {
 			"create": {
+				Aliases:        []string{"project.create"},
+				Tags:           []string{"project"},
+				RelatedActions: []string{"project.get"},
 				InputSchema: map[string]any{
 					"required": []string{"name"},
 					"properties": map[string]any{
@@ -73,6 +76,9 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 	cloneRoute.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"] = "integer"
 	cloneRoute.OutputSchema["required"].([]string)[0] = "changed"
 	cloneRoute.ParameterGuidance["project_id"].CommonConfusions[0] = "changed"
+	cloneRoute.Aliases[0] = "changed"
+	cloneRoute.Tags[0] = "changed"
+	cloneRoute.RelatedActions[0] = "changed"
 
 	original := routes["gitlab_project"]["create"]
 	if got := original.InputSchema["required"].([]string)[0]; got != "name" {
@@ -86,6 +92,9 @@ func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
 	}
 	if got := original.ParameterGuidance["project_id"].CommonConfusions[0]; got != "do not use target_project_id" {
 		t.Fatalf("original guidance confusion = %q, want unchanged", got)
+	}
+	if original.Aliases[0] != "project.create" || original.Tags[0] != "project" || original.RelatedActions[0] != "project.get" {
+		t.Fatalf("original route metadata = %+v, want unchanged", original)
 	}
 }
 

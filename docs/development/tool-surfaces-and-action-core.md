@@ -205,6 +205,43 @@ Add hand-authored dynamic aliases, tags, usage hints, or related actions only wh
 
 Use the alias and discovery audits in `internal/tools/dynamic` after metadata changes. If a registry is already built, call `AuditRegistryDiscoveryTerms`; use `AuditCatalogDiscoveryTerms` when only a catalog is available. A dense action family should either be discoverable from schemas and route names or have compact targeted guidance.
 
+## ActionSpec Authoring Pattern
+
+Domain-local specs should wrap the same typed route constructors used by the
+current meta route maps. The constructor call site stays familiar, and optional
+catalog metadata is added with `ActionRoute` copy helpers before the route is
+passed to `toolutil.NewActionSpec`.
+
+```go
+func ProjectSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
+  listRoute := toolutil.RouteAction(client, projects.List).
+    WithAliases("project search").
+    WithTags("project").
+    WithUsage("Use to list or search projects; use project.get when one project is known.").
+    WithRelatedActions("project.get").
+    WithParameterGuidance(map[string]toolutil.ParameterGuidance{
+      "search": {SemanticRole: "project_search_query"},
+    })
+
+  return []toolutil.ActionSpec{
+    toolutil.NewActionSpec("list", listRoute, toolutil.ActionSpecOptions{
+      ReadOnly:       true,
+      Idempotent:     true,
+      OpenWorld:      true,
+      OwnerPackage:   "projects",
+      IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_list_projects"},
+      ContentKind:    "list",
+    }),
+  }
+}
+```
+
+The helpers return copies, so callers can safely reuse base routes without
+sharing mutable schema, guidance, alias, tag, or related-action slices. When a
+spec wraps a route, route-local aliases, tags, usage, related actions, and
+parameter guidance become defaults; explicit `ActionSpecOptions` values may add
+or override the metadata for that spec.
+
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.

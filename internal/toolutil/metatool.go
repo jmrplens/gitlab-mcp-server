@@ -59,6 +59,10 @@ type ActionRoute struct {
 	InputSchema       map[string]any
 	OutputSchema      map[string]any
 	ParameterGuidance map[string]ParameterGuidance
+	Aliases           []string
+	Tags              []string
+	Usage             string
+	RelatedActions    []string
 }
 
 // ParameterGuidance carries compact model-facing hints for parameters that are
@@ -68,6 +72,36 @@ type ParameterGuidance struct {
 	ValueSource      string   `json:"value_source,omitempty"`
 	CommonConfusions []string `json:"common_confusions,omitempty"`
 	ExampleBinding   string   `json:"example_binding,omitempty"`
+}
+
+// WithParameterGuidance returns a copy of route with merged parameter guidance.
+func (route ActionRoute) WithParameterGuidance(guidance map[string]ParameterGuidance) ActionRoute {
+	route.ParameterGuidance = mergeActionSpecGuidance(route.ParameterGuidance, guidance)
+	return route
+}
+
+// WithAliases returns a copy of route with additional search aliases.
+func (route ActionRoute) WithAliases(aliases ...string) ActionRoute {
+	route.Aliases = appendNormalizedRouteStrings(route.Aliases, aliases...)
+	return route
+}
+
+// WithTags returns a copy of route with additional search tags.
+func (route ActionRoute) WithTags(tags ...string) ActionRoute {
+	route.Tags = appendNormalizedRouteStrings(route.Tags, tags...)
+	return route
+}
+
+// WithUsage returns a copy of route with a short model-facing usage hint.
+func (route ActionRoute) WithUsage(usage string) ActionRoute {
+	route.Usage = strings.TrimSpace(usage)
+	return route
+}
+
+// WithRelatedActions returns a copy of route with related canonical action IDs.
+func (route ActionRoute) WithRelatedActions(actions ...string) ActionRoute {
+	route.RelatedActions = appendNormalizedRouteStrings(route.RelatedActions, actions...)
+	return route
 }
 
 // ActionMap maps action names to their route definitions (handler + metadata).
@@ -281,9 +315,39 @@ func cloneActionMap(routes ActionMap) ActionMap {
 		route.InputSchema = cloneSchemaMap(route.InputSchema)
 		route.OutputSchema = cloneSchemaMap(route.OutputSchema)
 		route.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
+		route.Aliases = cloneRouteStrings(route.Aliases)
+		route.Tags = cloneRouteStrings(route.Tags)
+		route.RelatedActions = cloneRouteStrings(route.RelatedActions)
 		out[action] = route
 	}
 	return out
+}
+
+func cloneRouteStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
+
+func appendNormalizedRouteStrings(existing []string, values ...string) []string {
+	merged := make([]string, 0, len(existing)+len(values))
+	seen := make(map[string]struct{}, len(existing)+len(values))
+	for _, value := range append(cloneRouteStrings(existing), values...) {
+		value = strings.TrimSpace(strings.ToLower(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		merged = append(merged, value)
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
 }
 
 func cloneParameterGuidanceMap(guidance map[string]ParameterGuidance) map[string]ParameterGuidance {

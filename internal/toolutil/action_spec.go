@@ -63,13 +63,14 @@ type ActionSpecOptions struct {
 
 // NewActionSpec creates a defensive canonical action specification.
 func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	route = cloneActionRoute(route)
 	return ActionSpec{
 		Name:                   strings.TrimSpace(name),
-		Route:                  cloneActionRoute(route),
-		Aliases:                normalizeActionSpecStrings(opts.Aliases),
-		Tags:                   normalizeActionSpecStrings(opts.Tags),
-		Usage:                  opts.Usage,
-		RelatedActions:         normalizeActionSpecStrings(opts.RelatedActions),
+		Route:                  route,
+		Aliases:                mergeActionSpecStrings(route.Aliases, opts.Aliases),
+		Tags:                   mergeActionSpecStrings(route.Tags, opts.Tags),
+		Usage:                  firstNonEmptyString(opts.Usage, route.Usage),
+		RelatedActions:         mergeActionSpecStrings(route.RelatedActions, opts.RelatedActions),
 		ParameterGuidance:      cloneParameterGuidanceMap(opts.ParameterGuidance),
 		ReadOnly:               opts.ReadOnly,
 		Destructive:            route.Destructive || opts.Destructive,
@@ -208,6 +209,19 @@ func normalizeActionSpecStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func mergeActionSpecStrings(left, right []string) []string {
+	return normalizeActionSpecStrings(append(cloneRouteStrings(left), right...))
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func validateActionSpecGuidance(spec ActionSpec) error {

@@ -548,6 +548,18 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 	if action.SchemaURI == "" {
 		action.SchemaURI = toolutil.MetaSchemaURI(action.ToolName, action.Name)
 	}
+	if len(action.Aliases) == 0 {
+		action.Aliases = action.Route.Aliases
+	}
+	if len(action.Tags) == 0 {
+		action.Tags = action.Route.Tags
+	}
+	if action.Usage == "" {
+		action.Usage = action.Route.Usage
+	}
+	if len(action.RelatedActions) == 0 {
+		action.RelatedActions = action.Route.RelatedActions
+	}
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)

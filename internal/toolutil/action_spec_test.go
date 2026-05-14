@@ -82,6 +82,44 @@ func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	}
 }
 
+func TestActionRouteFluentMetadata_FlowsToActionSpec(t *testing.T) {
+	guidance := map[string]ParameterGuidance{
+		"project_id": {SemanticRole: "scope_project", CommonConfusions: []string{"route confusion"}},
+	}
+	route := ActionRoute{InputSchema: map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+	}}.
+		WithParameterGuidance(guidance).
+		WithAliases(" Project Search ", "project search").
+		WithTags(" Project ", "project").
+		WithUsage(" Use when searching projects. ").
+		WithRelatedActions(" Project.Get ")
+
+	guidance["project_id"] = ParameterGuidance{SemanticRole: "changed"}
+	spec := NewActionSpec("list", route, ActionSpecOptions{})
+	route.Aliases[0] = "changed"
+	route.Tags[0] = "changed"
+	route.RelatedActions[0] = "changed"
+	route.ParameterGuidance["project_id"] = ParameterGuidance{SemanticRole: "changed"}
+
+	if len(spec.Aliases) != 1 || spec.Aliases[0] != "project search" {
+		t.Fatalf("aliases = %+v, want route aliases", spec.Aliases)
+	}
+	if len(spec.Tags) != 1 || spec.Tags[0] != "project" {
+		t.Fatalf("tags = %+v, want route tags", spec.Tags)
+	}
+	if spec.Usage != "Use when searching projects." {
+		t.Fatalf("Usage = %q, want trimmed route usage", spec.Usage)
+	}
+	if len(spec.RelatedActions) != 1 || spec.RelatedActions[0] != "project.get" {
+		t.Fatalf("RelatedActions = %+v, want route related action", spec.RelatedActions)
+	}
+	if got := spec.Route.ParameterGuidance["project_id"].SemanticRole; got != "scope_project" {
+		t.Fatalf("route guidance semantic role = %q, want cloned route guidance", got)
+	}
+}
+
 func TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields(t *testing.T) {
 	route := ActionRoute{
 		InputSchema: map[string]any{
