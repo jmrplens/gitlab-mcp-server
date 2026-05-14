@@ -81,6 +81,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
@@ -114,6 +115,7 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
+		buildAnalyzeActionSpecs,
 		buildAttestationActionSpecs,
 		buildAuditEventActionSpecs,
 		buildBranchActionSpecs,
@@ -161,6 +163,10 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 	specs = append(specs, accessrequests.ActionSpecs(client)...)
 	specs = append(specs, invites.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_access", specs)
+}
+
+func buildAnalyzeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_analyze", samplingtools.ActionSpecs(client))
 }
 
 func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
