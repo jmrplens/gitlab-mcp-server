@@ -7,11 +7,14 @@ import (
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -35,15 +38,22 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
+		buildBranchActionSpecs,
 		buildGroupActionSpecs,
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
+		buildTagActionSpecs,
 	}
 }
 
 func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_access", deploytokens.ActionSpecs(client))
+}
+
+func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := append(branches.ActionSpecs(client), branchrules.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_branch", specs)
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
@@ -63,6 +73,10 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+}
+
+func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_tag", tags.ActionSpecs(client))
 }
 
 func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecGroup {
