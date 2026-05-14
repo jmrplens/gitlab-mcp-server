@@ -13,9 +13,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploymentmergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
@@ -23,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
@@ -53,6 +58,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildBranchActionSpecs,
 		buildCICatalogActionSpecs,
 		buildCustomEmojiActionSpecs,
+		buildEnvironmentActionSpecs,
 		buildGroupActionSpecs,
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
@@ -80,6 +86,16 @@ func buildCICatalogActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpec
 
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_custom_emoji", customemoji.ActionSpecs(client))
+}
+
+func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 23)
+	specs = append(specs, environments.ActionSpecs(client)...)
+	specs = append(specs, protectedenvs.ActionSpecs(client)...)
+	specs = append(specs, freezeperiods.ActionSpecs(client)...)
+	specs = append(specs, deployments.ActionSpecs(client)...)
+	specs = append(specs, deploymentmergerequests.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_environment", specs)
 }
 
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
