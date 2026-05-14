@@ -64,6 +64,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/orbit"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
@@ -142,6 +143,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildMemberRoleActionSpecs,
 		buildModelRegistryActionSpecs,
 		buildMRReviewActionSpecs,
+		buildOrbitActionSpecs,
 		buildPackageActionSpecs,
 		buildPipelineActionSpecs,
 		buildProjectAliasActionSpecs,
@@ -171,6 +173,13 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 
 func buildAnalyzeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_analyze", samplingtools.ActionSpecs(client))
+}
+
+func buildOrbitActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise || client == nil || !client.IsGitLabDotCom() {
+		return nil
+	}
+	return actionSpecGroup("gitlab_orbit", orbit.ActionSpecs(client))
 }
 
 func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
