@@ -32,6 +32,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstatistics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
@@ -39,6 +41,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -73,6 +76,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildModelRegistryActionSpecs,
+		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
 		buildTagActionSpecs,
@@ -136,6 +140,14 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
+}
+
+func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 9)
+	specs = append(specs, uploads.ActionSpecs(client)...)
+	specs = append(specs, projectstatistics.ActionSpecs(client)...)
+	specs = append(specs, projectimportexport.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_project", specs)
 }
 
 func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
