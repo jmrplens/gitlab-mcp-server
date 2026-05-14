@@ -229,17 +229,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 // RegisterMeta registers the gitlab_search meta-tool with all search
 // scopes available in the GitLab Search API.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"code":           searchRoute(client, Code),
-		"merge_requests": searchRoute(client, MergeRequests),
-		"issues":         searchRoute(client, Issues),
-		"commits":        searchRoute(client, Commits),
-		"milestones":     searchRoute(client, Milestones),
-		"notes":          searchRoute(client, Notes),
-		"projects":       searchRoute(client, Projects),
-		"snippets":       searchRoute(client, Snippets),
-		"users":          searchRoute(client, Users),
-		"wiki":           searchRoute(client, Wiki),
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		panic(fmt.Sprintf("search action specs: %v", err))
 	}
 
 	toolutil.AddReadOnlyMetaTool(server, "gitlab_search", `Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.

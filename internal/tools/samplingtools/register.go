@@ -303,18 +303,9 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 // RegisterMeta registers a single gitlab_analyze meta-tool that consolidates
 // all 11 sampling analysis tools under one action-dispatched interface.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"mr_changes":         samplingRoute[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
-		"issue_summary":      samplingRoute[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
-		"release_notes":      samplingRoute[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
-		"pipeline_failure":   samplingRoute[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
-		"mr_review":          samplingRoute[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
-		"milestone_report":   samplingRoute[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
-		"ci_config":          samplingRoute[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
-		"issue_scope":        samplingRoute[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
-		"mr_security":        samplingRoute[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
-		"technical_debt":     samplingRoute[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
-		"deployment_history": samplingRoute[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory),
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		panic(fmt.Sprintf("sampling action specs: %v", err))
 	}
 
 	toolutil.AddReadOnlyMetaTool(server, "gitlab_analyze", `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).

@@ -6,6 +6,7 @@ package samplingtools
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -151,6 +152,40 @@ func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 		if route.OutputSchema == nil {
 			t.Fatalf("route %q OutputSchema is nil", action)
 		}
+	}
+}
+
+// TestRegisterMeta_UsesActionSpecs verifies that gitlab_analyze meta routes
+// are projected from canonical ActionSpec definitions while preserving schemas.
+func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, nil)
+	})
+	got := metaDefinitionRoutes(t, definitions, "gitlab_analyze")
+	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(nil))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("registered analyze route count = %d, want %d", len(got), len(want))
+	}
+	for actionName, wantRoute := range want {
+		t.Run(actionName, func(t *testing.T) {
+			gotRoute, ok := got[actionName]
+			if !ok {
+				t.Fatalf("registered meta routes missing %q", actionName)
+			}
+			if gotRoute.Destructive != wantRoute.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			}
+			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+				t.Fatal("input schema differs from ActionSpec projection")
+			}
+			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+				t.Fatal("output schema differs from ActionSpec projection")
+			}
+		})
 	}
 }
 

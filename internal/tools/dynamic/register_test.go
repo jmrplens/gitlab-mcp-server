@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -741,6 +742,70 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	assertSchemaHasProperties(t, userList.InputSchema, "search", "username", "per_page")
 	if userList.OutputSchema == nil {
 		t.Fatal("user.list OutputSchema is nil")
+	}
+}
+
+// TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas verifies
+// that delegated meta-tool domains migrated to ActionSpec remain discoverable
+// through Dynamic search and describe with the same catalog-backed schemas.
+func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testing.T) {
+	catalog, registry := gitLabDotComEnterpriseRegistry(t)
+	actionIDs := []string{
+		"search.code",
+		"runner.enable_project",
+		"analyze.mr_changes",
+		"orbit.status",
+	}
+
+	for _, actionID := range actionIDs {
+		t.Run("search/"+actionID, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: actionID, Limit: 20})
+			if err != nil {
+				t.Fatalf("Search(%q) error = %v", actionID, err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search(%q) result = %+v, want non-error", actionID, result)
+			}
+			assertSearchResultsContain(t, output.Results, actionID)
+		})
+	}
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Actions: actionIDs})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	if output.Count != len(actionIDs) {
+		t.Fatalf("Describe() Count = %d, want %d", output.Count, len(actionIDs))
+	}
+
+	for _, actionID := range actionIDs {
+		description := actionDescriptionByID(t, output, actionID)
+		catalogAction, ok := catalog.Action(actioncatalog.ActionID(actionID))
+		if !ok {
+			t.Fatalf("catalog missing %s", actionID)
+		}
+		if !catalogAction.SpecBacked {
+			t.Fatalf("%s SpecBacked = false, want true", actionID)
+		}
+		assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
+		if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
+			t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
+		}
+		assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
+	}
+
+	searchCode := actionDescriptionByID(t, output, "search.code")
+	assertSchemaHasProperties(t, searchCode.InputSchema, "query", "search_type")
+
+	runnerEnableProject := actionDescriptionByID(t, output, "runner.enable_project")
+	if got := runnerEnableProject.ParamGuidance["runner_id"].SemanticRole; got != "runner_identifier" {
+		t.Fatalf("runner.enable_project runner_id semantic role = %q, want runner_identifier", got)
+	}
+	if got := runnerEnableProject.ParamGuidance["project_id"].SemanticRole; got != "scope_owner_project" {
+		t.Fatalf("runner.enable_project project_id semantic role = %q, want scope_owner_project", got)
 	}
 }
 
@@ -2504,6 +2569,23 @@ func realCatalogRegistry(t *testing.T) *Registry {
 	return NewRegistryFromCatalog(catalog)
 }
 
+func gitLabDotComEnterpriseRegistry(t *testing.T) (*actioncatalog.Catalog, *Registry) {
+	t.Helper()
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken(gitlab.com) error = %v", err)
+	}
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(gitlab.com enterprise) error = %v", err)
+	}
+	catalog, err = AddStandaloneCatalog(catalog, client, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog(gitlab.com enterprise) error = %v", err)
+	}
+	return catalog, NewRegistryFromCatalog(catalog)
+}
+
 func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...string) {
 	t.Helper()
 	for _, actionID := range want {
@@ -2560,6 +2642,15 @@ func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...str
 		if _, ok := properties[name]; !ok {
 			t.Fatalf("schema properties = %v, want %q", sortedPropertyNames(properties), name)
 		}
+	}
+}
+
+func assertSchemaPropertyNamesEqual(t *testing.T, actionID string, gotSchema, wantSchema map[string]any) {
+	t.Helper()
+	gotNames := sortedPropertyNames(schemaProperties(gotSchema))
+	wantNames := sortedPropertyNames(schemaProperties(wantSchema))
+	if !slices.Equal(gotNames, wantNames) {
+		t.Fatalf("%s schema properties = %v, want %v", actionID, gotNames, wantNames)
 	}
 }
 

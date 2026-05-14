@@ -2,6 +2,7 @@ package orbit
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -108,12 +109,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_orbit meta-tool. Callers gate this package to GitLab.com and the Enterprise catalog.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"status":       toolutil.RouteAction(client, Status),
-		"schema":       toolutil.RouteAction(client, Schema),
-		"tools":        toolutil.RouteAction(client, Tools),
-		"query":        toolutil.RouteAction(client, Query),
-		"graph_status": toolutil.RouteAction(client, GraphStatus),
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		panic(fmt.Sprintf("orbit action specs: %v", err))
 	}
 
 	toolutil.AddReadOnlyMetaTool(server, "gitlab_orbit", `Experimental GitLab.com-only Orbit Knowledge Graph operations. Read-only.

@@ -1753,6 +1753,43 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 	}
 }
 
+// TestRegisterMeta_UsesActionSpecs verifies that gitlab_search meta routes are
+// projected from the canonical ActionSpec definitions.
+func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	definitions := toolutil.CaptureMetaToolDefinitions(func() {
+		RegisterMeta(nil, client)
+	})
+	got := searchMetaRoutesFromDefinitions(t, definitions)
+	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("registered search route count = %d, want %d", len(got), len(want))
+	}
+	for actionName, wantRoute := range want {
+		t.Run(actionName, func(t *testing.T) {
+			gotRoute, ok := got[actionName]
+			if !ok {
+				t.Fatalf("registered meta routes missing %q", actionName)
+			}
+			if gotRoute.Destructive != wantRoute.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			}
+			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+				t.Fatal("input schema differs from ActionSpec projection")
+			}
+			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+				t.Fatal("output schema differs from ActionSpec projection")
+			}
+		})
+	}
+}
+
 func searchMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
 	t.Helper()
 	for _, definition := range definitions {

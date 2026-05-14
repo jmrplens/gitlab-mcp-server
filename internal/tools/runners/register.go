@@ -8,9 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -293,44 +290,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_runner meta-tool with all runner actions.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := toolutil.ActionMap{
-		"list":                     toolutil.RouteAction(client, List),
-		"list_all":                 toolutil.RouteAction(client, ListAll),
-		"get":                      toolutil.RouteAction(client, Get),
-		"update":                   toolutil.RouteAction(client, Update),
-		"remove":                   toolutil.DestructiveVoidAction(client, Remove),
-		"jobs":                     toolutil.RouteAction(client, ListJobs),
-		"list_project":             toolutil.RouteAction(client, ListProject),
-		"enable_project":           toolutil.RouteAction(client, EnableProject),
-		"disable_project":          toolutil.DestructiveVoidAction(client, DisableProject),
-		"list_group":               toolutil.RouteAction(client, ListGroup),
-		"register":                 toolutil.RouteAction(client, Register),
-		"delete_registered":        toolutil.DestructiveVoidAction(client, DeleteByID),
-		"delete_by_token":          toolutil.DestructiveVoidAction(client, DeleteByToken),
-		"verify":                   toolutil.RouteVoidAction(client, Verify),
-		"reset_token":              toolutil.RouteAction(client, ResetAuthToken),
-		"reset_instance_reg_token": toolutil.RouteAction(client, ResetInstanceRegToken),
-		"reset_group_reg_token":    toolutil.RouteAction(client, ResetGroupRegToken),
-		"reset_project_reg_token":  toolutil.RouteAction(client, ResetProjectRegToken),
-		"list_managers":            toolutil.RouteAction(client, ListManagers),
-		// Runner controller CRUD (admin, experimental)
-		"controller_list":   toolutil.RouteAction(client, runnercontrollers.List),
-		"controller_get":    toolutil.RouteAction(client, runnercontrollers.Get),
-		"controller_create": toolutil.RouteAction(client, runnercontrollers.Create),
-		"controller_update": toolutil.RouteAction(client, runnercontrollers.Update),
-		"controller_delete": toolutil.DestructiveVoidAction(client, runnercontrollers.Delete),
-		// Runner controller scope management
-		"controller_scope_list":            toolutil.RouteAction(client, runnercontrollerscopes.List),
-		"controller_scope_add_instance":    toolutil.RouteAction(client, runnercontrollerscopes.AddInstanceScope),
-		"controller_scope_remove_instance": toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
-		"controller_scope_add_runner":      toolutil.RouteAction(client, runnercontrollerscopes.AddRunnerScope),
-		"controller_scope_remove_runner":   toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
-		// Runner controller token management
-		"controller_token_list":   toolutil.RouteAction(client, runnercontrollertokens.List),
-		"controller_token_get":    toolutil.RouteAction(client, runnercontrollertokens.Get),
-		"controller_token_create": toolutil.RouteAction(client, runnercontrollertokens.Create),
-		"controller_token_rotate": toolutil.RouteAction(client, runnercontrollertokens.Rotate),
-		"controller_token_revoke": toolutil.DestructiveVoidAction(client, runnercontrollertokens.Revoke),
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		panic(fmt.Sprintf("runner action specs: %v", err))
 	}
 
 	toolutil.AddMetaTool(server, "gitlab_runner", `Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
