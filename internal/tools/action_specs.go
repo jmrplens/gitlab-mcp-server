@@ -48,6 +48,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
@@ -106,6 +110,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildModelRegistryActionSpecs,
+		buildMRReviewActionSpecs,
 		buildPackageActionSpecs,
 		buildPipelineActionSpecs,
 		buildProjectActionSpecs,
@@ -190,6 +195,15 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
+}
+
+func buildMRReviewActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 23)
+	specs = append(specs, mrnotes.ActionSpecs(client)...)
+	specs = append(specs, mrdiscussions.ActionSpecs(client)...)
+	specs = append(specs, mrchanges.ActionSpecs(client)...)
+	specs = append(specs, mrdraftnotes.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_mr_review", specs)
 }
 
 func buildPackageActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
