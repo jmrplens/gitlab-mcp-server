@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/containerregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dependencies"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploykeys"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploymentmergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
@@ -106,6 +107,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildCICatalogActionSpecs,
 		buildCIVariableActionSpecs,
 		buildCustomEmojiActionSpecs,
+		buildDependencyActionSpecs,
 		buildEnvironmentActionSpecs,
 		buildFeatureFlagsActionSpecs,
 		buildGroupActionSpecs,
@@ -158,6 +160,13 @@ func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_custom_emoji", customemoji.ActionSpecs(client))
+}
+
+func buildDependencyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_dependency", dependencies.ActionSpecs(client))
 }
 
 func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
