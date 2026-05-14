@@ -12,13 +12,12 @@ import (
 
 // RegisterTools registers all Application Statistics MCP tools.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_application_statistics",
-		Title:       toolutil.TitleFromName("gitlab_get_application_statistics"),
-		Description: "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_server_status.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconAnalytics,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	specs := ActionSpecs(client)
+	statisticsTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconAnalytics})
+	}
+
+	mcp.AddTool(server, statisticsTool("gitlab_get_application_statistics", "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_server_status."), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_application_statistics", start, err)
