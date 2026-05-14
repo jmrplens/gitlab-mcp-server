@@ -53,3 +53,15 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 		t.Fatalf("route guidance = %+v, want projected spec guidance", action.Route.ParameterGuidance)
 	}
 }
+
+func TestActionsFromSpecs_RejectsInvalidSpecs(t *testing.T) {
+	if _, err := ActionsFromSpecs([]toolutil.ActionSpec{{Name: ""}}); err == nil {
+		t.Fatal("ActionsFromSpecs() error = nil, want invalid spec rejection")
+	}
+}
+
+func TestGroupFromSpecs_PropagatesSpecProjectionErrors(t *testing.T) {
+	if _, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{{Name: ""}}); err == nil {
+		t.Fatal("GroupFromSpecs() error = nil, want invalid spec rejection")
+	}
+}

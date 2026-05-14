@@ -2,8 +2,10 @@ package dynamic
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -82,4 +84,49 @@ func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	if _, ok := merged["gitlab_project"]["get"]; !ok {
 		t.Fatal("existing mapping gitlab_project.get was removed")
 	}
+}
+
+func TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups(t *testing.T) {
+	testCases := []struct {
+		name string
+		seed actioncatalog.Group
+		want string
+	}{
+		{
+			name: "discover duplicate",
+			seed: seedStandaloneGroup(t, "gitlab_discover_project", "resolve"),
+			want: "gitlab_discover_project.resolve",
+		},
+		{
+			name: "interactive duplicate",
+			seed: seedStandaloneGroup(t, "gitlab_interactive", "issue_create"),
+			want: "gitlab_interactive",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := actioncatalog.NewCatalog()
+			if err := catalog.AddGroup(tc.seed); err != nil {
+				t.Fatalf("AddGroup(seed) error = %v", err)
+			}
+
+			_, err := AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("AddStandaloneCatalog() error = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func seedStandaloneGroup(t *testing.T, toolName, actionName string) actioncatalog.Group {
+	t.Helper()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: toolName})
+	group.SetAction(actioncatalog.Action{Name: actionName, Route: toolutil.ActionRoute{
+		Handler: func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]any{}, nil
+		},
+		InputSchema: map[string]any{"type": "object"},
+	}})
+	return group
 }

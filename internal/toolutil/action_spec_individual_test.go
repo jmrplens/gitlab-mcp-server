@@ -95,6 +95,10 @@ func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 		spec ActionSpec
 	}{
 		{
+			name: "invalid action spec",
+			spec: ActionSpec{},
+		},
+		{
 			name: "missing individual tool name",
 			spec: NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{ReadOnly: true}),
 		},

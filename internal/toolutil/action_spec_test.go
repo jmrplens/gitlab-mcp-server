@@ -82,6 +82,21 @@ func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	}
 }
 
+func TestActionSpecsToMap_ProjectsValidSpecsAndPanicsOnInvalid(t *testing.T) {
+	valid := NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{ReadOnly: true})
+	routes := ActionSpecsToMap([]ActionSpec{valid})
+	if _, ok := routes["get"]; !ok {
+		t.Fatal("ActionSpecsToMap() missing get route")
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("ActionSpecsToMap() did not panic for invalid spec")
+		}
+	}()
+	_ = ActionSpecsToMap([]ActionSpec{{Name: ""}})
+}
+
 func TestActionSpecsToMapWithError_RejectsAliasMatchingCanonicalActionName(t *testing.T) {
 	specs := []ActionSpec{
 		NewActionSpec("list", ActionRoute{}, ActionSpecOptions{Aliases: []string{"show"}}),
@@ -186,6 +201,57 @@ func TestActionSpecValidate_RejectsUnknownGuidanceParameter(t *testing.T) {
 
 	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "unknown parameter") {
 		t.Fatalf("Validate() error = %v, want unknown parameter rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsGuidanceWithoutInputSchema(t *testing.T) {
+	spec := NewActionSpec("get", ActionRoute{}, ActionSpecOptions{
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+	})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "without an input schema") {
+		t.Fatalf("Validate() error = %v, want missing schema rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsEmptyName(t *testing.T) {
+	if err := (ActionSpec{}).Validate(); err == nil || !strings.Contains(err.Error(), "name is required") {
+		t.Fatalf("Validate() error = %v, want missing name rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsReadOnlyDestructive(t *testing.T) {
+	spec := NewActionSpec("delete", ActionRoute{Destructive: true}, ActionSpecOptions{ReadOnly: true, Destructive: true})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "read-only and destructive") {
+		t.Fatalf("Validate() error = %v, want read-only destructive rejection", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsConflictingAliases(t *testing.T) {
+	testCases := []struct {
+		name string
+		spec ActionSpec
+		want string
+	}{
+		{
+			name: "alias duplicates action name",
+			spec: NewActionSpec("list", ActionRoute{}, ActionSpecOptions{Aliases: []string{"list"}}),
+			want: "duplicates its action name",
+		},
+		{
+			name: "alias also related action",
+			spec: NewActionSpec("list", ActionRoute{}, ActionSpecOptions{Aliases: []string{"project.get"}, RelatedActions: []string{"project.get"}}),
+			want: "also appears in related actions",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.spec.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() error = %v, want containing %q", err, tc.want)
+			}
+		})
 	}
 }
 
