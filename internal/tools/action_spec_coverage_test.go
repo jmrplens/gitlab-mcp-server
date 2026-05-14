@@ -541,14 +541,6 @@ var temporaryActionSpecMigrationAllowlist = map[actioncatalog.ActionID]struct{}{
 	"user.todo_mark_done":                            {},
 	"user.unban":                                     {},
 	"user.unblock":                                   {},
-	"vulnerability.confirm":                          {},
-	"vulnerability.dismiss":                          {},
-	"vulnerability.get":                              {},
-	"vulnerability.list":                             {},
-	"vulnerability.pipeline_security_summary":        {},
-	"vulnerability.resolve":                          {},
-	"vulnerability.revert":                           {},
-	"vulnerability.severity_count":                   {},
 }
 
 func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {

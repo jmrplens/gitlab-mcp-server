@@ -89,6 +89,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -147,6 +148,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildSnippetActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
+		buildVulnerabilityActionSpecs,
 		buildWikiActionSpecs,
 	}
 }
@@ -406,6 +408,13 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	specs = append(specs, licensetemplates.ActionSpecs(client)...)
 	specs = append(specs, projecttemplates.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_template", specs)
+}
+
+func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	return actionSpecGroup("gitlab_vulnerability", vulnerabilities.ActionSpecs(client))
 }
 
 func buildWikiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
