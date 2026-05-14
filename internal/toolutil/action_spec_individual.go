@@ -48,16 +48,15 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 		Name:         name,
 		Title:        title,
 		Description:  description,
-		Annotations:  annotationsFromActionSpec(spec, title),
+		Annotations:  annotationsFromActionSpec(spec),
 		InputSchema:  route.InputSchema,
 		OutputSchema: route.OutputSchema,
 		Icons:        append([]mcp.Icon(nil), opts.Icons...),
 	}, nil
 }
 
-func annotationsFromActionSpec(spec ActionSpec, title string) *mcp.ToolAnnotations {
+func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{
-		Title:           title,
 		ReadOnlyHint:    spec.ReadOnly,
 		DestructiveHint: new(spec.Destructive),
 		IdempotentHint:  spec.Idempotent,

@@ -1,9 +1,12 @@
 package tools
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
@@ -94,6 +97,43 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 	}
 }
 
+func TestIndividualToolProjection_RepresentativeDomainParity(t *testing.T) {
+	session := newMCPSession(t, auditHandler(), true)
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf(fmtListToolsErr, err)
+	}
+	toolsByName := make(map[string]*mcp.Tool, len(result.Tools))
+	for _, tool := range result.Tools {
+		toolsByName[tool.Name] = tool
+	}
+
+	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(nil, true))
+	if err != nil {
+		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
+	}
+
+	for _, toolName := range []string{"gitlab_project", "gitlab_issue", "gitlab_merge_request", "gitlab_job", "gitlab_group"} {
+		t.Run(toolName, func(t *testing.T) {
+			for _, spec := range specsByTool[toolName] {
+				individualName := strings.TrimSpace(spec.IndividualTool.Name)
+				actual, ok := toolsByName[individualName]
+				if !ok {
+					t.Fatalf("%s.%s individual tool %q is not registered", toolName, spec.Name, individualName)
+				}
+				projected, projectionErr := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{
+					Description: actual.Description,
+					Icons:       actual.Icons,
+				})
+				if projectionErr != nil {
+					t.Fatalf("%s.%s projection error = %v", toolName, spec.Name, projectionErr)
+				}
+				assertProjectedToolParity(t, toolName, spec.Name, actual, projected)
+			}
+		})
+	}
+}
+
 func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes toolutil.ActionMap) {
 	t.Helper()
 	if len(specRoutes) != len(captured) {
@@ -153,6 +193,55 @@ func assertGuidanceKeys(t *testing.T, toolName, actionName string, guidance map[
 	sort.Strings(want)
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("%s.%s guidance keys = %v, want %v", toolName, actionName, got, want)
+	}
+}
+
+func assertProjectedToolParity(t *testing.T, toolName, actionName string, actual, projected *mcp.Tool) {
+	t.Helper()
+	if projected.Name != actual.Name {
+		t.Fatalf("%s.%s projected name = %q, want %q", toolName, actionName, projected.Name, actual.Name)
+	}
+	if projected.Title != actual.Title {
+		t.Fatalf("%s.%s projected title = %q, want %q", toolName, actionName, projected.Title, actual.Title)
+	}
+	if projected.Description != actual.Description {
+		t.Fatalf("%s.%s projected description drift", toolName, actionName)
+	}
+	if projected.InputSchema == nil {
+		t.Fatalf("%s.%s projected input schema is nil", toolName, actionName)
+	}
+	if projected.OutputSchema == nil {
+		t.Fatalf("%s.%s projected output schema is nil", toolName, actionName)
+	}
+	assertProjectedToolAnnotations(t, toolName, actionName, projected.Annotations)
+	assertToolIconsParity(t, toolName, actionName, actual.Icons, projected.Icons)
+}
+
+func assertProjectedToolAnnotations(t *testing.T, toolName, actionName string, projected *mcp.ToolAnnotations) {
+	t.Helper()
+	if projected == nil {
+		t.Fatalf("%s.%s projected annotations are nil", toolName, actionName)
+	}
+	if projected.DestructiveHint == nil {
+		t.Fatalf("%s.%s projected destructive annotation is nil", toolName, actionName)
+	}
+	if projected.OpenWorldHint == nil {
+		t.Fatalf("%s.%s projected open-world annotation is nil", toolName, actionName)
+	}
+	if projected.ReadOnlyHint && *projected.DestructiveHint {
+		t.Fatalf("%s.%s projected annotations are both read-only and destructive", toolName, actionName)
+	}
+}
+
+func assertToolIconsParity(t *testing.T, toolName, actionName string, actual, projected []mcp.Icon) {
+	t.Helper()
+	if len(projected) != len(actual) {
+		t.Fatalf("%s.%s projected icon count = %d, want %d", toolName, actionName, len(projected), len(actual))
+	}
+	for i := range actual {
+		if projected[i].Source != actual[i].Source || projected[i].MIMEType != actual[i].MIMEType || strings.Join(projected[i].Sizes, ",") != strings.Join(actual[i].Sizes, ",") || projected[i].Theme != actual[i].Theme {
+			t.Fatalf("%s.%s projected icon[%d] = %+v, want %+v", toolName, actionName, i, projected[i], actual[i])
+		}
 	}
 }
 
