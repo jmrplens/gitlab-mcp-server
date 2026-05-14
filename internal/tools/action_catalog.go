@@ -16,6 +16,7 @@ type ActionCatalogOptions struct {
 	Enterprise bool
 	IncludeMCP bool
 	Updater    *autoupdate.Updater
+	SpecGroups []ActionSpecGroup
 }
 
 // BuildActionCatalog builds the canonical action catalog for catalog-backed
@@ -24,19 +25,28 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
 		registerAllMetaGroups(nil, client, opts.Enterprise)
 	})
+	specGroups := append(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups...)
+	specsByTool, specErr := actionSpecGroupsByTool(specGroups)
+	if specErr != nil {
+		return nil, fmt.Errorf("collect action specs: %w", specErr)
+	}
 	catalog := actioncatalog.NewCatalog()
 	for _, definition := range definitions {
-		if err := catalog.AddGroup(groupFromMetaToolDefinition(definition)); err != nil {
-			return nil, fmt.Errorf("add meta tool group %q: %w", definition.Name, err)
+		group, groupErr := groupFromMetaToolDefinition(definition, specsByTool[definition.Name])
+		if groupErr != nil {
+			return nil, fmt.Errorf("build meta tool group %q: %w", definition.Name, groupErr)
+		}
+		if addErr := catalog.AddGroup(group); addErr != nil {
+			return nil, fmt.Errorf("add meta tool group %q: %w", definition.Name, addErr)
 		}
 	}
 	if opts.IncludeMCP {
-		if err := catalog.AddGroup(BuildMCPActionGroup(client, opts.Updater)); err != nil {
-			return nil, fmt.Errorf("add MCP action group: %w", err)
+		if addErr := catalog.AddGroup(BuildMCPActionGroup(client, opts.Updater)); addErr != nil {
+			return nil, fmt.Errorf("add MCP action group: %w", addErr)
 		}
 	}
-	if err := catalog.Validate(); err != nil {
-		return nil, fmt.Errorf("validate action catalog: %w", err)
+	if validateErr := catalog.Validate(); validateErr != nil {
+		return nil, fmt.Errorf("validate action catalog: %w", validateErr)
 	}
 	return catalog, nil
 }
@@ -45,7 +55,7 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 // actioncatalog.Group built with actioncatalog.NewGroup and populated with
 // group.SetAction. Route names are sorted first so catalog action ordering is
 // deterministic across map iterations.
-func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actioncatalog.Group {
+func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition, specs []toolutil.ActionSpec) (actioncatalog.Group, error) {
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName:     def.Name,
 		Description:  def.Description,
@@ -53,16 +63,37 @@ func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition) actioncatalog.
 		ReadOnly:     def.ReadOnly,
 		FormatResult: def.FormatResult,
 	})
+	specActions, err := actioncatalog.ActionsFromSpecs(specs)
+	if err != nil {
+		return actioncatalog.Group{}, err
+	}
+	specActionByName := make(map[string]actioncatalog.Action, len(specActions))
+	for _, action := range specActions {
+		specActionByName[action.Name] = action
+	}
 	actionNames := make([]string, 0, len(def.Routes))
 	for actionName := range def.Routes {
 		actionNames = append(actionNames, actionName)
 	}
 	sort.Strings(actionNames)
 	for _, actionName := range actionNames {
+		if action, ok := specActionByName[actionName]; ok {
+			group.SetAction(action)
+			delete(specActionByName, actionName)
+			continue
+		}
 		route := withCatalogParameterGuidance(def.Name, actionName, def.Routes[actionName])
 		group.SetAction(actioncatalog.Action{Name: actionName, Route: route})
 	}
-	return group
+	if len(specActionByName) > 0 {
+		missing := make([]string, 0, len(specActionByName))
+		for actionName := range specActionByName {
+			missing = append(missing, actionName)
+		}
+		sort.Strings(missing)
+		return actioncatalog.Group{}, fmt.Errorf("spec actions missing captured routes: %v", missing)
+	}
+	return group, nil
 }
 
 func withCatalogParameterGuidance(toolName, actionName string, route toolutil.ActionRoute) toolutil.ActionRoute {
@@ -99,6 +130,8 @@ func withCatalogParameterGuidance(toolName, actionName string, route toolutil.Ac
 }
 
 func catalogParameterGuidance(actionID string) map[string]toolutil.ParameterGuidance {
+	// Legacy migration bridge: remove this overlay in TASK-054 after all entries
+	// move into canonical ActionSpec definitions owned by their domains.
 	switch actionID {
 	case "job.token_scope_remove_project":
 		return map[string]toolutil.ParameterGuidance{
