@@ -9,11 +9,17 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -45,6 +51,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildTagActionSpecs,
+		buildTemplateActionSpecs,
 		buildWikiActionSpecs,
 	}
 }
@@ -79,6 +86,17 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_tag", tags.ActionSpecs(client))
+}
+
+func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 12)
+	specs = append(specs, cilint.ActionSpecs(client)...)
+	specs = append(specs, ciyamltemplates.ActionSpecs(client)...)
+	specs = append(specs, dockerfiletemplates.ActionSpecs(client)...)
+	specs = append(specs, gitignoretemplates.ActionSpecs(client)...)
+	specs = append(specs, licensetemplates.ActionSpecs(client)...)
+	specs = append(specs, projecttemplates.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_template", specs)
 }
 
 func buildWikiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
