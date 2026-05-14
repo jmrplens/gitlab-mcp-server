@@ -32,6 +32,9 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 	if route.OutputSchema == nil {
 		return nil, fmt.Errorf("individual tool %q output schema is required", name)
 	}
+	applyIndividualRequiredFields(route)
+	normalizeSchemaDescriptions(route.InputSchema)
+	lockdownSchemaNode(route.InputSchema)
 	title := strings.TrimSpace(spec.IndividualTool.Title)
 	if title == "" {
 		title = TitleFromName(name)
@@ -53,6 +56,19 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 		OutputSchema: route.OutputSchema,
 		Icons:        append([]mcp.Icon(nil), opts.Icons...),
 	}, nil
+}
+
+func applyIndividualRequiredFields(route ActionRoute) {
+	if route.InputType == nil || route.InputSchema == nil {
+		return
+	}
+	schema := schemaForType(route.InputType)
+	required, ok := schema["required"]
+	if !ok {
+		delete(route.InputSchema, "required")
+		return
+	}
+	route.InputSchema["required"] = cloneSchemaValue(required)
 }
 
 func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {

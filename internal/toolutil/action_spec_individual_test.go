@@ -1,9 +1,13 @@
 package toolutil
 
 import (
+	"context"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 func TestIndividualToolFromActionSpec_ProjectsMetadata(t *testing.T) {
@@ -128,6 +132,84 @@ func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	}
 	if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
 		t.Fatalf("open-world annotation = %v, want override false", tool.Annotations.OpenWorldHint)
+	}
+}
+
+func TestIndividualToolFromActionSpec_LockdownsInputSchema(t *testing.T) {
+	inputSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string", "description": "Project ID,required"},
+		},
+	}
+	spec := NewActionSpec("current", ActionRoute{
+		InputSchema:  inputSchema,
+		OutputSchema: testActionSpecSchema("id"),
+	}, ActionSpecOptions{
+		ReadOnly:       true,
+		Idempotent:     true,
+		OwnerPackage:   "users",
+		IndividualTool: IndividualToolSpec{Name: "gitlab_user_current", Description: "Get the current user."},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	schema, schemaOK := tool.InputSchema.(map[string]any)
+	if !schemaOK {
+		t.Fatalf("tool input schema = %T, want map[string]any", tool.InputSchema)
+	}
+	properties, propertiesOK := schema["properties"].(map[string]any)
+	if !propertiesOK {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	projectID, projectOK := properties["project_id"].(map[string]any)
+	if !projectOK {
+		t.Fatalf("project_id property = %T, want map[string]any", properties["project_id"])
+	}
+	if projectID["description"] != "Project ID" {
+		t.Fatalf("project_id description = %q, want Project ID", projectID["description"])
+	}
+	if got, boolOK := schema["additionalProperties"].(bool); !boolOK || got {
+		t.Fatalf("schema additionalProperties = %#v, want false", schema["additionalProperties"])
+	}
+	if _, mutated := spec.Route.InputSchema["additionalProperties"]; mutated {
+		t.Fatal("projection mutated the spec input schema")
+	}
+}
+
+func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testing.T) {
+	type input struct {
+		ProjectID        string `json:"project_id" jsonschema:"Project ID,required"`
+		EnvironmentScope string `json:"environment_scope" jsonschema:"Filter by environment scope"`
+	}
+	route := RouteAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, input) (VoidOutput, error) {
+		return VoidOutput{}, nil
+	})
+	spec := NewActionSpec("get", route, ActionSpecOptions{
+		ReadOnly:       true,
+		Idempotent:     true,
+		OwnerPackage:   "ci_variables",
+		IndividualTool: IndividualToolSpec{Name: "gitlab_ci_variable_get", Description: "Get a CI/CD variable."},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	schema, schemaOK := tool.InputSchema.(map[string]any)
+	if !schemaOK {
+		t.Fatalf("tool input schema = %T, want map[string]any", tool.InputSchema)
+	}
+	required, requiredOK := schema["required"].([]any)
+	if !requiredOK {
+		t.Fatalf("schema required = %T, want []any", schema["required"])
+	}
+	for _, field := range []string{"project_id", "environment_scope"} {
+		if !slices.ContainsFunc(required, func(value any) bool { return value == field }) {
+			t.Fatalf("required fields = %#v, want %q", required, field)
+		}
 	}
 }
 

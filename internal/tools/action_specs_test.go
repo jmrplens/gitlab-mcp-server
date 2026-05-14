@@ -292,7 +292,7 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		}
 		if !schemaJSONEqual(t, name, want[index].InputSchema, got[index].InputSchema) {
 			if _, ok := knownIndividualProjectionSchemaGaps[name]; !ok {
-				diffs = append(diffs, "CHANGED "+name+" inputSchema")
+				diffs = append(diffs, schemaDiffMessage(t, name, want[index].InputSchema, got[index].InputSchema))
 			} else {
 				observedSchemaGaps[name] = struct{}{}
 			}
@@ -314,6 +314,19 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		sort.Strings(diffs)
 		t.Fatalf("generated individual snapshot parity drift against %s:\n%s", goldenPath, strings.Join(diffs, "\n"))
 	}
+}
+
+func schemaDiffMessage(t *testing.T, name string, want, got json.RawMessage) string {
+	t.Helper()
+	wantJSON, wantErr := normalizedSchemaJSON(want)
+	if wantErr != nil {
+		t.Fatalf("normalize want schema for %s: %v", name, wantErr)
+	}
+	gotJSON, gotErr := normalizedSchemaJSON(got)
+	if gotErr != nil {
+		t.Fatalf("normalize got schema for %s: %v", name, gotErr)
+	}
+	return "CHANGED " + name + " inputSchema:\n  old: " + string(wantJSON) + "\n  new: " + string(gotJSON)
 }
 
 func appendStaleProjectionGapDiffs(diffs *[]string, kind string, known map[string]string, observed map[string]struct{}) {
@@ -398,98 +411,7 @@ func normalizeSchemaValue(key string, value any) {
 
 var knownIndividualProjectionAnnotationGaps = map[string]string{}
 
-var knownIndividualProjectionSchemaGaps = map[string]string{
-	"gitlab_analyze_ci_configuration":          "ActionSpec schema preserves optional content_ref while historical individual snapshot marks it required",
-	"gitlab_analyze_mr_changes":                "ActionSpec schema omits sampling fields that historical individual snapshot marks required",
-	"gitlab_ci_lint":                           "ActionSpec schema preserves optional lint controls while historical individual snapshot marks them required",
-	"gitlab_ci_lint_project":                   "ActionSpec schema preserves optional lint controls while historical individual snapshot marks them required",
-	"gitlab_ci_variable_create":                "ActionSpec schema preserves optional variable controls while historical individual snapshot marks them required",
-	"gitlab_ci_variable_delete":                "ActionSpec schema preserves optional environment_scope while historical individual snapshot marks it required",
-	"gitlab_ci_variable_get":                   "ActionSpec schema preserves optional environment_scope while historical individual snapshot marks it required",
-	"gitlab_ci_variable_update":                "ActionSpec schema preserves optional variable controls while historical individual snapshot marks them required",
-	"gitlab_commit_cherry_pick":                "ActionSpec schema preserves optional branch controls while historical individual snapshot marks them required",
-	"gitlab_commit_revert":                     "ActionSpec schema preserves optional branch controls while historical individual snapshot marks them required",
-	"gitlab_create_cluster_agent_token":        "ActionSpec schema preserves optional token description while historical individual snapshot marks it required",
-	"gitlab_current_user_status":               "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_deploy_token_create_group":         "ActionSpec schema preserves optional deploy token controls while historical individual snapshot marks them required",
-	"gitlab_deploy_token_create_project":       "ActionSpec schema preserves optional deploy token controls while historical individual snapshot marks them required",
-	"gitlab_deploy_token_list_all":             "ActionSpec schema preserves optional pagination and filter controls while historical individual snapshot marks them required",
-	"gitlab_enable_disable_error_tracking":     "ActionSpec schema preserves optional setting values while historical individual snapshot marks them required",
-	"gitlab_find_technical_debt":               "ActionSpec schema preserves optional ref while historical individual snapshot marks it required",
-	"gitlab_generate_release_notes":            "ActionSpec schema preserves optional to ref while historical individual snapshot marks it required",
-	"gitlab_get_appearance":                    "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_application_statistics":        "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_avatar":                        "ActionSpec schema preserves optional avatar inputs while historical individual snapshot marks them required",
-	"gitlab_get_compliance_policy_settings":    "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_email":                         "ActionSpec schema preserves optional email ID shape differently from the historical individual snapshot",
-	"gitlab_get_group_issue_statistics":        "ActionSpec schema preserves optional issue filters while historical individual snapshot marks them required",
-	"gitlab_get_issue_statistics":              "ActionSpec schema preserves optional issue filters while historical individual snapshot marks them required",
-	"gitlab_get_license":                       "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_metadata":                      "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_metric_definitions":            "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_non_sql_metrics":               "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_project_issue_statistics":      "ActionSpec schema preserves optional issue filters while historical individual snapshot marks them required",
-	"gitlab_get_service_ping":                  "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_settings":                      "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_sidekiq_compound_metrics":      "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_sidekiq_job_stats":             "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_sidekiq_process_metrics":       "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_sidekiq_queue_metrics":         "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_get_usage_queries":                 "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_group_member_add":                  "ActionSpec schema preserves optional member fields while historical individual snapshot marks them required",
-	"gitlab_group_share":                       "ActionSpec schema preserves optional expires_at while historical individual snapshot marks it required",
-	"gitlab_group_variable_create":             "ActionSpec schema preserves optional variable controls while historical individual snapshot marks them required",
-	"gitlab_instance_variable_create":          "ActionSpec schema preserves optional variable controls while historical individual snapshot marks them required",
-	"gitlab_issue_link_create":                 "ActionSpec schema preserves optional target_project_id while historical individual snapshot marks it required",
-	"gitlab_job_download_artifacts":            "ActionSpec schema preserves optional artifact inputs while historical individual snapshot marks them required",
-	"gitlab_list_alert_metric_images":          "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_cluster_agent_tokens":         "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_cluster_agents":               "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_emails":                       "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_list_emails_for_user":              "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_error_tracking_client_keys":   "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_feature_definitions":          "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_list_features":                     "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_list_gpg_keys":                     "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_list_instance_member_roles":        "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_project_aliases":              "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_project_templates":            "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_secure_files":                 "ActionSpec schema preserves optional pagination shape differently from the historical individual snapshot",
-	"gitlab_list_system_hooks":                 "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_mr_approval_rule_create":           "ActionSpec schema preserves optional approver fields while historical individual snapshot marks them required",
-	"gitlab_mr_approval_rule_update":           "ActionSpec schema preserves optional approver fields while historical individual snapshot marks them required",
-	"gitlab_mr_dependency_create":              "ActionSpec schema preserves dependency ID requirements differently from the historical individual snapshot",
-	"gitlab_mr_dependency_delete":              "ActionSpec schema preserves dependency ID requirements differently from the historical individual snapshot",
-	"gitlab_notification_global_get":           "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_pages_domain_list_all":             "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_personal_access_token_get":         "ActionSpec schema preserves token ID shape differently from the historical individual snapshot",
-	"gitlab_personal_access_token_revoke_self": "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_pipeline_create":                   "ActionSpec schema preserves optional pipeline inputs while historical individual snapshot marks them required",
-	"gitlab_pipeline_trigger_create":           "ActionSpec schema preserves optional description while historical individual snapshot marks it required",
-	"gitlab_pipeline_trigger_run":              "ActionSpec schema preserves optional variables while historical individual snapshot marks them required",
-	"gitlab_project_member_add":                "ActionSpec schema preserves optional member fields while historical individual snapshot marks them required",
-	"gitlab_project_member_edit":               "ActionSpec schema preserves optional member fields while historical individual snapshot marks them required",
-	"gitlab_project_snippet_create":            "ActionSpec schema preserves optional snippet fields while historical individual snapshot marks them required",
-	"gitlab_runner_reset_instance_reg_token":   "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_search_code":                       "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_commits":                    "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_issues":                     "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_merge_requests":             "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_milestones":                 "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_notes":                      "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_projects":                   "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_snippets":                   "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_users":                      "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_search_wiki":                       "ActionSpec schema preserves search_type enum metadata differently from the historical individual snapshot",
-	"gitlab_set_feature_flag":                  "ActionSpec schema preserves optional feature flag gates while historical individual snapshot marks them required",
-	"gitlab_snippet_create":                    "ActionSpec schema preserves optional snippet fields while historical individual snapshot marks them required",
-	"gitlab_summarize_issue":                   "ActionSpec schema preserves required sampling fields differently from the historical individual snapshot",
-	"gitlab_todo_mark_all_done":                "ActionSpec schema preserves no-input shape differently from the historical individual snapshot",
-	"gitlab_update_alert_metric_image":         "ActionSpec schema preserves optional URL fields while historical individual snapshot marks them required",
-	"gitlab_update_settings":                   "ActionSpec schema preserves settings map shape differently from the historical individual snapshot",
-	"gitlab_upload_alert_metric_image":         "ActionSpec schema preserves optional url_text while historical individual snapshot marks it required",
-	"gitlab_user_current":                      "shared ActionSpec projections differ from the historical individual snapshot",
-}
+var knownIndividualProjectionSchemaGaps = map[string]string{}
 
 func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes toolutil.ActionMap) {
 	t.Helper()
