@@ -26,32 +26,22 @@ This skill is designed for the `Test Expert` agent or any agent tasked with incr
 
 ## Pipeline Overview
 
-```text
-┌────────────────────────────────────────────────────────┐
-│              INCREASE TEST COVERAGE                    │
-│  Orchestrates the full Research → Plan → Implement     │
-│  pipeline and tracks coverage progress                 │
-└─────────────────────┬──────────────────────────────────┘
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-┌───────────┐  ┌───────────┐  ┌───────────────┐
-│ RESEARCH  │  │   PLAN    │  │  IMPLEMENT    │
-│           │  │           │  │               │
-│ Measure   │  │ Prioritize│  │ Write tests   │
-│ coverage  │→ │ gaps by   │→ │ per phase     │
-│ & analyze │  │ package   │  │ & validate    │
-│ gaps      │  │           │  │               │
-└───────────┘  └───────────┘  └───────┬───────┘
-                                      │
-                              ┌───────┼───────┐
-                              ▼       ▼       ▼
-                          ┌───────┐┌──────┐┌───────┐
-                          │ BUILD ││ TEST ││ FIX   │
-                          │       ││      ││       │
-                          │go vet ││go    ││repair │
-                          │build  ││test  ││errors │
-                          └───────┘└──────┘└───────┘
+```mermaid
+flowchart TD
+    start[Increase test coverage]
+    research[Research\nMeasure coverage and analyze gaps]
+    plan[Plan\nPrioritize gaps by package]
+    implement[Implement\nWrite tests per phase]
+    build[Build\ngo vet and go build]
+    test[Test\ngo test]
+    fix[Fix\nRepair errors]
+
+    start --> research --> plan --> implement
+    implement --> build
+    implement --> test
+    implement --> fix
+    fix --> build
+    fix --> test
 ```
 
 ---

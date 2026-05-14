@@ -2,7 +2,6 @@ package resources
 
 import (
 	"context"
-	"maps"
 	"sort"
 	"strings"
 
@@ -83,13 +82,7 @@ func registerMetaSchemaTemplate(server *mcp.Server, routes map[string]toolutil.A
 // cloneMetaSchemaRoutes creates a shallow snapshot of route maps so resource
 // handlers do not observe later registration changes from other server builds.
 func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
-	out := make(map[string]toolutil.ActionMap, len(routes))
-	for tool, actions := range routes {
-		actionCopy := make(toolutil.ActionMap, len(actions))
-		maps.Copy(actionCopy, actions)
-		out[tool] = actionCopy
-	}
-	return out
+	return toolutil.CloneMetaSchemaRoutes(routes)
 }
 
 // buildMetaSchemaIndex builds a deterministic snapshot of all registered
@@ -114,22 +107,7 @@ func buildMetaSchemaIndex(routes map[string]toolutil.ActionMap) MetaSchemaIndex 
 // fallback object schema (with `additionalProperties: true` and a guidance
 // description) and true, so clients always get a usable JSON Schema.
 func lookupMetaActionSchema(routes map[string]toolutil.ActionMap, tool, action string) (map[string]any, bool) {
-	actions, ok := routes[tool]
-	if !ok {
-		return nil, false
-	}
-	route, ok := actions[action]
-	if !ok {
-		return nil, false
-	}
-	if route.InputSchema == nil {
-		return map[string]any{
-			"type":                 "object",
-			"description":          "This action has no captured parameter schema. Send an empty object {} or consult the meta-tool description for required fields.",
-			"additionalProperties": true,
-		}, true
-	}
-	return route.InputSchema, true
+	return toolutil.LookupMetaActionSchema(routes, tool, action)
 }
 
 // parseMetaSchemaURI extracts the {tool} and {action} segments from a

@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern for A/B reports, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
+| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |
@@ -152,6 +152,23 @@ timeout 180s go run ./cmd/eval_meta_tools \
   --compare dist/evaluation/meta-tools/snapshots/release-1.6.1/schema-base-read.md \
   --compare dist/evaluation/meta-tools/snapshots/current/schema-base-read.md \
   --out dist/evaluation/meta-tools/comparison/version-summary.md
+```
+
+Check Dynamic-3 call-efficiency gates from trace JSONL without parsing Markdown reports:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --check-efficiency dist/evaluation/meta-tools/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
+  --out dist/evaluation/meta-tools/dynamic-3-efficiency-check.md
+```
+
+Compare Dynamic-3 and meta-tool traces on identical task/model rows only:
+
+```bash
+timeout 180s go run ./cmd/eval_meta_tools \
+  --compare-traces dist/evaluation/meta-tools/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
+  --compare-traces dist/evaluation/meta-tools/meta-default-opaque-full-plus-reactivated-2026-05-13.traces/traces.jsonl \
+  --out dist/evaluation/meta-tools/meta-vs-dynamic-3-trace-comparison.md
 ```
 
 Publish reviewed Docker reports into managed documentation blocks:

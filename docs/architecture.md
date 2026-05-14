@@ -286,7 +286,7 @@ sequenceDiagram
 
 The dynamic toolset is a progressive-disclosure layer over the canonical action catalog. Instead of exposing all domain
 meta-tools in `tools/list`, it exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
-The current default remains meta-tools, but dynamic mode is the low-token candidate for a future default.
+The current default remains meta-tools, while dynamic mode is the low-token search/describe/execute alternative.
 
 For developer guidance on shared catalog ownership, standalone dynamic actions, and registration rules, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 

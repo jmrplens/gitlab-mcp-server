@@ -12,7 +12,7 @@ Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`.
 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
-> **See also**: [Tools Reference](tools/README.md) | [Dynamic Toolset](dynamic-tools.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
+> **See also**: [Tools Reference](tools/README.md) | [Configuration](configuration.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
 
 ## How Meta-Tools Work
@@ -33,33 +33,34 @@ The dispatcher routes the request to the underlying handler based on the `action
 
 ## Configuration
 
-Meta-tools are **enabled by default**. To switch to individual tools:
+Meta-tools are **enabled by default**. New configurations should prefer the explicit selector:
+
+```env
+TOOL_SURFACE=meta
+```
+
+The legacy boolean selector remains supported:
+
+```env
+META_TOOLS=true
+```
+
+To switch from meta-tools to individual tools:
 
 ```env
 META_TOOLS=false
 ```
 
-To switch to the low-token dynamic toolset:
-
 ```env
-TOOL_SURFACE=dynamic
+TOOL_SURFACE=individual
 ```
 
-Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the current low-token candidate for a future default; use it when the client can search, describe, then execute actions.
+Meta-tools remain the default because they are the most broadly compatible consolidated surface.
 
-| Mode                       | Tool Count | Best For                                                         |
-| -------------------------- | ---------- | ---------------------------------------------------------------- |
-| Meta-tools (`true`)        | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | LLMs with limited tool context windows                           |
-| Dynamic toolset (`dynamic`/`dynamic-3`) | 3 visible tools plus the canonical action catalog | Low-token clients that can call search, describe, then execute actions |
-| Dynamic-2 candidate (`dynamic-2`) | 2 visible tools plus the canonical action catalog | Experimental clients that can call find, then execute actions |
-| Individual tools (`false`) | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from granular tool discovery                |
-
-The dynamic toolset exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. It consumes the same
-canonical action catalog as meta-tools, including typed schemas, destructive-action metadata, Markdown formatters, read-only filtering, safe-mode previews, and token-scope filtering. The difference is packaging: dynamic keeps the full catalog out of the initial `tools/list` response and reveals actions through search and describe calls.
-The experimental `dynamic-2` candidate exposes `gitlab_find_action` and `gitlab_execute_tool`; it combines search and schema lookup into one discovery call for A/B evaluation.
-Pair it with `CAPABILITY_SURFACE=minimal` to keep only `gitlab://workspace/roots` and omit optional resources, prompts, and meta-schema resources.
-
-See [Dynamic Toolset](dynamic-tools.md) for the full user workflow, architecture diagrams, safety model, and troubleshooting guidance.
+| Mode | Tool Count | Best For |
+| --- | ---: | --- |
+| Meta-tools | 32 base / 47 self-managed Enterprise/Premium / 48 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Individual tools | 863 CE / 1006 self-managed Enterprise/Premium / 1011 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
 
 ---
 
@@ -142,22 +143,11 @@ See [Dynamic Toolset](dynamic-tools.md) for the full user workflow, architecture
 
 ## Architecture
 
-### Consolidation History
+### Consolidation Decision
 
-The meta-tool architecture evolved through ADR-0005:
+ADR-0005 records the historical consolidation from many standalone meta-tools to the current domain-oriented taxonomy. The stable architecture described here is the current contract: broad visible domain tools, Enterprise/Premium gating for premium groups, and GitLab.com-only gating for `gitlab_orbit`.
 
-- **v1.0**: 68 meta-tools (19 inline + 49 standalone sub-package registrations)
-- **v2.0**: 36 meta-tools (19 core inline + 4 consolidated inline + 2 delegated + 11 sampling)
-- **v2.1**: 40 meta-tools (+3 runner-controller delegated + 1 standalone project-discovery)
-- **v3.0**: 60 meta-tools (43 domain inline + 1 search + 1 runner + 3 runner-controller + 11 sampling + 1 standalone)
-- **v4.0**: 40 base / 59 enterprise (23 inline + 5 delegated + 11 sampling + 1 standalone + 19 enterprise inline); 6 former standalone meta-tools consolidated into existing meta-tools as enterprise-only routes
-- **v5.0**: 42 base / 57 enterprise (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone + 15 enterprise inline); 3 runner controller delegated meta-tools consolidated into 1; 4 free-tier always-registered meta-tools added (model registry, CI catalog, branch rules, custom emoji); enterprise count reduced from 19 to 15
-- **v6.0**: 32 base / 47 self-managed enterprise (23 inline + 4 always-registered + 3 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 11 individual sampling tools consolidated into 1 `gitlab_analyze` meta-tool with 11 actions
-- **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
-- **v7.1**: 32 base / 47 self-managed enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
-- **v7.2**: 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise; `gitlab_orbit` added for experimental GitLab.com Orbit Knowledge Graph actions
-
-The base mode provides a ~53% reduction from the v1.0 baseline, with enterprise features gated behind the Enterprise/Premium catalog.
+The consolidated surface reduces:
 
 - Token usage in `tools/list` MCP responses
 - LLM selection confusion when choosing among similar tools
@@ -165,9 +155,9 @@ The base mode provides a ~53% reduction from the v1.0 baseline, with enterprise 
 
 ### Implementation Pattern
 
-Meta-tools and the dynamic toolset are both built from the canonical action catalog in `internal/tools/action_catalog.go`.
-`RegisterAllMeta()` registers visible domain dispatchers from that catalog, while dynamic mode builds a catalog-backed search/describe/execute registry from the same action definitions.
-Developers define route metadata once through `ActionMap` and `ActionRoute`; both surfaces inherit the same parameter schemas, output schemas, destructive flags, and result formatting.
+Meta-tools are registered from the canonical action catalog built by `internal/tools.BuildActionCatalog()`.
+`RegisterAllMeta()` registers visible domain dispatchers from that catalog.
+Developers define route metadata through `ActionMap` and `ActionRoute`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
@@ -185,18 +175,24 @@ All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
 ### How Actions Are Routed
 
-```text
-User: gitlab_project { action: "board_create", params: { project_id: "42", name: "Sprint Board" } }
-  │
-  ├─ MakeMetaHandler looks up "board_create" in ActionMap routes
-  │
-  ├─ Routes to: ActionRoute{Handler: wrapAction(client, boards.Create), Destructive: false}
-  │
-  ├─ boards.Create unmarshals params, calls GitLab API
-  │
-  ├─ Result formatted via markdownForResult type-switch
-  │
-  └─ enrichWithHints extracts next_steps from Markdown into structuredContent JSON
+```mermaid
+sequenceDiagram
+    participant User
+    participant Meta as gitlab_project
+    participant Handler as MakeMetaHandler
+    participant Route as ActionRoute board_create
+    participant Domain as boards.Create
+    participant GL as GitLab API
+    participant Format as Markdown and hints
+
+    User->>Meta: action=board_create, params={project_id, name}
+    Meta->>Handler: Dispatch action
+    Handler->>Route: Lookup in ActionMap
+    Route->>Domain: Unmarshal typed params
+    Domain->>GL: Create project board
+    GL-->>Domain: Board response
+    Domain-->>Format: Structured result
+    Format-->>User: Markdown plus structuredContent next_steps
 ```
 
 ### Response Enrichment

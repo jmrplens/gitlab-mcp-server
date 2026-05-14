@@ -101,7 +101,7 @@ tags: [Optional: List of relevant tags or categories, e.g., `feature`, `upgrade`
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Description of task 1 | ✅ | 2025-04-25 |
+| TASK-001 | Description of task 1 | Yes | YYYY-MM-DD |
 | TASK-002 | Description of task 2 | |  |
 | TASK-003 | Description of task 3 | |  |
 

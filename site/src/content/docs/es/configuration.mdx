@@ -45,11 +45,11 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 :::tip
 **El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
 
-Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. `TOOL_SURFACE=dynamic-3` selecciona explícitamente esa misma superficie actual de tres herramientas para informes A/B o configuraciones fijadas. Usa `TOOL_SURFACE=dynamic-2` solo para el candidato A/B find/execute aparcado.
+Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. `TOOL_SURFACE=dynamic-3` selecciona explícitamente esa misma superficie actual de tres herramientas para configuraciones fijadas. Usa `TOOL_SURFACE=dynamic-2` solo cuando quieras intencionadamente la variante experimental find/execute.
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo buscar, describir y ejecutar.
 
-Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, recursos de meta-schema, guías de flujo y prompts. El valor por defecto sigue siendo `full`.
+Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, recursos de meta-schema, guías de flujo y prompts. Con `CAPABILITY_SURFACE=minimal`, usa `gitlab_describe_tools` para recuperar los schemas de acciones dinámicas en línea. El valor por defecto sigue siendo `full`.
 :::
 
 ## Autoactualización

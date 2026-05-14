@@ -158,6 +158,12 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 	return c, nil
 }
 
+// HTTPTransport returns the GitLab HTTP transport configured with the same TLS
+// policy used by authenticated GitLab clients.
+func HTTPTransport(skipTLSVerify bool) http.RoundTripper {
+	return buildBaseTransport(skipTLSVerify)
+}
+
 // Ping validates connectivity and authentication by calling the GitLab version endpoint.
 // Returns the GitLab version string on success.
 // Callers should wrap ctx with context.WithTimeout to bound the network round-trip.

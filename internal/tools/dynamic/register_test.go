@@ -726,6 +726,60 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	}
 }
 
+// TestDescribe_IncludesParameterGuidance verifies catalog-level guidance for
+// role-sensitive params reaches Dynamic describe and its schema extension.
+func TestDescribe_IncludesParameterGuidance(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "job.token_scope_remove_project"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Describe() result = %+v, want non-error", result)
+	}
+	description := actionDescriptionByID(t, output, "job.token_scope_remove_project")
+	projectGuidance, ok := description.ParamGuidance["project_id"]
+	if !ok {
+		t.Fatalf("ParamGuidance = %#v, want project_id", description.ParamGuidance)
+	}
+	if projectGuidance.SemanticRole != "scope_owner_project" {
+		t.Fatalf("project_id semantic role = %q, want scope_owner_project", projectGuidance.SemanticRole)
+	}
+	extension, ok := description.InputSchema["x_parameter_guidance"].(map[string]any)
+	if !ok {
+		t.Fatalf("InputSchema missing x_parameter_guidance: %#v", description.InputSchema)
+	}
+	if _, hasTargetProjectID := extension["target_project_id"]; !hasTargetProjectID {
+		t.Fatalf("x_parameter_guidance = %#v, want target_project_id", extension)
+	}
+}
+
+// TestSearch_WhyThisActionOnlyAppearsForCloseAlternatives verifies compact
+// action explanations do not appear on straightforward search results.
+func TestSearch_WhyThisActionOnlyAppearsForCloseAlternatives(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	_, straightforward, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search(straightforward) error = %v", err)
+	}
+	if straightforward.Count == 0 || len(straightforward.Results) == 0 {
+		t.Fatalf("Search(straightforward) returned no matches: %+v", straightforward)
+	}
+	if straightforward.Results[0].WhyThisAction != "" {
+		t.Fatalf("straightforward WhyThisAction = %q, want empty", straightforward.Results[0].WhyThisAction)
+	}
+
+	_, closeAlternatives, err := registry.Search(t.Context(), nil, SearchInput{Query: "project", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search(closeAlternatives) error = %v", err)
+	}
+	if !slices.ContainsFunc(closeAlternatives.Results, func(result SearchResult) bool { return result.WhyThisAction != "" }) {
+		t.Fatalf("close alternatives = %+v, want at least one why_this_action", closeAlternatives.Results)
+	}
+}
+
 // TestFind_ReturnsSchemaAndExecuteExample verifies that Find combines search
 // ranking with the input schema and execute example needed to call an action.
 func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {

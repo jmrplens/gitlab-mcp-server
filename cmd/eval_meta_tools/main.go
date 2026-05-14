@@ -15,13 +15,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +44,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	customemoji "github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -109,6 +114,26 @@ const (
 )
 
 var evalElicitationReleaseTag atomic.Value
+var liveResourceSequence atomic.Uint64
+
+func liveUniqueSuffix() string {
+	var randomBytes [8]byte
+	if _, err := rand.Read(randomBytes[:]); err == nil {
+		return hex.EncodeToString(randomBytes[:])
+	}
+	return fmt.Sprintf("%x-%s", os.Getpid(), strconv.FormatUint(liveResourceSequence.Add(1), 36))
+}
+
+func waitForContext(ctx context.Context, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
 
 // options holds data for main operations.
 type options struct {
@@ -119,6 +144,9 @@ type options struct {
 	Models              string
 	ToolsFile           string
 	CompareReports      stringList
+	CheckEfficiency     stringList
+	CompareTraces       stringList
+	EfficiencyAllowTask stringList
 	PublishFrom         stringList
 	PublishResults      string
 	PublishReadme       string
@@ -481,6 +509,12 @@ func run() (runErr error) {
 	if opts.PublishDocs || opts.CheckDocs {
 		return publishEvaluationDocs(opts)
 	}
+	if len(opts.CheckEfficiency) > 0 {
+		return runEfficiencyCheck(opts)
+	}
+	if len(opts.CompareTraces) > 0 {
+		return runTraceComparison(opts)
+	}
 	if len(opts.CompareReports) > 0 {
 		if opts.Output == "" {
 			opts.Output = defaultComparisonOutputPath()
@@ -646,7 +680,7 @@ func run() (runErr error) {
 
 	ctx := context.Background()
 	results := make([]taskResult, 0, len(tasks)*opts.Repeat*len(modelSpecs))
-	liveAttemptRunSuffix := strconv.FormatInt(time.Now().UnixNano()%1_000_000_000, 36)
+	liveAttemptRunSuffix := liveUniqueSuffix()
 	for _, spec := range modelSpecs {
 		apiKey, keyErr := apiKeyForModelProvider(spec.Provider)
 		if keyErr != nil {
@@ -716,6 +750,9 @@ func parseFlags() options {
 	flag.StringVar(&opts.Models, "models", "", "Comma-separated provider:model list for local multi-model evaluation; defaults to EVAL_MODELS when --model is not set")
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.Var(&opts.CompareReports, "compare", "Evaluation or token report file to include in a comparison summary; repeat for multiple reports")
+	flag.Var(&opts.CheckEfficiency, "check-efficiency", "Trace JSONL path to validate against model-call efficiency gates; repeat for multiple trace files")
+	flag.Var(&opts.CompareTraces, "compare-traces", "Trace JSONL path for direct Dynamic-3 versus meta comparison; provide dynamic trace first and meta trace second")
+	flag.Var(&opts.EfficiencyAllowTask, "efficiency-allow-task", "Task ID allowed to exceed the per-attempt call budget in --check-efficiency; repeat or comma-separate values")
 	flag.Var(&opts.PublishFrom, "publish-from", "Reviewed evaluation report to publish into docs; repeat for multiple reports")
 	flag.StringVar(&opts.PublishResults, "publish-results-doc", defaultPublishResultsDoc, "Markdown results document updated by --publish-docs")
 	flag.StringVar(&opts.PublishReadme, "publish-readme", defaultPublishReadme, "README updated by --publish-docs")
@@ -938,7 +975,7 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 	}
 	for _, step := range taskSteps(task) {
 		if step.ExpectedAction == "" {
-			if standaloneUnavailableInLiveEvaluator(step.ExpectedTool) {
+			if !standaloneToolAvailableInLiveEvaluator(step.ExpectedTool) {
 				return false
 			}
 			continue
@@ -951,6 +988,19 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 		}
 	}
 	return true
+}
+
+func standaloneToolAvailableInLiveEvaluator(tool string) bool {
+	switch tool {
+	case "gitlab_discover_project",
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create":
+		return true
+	default:
+		return false
+	}
 }
 
 // filterTasksByPartition performs the filter tasks by partition operation using the GitLab API and returns [[]evalTask].
@@ -1181,7 +1231,7 @@ func canonicalRouteID(tool, action string) string {
 func routeUnavailableOnCE(tool, action string) bool {
 	route := canonicalRouteID(tool, action)
 	switch route {
-	case "environment.deployment_approve_or_reject", "model_registry.download", "mr_review.draft_note_create":
+	case "environment.deployment_approve_or_reject", "model_registry.download":
 		return true
 	default:
 		return false
@@ -1191,16 +1241,11 @@ func routeUnavailableOnCE(tool, action string) bool {
 // taskUnavailableInLiveEvaluator is an internal helper for the main package.
 func taskUnavailableInLiveEvaluator(id string) bool {
 	switch id {
-	case "MT-008", "MT-017", "MT-023", "MT-049", "MT-054", "MT-063", "MT-066", "MT-069", "MT-105", "MT-107", "MT-114", "MT-115", "MT-116":
+	case "MT-105", "MT-115":
 		return true
 	default:
 		return false
 	}
-}
-
-// standaloneUnavailableInLiveEvaluator is an internal helper for the main package.
-func standaloneUnavailableInLiveEvaluator(tool string) bool {
-	return strings.HasPrefix(tool, "gitlab_interactive_")
 }
 
 // taskHasMutatingStep is an internal helper for the main package.
@@ -1998,8 +2043,12 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, nil
 	}
 	switch task.ID {
+	case "MT-008":
+		return ensureLiveSubgroupDeleteTarget(ctx, client, task)
 	case "MT-013":
 		return ensureLiveIssueDeleteTarget(ctx, client, task)
+	case "MT-017":
+		return ensureLiveMergeRequestMergeTarget(ctx, client, task)
 	case "MT-027":
 		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
 	case "MT-028":
@@ -2018,6 +2067,20 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	case "MT-044":
 		return ensureLivePackageDeleteTarget(ctx, client, task)
+	case "MT-049":
+		return ensureLiveEnvironmentStopTarget(ctx, client, task)
+	case "MT-054":
+		return ensureLiveBroadcastMessageDeleteTarget(ctx, client, task)
+	case "MT-063":
+		return ensureLiveDraftNotePublishAllTarget(ctx, client, task)
+	case "MT-066":
+		return ensureLiveJobTokenScopeRemoveProjectTarget(ctx, client, task)
+	case "MT-107":
+		return ensureLiveCustomEmojiDeleteTarget(ctx, client, task)
+	case "MT-114":
+		return ensureLiveTerraformStateUnlockTarget(ctx, task)
+	case "MT-116":
+		return ensureLiveMirrorForcePushTarget(ctx, client, task)
 	case "MS-004":
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	case "MS-007":
@@ -2030,7 +2093,7 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return ensureLiveSnippetDeleteTarget(ctx, client, task)
 	case "MT-057":
 		return ensureLiveHookDeleteTarget(ctx, client, task)
-	case "MT-024", "MT-065":
+	case "MT-023", "MT-024", "MT-065":
 		return ensureLiveFailedJobTarget(ctx, client, task)
 	}
 	switch task.ID {
@@ -2091,6 +2154,39 @@ func ensureLiveProjectActive(ctx context.Context, client *gitlabclient.Client) e
 	return nil
 }
 
+func ensureLiveSubgroupDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	parent, _, err := client.GL().Groups.GetGroup(liveFixtureGroupPath, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-008 fixture parent group: %w", err)
+	}
+	path := fmt.Sprintf("eval-temp-%s", liveUniqueSuffix())
+	visibility := gl.PrivateVisibility
+	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
+		Name:       new(path),
+		Path:       new(path),
+		ParentID:   new(parent.ID),
+		Visibility: &visibility,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-008 fixture subgroup: %w", err)
+	}
+	groupID := group.FullPath
+	if groupID == "" {
+		groupID = fmt.Sprintf("%s/%s", liveFixtureGroupPath, path)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "subgroup ", groupID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
 // ensureLiveIssueDeleteTarget performs the ensure live issue delete target operation using the GitLab API and returns [evalTask].
 func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
 	if client == nil {
@@ -2103,13 +2199,255 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
-		Title:       new(fmt.Sprintf("Evaluation issue safe to delete %d", time.Now().UnixNano())),
+		Title:       new(fmt.Sprintf("Evaluation issue safe to delete %s", liveUniqueSuffix())),
 		Description: new("Temporary issue for destructive evaluator coverage."),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
 	}
 	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveMergeRequestMergeTarget creates a mergeable MR in a disposable project and rewrites MT-017 to use it.
+func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	project, err := createLiveTemporaryProject(setupCtx, client, "merge-mr")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture project: %w", err)
+	}
+	projectID := project.PathWithNamespace
+	targetBranch := project.DefaultBranch
+	if targetBranch == "" {
+		targetBranch = liveFixtureDefaultRef
+	}
+	sourceBranch := fmt.Sprintf("eval-merge-%s", liveUniqueSuffix())
+	if branchErr := ensureLiveBranchExists(setupCtx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture branch: %w", branchErr)
+	}
+	ciContent := "stages:\n  - test\n\nvariables:\n  GIT_STRATEGY: none\n\neval-pass:\n  stage: test\n  script:\n    - echo evaluation merge fixture\n"
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, ".gitlab-ci.yml", &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       &ciContent,
+		CommitMessage: new("Seed passing CI for merge evaluation"),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return task, fmt.Errorf("prepare MT-017 fixture CI: %w", err)
+	}
+	filePath := fmt.Sprintf("tmp/eval-merge-%s.txt", liveUniqueSuffix())
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       new("evaluation merge request fixture\n"),
+		CommitMessage: new("Seed merge request evaluation fixture"),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture file: %w", err)
+	}
+	removeSource := false
+	mergeRequest, _, err := client.GL().MergeRequests.CreateMergeRequest(projectID, &gl.CreateMergeRequestOptions{
+		SourceBranch:       &sourceBranch,
+		TargetBranch:       &targetBranch,
+		Title:              new("Evaluation merge target"),
+		RemoveSourceBranch: &removeSource,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture merge request: %w", err)
+	}
+	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &sourceBranch}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture pipeline: %w", err)
+	}
+	if waitErr := waitForLivePipelineStatus(setupCtx, client, projectID, pipeline.ID, "success"); waitErr != nil {
+		return task, waitErr
+	}
+	if waitErr := waitForLiveMergeRequestReady(setupCtx, client, projectID, mergeRequest.IID); waitErr != nil {
+		return task, waitErr
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, projectID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "merge request ", mergeRequest.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveDraftNotePublishAllTarget creates an MR draft note and rewrites MT-063 to publish it.
+func ensureLiveDraftNotePublishAllTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	projectID, mergeRequestIID, err := createLiveDraftNoteMergeRequest(setupCtx, client)
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-063 fixture merge request: %w", err)
+	}
+	note := "Draft note ready for evaluator publish_all coverage."
+	_, _, err = client.GL().DraftNotes.CreateDraftNote(projectID, mergeRequestIID, &gl.CreateDraftNoteOptions{
+		Note: &note,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-063 fixture draft note: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, projectID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptMergeRequestIID(prompt, mergeRequestIID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// createLiveDraftNoteMergeRequest creates a small disposable MR suitable for draft-note lifecycle tasks.
+func createLiveDraftNoteMergeRequest(ctx context.Context, client *gitlabclient.Client) (projectID string, mergeRequestIID int64, err error) {
+	project, err := createLiveTemporaryProject(ctx, client, "draft-note")
+	if err != nil {
+		return "", 0, err
+	}
+	projectID = project.PathWithNamespace
+	targetBranch := project.DefaultBranch
+	if targetBranch == "" {
+		targetBranch = liveFixtureDefaultRef
+	}
+	sourceBranch := fmt.Sprintf("eval-draft-note-%s", liveUniqueSuffix())
+	if branchErr := ensureLiveBranchExists(ctx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
+		return "", 0, branchErr
+	}
+	filePath := fmt.Sprintf("tmp/eval-draft-note-%s.txt", liveUniqueSuffix())
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+		Branch:        &sourceBranch,
+		Content:       new("evaluation draft note fixture\n"),
+		CommitMessage: new("Seed draft note evaluation fixture"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", 0, err
+	}
+	mergeRequest, _, err := client.GL().MergeRequests.CreateMergeRequest(projectID, &gl.CreateMergeRequestOptions{
+		SourceBranch: &sourceBranch,
+		TargetBranch: &targetBranch,
+		Title:        new("Evaluation draft note target"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", 0, err
+	}
+	return projectID, mergeRequest.IID, nil
+}
+
+func replacePromptMergeRequestIID(prompt string, mergeRequestIID int64) (string, error) {
+	prompt, err := replacePromptBacktickValueAfter(prompt, promptMarkerMergeRequest, mergeRequestIID)
+	if err == nil {
+		return prompt, nil
+	}
+	return replacePromptBacktickValueAfter(prompt, "MR ", mergeRequestIID)
+}
+
+// ensureLiveCustomEmojiDeleteTarget creates a disposable custom emoji and rewrites MT-107 to delete it.
+func ensureLiveCustomEmojiDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	groupPath, err := createLiveTemporaryGroup(setupCtx, client, "emoji")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-107 fixture group: %w", err)
+	}
+	emojiURL := strings.TrimRight(os.Getenv("E2E_FIXTURE_URL"), "/") + "/emoji.png"
+	if emojiURL == "/emoji.png" {
+		emojiURL = "http://e2e-fixture:8080/emoji.png"
+	}
+	created, err := customemoji.Create(setupCtx, client, customemoji.CreateInput{
+		GroupPath: groupPath,
+		Name:      fmt.Sprintf("eval_delete_%s", liveUniqueSuffix()),
+		URL:       emojiURL,
+	})
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-107 fixture emoji: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "custom emoji GID ", created.Emoji.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+// ensureLiveTerraformStateUnlockTarget locks a state through the Terraform HTTP backend and rewrites MT-114.
+func ensureLiveTerraformStateUnlockTarget(ctx context.Context, task evalTask) (evalTask, error) {
+	projectID, ok := terraformStateUnlockProjectID(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-114 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	stateName := fmt.Sprintf("eval-unlock-%s", liveUniqueSuffix())
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	if err := createLiveTerraformStateLock(setupCtx, projectID, stateName); err != nil {
+		return task, err
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "state ", stateName)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func terraformStateUnlockProjectID(prompt string) (string, bool) {
+	if value, ok := backtickValueAfter(prompt, " in project "); ok {
+		return value, true
+	}
+	return exampleProjectIDValue(prompt)
+}
+
+// ensureLiveMirrorForcePushTarget creates a push mirror and rewrites MT-116 to use it.
+func ensureLiveMirrorForcePushTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	source, err := createLiveTemporaryProject(setupCtx, client, "mirror-source")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-116 fixture source project: %w", err)
+	}
+	target, err := createLiveTemporaryProject(setupCtx, client, "mirror-target")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-116 fixture target project: %w", err)
+	}
+	mirrorURL, err := liveRemoteMirrorTargetURL(target)
+	if err != nil {
+		return task, err
+	}
+	enabled := true
+	authMethod := "password"
+	mirror, _, err := client.GL().ProjectMirrors.AddProjectMirror(source.PathWithNamespace, &gl.AddProjectMirrorOptions{
+		URL:        &mirrorURL,
+		Enabled:    &enabled,
+		AuthMethod: &authMethod,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-116 fixture mirror add: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, source.PathWithNamespace)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "mirror ID ", mirror.ID)
 	if err != nil {
 		return task, err
 	}
@@ -2225,7 +2563,7 @@ func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.C
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	milestone, _, err := client.GL().Milestones.CreateMilestone(projectID, &gl.CreateMilestoneOptions{
-		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %d", time.Now().UnixNano())),
+		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %s", liveUniqueSuffix())),
 		Description: new("Temporary milestone for destructive evaluator coverage."),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
@@ -2289,7 +2627,7 @@ func ensureLiveInteractiveMergeRequestTarget(ctx context.Context, client *gitlab
 	if err := ensureLiveBranchExists(setupCtx, client, projectID, liveFixtureFeatureRef, liveFixtureDefaultRef); err != nil {
 		return fmt.Errorf("prepare MT-081 fixture branch %s: %w", liveFixtureFeatureRef, err)
 	}
-	content := fmt.Sprintf("interactive merge request fixture %d\n", time.Now().UnixNano())
+	content := fmt.Sprintf("interactive merge request fixture %s\n", liveUniqueSuffix())
 	message := "Seed interactive merge request fixture"
 	_, _, err := client.GL().RepositoryFiles.CreateFile(projectID, liveFixtureInteractiveMRFile, &gl.CreateFileOptions{
 		Branch:        new(liveFixtureFeatureRef),
@@ -2316,7 +2654,7 @@ func ensureLiveInteractiveReleaseTarget(ctx context.Context, client *gitlabclien
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	tagName := fmt.Sprintf("%s-%d", liveFixtureElicitationTag, time.Now().UnixNano())
+	tagName := fmt.Sprintf("%s-%s", liveFixtureElicitationTag, liveUniqueSuffix())
 	setEvalElicitationReleaseTag(tagName)
 	if err := ensureLiveTagExists(setupCtx, client, projectID, tagName, liveFixtureDefaultRef); err != nil {
 		return fmt.Errorf("prepare MT-083 fixture tag %s: %w", tagName, err)
@@ -2359,7 +2697,7 @@ func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	_, _, err := client.GL().GenericPackages.PublishPackageFile(
 		projectID,
 		liveFixturePackageName,
-		fmt.Sprintf("%s-delete-%d", liveFixturePackageVer, time.Now().UnixNano()),
+		fmt.Sprintf("%s-delete-%s", liveFixturePackageVer, liveUniqueSuffix()),
 		liveFixturePackageFile,
 		bytes.NewBufferString("evaluation package\n"),
 		nil,
@@ -2387,6 +2725,308 @@ func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func ensureLiveEnvironmentStopTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-049 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	name := fmt.Sprintf("eval-stop-%s", liveUniqueSuffix())
+	env, _, err := client.GL().Environments.CreateEnvironment(projectID, &gl.CreateEnvironmentOptions{
+		Name:        new(name),
+		Description: new("Temporary environment for destructive evaluator coverage"),
+		Tier:        new("testing"),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-049 fixture environment: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "environment ID ", env.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveBroadcastMessageDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	startsAt := time.Now().UTC().Add(24 * time.Hour)
+	endsAt := startsAt.Add(time.Hour)
+	message := fmt.Sprintf("Evaluation broadcast safe to delete %s", liveUniqueSuffix())
+	broadcastType := "banner"
+	dismissable := true
+	msg, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(&gl.CreateBroadcastMessageOptions{
+		Message:       &message,
+		StartsAt:      &startsAt,
+		EndsAt:        &endsAt,
+		BroadcastType: &broadcastType,
+		Dismissable:   &dismissable,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-054 fixture broadcast message: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "broadcast message ID ", msg.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveJobTokenScopeRemoveProjectTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := backtickValueAfter(task.Prompt, "allowlist of project ")
+	if !ok {
+		return task, fmt.Errorf("prepare MT-066 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	source, _, err := client.GL().Projects.GetProject(projectID, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture source project: %w", err)
+	}
+	target, err := createLiveTemporaryProject(setupCtx, client, "token-scope")
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture target project: %w", err)
+	}
+	_, err = client.GL().JobTokenScope.PatchProjectJobTokenAccessSettings(source.ID, &gl.PatchProjectJobTokenAccessSettingsOptions{
+		Enabled: true,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-066 fixture token scope settings: %w", err)
+	}
+	_, _, err = client.GL().JobTokenScope.AddProjectToJobScopeAllowList(source.ID, &gl.JobTokenInboundAllowOptions{
+		TargetProjectID: new(target.ID),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return task, fmt.Errorf("prepare MT-066 fixture allowlist project: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "project ID ", target.ID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "allowlist of project ", source.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client, prefix string) (*gl.Project, error) {
+	toolsGroup, _, err := client.GL().Groups.GetGroup(liveFixtureToolsPath, nil, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("get tools group %s: %w", liveFixtureToolsPath, err)
+	}
+	path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
+	visibility := gl.PrivateVisibility
+	project, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
+		Name:                 new(path),
+		Path:                 new(path),
+		NamespaceID:          new(toolsGroup.ID),
+		InitializeWithReadme: new(true),
+		Visibility:           &visibility,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("create project %s/%s: %w", liveFixtureToolsPath, path, err)
+	}
+	return project, nil
+}
+
+func createLiveTemporaryGroup(ctx context.Context, client *gitlabclient.Client, prefix string) (string, error) {
+	parent, _, err := client.GL().Groups.GetGroup(liveFixtureGroupPath, nil, gl.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("get parent group %s: %w", liveFixtureGroupPath, err)
+	}
+	path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
+	visibility := gl.PrivateVisibility
+	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
+		Name:       new(path),
+		Path:       new(path),
+		ParentID:   new(parent.ID),
+		Visibility: &visibility,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("create group %s/%s: %w", liveFixtureGroupPath, path, err)
+	}
+	if group.FullPath != "" {
+		return group.FullPath, nil
+	}
+	return fmt.Sprintf("%s/%s", liveFixtureGroupPath, path), nil
+}
+
+func waitForLivePipelineStatus(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, wantedStatus string) error {
+	deadline := time.Now().Add(4 * time.Minute)
+	lastStatus := "unknown"
+	for time.Now().Before(deadline) {
+		pipeline, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("prepare fixture pipeline %d: %w", pipelineID, err)
+		}
+		lastStatus = pipeline.Status
+		if pipeline.Status == wantedStatus {
+			return nil
+		}
+		if isLivePipelineTerminal(pipeline.Status) {
+			return fmt.Errorf("prepare fixture pipeline %d ended with status %s", pipelineID, pipeline.Status)
+		}
+		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
+			return waitErr
+		}
+	}
+	return fmt.Errorf("prepare fixture pipeline %d did not reach %s before timeout; last status %s", pipelineID, wantedStatus, lastStatus)
+}
+
+func isLivePipelineTerminal(status string) bool {
+	switch status {
+	case "success", "failed", "canceled", "skipped", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
+func waitForLiveMergeRequestReady(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
+	deadline := time.Now().Add(90 * time.Second)
+	lastStatus := "unknown"
+	for time.Now().Before(deadline) {
+		mergeRequest, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, mergeRequestIID, nil, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("prepare fixture MR !%d: %w", mergeRequestIID, err)
+		}
+		lastStatus = mergeRequest.DetailedMergeStatus
+		if mergeRequest.DetailedMergeStatus == "mergeable" {
+			return nil
+		}
+		if waitErr := waitForContext(ctx, 2*time.Second); waitErr != nil {
+			return waitErr
+		}
+	}
+	return fmt.Errorf("prepare fixture MR !%d did not become mergeable before timeout; last status %s", mergeRequestIID, lastStatus)
+}
+
+func createLiveTerraformStateLock(ctx context.Context, projectID, stateName string) error {
+	baseURL, err := liveDockerGitLabBaseURL()
+	if err != nil {
+		return err
+	}
+	token := os.Getenv("GITLAB_TOKEN")
+	if token == "" {
+		return errors.New("prepare MT-114 fixture requires GITLAB_TOKEN")
+	}
+	lockBody, err := json.Marshal(map[string]string{
+		"ID":        fmt.Sprintf("eval-lock-%s", liveUniqueSuffix()),
+		"Operation": "OperationTypeApply",
+		"Info":      "eval_meta_tools terraform unlock fixture",
+		"Who":       "eval_meta_tools",
+		"Version":   "1.6.0",
+		"Created":   time.Now().UTC().Format(time.RFC3339Nano),
+		"Path":      stateName,
+	})
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture lock body: %w", err)
+	}
+	endpoint := terraformStateLockEndpoint(baseURL, projectID, stateName)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(lockBody)) // #nosec G107,G704 -- endpoint is constrained by liveDockerGitLabBaseURL and uses a fixed API path.
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture request: %w", err)
+	}
+	request.Header.Set("PRIVATE-TOKEN", token)
+	request.Header.Set("Content-Type", "application/json")
+	httpClient, err := liveGitLabHTTPClient()
+	if err != nil {
+		return err
+	}
+	response, err := httpClient.Do(request) // #nosec G704 -- request URL is constrained to the configured Docker GitLab base URL.
+	if err != nil {
+		return fmt.Errorf("prepare MT-114 fixture lock: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+	return fmt.Errorf("prepare MT-114 fixture lock for project %q state %q: GitLab returned %s: %s", projectID, stateName, response.Status, strings.TrimSpace(string(body)))
+}
+
+func liveGitLabHTTPClient() (*http.Client, error) {
+	skipTLSVerify, err := gitlabSkipTLSVerify()
+	if err != nil {
+		return nil, err
+	}
+	if !skipTLSVerify {
+		return http.DefaultClient, nil
+	}
+	return &http.Client{Transport: gitlabclient.HTTPTransport(true)}, nil
+}
+
+func gitlabSkipTLSVerify() (bool, error) {
+	value := strings.TrimSpace(os.Getenv("GITLAB_SKIP_TLS_VERIFY"))
+	if value == "" {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY %q: %w", value, err)
+	}
+	return parsed, nil
+}
+
+func terraformStateLockEndpoint(baseURL *url.URL, projectID, stateName string) string {
+	root := strings.TrimRight(baseURL.String(), "/")
+	return root + "/api/v4/projects/" + url.PathEscape(projectID) + "/terraform/state/" + url.PathEscape(stateName) + "/lock"
+}
+
+func liveDockerGitLabBaseURL() (*url.URL, error) {
+	rawURL := strings.TrimRight(os.Getenv("GITLAB_URL"), "/")
+	if rawURL == "" {
+		return nil, errors.New("prepare MT-114 fixture requires GITLAB_URL")
+	}
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("prepare MT-114 fixture GitLab URL: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("prepare MT-114 fixture GitLab URL has unsupported scheme %q", parsedURL.Scheme)
+	}
+	if parsedURL.Host == "" || parsedURL.User != nil {
+		return nil, errors.New("prepare MT-114 fixture GitLab URL must include a host and no credentials")
+	}
+	return parsedURL, nil
+}
+
+func liveRemoteMirrorTargetURL(project *gl.Project) (string, error) {
+	token := os.Getenv("GITLAB_TOKEN")
+	if token == "" {
+		return "", errors.New("prepare MT-116 fixture requires GITLAB_TOKEN")
+	}
+	baseURL := strings.TrimRight(os.Getenv("E2E_GITLAB_INTERNAL_URL"), "/")
+	if baseURL == "" {
+		baseURL = "http://gitlab-e2e"
+	}
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("prepare MT-116 fixture internal URL: %w", err)
+	}
+	projectPath := strings.TrimPrefix(project.PathWithNamespace, "/")
+	if projectPath == "" {
+		return "", errors.New("prepare MT-116 fixture target project path is empty")
+	}
+	parsedURL.User = url.UserPassword("oauth2", token)
+	parsedURL.Path = strings.TrimRight(parsedURL.Path, "/") + "/" + projectPath + ".git"
+	return parsedURL.String(), nil
 }
 
 // ensureLiveProjectMemberAbsent is an internal helper for the main package.
@@ -2429,7 +3069,7 @@ func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Clie
 	runner, _, err := client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
 		RunnerType:  new("project_type"),
 		ProjectID:   new(project.ID),
-		Description: new(fmt.Sprintf("eval-remove-runner-%d", time.Now().UnixNano())),
+		Description: new(fmt.Sprintf("eval-remove-runner-%s", liveUniqueSuffix())),
 		Paused:      new(false),
 		Locked:      new(false),
 		RunUntagged: new(true),
@@ -2454,7 +3094,7 @@ func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	defer cancel()
 	visibility := gl.PrivateVisibility
 	snippet, _, err := client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
-		Title:      new(fmt.Sprintf("Evaluation snippet safe to delete %d", time.Now().UnixNano())),
+		Title:      new(fmt.Sprintf("Evaluation snippet safe to delete %s", liveUniqueSuffix())),
 		FileName:   new("eval.txt"),
 		Content:    new("evaluation snippet content\n"),
 		Visibility: &visibility,
@@ -2482,7 +3122,7 @@ func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	hook, _, err := client.GL().Projects.AddProjectHook(projectID, &gl.AddProjectHookOptions{
-		Name:                  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
+		Name:                  new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
 		URL:                   new("https://example.com/gitlab-hook-delete"),
 		PushEvents:            new(true),
 		EnableSSLVerification: new(false),
@@ -2512,7 +3152,7 @@ func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	badge, _, err := client.GL().ProjectBadges.AddProjectBadge(projectID, &gl.AddProjectBadgeOptions{
 		LinkURL:  new("https://example.com/coverage"),
 		ImageURL: new("https://example.com/badge.svg"),
-		Name:     new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
+		Name:     new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-059 fixture badge: %w", err)
@@ -2693,7 +3333,7 @@ func ensureLivePipelineTriggerDeleteTarget(ctx context.Context, client *gitlabcl
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	trigger, _, err := client.GL().PipelineTriggers.AddPipelineTrigger(projectID, &gl.AddPipelineTriggerOptions{
-		Description: new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
+		Description: new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-102 fixture trigger: %w", err)
@@ -2719,7 +3359,7 @@ func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabc
 	defer cancel()
 	ref := liveFixtureDefaultRef
 	schedule, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(projectID, &gl.CreatePipelineScheduleOptions{
-		Description:  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
+		Description:  new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
 		Ref:          &ref,
 		Cron:         new("0 3 * * *"),
 		CronTimezone: new("UTC"),
@@ -2920,7 +3560,7 @@ func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.C
 		return task, fmt.Errorf("prepare MT-111 fixture public key: %w", err)
 	}
 	deployKey, _, err := client.GL().DeployKeys.AddDeployKey(projectID, &gl.AddDeployKeyOptions{
-		Title:   new(fmt.Sprintf("eval-delete-key-%d", time.Now().UnixNano())),
+		Title:   new(fmt.Sprintf("eval-delete-key-%s", liveUniqueSuffix())),
 		Key:     &key,
 		CanPush: new(false),
 	}, gl.WithContext(setupCtx))
@@ -2948,7 +3588,7 @@ func ensureLiveDeployTokenDeleteTarget(ctx context.Context, client *gitlabclient
 	defer cancel()
 	expiresAt := time.Now().UTC().AddDate(0, 1, 0)
 	deployToken, _, err := client.GL().DeployTokens.CreateProjectDeployToken(projectID, &gl.CreateProjectDeployTokenOptions{
-		Name:      new(fmt.Sprintf("eval-delete-deploy-token-%d", time.Now().UnixNano())),
+		Name:      new(fmt.Sprintf("eval-delete-deploy-token-%s", liveUniqueSuffix())),
 		ExpiresAt: &expiresAt,
 		Scopes:    &[]string{"read_repository"},
 	}, gl.WithContext(setupCtx))
@@ -2978,7 +3618,7 @@ func ensureLiveCommitDiscussionNoteDeleteTarget(ctx context.Context, client *git
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	body := fmt.Sprintf("delete fixture %d", time.Now().UnixNano())
+	body := fmt.Sprintf("delete fixture %s", liveUniqueSuffix())
 	discussion, _, err := client.GL().Discussions.CreateCommitDiscussion(projectID, commitSHA, &gl.CreateCommitDiscussionOptions{Body: &body}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-113 fixture commit discussion: %w", err)
@@ -3036,10 +3676,8 @@ func waitForFailedJob(ctx context.Context, client *gitlabclient.Client, projectI
 				return job.ID, nil
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		case <-time.After(5 * time.Second):
+		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
+			return 0, waitErr
 		}
 	}
 	return 0, fmt.Errorf("prepare failed-job fixture failed job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
@@ -3089,10 +3727,8 @@ func waitForManualJob(ctx context.Context, client *gitlabclient.Client, projectI
 				return job.ID, nil
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		case <-time.After(5 * time.Second):
+		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
+			return 0, waitErr
 		}
 	}
 	return 0, fmt.Errorf("prepare MT-064 fixture manual job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
@@ -3564,7 +4200,7 @@ func evalElicitationTextValue(fieldName string) string {
 	case "description":
 		return "Created by eval_meta_tools elicitation handler"
 	case "name":
-		return fmt.Sprintf("eval-elicit-resource-%d", time.Now().UnixNano())
+		return fmt.Sprintf("eval-elicit-resource-%s", liveUniqueSuffix())
 	case "source_branch":
 		return liveFixtureFeatureRef
 	case "target_branch", "default_branch":
@@ -3713,11 +4349,13 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 	steps := taskSteps(task)
 	userPrompt := taskPromptForSurface(task, r.toolSurface)
 	systemPrompt := systemPromptForTask(task, r.toolSurface)
+	callBudget := callBudgetForTask(task, r.toolSurface)
 	result := taskResult{Task: task, Model: r.modelLabel, ToolSurface: r.toolSurface, DestructiveSafe: true, Trace: newTaskTrace(task, systemPrompt, userPrompt)}
 	result.Trace.Model = r.modelLabel
 	messages := []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: userPrompt}}}}
 	firstFinalAttempt := true
 	repairCount := 0
+	lastInvalidFingerprint := ""
 	repairLimit := repairAttemptLimitForTask(r.toolSurface, len(steps))
 	stepIndex := 0
 	simulationAttempts := map[int]int{}
@@ -3752,6 +4390,14 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
 			if isSchemaLookup(toolUse) {
 				result.SchemaLookupUsed = true
+				if stepIndex < len(steps) {
+					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
+						block := toolResultBlock(toolUse.ID, message, errors.New(message))
+						followups = append(followups, block)
+						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+						continue
+					}
+				}
 				payload, lookupErr := schemaLookupResult(routes, toolUse.Input)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
@@ -3763,6 +4409,14 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			}
 			if isDynamicDiscovery(toolUse) {
 				result.SchemaLookupUsed = true
+				if stepIndex < len(steps) {
+					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
+						block := toolResultBlock(toolUse.ID, message, errors.New(message))
+						followups = append(followups, block)
+						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+						continue
+					}
+				}
 				payload, lookupErr := dynamicDiscoveryResult(ctx, routes, toolUse)
 				block := toolResultBlock(toolUse.ID, payload, lookupErr)
 				followups = append(followups, block)
@@ -3805,6 +4459,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			result.FinalAction = validation.Action
 			result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
 			if validation.Valid {
+				lastInvalidFingerprint = ""
 				completedStep := steps[stepIndex]
 				simulation := r.validatedToolResult(ctx, steps[stepIndex], toolUse, simulationAttempts[stepIndex], stepIndex+1, len(steps))
 				if simulation.Injected {
@@ -3851,6 +4506,12 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 				continue
 			}
 
+			invalidFingerprint := invalidToolUseFingerprint(toolUse)
+			if invalidFingerprint != "" && invalidFingerprint == lastInvalidFingerprint {
+				result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+				return result
+			}
+			lastInvalidFingerprint = invalidFingerprint
 			result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
 			if repairAlreadySent {
 				return result
@@ -3925,6 +4586,17 @@ func isReadOnlyUnexpectedAction(action string) bool {
 	return leaf == "get" || leaf == "list" || strings.HasPrefix(leaf, "get_") || strings.HasPrefix(leaf, "list_") || strings.HasSuffix(leaf, "_get") || strings.HasSuffix(leaf, "_list")
 }
 
+func invalidToolUseFingerprint(toolUse modelContentBlock) string {
+	data, err := json.Marshal(struct {
+		Name  string         `json:"name"`
+		Input map[string]any `json:"input"`
+	}{Name: toolUse.Name, Input: toolUse.Input})
+	if err != nil {
+		return toolUse.Name
+	}
+	return string(data)
+}
+
 // taskToolCallLimit is an internal helper for the main package.
 func taskToolCallLimit(stepCount int) int {
 	limit := stepCount*3 + 4
@@ -3947,6 +4619,69 @@ func taskToolCallLimitForSurface(stepCount int, toolSurface string) int {
 		return dynamicLimit
 	}
 	return limit
+}
+
+type taskCallBudget struct {
+	ExpectedSteps         int
+	AllowedDiscoveryCalls int
+	AllowedRepairCalls    int
+	MaxCalls              int
+	SuppressDiscovery     bool
+}
+
+func callBudgetForTask(task evalTask, toolSurface string) taskCallBudget {
+	steps := taskSteps(task)
+	budget := taskCallBudget{
+		ExpectedSteps:         len(steps),
+		AllowedDiscoveryCalls: 0,
+		AllowedRepairCalls:    repairAttemptLimitForTask(toolSurface, len(steps)),
+	}
+	if isDynamicThreeToolEvalSurface(toolSurface) {
+		switch {
+		case exactDynamicCallAvailable(task, steps):
+			budget.AllowedDiscoveryCalls = 0
+			budget.SuppressDiscovery = true
+		case len(steps) == 1:
+			budget.AllowedDiscoveryCalls = 2
+		case dynamicWorkflowPlanPreamble(task) != "":
+			budget.AllowedDiscoveryCalls = 1
+		default:
+			budget.AllowedDiscoveryCalls = len(steps)
+		}
+	}
+	budget.MaxCalls = max(budget.ExpectedSteps, budget.ExpectedSteps+budget.AllowedDiscoveryCalls+budget.AllowedRepairCalls)
+	return budget
+}
+
+func discoveryBudgetFeedback(task evalTask, step evalStep, toolUse modelContentBlock, budget taskCallBudget) (string, bool) {
+	if !budget.SuppressDiscovery || !isRedundantDiscoveryTool(toolUse.Name) {
+		return "", false
+	}
+	if !exactDynamicCallAvailable(task, []evalStep{step}) {
+		return "", false
+	}
+	return fmt.Sprintf("The exact gitlab_execute_tool call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no search, describe, or schema lookup is needed.", step.ExpectedAction), true
+}
+
+func isRedundantDiscoveryTool(toolName string) bool {
+	switch toolName {
+	case dynamicSearchTool, dynamicDescribeTool, dynamicFindTool, "gitlab":
+		return true
+	default:
+		return false
+	}
+}
+
+func exactDynamicCallAvailable(task evalTask, steps []evalStep) bool {
+	if len(steps) != 1 {
+		return false
+	}
+	step := steps[0]
+	if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+		return false
+	}
+	_, provenances := exactCallParams(step, task.Prompt, false)
+	return exactCallParamsAreSafe(provenances)
 }
 
 func repairAttemptLimitForSurface(toolSurface string) int {
@@ -4288,7 +5023,57 @@ func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	if step.Simulation != "" {
 		return fmt.Sprintf("step %d simulation %s: %s", stepNumber, step.Simulation, err.Error())
 	}
-	return fmt.Sprintf("step %d MCP execution: %s", stepNumber, err.Error())
+	message := fmt.Sprintf("step %d MCP execution: %s", stepNumber, err.Error())
+	payload := repairPayloadForExecutionError(step, err, message)
+	data, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return message
+	}
+	return string(data)
+}
+
+func repairPayloadForExecutionError(step evalStep, err error, message string) repairPayload {
+	return repairPayload{
+		ErrorKind:    executionErrorKind(step, err),
+		FailedAction: step.ExpectedAction,
+		BadParam:     executionErrorBadParam(step, err),
+		ExpectedType: "GitLab API request accepted by the selected action",
+		LikelyFix:    strings.TrimSpace(message + roleSensitiveRepairHint(step)),
+		RetryAllowed: true,
+		Message:      message,
+	}
+}
+
+func executionErrorKind(step evalStep, err error) string {
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "400") && roleSensitiveRepairHint(step) != "":
+		return "gitlab_bad_request_role_confusion"
+	case strings.Contains(text, "400") || strings.Contains(text, "bad request"):
+		return "gitlab_bad_request"
+	case strings.Contains(text, "404") || strings.Contains(text, "not found"):
+		return "gitlab_not_found"
+	case strings.Contains(text, "403") || strings.Contains(text, "forbidden"):
+		return "gitlab_forbidden"
+	default:
+		return "mcp_execution_error"
+	}
+}
+
+func executionErrorBadParam(step evalStep, err error) string {
+	if executionErrorKind(step, err) != "gitlab_bad_request_role_confusion" {
+		return ""
+	}
+	switch step.ExpectedAction {
+	case "job.token_scope_remove_project":
+		return "project_id,target_project_id"
+	case "issue.link_create":
+		return "project_id,issue_iid,target_project_id,target_issue_iid"
+	case "merge_request.create":
+		return "source_branch,target_branch"
+	default:
+		return ""
+	}
 }
 
 // newTaskTrace is an internal helper for the main package.
@@ -4421,10 +5206,8 @@ func (r *modelRunner) call(ctx context.Context, systemPrompt string, catalog []m
 	var lastErr error
 	for attempt := 0; attempt <= r.retries; attempt++ {
 		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return modelResponse{}, ctx.Err()
-			case <-time.After(r.retryWait):
+			if err := waitForContext(ctx, r.retryWait); err != nil {
+				return modelResponse{}, err
 			}
 		}
 		out, retry, callErr := provider.callOnce(ctx, r.client, r.apiKey, request)
@@ -4743,7 +5526,54 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	if isDynamicTwoToolEvalSurface(toolSurface) {
 		return joinDynamicPrompt(exactPreamble, prompt, "Dynamic-2 mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. Use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
 	}
+	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task), dynamicCallBudgetPreamble(task, toolSurface))
 	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool. If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool. When an exact required call is present above, execute it directly without an extra describe call. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the described input schema, or to the supplied input object when an exact required call is present. Always include top-level params, using params:{} only for actions with no parameters. Canonical action IDs do not include gitlab_ prefixes. Never use angle-bracket placeholder values. Never send confirm:false; omit confirm unless the action is destructive. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+}
+
+func joinNonEmpty(separator string, values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, separator)
+}
+
+func dynamicCallBudgetPreamble(task evalTask, toolSurface string) string {
+	if !isDynamicThreeToolEvalSurface(toolSurface) {
+		return ""
+	}
+	budget := callBudgetForTask(task, toolSurface)
+	return fmt.Sprintf("Dynamic call budget: expected_steps=%d; allowed_discovery_calls=%d; allowed_repair_calls=%d; max_calls=%d.", budget.ExpectedSteps, budget.AllowedDiscoveryCalls, budget.AllowedRepairCalls, budget.MaxCalls)
+}
+
+func dynamicWorkflowPlanPreamble(task evalTask) string {
+	steps := taskSteps(task)
+	if len(steps) <= 1 {
+		return ""
+	}
+	lines := []string{"Dynamic workflow plan:"}
+	for index, step := range steps {
+		if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+			return ""
+		}
+		required := "none"
+		if len(step.RequiredParams) > 0 {
+			required = strings.Join(step.RequiredParams, ", ")
+		}
+		parts := []string{
+			fmt.Sprintf("action=%s", step.ExpectedAction),
+			fmt.Sprintf("required_params=%s", required),
+		}
+		if step.Destructive {
+			parts = append(parts, "destructive_confirm=true")
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
+	}
+	lines = append(lines, "Use this order. The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_search_tools or gitlab_describe_tools for these planned actions. Execute each action directly when its required values are present. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	return strings.Join(lines, "\n")
 }
 
 func joinDynamicPrompt(preamble, prompt, override string) string {
@@ -4778,12 +5608,12 @@ func dynamicConfirmPrompt(prompt string) string {
 
 func dynamicFirstStepGuidance(task evalTask) string {
 	steps := taskSteps(task)
-	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" || len(steps[0].RequiredParams) == 0 {
+	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" {
 		return ""
 	}
-	params := make(map[string]any, len(steps[0].RequiredParams))
-	for _, param := range steps[0].RequiredParams {
-		params[param] = dynamicExampleParamValue(steps[0].ExpectedAction, param, task.Prompt)
+	params, provenances := exactCallParams(steps[0], task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return ""
 	}
 	arguments := actionGuidanceExample(steps[0], params)
 	data, err := marshalGuidanceExample(arguments)
@@ -4827,6 +5657,17 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		}
 	}
 	switch action {
+	case "release.create":
+		switch param {
+		case "tag_name":
+			if value, ok := backtickValueAfter(prompt, "release "); ok {
+				return value
+			}
+		case "name":
+			if value, ok := backtickValueAfter(prompt, "named "); ok {
+				return value
+			}
+		}
 	case "merge_request.time_estimate_set":
 		if param == "duration" {
 			if value, ok := backtickValueAfter(prompt, "estimate "); ok {
@@ -4876,6 +5717,19 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		if param == "description" {
 			if value, ok := backtickValueAfter(prompt, "create trigger "); ok {
 				return value
+			}
+		}
+	case "pipeline.schedule_create":
+		switch param {
+		case "description":
+			for _, marker := range []string{"inactive schedule ", "active schedule ", "create schedule ", "schedule named "} {
+				if value, ok := backtickValueAfter(prompt, marker); ok {
+					return value
+				}
+			}
+		case "active":
+			if strings.Contains(strings.ToLower(prompt), "inactive") {
+				return false
 			}
 		}
 	}
@@ -5091,12 +5945,9 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
 		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
 	}
-	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
-	for _, param := range step.RequiredParams {
-		params[param] = exampleParamValue(param, task.Prompt)
-	}
-	for _, param := range step.OptionalParams {
-		params[param] = exampleParamValue(param, task.Prompt)
+	params, provenances := exactCallParams(step, task.Prompt, true)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
 	}
 
 	example := actionGuidanceExample(step, params)
@@ -5142,9 +5993,9 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
 		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
 	}
-	params := make(map[string]any, len(step.RequiredParams)+1)
-	for _, param := range step.RequiredParams {
-		params[param] = exampleParamValue(param, task.Prompt)
+	params, provenances := exactCallParams(step, task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
 	}
 	if slices.Contains(step.OptionalParams, "confirm") {
 		params["confirm"] = true
@@ -5184,6 +6035,220 @@ func compactExactPromptUsesID(requiredParams []string) bool {
 		}
 	}
 	return false
+}
+
+// paramProvenance records where an exact-call parameter value came from.
+type paramProvenance struct {
+	ParamName    string
+	Value        any
+	SourceText   string
+	SourceMarker string
+	SemanticRole string
+	Confidence   float64
+}
+
+func exactCallParams(step evalStep, prompt string, includeOptional bool) (map[string]any, []paramProvenance) {
+	allParams := exactCallParamSet(step)
+	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
+	provenances := make([]paramProvenance, 0, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	for _, param := range step.OptionalParams {
+		if value, ok := exampleOptionalParamValue(param, prompt); ok {
+			params[param] = value
+			provenances = append(provenances, paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "optional-prompt", SemanticRole: paramSemanticRole(param), Confidence: 0.9})
+			continue
+		}
+		if !includeOptional {
+			continue
+		}
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	return params, provenances
+}
+
+func exactCallParamSet(step evalStep) map[string]bool {
+	allParams := make(map[string]bool, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		allParams[param] = true
+	}
+	for _, param := range step.OptionalParams {
+		allParams[param] = true
+	}
+	return allParams
+}
+
+func resolveExactParamProvenance(action, param, prompt string, allParams map[string]bool) paramProvenance {
+	if provenance, ok := roleParamProvenance(param, prompt, allParams); ok {
+		return provenance
+	}
+	if exactParamNeedsResolvedRole(param, allParams) {
+		return fallbackParamProvenance(param)
+	}
+	value := dynamicExampleParamValue(action, param, prompt)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "inferred", SemanticRole: paramSemanticRole(param), Confidence: 0.7}
+}
+
+func roleParamProvenance(param, prompt string, allParams map[string]bool) (paramProvenance, bool) {
+	switch param {
+	case "project_id":
+		if allParams["target_project_id"] {
+			return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"allowlist of project ", "of project ", "source project ", "owning project ", "in project ", "from project ", "on project "})
+		}
+		return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"in project ", "from project ", "on project "})
+	case "target_project_id":
+		return firstBacktickProvenance(param, prompt, "target_project", []string{"target project ID ", "target project ", "project ID ", "remove project ID "}, true)
+	case "target_group_id":
+		return firstBacktickProvenance(param, prompt, "target_group", []string{"target group ID ", "target group "}, true)
+	case "issue_iid":
+		if allParams["target_issue_iid"] {
+			return firstBacktickProvenance(param, prompt, "source_issue", []string{"source issue IID ", "source issue ", "issue IID ", promptMarkerIssue}, true)
+		}
+	case "target_issue_iid":
+		return firstBacktickProvenance(param, prompt, "target_issue", []string{"target issue IID ", "target issue "}, true)
+	case "child_iid":
+		return firstBacktickProvenance(param, prompt, "child_issue", []string{"child issue IID ", "issue IID "}, true)
+	case "source_branch":
+		return firstBacktickProvenance(param, prompt, "source_branch", []string{promptMarkerFrom, "source branch "}, false)
+	case "target_branch":
+		return firstBacktickProvenance(param, prompt, "target_branch", []string{" into ", "target branch ", "against "}, false)
+	case "full_path":
+		return firstBacktickProvenance(param, prompt, "parent_group_path", []string{"group full path ", "parent group full path ", "group path "}, false)
+	case "child_project_path":
+		return firstBacktickProvenance(param, prompt, "child_project_path", []string{"child project path "}, false)
+	case "parent_id":
+		return firstBacktickProvenance(param, prompt, "parent_group_id", []string{"under group ID ", "parent group ID ", "group ID "}, true)
+	}
+	return paramProvenance{}, false
+}
+
+func firstBacktickProvenance(param, prompt, role string, markers []string, numeric bool) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if numeric {
+			number, err := strconv.Atoi(value)
+			if err != nil {
+				return paramProvenance{}, false
+			}
+			parsed = number
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+func firstProjectIDProvenance(param, prompt, role string, markers []string) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if _, err := strconv.Atoi(value); err == nil {
+			parsed = numericExampleValue(value)
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+func fallbackParamProvenance(param string) paramProvenance {
+	value := fallbackExampleParamValue(param)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "fallback", SemanticRole: paramSemanticRole(param), Confidence: 0}
+}
+
+func exactParamNeedsResolvedRole(param string, allParams map[string]bool) bool {
+	switch param {
+	case "target_project_id", "target_group_id", "target_issue_iid", "source_branch", "target_branch", "full_path", "child_project_path", "parent_id", "child_iid":
+		return true
+	case "project_id":
+		return allParams["target_project_id"] || allParams["target_issue_iid"]
+	case "issue_iid":
+		return allParams["target_issue_iid"]
+	default:
+		return false
+	}
+}
+
+func paramSemanticRole(param string) string {
+	switch param {
+	case "project_id":
+		return "scope_owner_project"
+	case "target_project_id":
+		return "target_project"
+	case "group_id", "full_path":
+		return "group_scope"
+	case "target_group_id":
+		return "target_group"
+	case "issue_iid", "child_iid":
+		return "source_issue"
+	case "target_issue_iid":
+		return "target_issue"
+	case "source_branch":
+		return "source_branch"
+	case "target_branch":
+		return "target_branch"
+	case "child_project_path":
+		return "child_project_path"
+	default:
+		return param
+	}
+}
+
+func exactCallParamsAreSafe(provenances []paramProvenance) bool {
+	allParams := make(map[string]bool, len(provenances))
+	for _, provenance := range provenances {
+		allParams[provenance.ParamName] = true
+	}
+	for _, provenance := range provenances {
+		if exactParamValueIsPlaceholder(provenance.Value) {
+			return false
+		}
+		if exactParamNeedsResolvedRole(provenance.ParamName, allParams) && provenance.Confidence <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func exactParamValueIsPlaceholder(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		return trimmed == "" || trimmed == "..." || strings.Contains(trimmed, "<") && strings.Contains(trimmed, ">")
+	case []map[string]any:
+		return slices.ContainsFunc(typed, func(item map[string]any) bool {
+			return exactParamValueIsPlaceholder(item)
+		})
+	case []any:
+		return slices.ContainsFunc(typed, exactParamValueIsPlaceholder)
+	case map[string]any:
+		for _, item := range typed {
+			if exactParamValueIsPlaceholder(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func schemaFirstTaskPrompt(task evalTask, destructive string, step evalStep) string {
+	toolName := step.ExpectedTool
+	if toolName == "" {
+		toolName = "gitlab"
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nRequired parameters for action %s could not be resolved safely from the task text. Do not use placeholder values. Look up or describe the action schema first, bind only concrete values from the prompt or prior tool results, then call %s with action %s and the required params.", task.ID, task.Prompt, destructive, step.ExpectedAction, toolName, step.ExpectedAction)
 }
 
 // marshalGuidanceExample performs the marshal guidance example operation using the GitLab API and returns [string].
@@ -5238,6 +6303,7 @@ var stringExampleParamMarkers = map[string][]string{
 	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
 	"key":                {"public key ", "variable "},
 	"value":              {"value "},
+	"query":              {"for "},
 	"title":              {"titled "},
 	"user_xids":          {"user IDs ", "user_xids "},
 	"version":            {"version "},
@@ -5384,6 +6450,22 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	case "enabled":
 		if strings.Contains(strings.ToLower(prompt), "disabled") {
 			return false, true
+		}
+	case "active":
+		if strings.Contains(strings.ToLower(prompt), "inactive") {
+			return false, true
+		}
+	case "order_by":
+		if strings.Contains(strings.ToLower(prompt), "recently updated") || strings.Contains(strings.ToLower(prompt), "updated") {
+			return "updated_at", true
+		}
+	case "sort":
+		if strings.Contains(strings.ToLower(prompt), "most recently") || strings.Contains(strings.ToLower(prompt), "latest") || strings.Contains(strings.ToLower(prompt), "recently updated") {
+			return "desc", true
+		}
+	case "per_page":
+		if strings.Contains(strings.ToLower(prompt), "10 most") || strings.Contains(strings.ToLower(prompt), "most recently updated projects") {
+			return 10, true
 		}
 	case "primary":
 		if strings.Contains(strings.ToLower(prompt), "secondary") {
@@ -5741,6 +6823,60 @@ func requiredParamPresent(params map[string]any, required string) bool {
 
 // validationRepairMessage is an internal helper for the main package.
 func validationRepairMessage(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
+	text := validationRepairText(task, step, validation, attemptedInput)
+	payload := repairPayloadForValidation(task, step, validation, attemptedInput, text)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return text
+	}
+	return string(data)
+}
+
+type repairPayload struct {
+	ErrorKind     string         `json:"error_kind"`
+	FailedAction  string         `json:"failed_action,omitempty"`
+	BadParam      string         `json:"bad_param,omitempty"`
+	ExpectedType  string         `json:"expected_type,omitempty"`
+	SentValue     any            `json:"sent_value,omitempty"`
+	RetryEnvelope map[string]any `json:"retry_envelope,omitempty"`
+	LikelyFix     string         `json:"likely_fix"`
+	RetryAllowed  bool           `json:"retry_allowed"`
+	Message       string         `json:"message"`
+}
+
+func repairPayloadForValidation(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any, text string) repairPayload {
+	badParam := validationBadParam(validation.Message)
+	payload := repairPayload{
+		ErrorKind:     validationErrorKind(validation.Message, validation),
+		FailedAction:  validation.Action,
+		BadParam:      badParam,
+		ExpectedType:  validationExpectedType(validation.Message, badParam),
+		SentValue:     attemptedParamValue(attemptedInput, badParam),
+		RetryEnvelope: repairRetryEnvelope(task, step, attemptedInput),
+		LikelyFix:     strings.TrimSpace(text + roleSensitiveRepairHint(step)),
+		RetryAllowed:  true,
+		Message:       text,
+	}
+	if payload.FailedAction == "" {
+		payload.FailedAction = step.ExpectedAction
+	}
+	if payload.FailedAction == "" {
+		payload.FailedAction = step.ExpectedTool
+	}
+	_ = task
+	return payload
+}
+
+func repairRetryEnvelope(task evalTask, step evalStep, attemptedInput map[string]any) map[string]any {
+	data := expectedActionCallExample(task, step, attemptedInput)
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+		return nil
+	}
+	return envelope
+}
+
+func validationRepairText(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
 	var b strings.Builder
 	b.WriteString(validation.Message)
 	if step.ExpectedAction == "" {
@@ -5769,16 +6905,111 @@ func validationRepairMessage(task evalTask, step evalStep, validation validation
 	return b.String()
 }
 
+func validationErrorKind(message string, validation validationResult) string {
+	switch {
+	case strings.Contains(message, "missing required"):
+		return "missing_required_param"
+	case strings.Contains(message, diagnosticUnknownParams):
+		return "unknown_param"
+	case strings.Contains(message, "integer") || strings.Contains(message, "expected type"):
+		return "wrong_type"
+	case strings.Contains(message, "destructive") && strings.Contains(message, "confirm"):
+		return "destructive_confirmation_missing"
+	case !validation.ActionMatches:
+		return "wrong_action"
+	case !validation.ToolMatches:
+		return "wrong_tool"
+	case strings.Contains(message, "unexpected top-level parameter") || strings.Contains(message, "top-level input fields"):
+		return "invalid_envelope"
+	default:
+		return "validation_error"
+	}
+}
+
+func validationBadParam(message string) string {
+	for _, marker := range []string{"missing required params.", "missing required "} {
+		if after, ok := strings.CutPrefix(message, marker); ok {
+			return firstRepairParam(after)
+		}
+		if _, after, ok := strings.Cut(message, marker); ok {
+			return firstRepairParam(after)
+		}
+	}
+	if _, after, ok := strings.Cut(message, diagnosticUnknownParams); ok {
+		if _, params, hasColon := strings.Cut(after, ":"); hasColon {
+			return firstRepairParam(params)
+		}
+	}
+	if _, after, ok := strings.Cut(message, "params."); ok {
+		return firstRepairParam(after)
+	}
+	if strings.Contains(message, "confirm") {
+		return "confirm"
+	}
+	return ""
+}
+
+func firstRepairParam(text string) string {
+	text = strings.TrimSpace(strings.Trim(text, ".;:"))
+	if index := strings.IndexAny(text, ",; "); index >= 0 {
+		text = text[:index]
+	}
+	return strings.TrimSpace(strings.Trim(text, ".`"))
+}
+
+func validationExpectedType(message, badParam string) string {
+	if badParam == "confirm" {
+		return "boolean true"
+	}
+	if strings.Contains(message, "integer") {
+		return "integer"
+	}
+	if strings.Contains(message, "missing required") {
+		return "present concrete value"
+	}
+	if strings.Contains(message, diagnosticUnknownParams) {
+		return "parameter allowed by the selected action schema"
+	}
+	return "valid value for selected action schema"
+}
+
+func attemptedParamValue(input map[string]any, param string) any {
+	if param == "" || input == nil {
+		return nil
+	}
+	if value, ok := input[param]; ok {
+		return value
+	}
+	params, _ := input["params"].(map[string]any)
+	return params[param]
+}
+
+func roleSensitiveRepairHint(step evalStep) string {
+	if step.ExpectedTool != dynamicExecuteTool {
+		return ""
+	}
+	switch step.ExpectedAction {
+	case "job.token_scope_remove_project":
+		return ". Parameter role hint: project_id is the owning project whose allowlist changes; target_project_id is the project being added or removed"
+	case "issue.link_create":
+		return ". Parameter role hint: project_id and issue_iid identify the source issue; target_project_id and target_issue_iid identify the linked target issue"
+	case "merge_request.create":
+		return ". Parameter role hint: source_branch is the branch merged from; target_branch is the branch merged into"
+	}
+	return ""
+}
+
 // expectedActionCallExample is an internal helper for the main package.
 func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[string]any) string {
 	params := map[string]any{}
 	attemptedParams, _ := attemptedInput["params"].(map[string]any)
+	allParams := exactCallParamSet(step)
 	for _, required := range step.RequiredParams {
 		if value, ok := attemptedParams[required]; ok {
 			params[required] = value
 			continue
 		}
-		params[required] = dynamicExampleParamValue(step.ExpectedAction, required, task.Prompt)
+		params[required] = resolveExactParamProvenance(step.ExpectedAction, required, task.Prompt, allParams).Value
 	}
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
 	if step.ExpectedTool == dynamicExecuteTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {

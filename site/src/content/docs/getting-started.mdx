@@ -490,7 +490,7 @@ This is transparent to you — your AI client handles the routing automatically.
 :::tip
 Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute option.
+For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-3` explicitly selects that same three-tool surface, and `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute variant.
 
 Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources and prompts when you need the smallest initial MCP context.
 :::

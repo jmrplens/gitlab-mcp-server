@@ -76,8 +76,8 @@ gitlab-mcp-server --http \
 - `meta`: domain-level meta-tools, the default consolidated catalog.
 - `individual`: every GitLab operation is exposed as its own tool.
 - `dynamic`: the current low-token three-tool surface with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
-- `dynamic-3`: explicit selector for the same three-tool dynamic surface, mainly for A/B evaluation and reporting.
-- `dynamic-2`: experimental two-tool comparison surface with `gitlab_find_action` and `gitlab_execute_tool`.
+- `dynamic-3`: explicit selector for the same three-tool dynamic surface, useful for pinned configurations.
+- `dynamic-2`: experimental two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
 
 `--capability-surface` controls resources and prompts independently of tools: `full` registers all resources and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments.
 

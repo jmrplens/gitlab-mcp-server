@@ -199,11 +199,11 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
 | **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
-| **Dynamic toolset** | `TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, or `META_TOOLS=dynamic` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions. Current candidate for a future default |
-| **Dynamic-2 candidate** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental A/B candidate that combines discovery and schema lookup |
+| **Dynamic toolset** | `TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, or `META_TOOLS=dynamic` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
+| **Dynamic-2 variant** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental two-tool surface that combines discovery and schema lookup |
 | **Individual tools** | `META_TOOLS=false` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
 
-`TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, and legacy `META_TOOLS=dynamic` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need an explicit current dynamic selector in reports or pinned configs, and reserve `dynamic-2` for find/execute experiments.
+`TOOL_SURFACE=dynamic`, `TOOL_SURFACE=dynamic-3`, and legacy `META_TOOLS=dynamic` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need to pin the explicit three-tool selector, and reserve `dynamic-2` for find/execute experiments.
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token search/describe/execute workflow.
 

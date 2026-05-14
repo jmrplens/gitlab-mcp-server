@@ -265,6 +265,18 @@ func TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys(t *testin
 	assertContains(t, got.Prompt, "`EVAL_TOKEN_qwen36flash_r3_abc123`")
 }
 
+// TestAddLiveAttemptResourceSuffix_IsolatesInstanceVariableDelete verifies that MT-069 deletes the instance variable created for the same model attempt.
+func TestAddLiveAttemptResourceSuffix_IsolatesInstanceVariableDelete(t *testing.T) {
+	task := evalTask{
+		ID:     "MT-069",
+		Prompt: "Delete instance CI variable `INSTANCE_EVAL_TOKEN`.",
+	}
+
+	got := addLiveAttemptResourceSuffix(task, "openai:gpt-5.4-nano", 1, "abc123")
+
+	assertContains(t, got.Prompt, "`INSTANCE_EVAL_TOKEN_gpt54nano_r1_abc123`")
+}
+
 // TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources verifies that AddLiveAttemptResourceSuffix handles the isolates workflow resources scenario correctly.
 func TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources(t *testing.T) {
 	task := evalTask{
@@ -344,6 +356,144 @@ func TestReplacePromptJobID(t *testing.T) {
 	if strings.Contains(got, "job `496`") {
 		t.Fatalf("replacePromptJobID() = %q, still contains old job ID", got)
 	}
+}
+
+// TestEnsureLiveFailedJobTarget_CreatesAttemptLocalFailedJob verifies retry tasks do not reuse the shared failed-job fixture.
+func TestEnsureLiveFailedJobTarget_CreatesAttemptLocalFailedJob(t *testing.T) {
+	calls := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipeline":
+			_, _ = w.Write([]byte(`{"id":700,"iid":7,"ref":"main","status":"created"}`))
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipelines/700/jobs":
+			_, _ = w.Write([]byte(`[{"id":4321,"name":"failing_fixture","status":"failed"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	task := evalTask{
+		ID:     "MT-023",
+		Prompt: "Retry job `999` in project `my-org/tools/gitlab-mcp-server`.",
+	}
+
+	got, err := ensureLiveFailedJobTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveFailedJobTarget() error = %v", err)
+	}
+
+	assertContains(t, got.Prompt, "job `4321`")
+	if strings.Contains(got.Prompt, "job `999`") {
+		t.Fatalf("Prompt = %q, still contains old job ID", got.Prompt)
+	}
+	if gotCalls := strings.Join(calls, ","); gotCalls != "POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipeline,GET /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipelines/700/jobs" {
+		t.Fatalf("calls = %q", gotCalls)
+	}
+}
+
+// TestEnsureLiveSubgroupDeleteTarget_CreatesAttemptLocalSubgroup verifies destructive group deletes target an evaluator-owned subgroup.
+func TestEnsureLiveSubgroupDeleteTarget_CreatesAttemptLocalSubgroup(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/groups/my-org":
+			_, _ = w.Write([]byte(`{"id":123,"name":"my-org","full_path":"my-org"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/groups":
+			_, _ = w.Write([]byte(`{"id":456,"name":"eval-temp-test","full_path":"my-org/eval-temp-test"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	task := evalTask{ID: "MT-008", Prompt: "Delete subgroup `my-org/eval-temp`."}
+
+	got, err := ensureLiveSubgroupDeleteTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveSubgroupDeleteTarget() error = %v", err)
+	}
+
+	assertContains(t, got.Prompt, "`my-org/eval-temp-test`")
+}
+
+// TestEnsureLiveEnvironmentStopTarget_CreatesAttemptLocalEnvironment verifies environment stop does not reuse the shared fixture environment.
+func TestEnsureLiveEnvironmentStopTarget_CreatesAttemptLocalEnvironment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/environments" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":77,"name":"eval-stop-test","state":"available"}`))
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	task := evalTask{ID: "MT-049", Prompt: "Stop environment ID `7` in project `my-org/tools/gitlab-mcp-server`."}
+
+	got, err := ensureLiveEnvironmentStopTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveEnvironmentStopTarget() error = %v", err)
+	}
+
+	assertContains(t, got.Prompt, "environment ID `77`")
+}
+
+// TestEnsureLiveBroadcastMessageDeleteTarget_CreatesAttemptLocalMessage verifies broadcast delete targets a freshly created message.
+func TestEnsureLiveBroadcastMessageDeleteTarget_CreatesAttemptLocalMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/v4/broadcast_messages" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":98,"message":"Evaluation broadcast safe to delete"}`))
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	task := evalTask{ID: "MT-054", Prompt: "Delete broadcast message ID `12`."}
+
+	got, err := ensureLiveBroadcastMessageDeleteTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveBroadcastMessageDeleteTarget() error = %v", err)
+	}
+
+	assertContains(t, got.Prompt, "broadcast message ID `98`")
+}
+
+// TestEnsureLiveJobTokenScopeRemoveProjectTarget_SeedsAllowlist verifies token-scope removal has a target project to remove.
+func TestEnsureLiveJobTokenScopeRemoveProjectTarget_SeedsAllowlist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/groups/my-org%2Ftools":
+			_, _ = w.Write([]byte(`{"id":321,"name":"tools","full_path":"my-org/tools"}`))
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server":
+			_, _ = w.Write([]byte(`{"id":42,"path_with_namespace":"my-org/tools/gitlab-mcp-server"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects":
+			_, _ = w.Write([]byte(`{"id":99,"name":"eval-token-scope-test","path_with_namespace":"my-org/tools/eval-token-scope-test"}`))
+		case r.Method == http.MethodPatch && strings.Contains(r.URL.EscapedPath(), "/job_token_scope"):
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.EscapedPath(), "/job_token_scope/allowlist"):
+			_, _ = w.Write([]byte(`{"source_project_id":42,"target_project_id":99}`))
+		default:
+			t.Logf("unexpected fixture request: %s %s", r.Method, r.URL.EscapedPath())
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	task := evalTask{ID: "MT-066", Prompt: "Remove project ID `123` from the CI job token allowlist of project `my-org/tools/gitlab-mcp-server`."}
+
+	got, err := ensureLiveJobTokenScopeRemoveProjectTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveJobTokenScopeRemoveProjectTarget() error = %v", err)
+	}
+
+	assertContains(t, got.Prompt, "project ID `99`")
+	assertContains(t, got.Prompt, "project `42`")
 }
 
 // TestReplacePromptBacktickValueAfter verifies the behavior of replace prompt backtick value after.

@@ -32,7 +32,7 @@ En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se c
 
 ### Conjunto de herramientas dinámico
 
-El modo dinámico (`TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`) es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`) es la alternativa de bajo consumo de tokens. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR

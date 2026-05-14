@@ -15,7 +15,7 @@ El conjunto de herramientas dinámico es el modo de bajo consumo de tokens de Gi
 | `gitlab_describe_tools` | Devuelve los parámetros exactos, ejemplos y metadatos de seguridad de una o varias acciones                                     |
 | `gitlab_execute_tool`   | Ejecuta la acción elegida tras validar el ID de acción y los parámetros                                                         |
 
-Las meta-herramientas siguen siendo el modo predeterminado hoy porque son la superficie más compatible. El modo dinámico es el candidato actual de bajo consumo de tokens para convertirse en predeterminado en el futuro.
+Las meta-herramientas siguen siendo el modo predeterminado hoy porque son la superficie más compatible. El modo dinámico es la alternativa de bajo consumo de tokens.
 
 ## Por qué existe el modo dinámico
 
@@ -74,9 +74,9 @@ gitlab-mcp-server --http \
 ```
 
 :::tip[Nombres actuales]
-`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la misma superficie actual de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites un nombre explícito de candidato en evaluaciones.
+`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la misma superficie actual de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites fijar explícitamente la variante de tres herramientas.
 
-`TOOL_SURFACE=dynamic-2` es un modo de comparación aparcado con `gitlab_find_action` más `gitlab_execute_tool`.
+`TOOL_SURFACE=dynamic-2` es una variante experimental de dos herramientas con `gitlab_find_action` más `gitlab_execute_tool`.
 :::
 
 ## Flujo del modelo

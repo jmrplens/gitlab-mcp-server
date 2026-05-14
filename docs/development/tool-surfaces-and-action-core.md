@@ -30,14 +30,16 @@ future generator is considered.
 The canonical action core is the intermediate layer between typed GitLab domain
 handlers and catalog-backed MCP surfaces.
 
-```text
-Typed domain handlers and route constructors
-                 |
-                 v
-Canonical action catalog
-       |                         |
-       v                         v
-Visible meta-tools        Dynamic search/describe/execute
+```mermaid
+flowchart LR
+        handlers[Typed domain handlers\nand route constructors]
+        catalog[Canonical action catalog]
+        meta[Visible meta-tools\ndomain dispatchers]
+        dynamic[Dynamic tools\nsearch / describe / execute]
+
+        handlers --> catalog
+        catalog --> meta
+        catalog --> dynamic
 ```
 
 The core pieces are:
@@ -60,47 +62,28 @@ formatters. Dynamic action IDs use stable `domain.action` names such as
 
 `cmd/server/main.go` selects one tool surface when the server is created.
 
-```text
-TOOL_SURFACE=individual
-        |
-        v
-internal/tools.RegisterAll
-        |
-        v
-domain RegisterTools functions
-```
+```mermaid
+flowchart TD
+    server[cmd/server.createServer]
+    selector{Selected tool surface}
 
-```text
-TOOL_SURFACE=meta
-        |
-        v
-internal/tools.BuildActionCatalog
-        |
-        v
-internal/tools.RegisterMetaCatalog
-```
+    server --> selector
 
-```text
-TOOL_SURFACE=dynamic or dynamic-3
-        |
-        v
-cmd/server.buildDynamicActionCatalog
-        |
-        v
-dynamic.AddStandaloneCatalog
-        |
-        v
-dynamic.RegisterCatalogTools
-```
+    selector -->|individual| registerAll[internal/tools.RegisterAll]
+    registerAll --> domainTools[Domain RegisterTools functions]
 
-```text
-TOOL_SURFACE=dynamic-2
-        |
-        v
-cmd/server.buildDynamicActionCatalog
-        |
-        v
-dynamic.RegisterCatalogFindExecuteTools
+    selector -->|meta| buildMeta[internal/tools.BuildActionCatalog]
+    buildMeta --> registerMeta[internal/tools.RegisterMetaCatalog]
+    registerMeta --> metaTools[Visible domain meta-tools]
+
+    selector -->|dynamic or dynamic-3| buildDynamic[cmd/server.buildDynamicActionCatalog]
+    buildDynamic --> standalone[dynamic.AddStandaloneCatalog]
+    standalone --> dynamic3[dynamic.RegisterCatalogTools]
+    dynamic3 --> threeTools[gitlab_search_tools\ngitlab_describe_tools\ngitlab_execute_tool]
+
+    selector -->|dynamic-2| buildDynamic2[cmd/server.buildDynamicActionCatalog]
+    buildDynamic2 --> dynamic2[dynamic.RegisterCatalogFindExecuteTools]
+    dynamic2 --> twoTools[gitlab_find_action\ngitlab_execute_tool]
 ```
 
 ## Action Group Builder Ownership

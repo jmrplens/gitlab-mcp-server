@@ -72,8 +72,8 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 - `meta`: meta-herramientas por dominio, el catálogo consolidado por defecto.
 - `individual`: cada operación de GitLab se expone como una herramienta independiente.
 - `dynamic`: la superficie actual de bajo consumo con tres herramientas: `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`.
-- `dynamic-3`: selector explícito para la misma superficie dinámica de tres herramientas, usado principalmente para evaluación A/B e informes.
-- `dynamic-2`: superficie experimental de comparación con dos herramientas: `gitlab_find_action` y `gitlab_execute_tool`.
+- `dynamic-3`: selector explícito para la misma superficie dinámica de tres herramientas, útil para configuraciones fijadas.
+- `dynamic-2`: superficie experimental de dos herramientas con `gitlab_find_action` y `gitlab_execute_tool`.
 
 `--capability-surface` controla recursos y prompts de forma independiente a las herramientas: `full` registra todos los recursos y prompts, mientras que `minimal` conserva solo el recurso de roots del workspace para despliegues dinámicos de bajo consumo.
 
@@ -341,7 +341,7 @@ docker run -d \
 </Tabs>
 
 :::tip
-Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.1`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
+Fija la imagen a una etiqueta de release específica (por ejemplo `ghcr.io/jmrplens/gitlab-mcp-server:<version>`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
 :::
 
 ### Docker Compose
@@ -464,7 +464,7 @@ flyctl scale memory 512    # Subir memoria a 512 MB (por defecto en fly.toml: 25
 La auto-actualización está **deshabilitada** en la configuración incluida (`--auto-update=false`). En Fly.io, el flujo de actualización recomendado es redesplegar con una imagen nueva:
 
 ```bash
-flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.1
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:<version>
 ```
 
 Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y preserva tus secretos y configuración.

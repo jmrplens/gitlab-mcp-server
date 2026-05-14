@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -30,6 +32,41 @@ func requireContainsAll(t *testing.T, name, content string, wants []string) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("%s = %q, want content containing %q", name, content, want)
 		}
+	}
+}
+
+func TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues(t *testing.T) {
+	first := liveUniqueSuffix()
+	second := liveUniqueSuffix()
+	if first == "" || second == "" {
+		t.Fatalf("liveUniqueSuffix() returned empty values: %q %q", first, second)
+	}
+	if first == second {
+		t.Fatalf("liveUniqueSuffix() returned duplicate values: %q", first)
+	}
+}
+
+func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	got, err := gitlabSkipTLSVerify()
+	if err != nil {
+		t.Fatalf("gitlabSkipTLSVerify() error = %v", err)
+	}
+	if !got {
+		t.Fatal("gitlabSkipTLSVerify() = false, want true")
+	}
+
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "not-bool")
+	if _, parseErr := gitlabSkipTLSVerify(); parseErr == nil {
+		t.Fatal("gitlabSkipTLSVerify() error = nil, want invalid bool error")
+	}
+}
+
+func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := waitForContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitForContext() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -219,11 +256,18 @@ func TestFilterTasksByMutation_RejectsConflictingFlags(t *testing.T) {
 func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab": {
+			"admin.terraform_state_unlock":             {},
+			"ci_variable.instance_delete":              {},
+			"custom_emoji.delete":                      {},
 			"environment.deployment_approve_or_reject": {},
-			"issue.list":                  {},
-			"model_registry.download":     {},
-			"mr_review.draft_note_create": {},
-			"project.get":                 {},
+			"issue.list":                               {},
+			"job.retry":                                {},
+			"merge_request.merge":                      {},
+			"model_registry.download":                  {},
+			"mr_review.draft_note_create":              {},
+			"mr_review.draft_note_publish_all":         {},
+			"project.mirror_force_push":                {},
+			"project.get":                              {},
 		},
 		"gitlab_model_registry": {
 			"download": {},
@@ -231,21 +275,29 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	}
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
+		{ID: "MT-017", ExpectedTool: "gitlab", ExpectedAction: "merge_request.merge"},
+		{ID: "MT-023", ExpectedTool: "gitlab", ExpectedAction: "job.retry"},
+		{ID: "MT-069", ExpectedTool: "gitlab", ExpectedAction: "ci_variable.instance_delete"},
+		{ID: "MT-063", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_publish_all"},
 		{ID: "deployment-unavailable", ExpectedTool: "gitlab", ExpectedAction: "environment.deployment_approve_or_reject"},
 		{ID: "missing", ExpectedTool: "gitlab", ExpectedAction: "dependency.list"},
 		{ID: "ce-unavailable", ExpectedTool: "gitlab", ExpectedAction: "model_registry.download"},
 		{ID: "split-ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
-		{ID: "docker-unavailable", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
+		{ID: "draft-notes-ce", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
+		{ID: "MT-107", ExpectedTool: "gitlab", ExpectedAction: "custom_emoji.delete"},
+		{ID: "MT-114", ExpectedTool: "gitlab", ExpectedAction: "admin.terraform_state_unlock"},
+		{ID: "MT-116", ExpectedTool: "gitlab", ExpectedAction: "project.mirror_force_push"},
 		{ID: "MT-105", ExpectedTool: "gitlab", ExpectedAction: "user.disable_two_factor"},
 		{ID: "MT-115", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
 		{ID: "standalone", ExpectedTool: "gitlab_discover_project"},
 		{ID: "interactive", ExpectedTool: "gitlab_interactive_issue_create"},
+		{ID: "unknown-standalone", ExpectedTool: "gitlab_unknown_standalone"},
 		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "dependency.list"}}},
 	}
 
 	filtered := filterTasksByAvailableRoutes(tasks, routes)
-	if got := taskIDs(filtered); got != "read,standalone" {
-		t.Fatalf("filtered IDs = %q, want read,standalone", got)
+	if got := taskIDs(filtered); got != "read,MT-017,MT-023,MT-069,MT-063,draft-notes-ce,MT-107,MT-114,MT-116,standalone,interactive" {
+		t.Fatalf("filtered IDs = %q, want reactivated CE/docker-safe tasks plus standalone interactive tools", got)
 	}
 }
 
@@ -336,6 +388,31 @@ func TestOrderSharedFixtureDestructiveLast(t *testing.T) {
 
 	if got := taskIDs(ordered); got != "MT-060,MT-065,MT-064,MT-024,MT-055" {
 		t.Fatalf("ordered IDs = %q, want MT-060,MT-065,MT-064,MT-024,MT-055", got)
+	}
+}
+
+// TestTerraformStateUnlockProjectID_IgnoresStateName verifies Terraform state fixture setup reads the project path, not the state name.
+func TestTerraformStateUnlockProjectID_IgnoresStateName(t *testing.T) {
+	got, ok := terraformStateUnlockProjectID("Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.")
+	if !ok {
+		t.Fatal("terraformStateUnlockProjectID() ok = false, want true")
+	}
+	if got != "my-org/tools/gitlab-mcp-server" {
+		t.Fatalf("terraformStateUnlockProjectID() = %q, want project path", got)
+	}
+}
+
+// TestTerraformStateLockEndpoint_PreservesEscapedProjectPath verifies GitLab project paths are escaped exactly once.
+func TestTerraformStateLockEndpoint_PreservesEscapedProjectPath(t *testing.T) {
+	baseURL, err := url.Parse("http://localhost:8929")
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	got := terraformStateLockEndpoint(baseURL, "my-org/tools/gitlab-mcp-server", "eval-unlock")
+	want := "http://localhost:8929/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/terraform/state/eval-unlock/lock"
+	if got != want {
+		t.Fatalf("terraformStateLockEndpoint() = %q, want %q", got, want)
 	}
 }
 
@@ -869,6 +946,54 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	})
 }
 
+func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T) {
+	exactTask := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+	}}
+	exactBudget := callBudgetForTask(exactTask, config.ToolSurfaceDynamic3)
+	if exactBudget.ExpectedSteps != 1 || exactBudget.AllowedDiscoveryCalls != 0 || !exactBudget.SuppressDiscovery {
+		t.Fatalf("exact budget = %+v, want one-step direct execution with no discovery", exactBudget)
+	}
+
+	ambiguousTask := evalTask{ID: "MT-AMB", Prompt: "Find the right project cleanup action.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.delete", RequiredParams: []string{"project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+	}}
+	ambiguousBudget := callBudgetForTask(ambiguousTask, config.ToolSurfaceDynamic3)
+	if ambiguousBudget.AllowedDiscoveryCalls != 2 || ambiguousBudget.SuppressDiscovery {
+		t.Fatalf("ambiguous budget = %+v, want search+describe allowed", ambiguousBudget)
+	}
+}
+
+func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T) {
+	task := evalTask{ID: "MS-PLAN", Prompt: "Create an issue and then list it.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.list", RequiredParams: []string{"project_id"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+		"Dynamic workflow plan:",
+		"1. action=issue.create; required_params=project_id, title",
+		"2. action=issue.list; required_params=project_id",
+		"Dynamic call budget: expected_steps=2; allowed_discovery_calls=1",
+	})
+	if strings.Contains(taskPromptForSurface(task, config.ToolSurfaceDynamic2), "Dynamic workflow plan:") {
+		t.Fatal("Dynamic-2 prompt unexpectedly received Dynamic-3 workflow plan")
+	}
+}
+
+func TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall(t *testing.T) {
+	task := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+	}}
+	step := taskSteps(task)[0]
+	message, blocked := discoveryBudgetFeedback(task, step, modelContentBlock{Name: dynamicDescribeTool}, callBudgetForTask(task, config.ToolSurfaceDynamic3))
+	if !blocked {
+		t.Fatal("discoveryBudgetFeedback() blocked = false, want true")
+	}
+	requireContainsAll(t, "discoveryBudgetFeedback()", message, []string{"exact gitlab_execute_tool call", "job.token_scope_remove_project", "no search, describe, or schema lookup is needed"})
+}
+
 // TestDynamicTaskPrompt_IncludesProviderConfusionGuidance verifies task-level
 // prompts give exact ordering hints for workflows confused by model providers.
 func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
@@ -1039,6 +1164,155 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before dynamic override", prompt)
 			}
 			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
+		})
+	}
+}
+
+func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) {
+	task := evalTask{ID: "MT-003", Prompt: "List the 10 most recently updated projects I can access.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.list", OptionalParams: []string{"order_by", "sort", "per_page"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+		"Dynamic first-step exact call",
+		`"action":"project.list"`,
+		`"order_by":"updated_at"`,
+		`"sort":"desc"`,
+		`"per_page":10`,
+		"execute it directly without an extra describe call",
+	})
+}
+
+func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
+	task := evalTask{ID: "MT-033", Prompt: "Search all projects for `gitlab-mcp-server`.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "search.projects", RequiredParams: []string{"query"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+		"Dynamic first-step exact call",
+		`"action":"search.projects"`,
+		`"query":"gitlab-mcp-server"`,
+		"execute it directly without an extra describe call",
+	})
+}
+
+func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.T) {
+	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_get", RequiredParams: []string{"project_id", "schedule_id"}},
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_update", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"cron"}},
+		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_delete_variable", RequiredParams: []string{"project_id", "schedule_id", "key"}, Destructive: true},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+		"Dynamic first-step exact call",
+		`"action":"pipeline.schedule_create"`,
+		`"description":"eval-crud-schedule"`,
+		`"active":false`,
+		"The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_search_tools or gitlab_describe_tools for these planned actions.",
+		"Values named *_id that are produced by earlier steps must be copied from the preceding tool result.",
+		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
+		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.",
+	})
+}
+
+func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
+	tests := []struct {
+		name string
+		task evalTask
+		want []string
+	}{
+		{
+			name: "allowlist source and target projects",
+			task: evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"job.token_scope_remove_project"`, `"confirm":true`, `"params":{"project_id":1,"target_project_id":51}`},
+		},
+		{
+			name: "issue link source and target",
+			task: evalTask{ID: "MT-LINK", Prompt: "Link source issue IID `5` in project `my-org/source` to target issue IID `9` in target project ID `77`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+			}},
+			want: []string{`"action":"issue.link_create"`, `"issue_iid":5`, `"project_id":"my-org/source"`, `"target_issue_iid":9`, `"target_project_id":77`},
+		},
+		{
+			name: "merge request branches",
+			task: evalTask{ID: "MT-MR", Prompt: "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval` into `main` titled `Evaluation MR`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.create", RequiredParams: []string{"project_id", "source_branch", "target_branch", "title"}},
+			}},
+			want: []string{`"action":"merge_request.create"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"source_branch":"feature/eval"`, `"target_branch":"main"`, `"title":"Evaluation MR"`},
+		},
+		{
+			name: "group epic child issue",
+			task: evalTask{ID: "MT-140", Prompt: "Assign issue IID `99` from child project path `my-org/tools/gitlab-mcp-server` to epic IID `12` in group full path `my-org`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "group.epic_issue_assign", RequiredParams: []string{"full_path", "epic_iid", "child_project_path", "child_iid"}},
+			}},
+			want: []string{`"action":"group.epic_issue_assign"`, `"child_iid":99`, `"child_project_path":"my-org/tools/gitlab-mcp-server"`, `"epic_iid":12`, `"full_path":"my-org"`},
+		},
+		{
+			name: "project deploy token delete",
+			task: evalTask{ID: "MT-112", Prompt: "Delete project deploy token ID `66` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "access.deploy_token_delete_project", RequiredParams: []string{"project_id", "deploy_token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"access.deploy_token_delete_project"`, `"confirm":true`, `"deploy_token_id":66`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			if !strings.Contains(prompt, "Dynamic first-step exact call") && !strings.Contains(prompt, "Dynamic exact call") {
+				t.Fatalf("taskPromptForSurface() = %q, want dynamic exact-call guidance", prompt)
+			}
+			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
+		})
+	}
+}
+
+func TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCalls(t *testing.T) {
+	tests := []struct {
+		name   string
+		task   evalTask
+		absent []string
+	}{
+		{
+			name: "missing target project",
+			task: evalTask{ID: "MT-066", Prompt: "Remove a project from the CI job token allowlist of project `1`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			absent: []string{"Dynamic first-step exact call", `"target_project_id":123`, "<target_project_id>"},
+		},
+		{
+			name: "non numeric target project",
+			task: evalTask{ID: "MT-066", Prompt: "Remove project ID `not-a-number` from the CI job token allowlist of project `1`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			absent: []string{"Dynamic first-step exact call", `"target_project_id":123`},
+		},
+		{
+			name: "missing target branch",
+			task: evalTask{ID: "MT-MR", Prompt: "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval` titled `Evaluation MR`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.create", RequiredParams: []string{"project_id", "source_branch", "target_branch", "title"}},
+			}},
+			absent: []string{"Dynamic first-step exact call", `"target_branch":"main"`, "<target_branch>"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			for _, unwanted := range tt.absent {
+				if strings.Contains(prompt, unwanted) {
+					t.Fatalf("taskPromptForSurface() = %q, want no unsafe exact-call content %q", prompt, unwanted)
+				}
+			}
+			if !strings.Contains(prompt, "Required parameters for action") && !strings.Contains(prompt, "call gitlab_search_tools") {
+				t.Fatalf("taskPromptForSurface() = %q, want schema-first or dynamic discovery guidance", prompt)
+			}
 		})
 	}
 }
@@ -1718,6 +1992,67 @@ func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) 
 		if !strings.Contains(message, want) {
 			t.Fatalf("message = %q, want substring %q", message, want)
 		}
+	}
+}
+
+func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true}
+	task := evalTask{Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.target_project_id", Action: "job.token_scope_remove_project"}, map[string]any{
+		"action": "job.token_scope_remove_project",
+		"params": map[string]any{"project_id": 51},
+	})
+
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(message), &payload); err != nil {
+		t.Fatalf("validationRepairMessage() JSON error = %v; message = %s", err, message)
+	}
+	if payload.ErrorKind != "missing_required_param" || payload.BadParam != "target_project_id" || payload.ExpectedType != "present concrete value" || !payload.RetryAllowed {
+		t.Fatalf("repair payload = %+v, want structured missing param retry", payload)
+	}
+	if !strings.Contains(payload.LikelyFix, "project_id is the owning project") || !strings.Contains(payload.Message, `"target_project_id":51`) {
+		t.Fatalf("repair payload = %+v, want role hint and concrete target_project_id", payload)
+	}
+}
+
+func TestInvalidToolUseFingerprint_StableForRepeatedInvalidRetry(t *testing.T) {
+	toolUse := modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "project.delete", "params": map[string]any{"project_id": "my-org/project"}}}
+	first := invalidToolUseFingerprint(toolUse)
+	second := invalidToolUseFingerprint(toolUse)
+	if first == "" || first != second {
+		t.Fatalf("invalidToolUseFingerprint() = %q then %q, want stable non-empty fingerprint", first, second)
+	}
+}
+
+func TestToolExecutionNote_ClassifiesGitLabRoleConfusion(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}}
+	note := toolExecutionNote(1, step, errors.New("GitLab 400 Bad Request: target project is not in scope"))
+
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(note), &payload); err != nil {
+		t.Fatalf("toolExecutionNote() JSON error = %v; note = %s", err, note)
+	}
+	if payload.ErrorKind != "gitlab_bad_request_role_confusion" || payload.BadParam != "project_id,target_project_id" || !payload.RetryAllowed {
+		t.Fatalf("execution repair payload = %+v, want role-confusion bad request", payload)
+	}
+	if !strings.Contains(payload.LikelyFix, "project_id is the owning project") {
+		t.Fatalf("execution repair payload = %+v, want role-sensitive likely_fix", payload)
+	}
+}
+
+func TestValidationRepairMessage_ClassifiesWrongIntegerType(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}}
+	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "expected params.runner_id to be integer; got string", Action: "runner.remove"}, map[string]any{
+		"action": "runner.remove",
+		"params": map[string]any{"runner_id": "not-a-number"},
+	})
+
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(message), &payload); err != nil {
+		t.Fatalf("validationRepairMessage() JSON error = %v; message = %s", err, message)
+	}
+	if payload.ErrorKind != "wrong_type" || payload.BadParam != "runner_id" || payload.ExpectedType != "integer" || payload.SentValue != "not-a-number" {
+		t.Fatalf("repair payload = %+v, want wrong integer type details", payload)
 	}
 }
 
