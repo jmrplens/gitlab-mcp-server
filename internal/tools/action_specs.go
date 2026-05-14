@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commitdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/containerregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploymentmergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
@@ -41,6 +42,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
@@ -48,6 +50,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectstatistics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedpackages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
@@ -90,6 +93,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
 		buildModelRegistryActionSpecs,
+		buildPackageActionSpecs,
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
@@ -162,6 +166,14 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
+}
+
+func buildPackageActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 24)
+	specs = append(specs, packages.ActionSpecs(client)...)
+	specs = append(specs, containerregistry.ActionSpecs(client)...)
+	specs = append(specs, protectedpackages.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_package", specs)
 }
 
 func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
