@@ -105,6 +105,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/workitems"
@@ -169,6 +170,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildStorageMoveActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
+		buildUserActionSpecs,
 		buildVulnerabilityActionSpecs,
 		buildWikiActionSpecs,
 	}
@@ -475,6 +477,10 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	specs = append(specs, licensetemplates.ActionSpecs(client)...)
 	specs = append(specs, projecttemplates.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_template", specs)
+}
+
+func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_user", users.ActionSpecs(client, enterprise))
 }
 
 func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
