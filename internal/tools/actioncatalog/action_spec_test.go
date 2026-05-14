@@ -40,7 +40,7 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	if action.ID != "project.get" || action.SchemaURI != "gitlab://schema/meta/gitlab_project/get" {
 		t.Fatalf("action identity = %q %q, want normalized project.get schema URI", action.ID, action.SchemaURI)
 	}
-	if !action.ReadOnly || action.Edition != "core" || action.OwnerPackage != "projects" {
+	if !action.SpecBacked || !action.ReadOnly || action.Edition != "core" || action.OwnerPackage != "projects" {
 		t.Fatalf("action metadata = %+v, want projected read-only core project metadata", action)
 	}
 	if len(action.Aliases) != 1 || action.Aliases[0] != "project.show" {

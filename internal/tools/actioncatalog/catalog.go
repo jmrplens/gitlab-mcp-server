@@ -42,6 +42,7 @@ type Action struct {
 	EmbeddedResourcePolicy string
 	RichResultPolicy       string
 	RuntimeValidationNotes []string
+	SpecBacked             bool
 }
 
 // GroupOptions contains metadata for creating a catalog group.

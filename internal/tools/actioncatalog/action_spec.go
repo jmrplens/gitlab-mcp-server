@@ -29,6 +29,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 		actions = append(actions, Action{
 			Name:                   spec.Name,
 			Route:                  route,
+			SpecBacked:             true,
 			Aliases:                append([]string(nil), spec.Aliases...),
 			Tags:                   append([]string(nil), spec.Tags...),
 			Usage:                  spec.Usage,
