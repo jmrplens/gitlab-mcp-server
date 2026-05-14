@@ -577,7 +577,6 @@ var temporaryActionSpecMigrationAllowlist = map[actioncatalog.ActionID]struct{}{
 	"merge_train.get":                                {},
 	"merge_train.list_branch":                        {},
 	"merge_train.list_project":                       {},
-	"model_registry.download":                        {},
 	"mr_review.changes_get":                          {},
 	"mr_review.diff_version_get":                     {},
 	"mr_review.diff_versions_list":                   {},

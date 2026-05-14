@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/modelregistry"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
@@ -56,6 +57,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildIssueActionSpecs,
 		buildJobActionSpecs,
 		buildMergeRequestActionSpecs,
+		buildModelRegistryActionSpecs,
 		buildReleaseActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
@@ -97,6 +99,10 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_merge_request", mergerequests.ActionSpecs(client))
+}
+
+func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
 }
 
 func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
