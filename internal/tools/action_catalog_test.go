@@ -209,33 +209,33 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 
 func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	spec := toolutil.NewActionSpec("list", testCatalogActionRoute("search"), toolutil.ActionSpecOptions{
-		Aliases:           []string{"project.search"},
-		Tags:              []string{"Project"},
-		Usage:             "Use to list projects with optional search filtering.",
-		RelatedActions:    []string{"project.get"},
-		ParameterGuidance: map[string]toolutil.ParameterGuidance{"search": {SemanticRole: "project_search_query"}},
+		Aliases:           []string{"group.search"},
+		Tags:              []string{"Group"},
+		Usage:             "Use to list groups with optional search filtering.",
+		RelatedActions:    []string{"group.get"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{"search": {SemanticRole: "group_search_query"}},
 		ReadOnly:          true,
 		Idempotent:        true,
 		OpenWorld:         true,
-		OwnerPackage:      "projects",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: "gitlab_list_projects", Title: "List projects"},
+		OwnerPackage:      "groups",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: "gitlab_group_list", Title: "List groups"},
 	})
 
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_project", Specs: []toolutil.ActionSpec{spec}}}})
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_group", Specs: []toolutil.ActionSpec{spec}}}})
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
-	action, ok := catalog.Action("project.list")
+	action, ok := catalog.Action("group.list")
 	if !ok {
-		t.Fatal("catalog missing project.list")
+		t.Fatal("catalog missing group.list")
 	}
-	if action.Usage != "Use to list projects with optional search filtering." || action.OwnerPackage != "projects" {
+	if action.Usage != "Use to list groups with optional search filtering." || action.OwnerPackage != "groups" {
 		t.Fatalf("action metadata = %+v, want spec metadata", action)
 	}
-	if !slices.Contains(action.Aliases, "project.search") || !slices.Contains(action.Tags, "project") || !slices.Contains(action.RelatedActions, "project.get") {
+	if !slices.Contains(action.Aliases, "group.search") || !slices.Contains(action.Tags, "group") || !slices.Contains(action.RelatedActions, "group.get") {
 		t.Fatalf("action search metadata = aliases %+v tags %+v related %+v", action.Aliases, action.Tags, action.RelatedActions)
 	}
-	if action.Route.ParameterGuidance["search"].SemanticRole != "project_search_query" {
+	if action.Route.ParameterGuidance["search"].SemanticRole != "group_search_query" {
 		t.Fatalf("route guidance = %+v, want spec guidance", action.Route.ParameterGuidance)
 	}
 }
