@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -25,7 +26,7 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
 		registerAllMetaGroups(nil, client, opts.Enterprise)
 	})
-	specGroups := append(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups...)
+	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups)
 	specsByTool, specErr := actionSpecGroupsByTool(specGroups)
 	if specErr != nil {
 		return nil, fmt.Errorf("collect action specs: %w", specErr)
@@ -49,6 +50,47 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 		return nil, fmt.Errorf("validate action catalog: %w", validateErr)
 	}
 	return catalog, nil
+}
+
+func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup) []ActionSpecGroup {
+	if len(overrideGroups) == 0 {
+		return baseGroups
+	}
+	overrideNamesByTool := make(map[string]map[string]struct{}, len(overrideGroups))
+	for _, group := range overrideGroups {
+		toolName := strings.TrimSpace(group.ToolName)
+		if toolName == "" {
+			continue
+		}
+		if overrideNamesByTool[toolName] == nil {
+			overrideNamesByTool[toolName] = make(map[string]struct{}, len(group.Specs))
+		}
+		for _, spec := range group.Specs {
+			name := strings.TrimSpace(spec.Name)
+			if name != "" {
+				overrideNamesByTool[toolName][name] = struct{}{}
+			}
+		}
+	}
+	merged := make([]ActionSpecGroup, 0, len(baseGroups)+len(overrideGroups))
+	for _, group := range baseGroups {
+		toolName := strings.TrimSpace(group.ToolName)
+		overrideNames := overrideNamesByTool[toolName]
+		if len(overrideNames) == 0 {
+			merged = append(merged, group)
+			continue
+		}
+		specs := make([]toolutil.ActionSpec, 0, len(group.Specs))
+		for _, spec := range group.Specs {
+			if _, overridden := overrideNames[strings.TrimSpace(spec.Name)]; !overridden {
+				specs = append(specs, spec)
+			}
+		}
+		if len(specs) > 0 {
+			merged = append(merged, ActionSpecGroup{ToolName: group.ToolName, Specs: specs})
+		}
+	}
+	return append(merged, overrideGroups...)
 }
 
 // groupFromMetaToolDefinition converts a captured meta-tool definition into an
