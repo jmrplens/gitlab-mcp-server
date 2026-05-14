@@ -8,6 +8,8 @@ import (
 // ActionSpecs returns canonical specs for issue link actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		issueLinkReadSpec("link_list", toolutil.RouteAction(client, List), "gitlab_issue_link_list"),
+		issueLinkReadSpec("link_get", toolutil.RouteAction(client, Get), "gitlab_issue_link_get"),
 		toolutil.NewActionSpec("link_create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
@@ -40,5 +42,29 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				OwnerPackage:   "issuelinks",
 				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_link_create", Title: toolutil.TitleFromName("gitlab_issue_link_create")},
 			}),
+		issueLinkDeleteSpec("link_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_issue_link_delete"),
+	}
+}
+
+func issueLinkReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueLinkOptions(individualTool)
+	options.ReadOnly = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueLinkOptions(individualTool)
+	options.Destructive = true
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueLinkOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"issue", "link"},
+		OpenWorld:      true,
+		OwnerPackage:   "issuelinks",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
