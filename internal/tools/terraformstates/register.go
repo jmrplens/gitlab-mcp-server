@@ -13,13 +13,12 @@ import (
 
 // RegisterTools registers all Terraform state tools with the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_terraform_states",
-		Title:       toolutil.TitleFromName("gitlab_list_terraform_states"),
-		Description: "List Terraform states for a GitLab project\n\nReturns: JSON array of Terraform states with pagination.\n\nSee also: gitlab_get_terraform_state, gitlab_list_secure_files",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	specs := ActionSpecs(client)
+	terraformStateTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconInfra})
+	}
+
+	mcp.AddTool(server, terraformStateTool("gitlab_list_terraform_states", "List Terraform states for a GitLab project\n\nReturns: JSON array of Terraform states with pagination.\n\nSee also: gitlab_get_terraform_state, gitlab_list_secure_files"), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_terraform_states", start, err)
@@ -29,13 +28,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_get_terraform_state",
-		Title:       toolutil.TitleFromName("gitlab_get_terraform_state"),
-		Description: "Get details of a Terraform state\n\nReturns: JSON with Terraform state details.\n\nSee also: gitlab_list_terraform_states, gitlab_lock_terraform_state",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, StateItem, error) {
+	mcp.AddTool(server, terraformStateTool("gitlab_get_terraform_state", "Get details of a Terraform state\n\nReturns: JSON with Terraform state details.\n\nSee also: gitlab_list_terraform_states, gitlab_lock_terraform_state"), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, StateItem, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_terraform_state", start, err)
@@ -45,13 +38,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatStateMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_delete_terraform_state",
-		Title:       toolutil.TitleFromName("gitlab_delete_terraform_state"),
-		Description: "Delete a Terraform state\n\nReturns: JSON confirming state deletion.\n\nSee also: gitlab_list_terraform_states, gitlab_get_terraform_state",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, terraformStateTool("gitlab_delete_terraform_state", "Delete a Terraform state\n\nReturns: JSON confirming state deletion.\n\nSee also: gitlab_list_terraform_states, gitlab_get_terraform_state"), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete Terraform state %q from project %s?", input.Name, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil
@@ -65,13 +52,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_delete_terraform_state_version",
-		Title:       toolutil.TitleFromName("gitlab_delete_terraform_state_version"),
-		Description: "Delete a specific version of a Terraform state\n\nReturns: JSON confirming state version deletion.\n\nSee also: gitlab_get_terraform_state, gitlab_delete_terraform_state",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteVersionInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	mcp.AddTool(server, terraformStateTool("gitlab_delete_terraform_state_version", "Delete a specific version of a Terraform state\n\nReturns: JSON confirming state version deletion.\n\nSee also: gitlab_get_terraform_state, gitlab_delete_terraform_state"), func(ctx context.Context, req *mcp.CallToolRequest, input DeleteVersionInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Delete Terraform state %q version %d from project %s?", input.Name, input.Serial, input.ProjectID)); r != nil {
 			return r, toolutil.DeleteOutput{}, nil
@@ -85,13 +66,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return r, o, nil
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_lock_terraform_state",
-		Title:       toolutil.TitleFromName("gitlab_lock_terraform_state"),
-		Description: "Lock a Terraform state\n\nReturns: JSON confirming the state was locked.\n\nSee also: gitlab_unlock_terraform_state, gitlab_get_terraform_state",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input LockInput) (*mcp.CallToolResult, LockOutput, error) {
+	mcp.AddTool(server, terraformStateTool("gitlab_lock_terraform_state", "Lock a Terraform state\n\nReturns: JSON confirming the state was locked.\n\nSee also: gitlab_unlock_terraform_state, gitlab_get_terraform_state"), func(ctx context.Context, req *mcp.CallToolRequest, input LockInput) (*mcp.CallToolResult, LockOutput, error) {
 		start := time.Now()
 		out, err := Lock(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_lock_terraform_state", start, err)
@@ -101,13 +76,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatLockMarkdown(out)), out, nil)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_unlock_terraform_state",
-		Title:       toolutil.TitleFromName("gitlab_unlock_terraform_state"),
-		Description: "Unlock a Terraform state\n\nReturns: JSON confirming the state was unlocked.\n\nSee also: gitlab_lock_terraform_state, gitlab_get_terraform_state",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconInfra,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input LockInput) (*mcp.CallToolResult, LockOutput, error) {
+	mcp.AddTool(server, terraformStateTool("gitlab_unlock_terraform_state", "Unlock a Terraform state\n\nReturns: JSON confirming the state was unlocked.\n\nSee also: gitlab_lock_terraform_state, gitlab_get_terraform_state"), func(ctx context.Context, req *mcp.CallToolRequest, input LockInput) (*mcp.CallToolResult, LockOutput, error) {
 		start := time.Now()
 		out, err := Unlock(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_unlock_terraform_state", start, err)
