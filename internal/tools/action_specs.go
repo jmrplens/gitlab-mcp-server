@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/boards"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
@@ -61,6 +62,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetnotes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
@@ -103,6 +107,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
+		buildSnippetActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
 		buildWikiActionSpecs,
@@ -230,6 +235,15 @@ func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	specs = append(specs, markdown.ActionSpecs(client)...)
 	specs = append(specs, commitdiscussions.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_repository", specs)
+}
+
+func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	specs := make([]toolutil.ActionSpec, 0, 34)
+	specs = append(specs, snippets.ActionSpecs(client)...)
+	specs = append(specs, snippetdiscussions.ActionSpecs(client)...)
+	specs = append(specs, snippetnotes.ActionSpecs(client)...)
+	specs = append(specs, awardemoji.SnippetActionSpecs(client)...)
+	return actionSpecGroup("gitlab_snippet", specs)
 }
 
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
