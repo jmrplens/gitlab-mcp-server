@@ -49,6 +49,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/invites"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobtokenscope"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
@@ -297,7 +298,10 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []A
 }
 
 func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_issue", issuelinks.ActionSpecs(client))
+	specs := make([]toolutil.ActionSpec, 0, 25)
+	specs = append(specs, issues.ActionSpecs(client)...)
+	specs = append(specs, issuelinks.ActionSpecs(client)...)
+	return actionSpecGroup("gitlab_issue", specs)
 }
 
 func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
