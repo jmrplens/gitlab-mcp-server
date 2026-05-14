@@ -56,12 +56,27 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 }
 
 func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
+	readOnly := spec.ReadOnly
 	destructive := spec.Destructive
+	idempotent := spec.Idempotent
 	openWorld := spec.OpenWorld
+	overrides := spec.IndividualTool.AnnotationOverrides
+	if overrides.ReadOnly != nil {
+		readOnly = *overrides.ReadOnly
+	}
+	if overrides.Destructive != nil {
+		destructive = *overrides.Destructive
+	}
+	if overrides.Idempotent != nil {
+		idempotent = *overrides.Idempotent
+	}
+	if overrides.OpenWorld != nil {
+		openWorld = *overrides.OpenWorld
+	}
 	return &mcp.ToolAnnotations{
-		ReadOnlyHint:    spec.ReadOnly,
+		ReadOnlyHint:    readOnly,
 		DestructiveHint: &destructive,
-		IdempotentHint:  spec.Idempotent,
+		IdempotentHint:  idempotent,
 		OpenWorldHint:   &openWorld,
 	}
 }

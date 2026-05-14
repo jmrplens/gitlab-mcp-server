@@ -89,6 +89,48 @@ func TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTi
 	}
 }
 
+func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
+	overrideReadOnly := true
+	overrideDestructive := false
+	overrideIdempotent := false
+	overrideOpenWorld := false
+	spec := NewActionSpec("archive", ActionRoute{
+		InputSchema:  testActionSpecSchema("project_id"),
+		OutputSchema: testActionSpecSchema("id"),
+	}, ActionSpecOptions{
+		Idempotent:   true,
+		OpenWorld:    true,
+		OwnerPackage: "projects",
+		IndividualTool: IndividualToolSpec{
+			Name:        "gitlab_project_archive",
+			Description: "Archive a GitLab project.",
+			AnnotationOverrides: IndividualToolAnnotationOverrides{
+				ReadOnly:    &overrideReadOnly,
+				Destructive: &overrideDestructive,
+				Idempotent:  &overrideIdempotent,
+				OpenWorld:   &overrideOpenWorld,
+			},
+		},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if !tool.Annotations.ReadOnlyHint {
+		t.Fatal("read-only annotation = false, want override true")
+	}
+	if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
+		t.Fatalf("destructive annotation = %v, want override false", tool.Annotations.DestructiveHint)
+	}
+	if tool.Annotations.IdempotentHint {
+		t.Fatal("idempotent annotation = true, want override false")
+	}
+	if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
+		t.Fatalf("open-world annotation = %v, want override false", tool.Annotations.OpenWorldHint)
+	}
+}
+
 func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 	testCases := []struct {
 		name string

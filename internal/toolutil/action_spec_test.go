@@ -24,6 +24,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	relatedActions := []string{"Project.Get"}
 	schemaNotes := []string{"Schema cannot express file source exclusivity."}
 	runtimeNotes := []string{"Validate project ownership."}
+	individualIdempotent := false
 	spec := NewActionSpec(" delete ", route, ActionSpecOptions{
 		Aliases:                aliases,
 		Tags:                   tags,
@@ -31,7 +32,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 		ParameterGuidance:      map[string]ParameterGuidance{"project_id": specGuidance},
 		ReadOnly:               false,
 		OwnerPackage:           "projects",
-		IndividualTool:         IndividualToolSpec{Name: "gitlab_delete_project", Title: "Delete project", Description: "Delete a GitLab project."},
+		IndividualTool:         IndividualToolSpec{Name: "gitlab_delete_project", Title: "Delete project", Description: "Delete a GitLab project.", AnnotationOverrides: IndividualToolAnnotationOverrides{Idempotent: &individualIdempotent}},
 		ContentKind:            ActionSpecContentMutate,
 		NotFoundPolicy:         ActionSpecNotFoundResult,
 		EmbeddedResourcePolicy: ActionSpecEmbeddedNone,
@@ -48,6 +49,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	relatedActions[0] = "changed"
 	schemaNotes[0] = "changed"
 	runtimeNotes[0] = "changed"
+	individualIdempotent = true
 
 	if spec.Name != "delete" || !spec.Destructive {
 		t.Fatalf("spec = %+v, want trimmed destructive action", spec)
@@ -69,6 +71,9 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	}
 	if spec.RelatedActions[0] != "project.get" || spec.SchemaValidationNotes[0] != "Schema cannot express file source exclusivity." || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
 		t.Fatalf("related/actions notes = %+v / %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.SchemaValidationNotes, spec.RuntimeValidationNotes)
+	}
+	if spec.IndividualTool.AnnotationOverrides.Idempotent == nil || *spec.IndividualTool.AnnotationOverrides.Idempotent {
+		t.Fatalf("individual idempotent override = %v, want cloned false", spec.IndividualTool.AnnotationOverrides.Idempotent)
 	}
 }
 

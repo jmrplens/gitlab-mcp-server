@@ -279,6 +279,8 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		return
 	}
 	var diffs []string
+	observedSchemaGaps := make(map[string]struct{})
+	observedAnnotationGaps := make(map[string]struct{})
 	for index := range want {
 		name := want[index].Name
 		if name != got[index].Name {
@@ -291,6 +293,8 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		if !schemaJSONEqual(t, name, want[index].InputSchema, got[index].InputSchema) {
 			if _, ok := knownIndividualProjectionSchemaGaps[name]; !ok {
 				diffs = append(diffs, "CHANGED "+name+" inputSchema")
+			} else {
+				observedSchemaGaps[name] = struct{}{}
 			}
 		}
 		if !schemaJSONEqual(t, name, want[index].OutputSchema, got[index].OutputSchema) {
@@ -299,12 +303,24 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		if !annotationsEqual(t, name, want[index].Annotations, got[index].Annotations) {
 			if _, ok := knownIndividualProjectionAnnotationGaps[name]; !ok {
 				diffs = append(diffs, "CHANGED "+name+" annotations")
+			} else {
+				observedAnnotationGaps[name] = struct{}{}
 			}
 		}
 	}
+	appendStaleProjectionGapDiffs(&diffs, "schema", knownIndividualProjectionSchemaGaps, observedSchemaGaps)
+	appendStaleProjectionGapDiffs(&diffs, "annotation", knownIndividualProjectionAnnotationGaps, observedAnnotationGaps)
 	if len(diffs) > 0 {
 		sort.Strings(diffs)
 		t.Fatalf("generated individual snapshot parity drift against %s:\n%s", goldenPath, strings.Join(diffs, "\n"))
+	}
+}
+
+func appendStaleProjectionGapDiffs(diffs *[]string, kind string, known map[string]string, observed map[string]struct{}) {
+	for name := range known {
+		if _, ok := observed[name]; !ok {
+			*diffs = append(*diffs, fmt.Sprintf("STALE %s gap allowlist: %s", kind, name))
+		}
 	}
 }
 
@@ -381,55 +397,38 @@ func normalizeSchemaValue(key string, value any) {
 }
 
 var knownIndividualProjectionAnnotationGaps = map[string]string{
-	"gitlab_add_group_job_token_allowlist":     "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_add_project_job_token_allowlist":   "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_ban_user":                          "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_block_user":                        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_branch_delete":                     "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_branch_delete_merged":              "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_branch_protect":                    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_branch_unprotect":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_commit_status_set":                 "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_deactivate_user":                   "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_deployment_approve_or_reject":      "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_disable_2fa_enterprise_user":       "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_disable_two_factor":                "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_environment_stop":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_force_push_mirror_update":          "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_group_access_token_rotate":         "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_group_access_token_rotate_self":    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_group_transfer_project":            "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_group_unshare":                     "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_issue_move":                        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_issue_spent_time_add":              "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_job_play":                          "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_job_retry":                         "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mark_migration":                    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_add_spent_time":                 "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_approval_reset":                 "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_draft_note_publish":             "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_draft_note_publish_all":         "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_merge":                          "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_mr_unapprove":                      "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_personal_access_token_rotate":      "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_personal_access_token_rotate_self": "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_pipeline_retry":                    "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_pipeline_schedule_run":             "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_access_token_rotate":       "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_access_token_rotate_self":  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_hook_test":                 "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_star":                      "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_start_housekeeping":        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_project_start_mirroring":           "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_protected_branch_update":           "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_set_custom_attribute":              "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_set_feature_flag":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_tag_delete":                        "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_tag_unprotect":                     "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_test_system_hook":                  "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_unlock_terraform_state":            "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_wiki_delete":                       "ActionSpec marks idempotent, historical individual metadata does not",
-	"gitlab_wiki_update":                       "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_add_group_job_token_allowlist":   "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_add_project_job_token_allowlist": "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_ban_user":                        "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_block_user":                      "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_commit_status_set":               "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_deactivate_user":                 "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_deployment_approve_or_reject":    "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_disable_2fa_enterprise_user":     "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_disable_two_factor":              "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_environment_stop":                "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_force_push_mirror_update":        "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_group_transfer_project":          "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_group_unshare":                   "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_issue_move":                      "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_issue_spent_time_add":            "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_job_play":                        "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_job_retry":                       "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mark_migration":                  "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_add_spent_time":               "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_approval_reset":               "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_draft_note_publish":           "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_draft_note_publish_all":       "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_merge":                        "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_mr_unapprove":                    "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_pipeline_retry":                  "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_pipeline_schedule_run":           "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_set_custom_attribute":            "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_set_feature_flag":                "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_test_system_hook":                "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_unlock_terraform_state":          "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_wiki_delete":                     "ActionSpec marks idempotent, historical individual metadata does not",
+	"gitlab_wiki_update":                     "ActionSpec marks idempotent, historical individual metadata does not",
 }
 
 var knownIndividualProjectionSchemaGaps = map[string]string{

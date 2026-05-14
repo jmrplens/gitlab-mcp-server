@@ -38,7 +38,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			Edition:                spec.Edition,
 			GitLabDotComOnly:       spec.GitLabDotComOnly,
 			OwnerPackage:           spec.OwnerPackage,
-			IndividualTool:         spec.IndividualTool,
+			IndividualTool:         toolutil.CloneIndividualToolSpec(spec.IndividualTool),
 			ContentKind:            spec.ContentKind,
 			NotFoundPolicy:         spec.NotFoundPolicy,
 			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,

@@ -592,6 +592,7 @@ func cloneAction(action Action) Action {
 		route = routes[action.ToolName][action.Name]
 	}
 	action.Route = route
+	action.IndividualTool = toolutil.CloneIndividualToolSpec(action.IndividualTool)
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)

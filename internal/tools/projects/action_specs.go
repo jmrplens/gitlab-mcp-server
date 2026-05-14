@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		projectUpdateSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_project_restore"),
 		projectUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_project_update"),
 		projectCreateSpec("fork", toolutil.RouteAction(client, Fork), "gitlab_project_fork"),
-		projectUpdateSpec("star", toolutil.RouteAction(client, Star), "gitlab_project_star"),
+		projectCreateSpec("star", toolutil.RouteAction(client, Star), "gitlab_project_star"),
 		projectUpdateSpec("unstar", toolutil.RouteAction(client, Unstar), "gitlab_project_unstar"),
 		projectUpdateSpec("archive", toolutil.RouteAction(client, Archive), "gitlab_project_archive"),
 		projectUpdateSpec("unarchive", toolutil.RouteAction(client, Unarchive), "gitlab_project_unarchive"),
@@ -95,7 +95,9 @@ func projectCreateSpec(name string, route toolutil.ActionRoute, individualTool s
 }
 
 func projectMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, projectOptions(individualTool, extraTags...))
+	options := projectOptions(individualTool, extraTags...)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
 }
 
 func projectUpdateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
