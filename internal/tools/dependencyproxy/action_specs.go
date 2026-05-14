@@ -1,0 +1,25 @@
+package dependencyproxy
+
+import (
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// ActionSpecs returns canonical specs for dependency proxy tools.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	options := dependencyProxyOptions("gitlab_purge_dependency_proxy")
+	options.Destructive = true
+	options.Idempotent = true
+	return []toolutil.ActionSpec{
+		toolutil.NewActionSpec("dependency_proxy_delete", toolutil.DestructiveVoidAction(client, Purge), options),
+	}
+}
+
+func dependencyProxyOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Tags:           []string{"dependency-proxy"},
+		OpenWorld:      true,
+		OwnerPackage:   "dependencyproxy",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
