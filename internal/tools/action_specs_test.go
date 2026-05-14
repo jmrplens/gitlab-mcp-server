@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -132,6 +133,73 @@ func TestIndividualToolProjection_RepresentativeDomainParity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
+	session := newMCPSession(t, auditHandler(), true)
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf(fmtListToolsErr, err)
+	}
+	toolsByName := make(map[string]*mcp.Tool, len(result.Tools))
+	for _, tool := range result.Tools {
+		toolsByName[tool.Name] = tool
+	}
+
+	specNames := make(map[string]string)
+	duplicateSpecNames := make([]string, 0)
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Specs {
+			name := strings.TrimSpace(spec.IndividualTool.Name)
+			if name == "" {
+				t.Fatalf("%s.%s missing individual tool name", group.ToolName, spec.Name)
+			}
+			if previous, exists := specNames[name]; exists {
+				if _, ok := sharedIndividualToolSpecNames[name]; !ok {
+					duplicateSpecNames = append(duplicateSpecNames, fmt.Sprintf("%s => %s, %s.%s", name, previous, group.ToolName, spec.Name))
+				}
+			} else {
+				specNames[name] = group.ToolName + "." + spec.Name
+			}
+			if _, ok := toolsByName[name]; !ok {
+				t.Fatalf("%s.%s references unregistered individual tool %q", group.ToolName, spec.Name, name)
+			}
+		}
+	}
+	if len(duplicateSpecNames) > 0 {
+		sort.Strings(duplicateSpecNames)
+		t.Fatalf("unexpected shared individual tool references: %v", duplicateSpecNames)
+	}
+
+	missingSpecs := make([]string, 0)
+	for _, tool := range result.Tools {
+		if _, ok := specNames[tool.Name]; ok {
+			continue
+		}
+		if _, ok := standaloneIndividualToolExceptions[tool.Name]; ok {
+			continue
+		}
+		missingSpecs = append(missingSpecs, tool.Name)
+	}
+	sort.Strings(missingSpecs)
+	if len(missingSpecs) > 0 {
+		t.Fatalf("individual tools missing ActionSpec metadata: %v", missingSpecs)
+	}
+}
+
+var standaloneIndividualToolExceptions = map[string]string{
+	"gitlab_discover_project":           "dynamic standalone project discovery helper",
+	"gitlab_interactive_issue_create":   "elicitation standalone multi-step workflow",
+	"gitlab_interactive_mr_create":      "elicitation standalone multi-step workflow",
+	"gitlab_interactive_project_create": "elicitation standalone multi-step workflow",
+	"gitlab_interactive_release_create": "elicitation standalone multi-step workflow",
+	"gitlab_server_status":              "server diagnostic helper outside the GitLab API catalog",
+}
+
+var sharedIndividualToolSpecNames = map[string]string{
+	"gitlab_commit_list":      "shared by gitlab_repository.commit_list and gitlab_repository.file_history",
+	"gitlab_issue_list_group": "shared by gitlab_group.issues and gitlab_issue.list_group",
+	"gitlab_user_current":     "shared by gitlab_user.current and gitlab_user.me",
 }
 
 func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes toolutil.ActionMap) {

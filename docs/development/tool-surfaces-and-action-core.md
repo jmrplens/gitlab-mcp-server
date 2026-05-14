@@ -299,6 +299,10 @@ The migration is enforced by source-level tests and audits:
 - `TestIndividualToolProjection_RepresentativeDomainParity` pilots the
   `ActionSpec`-to-`mcp.Tool` projection adapter against registered individual
   tools for project, issue, merge request, job, and group domains.
+- `TestIndividualToolMetadata_CatalogBackedCoverage` verifies every
+  catalog-backed spec points to a registered individual tool and every
+  registered individual tool without ActionSpec metadata is an explicit
+  standalone exception.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
 - `make audit-dynamic-aliases`, `go run ./cmd/audit_output/`,
