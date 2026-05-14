@@ -4,6 +4,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -25,6 +26,7 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 		registerProjectMeta(nil, nil, false)
 		registerRepositoryMeta(nil, nil)
 		registerReleaseMeta(nil, nil)
+		runners.RegisterMeta(nil, nil)
 		search.RegisterMeta(nil, nil)
 		registerTagMeta(nil, nil)
 		registerSnippetMeta(nil, nil)
@@ -41,7 +43,7 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
 
-	for _, toolName := range []string{"gitlab_access", "gitlab_branch", "gitlab_ci_catalog", "gitlab_ci_variable", "gitlab_custom_emoji", "gitlab_environment", "gitlab_feature_flags", "gitlab_job", "gitlab_model_registry", "gitlab_mr_review", "gitlab_package", "gitlab_pipeline", "gitlab_project", "gitlab_release", "gitlab_repository", "gitlab_search", "gitlab_snippet", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
+	for _, toolName := range []string{"gitlab_access", "gitlab_branch", "gitlab_ci_catalog", "gitlab_ci_variable", "gitlab_custom_emoji", "gitlab_environment", "gitlab_feature_flags", "gitlab_job", "gitlab_model_registry", "gitlab_mr_review", "gitlab_package", "gitlab_pipeline", "gitlab_project", "gitlab_release", "gitlab_repository", "gitlab_runner", "gitlab_search", "gitlab_snippet", "gitlab_tag", "gitlab_template", "gitlab_wiki"} {
 		t.Run(toolName, func(t *testing.T) {
 			definition, ok := capturedByTool[toolName]
 			if !ok {

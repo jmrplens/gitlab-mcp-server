@@ -84,6 +84,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
@@ -150,6 +151,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
+		buildRunnerActionSpecs,
 		buildSearchActionSpecs,
 		buildSecurityFindingActionSpecs,
 		buildSnippetActionSpecs,
@@ -392,6 +394,10 @@ func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	specs = append(specs, markdown.ActionSpecs(client)...)
 	specs = append(specs, commitdiscussions.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_repository", specs)
+}
+
+func buildRunnerActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_runner", runners.ActionSpecs(client))
 }
 
 func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
