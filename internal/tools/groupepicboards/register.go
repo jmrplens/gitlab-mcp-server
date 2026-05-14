@@ -12,26 +12,19 @@ import (
 
 // RegisterTools registers MCP tools for GitLab group epic board operations.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_group_epic_board_list",
-		Title:       toolutil.TitleFromName("gitlab_group_epic_board_list"),
-		Description: "List all epic boards in a GitLab group. Supports pagination.\n\nReturns: JSON with boards array and pagination metadata. See also: gitlab_group_epic_board_get.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconBoard,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	specs := ActionSpecs(client)
+	groupEpicBoardTool := func(name, description string) *mcp.Tool {
+		return toolutil.MustIndividualToolFromSpecs(specs, name, toolutil.IndividualToolProjectionOptions{Description: description, Icons: toolutil.IconBoard})
+	}
+
+	mcp.AddTool(server, groupEpicBoardTool("gitlab_group_epic_board_list", "List all epic boards in a GitLab group. Supports pagination.\n\nReturns: JSON with boards array and pagination metadata. See also: gitlab_group_epic_board_get."), func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_group_epic_board_list", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_group_epic_board_get",
-		Title:       toolutil.TitleFromName("gitlab_group_epic_board_get"),
-		Description: "Get a single epic board in a GitLab group by its ID, including board lists (columns) and labels.\n\nReturns: JSON with board details. See also: gitlab_group_epic_board_list.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconBoard,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
+	mcp.AddTool(server, groupEpicBoardTool("gitlab_group_epic_board_get", "Get a single epic board in a GitLab group by its ID, including board lists (columns) and labels.\n\nReturns: JSON with board details. See also: gitlab_group_epic_board_list."), func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_group_epic_board_get", start, err)
