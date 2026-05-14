@@ -48,6 +48,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupvariables"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/impersonationtokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/invites"
@@ -111,6 +112,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/useremails"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/usergpgkeys"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
@@ -486,7 +489,7 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 }
 
 func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 56)
+	specs := make([]toolutil.ActionSpec, 0, 75)
 	specs = append(specs, users.ActionSpecs(client, enterprise)...)
 	specs = append(specs, todos.ActionSpecs(client)...)
 	specs = append(specs, events.UserActionSpecs(client)...)
@@ -494,6 +497,9 @@ func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []Action
 	specs = append(specs, keys.ActionSpecs(client)...)
 	specs = append(specs, namespaces.ActionSpecs(client)...)
 	specs = append(specs, avatar.ActionSpecs(client)...)
+	specs = append(specs, usergpgkeys.ActionSpecs(client)...)
+	specs = append(specs, useremails.ActionSpecs(client)...)
+	specs = append(specs, impersonationtokens.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_user", specs)
 }
 
