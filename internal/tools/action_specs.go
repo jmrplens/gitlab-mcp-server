@@ -69,6 +69,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetnotes"
@@ -116,6 +117,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildProjectActionSpecs,
 		buildReleaseActionSpecs,
 		buildRepositoryActionSpecs,
+		buildSearchActionSpecs,
 		buildSnippetActionSpecs,
 		buildTagActionSpecs,
 		buildTemplateActionSpecs,
@@ -259,6 +261,10 @@ func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	specs = append(specs, markdown.ActionSpecs(client)...)
 	specs = append(specs, commitdiscussions.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_repository", specs)
+}
+
+func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_search", search.ActionSpecs(client))
 }
 
 func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
