@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -613,9 +611,8 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_MCPRoundTrip verifies that all 5 group protected env
-// tools can be called successfully through the MCP transport.
-func TestRegisterTools_MCPRoundTrip(t *testing.T) {
+// TestActionSpecs_RoundTrip verifies that all group protected environment routes execute successfully.
+func TestActionSpecs_RoundTrip(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/mygroup/protected_environments", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+fullEnvJSON+`]`)
@@ -634,20 +631,7 @@ func TestRegisterTools_MCPRoundTrip(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -662,15 +646,12 @@ func TestRegisterTools_MCPRoundTrip(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, callErr := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if callErr != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, callErr)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, callErr)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}

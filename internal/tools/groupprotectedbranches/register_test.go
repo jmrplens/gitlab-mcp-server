@@ -1,16 +1,11 @@
-// register_test.go contains integration tests for the group protected branch
-// tool closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
 package groupprotectedbranches
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const registerBranchJSON = `{
@@ -22,55 +17,60 @@ const registerBranchJSON = `{
 	"code_owner_approval_required": false
 }`
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all group
-// protected branch tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group protected branch actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "groupprotectedbranches" {
+			t.Errorf("OwnerPackage for %s = %q, want groupprotectedbranches", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+
+	byTool := groupProtectedBranchSpecsByTool(t, specs)
+	for _, name := range []string{"gitlab_group_protected_branch_list", "gitlab_group_protected_branch_get"} {
+		if !byTool[name].ReadOnly {
+			t.Errorf("%s should be read-only", name)
+		}
+	}
+	spec := byTool["gitlab_group_protected_branch_unprotect"]
+	if !spec.Destructive || !spec.Route.Destructive {
+		t.Error("unprotect action should be destructive")
+	}
+	if !spec.Idempotent {
+		t.Error("unprotect action should be idempotent")
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all registered group protected branch
-// tools can be called through MCP in-memory transport, covering handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies all group protected branch routes execute through the catalog.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	// List
 	mux.HandleFunc("GET /api/v4/groups/{gid}/protected_branches", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+registerBranchJSON+`]`)
 	})
-	// Get single (path with name segment)
 	mux.HandleFunc("GET /api/v4/groups/{gid}/protected_branches/{name}", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, registerBranchJSON)
 	})
-	// Protect (POST)
 	mux.HandleFunc("POST /api/v4/groups/{gid}/protected_branches", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, registerBranchJSON)
 	})
-	// Update (PATCH)
 	mux.HandleFunc("PATCH /api/v4/groups/{gid}/protected_branches/{name}", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, registerBranchJSON)
 	})
-	// Unprotect (DELETE)
 	mux.HandleFunc("DELETE /api/v4/groups/{gid}/protected_branches/{name}", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupProtectedBranchSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -84,20 +84,19 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_UnprotectError verifies that the unprotect handler returns
-// an error result when the GitLab API fails, covering the if-err-not-nil branch.
-func TestRegisterTools_UnprotectError(t *testing.T) {
+// TestActionSpecs_CallRouteError verifies unprotect route errors propagate directly.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -107,29 +106,22 @@ func TestRegisterTools_UnprotectError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	spec := groupProtectedBranchSpecsByTool(t, ActionSpecs(client))["gitlab_group_protected_branch_unprotect"]
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	result, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "42", "branch": "main"})
+	if err == nil {
+		t.Fatal("Route.Handler expected error, got nil")
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
+	if result != nil {
+		t.Errorf("Route.Handler result = %#v, want nil", result)
 	}
-	t.Cleanup(func() { session.Close() })
+}
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_group_protected_branch_unprotect",
-		Arguments: map[string]any{"group_id": "42", "branch": "main"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool returned transport error: %v", err)
+func groupProtectedBranchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-	if result == nil || !result.IsError {
-		t.Error("expected error result from unprotect with failing backend")
-	}
+	return byTool
 }
