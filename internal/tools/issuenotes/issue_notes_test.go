@@ -14,7 +14,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -813,98 +812,6 @@ func TestList_MissingProjectID(t *testing.T) {
 	if err == nil {
 		t.Fatal("List() expected error for missing project_id, got nil")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// MCP integration - RegisterTools + CallTool
-// ---------------------------------------------------------------------------.
-
-// newIssueNotesMCPSession is an internal helper for the issuenotes package.
-func newIssueNotesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodPost && path == pathIssueNotes:
-			testutil.RespondJSON(w, http.StatusCreated, noteJSONSimple)
-		case r.Method == http.MethodGet && path == pathIssueNotes:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSONSimple+"]",
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		case r.Method == http.MethodGet && path == pathIssueNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
-		case r.Method == http.MethodPut && path == pathIssueNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
-		case r.Method == http.MethodDelete && path == pathIssueNote100:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueNotesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_note_create", map[string]any{"project_id": "42", "issue_iid": 10, "body": "test note"}},
-		{"gitlab_issue_note_list", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_issue_note_get", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100}},
-		{"gitlab_issue_note_update", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100, "body": "updated"}},
-		{"gitlab_issue_note_delete", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
 }
 
 // ---------------------------------------------------------------------------

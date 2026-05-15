@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,713 |
-| Unit test functions | 9,466 |
+| Total test functions | 9,714 |
+| Unit test functions | 9,467 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 420 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,722 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,723 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 282 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,103 | 322 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,104 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,713** | **546** |  |
+| **Total** | **9,714** | **546** |  |
 
 ### Core Packages
 
@@ -196,7 +196,7 @@
 | instancevariables | 37 | 2 | 97.6% | 5 |
 | integrations | 31 | 2 | 100.0% | 4 |
 | invites | 30 | 1 | 98.1% | 4 |
-| issuediscussions | 40 | 2 | 99.4% | 6 |
+| issuediscussions | 41 | 2 | 100.0% | 6 |
 | issuelinks | 43 | 2 | 99.2% | 4 |
 | issuenotes | 38 | 2 | 100.0% | 5 |
 | issues | 198 | 1 | 96.7% | 21 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,103** | **322** |  | **1,018** |
+| **Total** | **7,104** | **322** |  | **1,018** |
 
 </details>
 
@@ -413,7 +413,7 @@
 | instancevariables | 97.6% |
 | integrations | 100.0% |
 | invites | 98.1% |
-| issuediscussions | 99.4% |
+| issuediscussions | 100.0% |
 | issuelinks | 99.2% |
 | issuenotes | 100.0% |
 | issues | 96.7% |

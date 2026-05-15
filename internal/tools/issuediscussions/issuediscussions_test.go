@@ -11,8 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -772,10 +770,6 @@ func TestDeleteNote_APIError(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools MCP integration test
-// ---------------------------------------------------------------------------.
-
 const (
 	errExpectedAPI         = "expected API error, got nil"
 	fmtUnexpErr            = "unexpected error: %v"
@@ -799,106 +793,3 @@ const (
 "updated_at":"2026-03-02T12:00:00Z"
 }`
 )
-
-// newIssueDiscussionsMCPSession is an internal helper for the issuediscussions package.
-func newIssueDiscussionsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		// POST .../discussions → create discussion.
-		case r.Method == http.MethodPost && strings.HasSuffix(path, "/discussions"):
-			testutil.RespondJSON(w, http.StatusCreated, discussionJSONCoverage)
-
-		// POST .../discussions/{id}/notes → add note.
-		case r.Method == http.MethodPost && strings.Contains(path, "/discussions/") && strings.HasSuffix(path, "/notes"):
-			testutil.RespondJSON(w, http.StatusCreated, noteJSONCoverage)
-
-		// PUT .../discussions/{id}/notes/{noteID} → update note.
-		case r.Method == http.MethodPut && strings.Contains(path, "/notes/"):
-			testutil.RespondJSON(w, http.StatusOK, noteJSONCoverage)
-
-		// DELETE .../discussions/{id}/notes/{noteID} → delete note.
-		case r.Method == http.MethodDelete && strings.Contains(path, "/notes/"):
-			w.WriteHeader(http.StatusNoContent)
-
-		// GET .../discussions/{id} → get single discussion.
-		case r.Method == http.MethodGet && strings.Contains(path, "/discussions/"):
-			testutil.RespondJSON(w, http.StatusOK, discussionJSONCoverage)
-
-		// GET .../discussions → list discussions.
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/discussions"):
-			testutil.RespondJSON(w, http.StatusOK, "["+discussionJSONCoverage+"]")
-
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueDiscussionsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_issue_discussions", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_get_issue_discussion", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": "abc123"}},
-		{"gitlab_create_issue_discussion", map[string]any{"project_id": "42", "issue_iid": 10, "body": "New discussion"}},
-		{"gitlab_add_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": "abc123", "body": "Reply"}},
-		{"gitlab_update_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": "abc123", "note_id": 300, "body": "Updated"}},
-		{"gitlab_delete_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": "abc123", "note_id": 300}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
