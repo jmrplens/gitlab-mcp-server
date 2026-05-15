@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
@@ -427,24 +426,31 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools no-panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies health action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "health" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_server_status
+// ActionSpec route execution — gitlab_server_status
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_Trip verifies the behavior of cov m c p round trip.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_CallRoute verifies the health canonical route.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
@@ -456,65 +462,43 @@ func TestMCPRound_Trip(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := healthSpecByTool(t, ActionSpecs(client), "gitlab_server_status")
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_server_status",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool gitlab_server_status: %v", err)
+		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
-	}
-	if res.IsError {
-		t.Error("expected no error")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_server_status unhealthy (API error)
+// ActionSpec route execution — gitlab_server_status unhealthy (API error)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripUnhealthy verifies the behavior of cov m c p round trip unhealthy.
-func TestMCPRound_TripUnhealthy(t *testing.T) {
+// TestActionSpecs_CallRouteUnhealthy verifies the unhealthy health route path.
+func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := healthSpecByTool(t, ActionSpecs(client), "gitlab_server_status")
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_server_status",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool gitlab_server_status: %v", err)
+		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
+}
+
+func healthSpecByTool(t *testing.T, specs []toolutil.ActionSpec, tool string) toolutil.ActionSpec {
+	t.Helper()
+	for _, spec := range specs {
+		if spec.IndividualTool.Name == tool {
+			return spec
+		}
+	}
+	t.Fatalf("missing ActionSpec for %s", tool)
+	return toolutil.ActionSpec{}
 }
