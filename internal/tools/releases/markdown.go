@@ -4,8 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type releaseNotFoundOutput struct {
+	Identifier string
+}
+
+func formatReleaseNotFound(out releaseNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Release", out.Identifier,
+		"Use gitlab_release_list with project_id to list releases",
+		"Verify the tag_name is correct (case-sensitive)",
+		"A tag may exist without a release - check with gitlab_tag_get",
+	)
+}
 
 // FormatMarkdown renders a single release as a Markdown summary.
 func FormatMarkdown(r Output) string {
@@ -78,6 +92,7 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatReleaseNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 }

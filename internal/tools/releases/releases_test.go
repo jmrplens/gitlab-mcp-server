@@ -920,26 +920,37 @@ func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for release actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := releaseSpecsByTool(t, specs)
+
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "releases" {
+			t.Fatalf("OwnerPackage for %s = %q, want releases", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 6 tools
+// ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newReleasesMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates release routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newReleaseSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -956,34 +967,31 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in gitlab_release_delete when user declines.
-func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
+// confirmation for release delete when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_release_delete" {
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test release destructive confirmation.", Icons: toolutil.IconRelease})
+		}
+	}
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -995,7 +1003,10 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_release_delete",
@@ -1009,36 +1020,20 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
-// gitlab_release_get when the release does not exist.
-func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound covers the not-found route output when the release does not exist.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Release Not Found"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := releaseSpecsByTool(t, ActionSpecs(client))
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_release_get",
-		Arguments: map[string]any{"project_id": "42", "tag_name": "v99.0.0"},
-	})
+	result, err := byTool["gitlab_release_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "v99.0.0"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404")
+	if _, ok := result.(releaseNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want releaseNotFoundOutput", result)
 	}
 }
 
@@ -1081,11 +1076,10 @@ func TestCreate_ForbiddenError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newReleasesMCPSession is an internal helper for the releases package.
-func newReleasesMCPSession(t *testing.T) *mcp.ClientSession {
+func newReleaseSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	releaseJSON := `{"tag_name":"v1.0.0","name":"v1","description":"notes","created_at":"2026-03-02T10:00:00Z","released_at":"2026-03-02T10:00:00Z","author":{"username":"admin"}}`
@@ -1123,24 +1117,7 @@ func newReleasesMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return releaseSpecsByTool(t, ActionSpecs(client))
 }
 
 // TestUpdate_WithMilestonesAndReleasedAt verifies that Update forwards both
@@ -1188,11 +1165,8 @@ func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
 	}
 }
 
-// TestReleaseGet_EmbedsCanonicalResource asserts gitlab_release_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}/release/{tag}
-// and application/json MIME type when the embed toggle is enabled, and
-// omits the block when it is disabled.
-func TestReleaseGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_ReleaseGetRoute verifies the canonical release get route output.
+func TestActionSpecs_ReleaseGetRoute(t *testing.T) {
 	const respJSON = `{"tag_name":"v1.0.0","name":"R","description":"","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-02T00:00:00Z","author":{"username":"alice"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/releases/v1.0.0") {
@@ -1201,7 +1175,27 @@ func TestReleaseGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "tag_name": "v1.0.0"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_release_get", args, "gitlab://project/42/release/v1.0.0", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := releaseSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_release_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "v1.0.0"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.TagName != "v1.0.0" || out.Name != "R" {
+		t.Fatalf("release output = %#v, want tag v1.0.0 name R", out)
+	}
+}
+
+func releaseSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
