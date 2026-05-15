@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const fmtUnexpErr = "unexpected error: %v"
@@ -590,26 +589,27 @@ func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
+// TestActionSpecs_CallAllRoutes validates all CI lint canonical routes across table-driven subtests.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	lintResult := `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"stages:\n  - build","includes":[]}`
 
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 2 tools
-// ---------------------------------------------------------------------------.
+	handler := http.NewServeMux()
+	handler.HandleFunc("GET /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, lintResult)
+	})
+	handler.HandleFunc("POST /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, lintResult)
+	})
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCILintMCPSession(t)
-	ctx := context.Background()
+	client := testutil.NewTestClient(t, handler)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -628,75 +628,17 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.tool, tt.args)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			}
 		})
 	}
-}
-
-// assertToolCallSuccess calls an MCP tool and fails the test if it returns an error.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, tool string, args map[string]any) {
-	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      tool,
-		Arguments: args,
-	})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", tool, err)
-	}
-	if result.IsError {
-		t.Fatalf("CallTool(%s) returned error: %s", tool, extractErrorText(result))
-	}
-}
-
-// extractErrorText returns the first text content from an MCP error result.
-func extractErrorText(result *mcp.CallToolResult) string {
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			return tc.Text
-		}
-	}
-	return "IsError=true (no text content)"
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newCILintMCPSession is an internal helper for the cilint package.
-func newCILintMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	lintResult := `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"stages:\n  - build","includes":[]}`
-
-	handler := http.NewServeMux()
-
-	// Lint project CI config (GET)
-	handler.HandleFunc("GET /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, lintResult)
-	})
-
-	// Lint content (POST)
-	handler.HandleFunc("POST /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, lintResult)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
