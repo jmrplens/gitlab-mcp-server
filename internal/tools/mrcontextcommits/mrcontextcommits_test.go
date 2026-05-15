@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -389,13 +390,32 @@ func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRegisterTools_CallAllThroughMCP — full MCP roundtrip for all 3 tools
+// ActionSpecs route execution for all context commit tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMRContextCommitsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_Metadata verifies canonical metadata for MR context commit actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := newMRContextCommitsSpecsByTool(t)
+
+	if len(byTool) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(byTool))
+	}
+	if !byTool["gitlab_list_mr_context_commits"].ReadOnly || !byTool["gitlab_list_mr_context_commits"].Idempotent {
+		t.Error("list action should be read-only and idempotent")
+	}
+	if !byTool["gitlab_delete_mr_context_commits"].Destructive || !byTool["gitlab_delete_mr_context_commits"].Idempotent {
+		t.Error("delete action should be destructive and idempotent")
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "mrcontextcommits" {
+			t.Errorf("OwnerPackage for %s = %q, want mrcontextcommits", spec.Name, spec.OwnerPackage)
+		}
+	}
+}
+
+// TestActionSpecs_CallAllRoutes validates all MR context commit routes.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newMRContextCommitsSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -408,20 +428,12 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
@@ -431,8 +443,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// newMRContextCommitsMCPSession is an internal helper for the mrcontextcommits package.
-func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
+func newMRContextCommitsSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	const commitsJSON = `[
@@ -457,24 +468,12 @@ func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
 
 // TestList_EmptyProjectID verifies that List returns an error when project_id
@@ -513,39 +512,21 @@ func TestDelete_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_DeleteError validates the register.go error path for
-// the delete tool via MCP round-trip against a 403 backend.
-func TestMCPRoundTrip_DeleteError(t *testing.T) {
+// TestActionSpecs_DeleteError validates the delete route error path against a 403 backend.
+func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	byTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		byTool[spec.IndividualTool.Name] = spec
 	}
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_mr_context_commits",
-		Arguments: map[string]any{"project_id": "p", "merge_request_iid": 1, "commits": []any{"abc"}},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true")
+	_, err := byTool["gitlab_delete_mr_context_commits"].Route.Handler(t.Context(), map[string]any{"project_id": "p", "merge_request_iid": int64(1), "commits": []any{"abc"}})
+	if err == nil {
+		t.Error("expected delete route error")
 	}
 }
