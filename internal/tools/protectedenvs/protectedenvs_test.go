@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -264,59 +262,6 @@ func TestUnprotect_CancelledContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
 	}
-}
-
-// TestMCPRoundTrip_ErrorAndNotFound validates register.go error and NotFound
-// paths via MCP round-trip.
-func TestMCPRoundTrip_ErrorAndNotFound(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	t.Run("get_404", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_protected_environment_get",
-			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true for get 404")
-		}
-	})
-
-	t.Run("unprotect_404", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_protected_environment_unprotect",
-			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true for unprotect 404")
-		}
-	})
 }
 
 // TestProtect_MissingName verifies the behavior of protect missing name.
@@ -638,74 +583,6 @@ func TestUnprotect_APIError(t *testing.T) {
 	err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42", Environment: "production"})
 	if err == nil {
 		t.Fatal("expected error for API failure")
-	}
-}
-
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallThroughMCP verifies all registered tools can be called
-// through MCP in-memory transport, covering the handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			testutil.RespondJSON(w, http.StatusOK,
-				`[{"name":"production","deploy_access_levels":[{"access_level":40}],"approval_rules":[]}]`)
-		case http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, envJSON)
-		case http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, envJSON)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_protected_environment_list", map[string]any{"project_id": "42"}},
-		{"gitlab_protected_environment_get", map[string]any{"project_id": "42", "environment": "production"}},
-		{"gitlab_protected_environment_protect", map[string]any{"project_id": "42", "name": "staging"}},
-		{"gitlab_protected_environment_update", map[string]any{"project_id": "42", "environment": "production"}},
-		{"gitlab_protected_environment_unprotect", map[string]any{"project_id": "42", "environment": "production"}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
-			}
-		})
 	}
 }
 

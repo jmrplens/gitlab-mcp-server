@@ -18,11 +18,11 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,716 |
-| Unit test functions | 9,469 |
+| Total test functions | 9,717 |
+| Unit test functions | 9,470 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 423 |
+| Test files (internal/) | 424 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,727 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,728 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,106 | 325 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,107 | 326 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,716** | **549** |  |
+| **Total** | **9,717** | **550** |  |
 
 ### Core Packages
 
@@ -240,7 +240,7 @@
 | projectstatistics | 8 | 2 | 100.0% | 1 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
 | projecttemplates | 18 | 1 | 100.0% | 2 |
-| protectedenvs | 35 | 1 | 98.7% | 5 |
+| protectedenvs | 36 | 2 | 99.0% | 5 |
 | protectedpackages | 32 | 2 | 100.0% | 4 |
 | releaselinks | 53 | 2 | 100.0% | 6 |
 | releases | 60 | 1 | 99.5% | 6 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,106** | **325** |  | **1,018** |
+| **Total** | **7,107** | **326** |  | **1,018** |
 
 </details>
 
@@ -457,7 +457,7 @@
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
 | projecttemplates | 100.0% |
-| protectedenvs | 98.7% |
+| protectedenvs | 99.0% |
 | protectedpackages | 100.0% |
 | releaselinks | 100.0% |
 | releases | 99.5% |
