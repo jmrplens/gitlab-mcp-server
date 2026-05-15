@@ -1511,81 +1511,18 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 	}
 }
 
-// knownExceptions lists sub-packages that are NOT registered via RegisterAll
-// in register.go because they have a different constructor signature.
-// Each entry must document WHY it is an exception.
-var knownExceptions = map[string]string{
-	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
-	// it is registered in cmd/server/main.go.
-	"actioncompat":  "infrastructure package for catalog compatibility policies, not an MCP tool package",
-	"adminspecs":    "infrastructure package for gitlab_admin catalog metadata, not an MCP tool package",
-	"actioncatalog": "infrastructure package for catalog metadata, not an MCP tool package",
-	"dynamic":       "registered in cmd/server/main.go from the canonical action catalog",
-	"serverupdate":  "registered in cmd/server/main.go with *autoupdate.Updater",
-	"surfaces":      "infrastructure package for catalog-backed standalone surface tool specs",
-	"testdata":      "contains test data, not a tool package",
-}
-
-// TestAllSubPackagesRegistered verifies that every sub-directory under
-// internal/tools/ has a corresponding RegisterTools call in register.go.
-// Sub-packages listed in knownExceptions are allowed to be absent from
-// register.go if they are registered elsewhere.
-func TestAllSubPackagesRegistered(t *testing.T) {
-	// 1. Discover all sub-directories (= sub-packages).
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	var subDirs []string
-	for _, e := range entries {
-		if e.IsDir() {
-			subDirs = append(subDirs, e.Name())
-		}
-	}
-	if len(subDirs) == 0 {
-		t.Fatal("no sub-directories found — test may be running from wrong directory")
-	}
-
-	// 2. Parse register.go to extract all {pkg}.RegisterTools( calls.
+// TestRegisterAllDoesNotUseDomainRegisterTools verifies the root individual
+// runtime is catalog-backed and cannot regress to per-domain RegisterTools loops.
+func TestRegisterAllDoesNotUseDomainRegisterTools(t *testing.T) {
 	src, err := os.ReadFile("register.go")
 	if err != nil {
 		t.Fatalf("ReadFile register.go: %v", err)
 	}
-	re := regexp.MustCompile(`\b(\w+)\.RegisterTools\(`)
-	matches := re.FindAllStringSubmatch(string(src), -1)
-
-	registered := make(map[string]bool)
-	for _, m := range matches {
-		registered[m[1]] = true
-	}
-
-	// 3. Check that every sub-directory is registered or is a known exception.
-	var missing []string
-	for _, dir := range subDirs {
-		if registered[dir] {
-			continue
-		}
-		if _, ok := knownExceptions[dir]; ok {
-			continue
-		}
-		missing = append(missing, dir)
-	}
-
-	if len(missing) > 0 {
-		t.Errorf("sub-packages not registered in register.go (and not in knownExceptions):\n  %s",
-			strings.Join(missing, "\n  "))
-		t.Log("If a sub-package has a different constructor, add it to knownExceptions with a reason.")
-	}
-
-	// 4. Verify known exceptions actually exist as directories.
-	for pkg, reason := range knownExceptions {
-		if _, statErr := os.Stat(pkg); os.IsNotExist(statErr) {
-			t.Errorf("knownExceptions entry %q (%s) does not exist as a sub-directory — remove it", pkg, reason)
+	for _, forbidden := range []string{".RegisterTools(", "registerAllLegacy", "legacyIndividualToolDescriptions", "listToolsForDescriptionCapture"} {
+		if strings.Contains(string(src), forbidden) {
+			t.Fatalf("register.go contains %q; RegisterAll must remain catalog-backed", forbidden)
 		}
 	}
-
-	t.Logf("verified %d sub-packages: %d in register.go, %d known exceptions",
-		len(subDirs), len(registered), len(knownExceptions))
 }
 
 // TestAllMarkdownFormattersRegistered verifies that every sub-package with a

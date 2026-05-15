@@ -112,6 +112,9 @@ func individualCatalogGroupEligible(group actioncatalog.Group, opts IndividualCa
 func mustIndividualToolFromCatalogAction(action actioncatalog.Action, icons []mcp.Icon, opts IndividualCatalogRegisterOptions) *mcp.Tool {
 	spec := actionSpecFromCatalogAction(action)
 	description := strings.TrimSpace(spec.IndividualTool.Description)
+	if description == "" {
+		description = strings.TrimSpace(catalogIndividualToolDescriptions[action.IndividualTool.Name])
+	}
 	if description == "" && opts.DescriptionForTool != nil {
 		description = strings.TrimSpace(opts.DescriptionForTool(action))
 	}

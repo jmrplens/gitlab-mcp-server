@@ -26,18 +26,10 @@ func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(goldenData, &golden); unmarshalErr != nil {
 		t.Fatalf("parse golden file %s: %v", goldenPath, unmarshalErr)
 	}
-	goldenByName := make(map[string]toolSnapshot, len(golden))
-	for _, snapshot := range golden {
-		goldenByName[snapshot.Name] = snapshot
-	}
-
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
-		DescriptionForTool: func(action actioncatalog.Action) string {
-			return goldenByName[action.IndividualTool.Name].Description
-		},
 	})
 
 	tools := listToolsFromServer(t, server)
@@ -56,7 +48,7 @@ func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 	compareSnapshotSlices(t, goldenPath, wantSnapshots, gotSnapshots)
 }
 
-func TestRegisterAll_CatalogBackedMatchesLegacyToolNames(t *testing.T) {
+func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T) {
 	testCases := []struct {
 		name       string
 		client     *gitlabclient.Client
@@ -69,17 +61,19 @@ func TestRegisterAll_CatalogBackedMatchesLegacyToolNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			legacyServer := mcp.NewServer(&mcp.Implementation{Name: "legacy", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-			registerAllLegacy(legacyServer, tc.client, tc.enterprise)
-			legacyNames := toolNamesFromServer(t, legacyServer)
+			catalog := mustBuildActionCatalog(t, tc.client, ActionCatalogOptions{Enterprise: tc.enterprise, IncludeMCP: true})
+			expectedServer := mcp.NewServer(&mcp.Implementation{Name: "expected", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+			RegisterIndividualCatalogTools(expectedServer, catalog, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true})
+			RegisterMetaStandaloneTools(expectedServer, tc.client)
+			expectedNames := toolNamesFromServer(t, expectedServer)
 
 			catalogServer := mcp.NewServer(&mcp.Implementation{Name: "catalog", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 			RegisterAll(catalogServer, tc.client, tc.enterprise)
 			catalogNames := toolNamesFromServer(t, catalogServer)
 
-			missing, extra := diffStringSlices(legacyNames, catalogNames)
+			missing, extra := diffStringSlices(expectedNames, catalogNames)
 			if len(missing) > 0 || len(extra) > 0 {
-				t.Fatalf("catalog-backed RegisterAll name drift\nmissing: %v\nextra: %v", missing, extra)
+				t.Fatalf("RegisterAll catalog projection name drift\nmissing: %v\nextra: %v", missing, extra)
 			}
 		})
 	}

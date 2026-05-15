@@ -16,6 +16,9 @@ import (
 //go:embed testdata/tools_meta.json
 var metaToolSnapshotJSON []byte
 
+//go:embed testdata/tools_individual.json
+var individualToolSnapshotJSON []byte
+
 type metaToolSnapshot struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -23,10 +26,27 @@ type metaToolSnapshot struct {
 
 var catalogMetaToolDescriptions = loadCatalogMetaToolDescriptions()
 
+var catalogIndividualToolDescriptions = loadCatalogIndividualToolDescriptions()
+
 func loadCatalogMetaToolDescriptions() map[string]string {
 	var snapshots []metaToolSnapshot
 	if err := json.Unmarshal(metaToolSnapshotJSON, &snapshots); err != nil {
 		panic(fmt.Sprintf("load meta-tool descriptions: %v", err))
+	}
+	descriptions := make(map[string]string, len(snapshots))
+	for _, snapshot := range snapshots {
+		if snapshot.Name == "" || snapshot.Description == "" {
+			continue
+		}
+		descriptions[snapshot.Name] = snapshot.Description
+	}
+	return descriptions
+}
+
+func loadCatalogIndividualToolDescriptions() map[string]string {
+	var snapshots []metaToolSnapshot
+	if err := json.Unmarshal(individualToolSnapshotJSON, &snapshots); err != nil {
+		panic(fmt.Sprintf("load individual tool descriptions: %v", err))
 	}
 	descriptions := make(map[string]string, len(snapshots))
 	for _, snapshot := range snapshots {
