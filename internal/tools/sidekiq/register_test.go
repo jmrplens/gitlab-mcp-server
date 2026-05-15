@@ -1,41 +1,21 @@
-// register_test.go contains integration tests for the Sidekiq tool closures
-// in register.go. Tests exercise read-only tool dispatch via an in-memory
-// MCP session with a mock GitLab API.
+// register_test.go contains canonical route error tests for Sidekiq metrics.
 package sidekiq
 
 import (
-	"context"
 	"net/http"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestRegisterTools_ErrorPaths covers the error branches in register.go handler
-// closures when the GitLab API returns an error, ensuring ErrorResultMarkdown
-// is returned through the MCP transport.
-func TestRegisterTools_ErrorPaths(t *testing.T) {
+// TestActionSpecs_CallRouteErrors validates Sidekiq route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := sidekiqSpecsByTool(ActionSpecs(client))
 
 	tools := []string{
 		"gitlab_get_sidekiq_queue_metrics",
@@ -45,12 +25,12 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 	}
 	for _, name := range tools {
 		t.Run(name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
+			spec, ok := specByTool[name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", name)
 			}
-			if result == nil || !result.IsError {
-				t.Fatal("expected IsError result for server error response")
+			if _, err := spec.Route.Handler(t.Context(), map[string]any{}); err == nil {
+				t.Fatal("expected route error")
 			}
 		})
 	}
