@@ -44,7 +44,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("broadcast_message_get", toolutil.RouteAction(client, broadcastmessages.Get), "gitlab_get_broadcast_message"),
 		adminCreateSpec("broadcast_message_create", toolutil.RouteAction(client, broadcastmessages.Create), "gitlab_create_broadcast_message"),
 		adminUpdateSpec("broadcast_message_update", toolutil.RouteAction(client, broadcastmessages.Update), "gitlab_update_broadcast_message"),
-		adminDeleteSpec("broadcast_message_delete", toolutil.DestructiveVoidAction(client, broadcastmessages.Delete), "gitlab_delete_broadcast_message"),
+		adminDeleteSpec("broadcast_message_delete", toolutil.DestructiveAction(client, broadcastmessages.DeleteOutput), "gitlab_delete_broadcast_message"),
 		adminReadSpec("feature_list", toolutil.RouteAction(client, features.List), "gitlab_list_features"),
 		adminReadSpec("feature_list_definitions", toolutil.RouteAction(client, features.ListDefinitions), "gitlab_list_feature_definitions"),
 		adminUpdateCreateIndividualSpec("feature_set", features.SetRoute(client), "gitlab_set_feature_flag"),

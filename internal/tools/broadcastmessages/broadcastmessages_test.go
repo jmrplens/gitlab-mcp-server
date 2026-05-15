@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const fmtUnexpErr = "unexpected error: %v"
@@ -474,26 +475,35 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for broadcast message actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := broadcastMessageSpecsByTool(t, specs)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_broadcast_message"].Route.Destructive {
+		t.Fatal("gitlab_delete_broadcast_message should be destructive")
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip for all tools
+// ActionSpecs — all routes
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newBroadcastMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates broadcast message routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newBroadcastRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -509,31 +519,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newBroadcastMCPSession is an internal helper for the broadcastmessages package.
-func newBroadcastMCPSession(t *testing.T) *mcp.ClientSession {
+// newBroadcastRouteSpecs is an internal helper for the broadcastmessages package.
+func newBroadcastRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	msgJSON := `{"id":1,"message":"Hello","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","active":true,"broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
@@ -560,23 +562,21 @@ func newBroadcastMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return broadcastMessageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }

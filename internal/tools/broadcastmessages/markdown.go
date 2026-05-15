@@ -54,7 +54,22 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
+func formatGetOutput(out GetOutput) *mcp.CallToolResult {
+	return FormatMessageMarkdown(out.Message)
+}
+
+func formatCreateOutput(out CreateOutput) *mcp.CallToolResult {
+	return FormatMessageMarkdown(out.Message)
+}
+
+func formatUpdateOutput(out UpdateOutput) *mcp.CallToolResult {
+	return FormatMessageMarkdown(out.Message)
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(FormatListMarkdown)
 	toolutil.RegisterMarkdownResult(FormatMessageMarkdown)
+	toolutil.RegisterMarkdownResult(formatGetOutput)
+	toolutil.RegisterMarkdownResult(formatCreateOutput)
+	toolutil.RegisterMarkdownResult(formatUpdateOutput)
 }
