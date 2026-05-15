@@ -150,6 +150,8 @@ type ActionSpecGroup = actioncatalog.CatalogGroupSpec
 
 type actionSpecGroupBuilder func(*gitlabclient.Client, bool) []ActionSpecGroup
 
+//go:generate go run ../../cmd/gen_action_catalog_manifest/
+
 // CollectActionSpecs gathers canonical specs from domain-local builders.
 func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	groups := make([]ActionSpecGroup, 0)
@@ -157,54 +159,6 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 		groups = append(groups, build(client, enterprise)...)
 	}
 	return cloneSortedActionSpecGroups(groups)
-}
-
-func actionSpecGroupBuilders() []actionSpecGroupBuilder {
-	return []actionSpecGroupBuilder{
-		buildAdminActionSpecs,
-		buildAccessActionSpecs,
-		buildAnalyzeActionSpecs,
-		buildAttestationActionSpecs,
-		buildAuditEventActionSpecs,
-		buildBranchActionSpecs,
-		buildCICatalogActionSpecs,
-		buildCIVariableActionSpecs,
-		buildCompliancePolicyActionSpecs,
-		buildCustomEmojiActionSpecs,
-		buildDependencyActionSpecs,
-		buildDORAMetricsActionSpecs,
-		buildEnvironmentActionSpecs,
-		buildEnterpriseUserActionSpecs,
-		buildExternalStatusCheckActionSpecs,
-		buildFeatureFlagsActionSpecs,
-		buildGeoActionSpecs,
-		buildGroupActionSpecs,
-		buildGroupSCIMActionSpecs,
-		buildIssueActionSpecs,
-		buildJobActionSpecs,
-		buildMergeRequestActionSpecs,
-		buildMergeTrainActionSpecs,
-		buildMemberRoleActionSpecs,
-		buildModelRegistryActionSpecs,
-		buildMRReviewActionSpecs,
-		buildOrbitActionSpecs,
-		buildPackageActionSpecs,
-		buildPipelineActionSpecs,
-		buildProjectAliasActionSpecs,
-		buildProjectActionSpecs,
-		buildReleaseActionSpecs,
-		buildRepositoryActionSpecs,
-		buildRunnerActionSpecs,
-		buildSearchActionSpecs,
-		buildSecurityFindingActionSpecs,
-		buildSnippetActionSpecs,
-		buildStorageMoveActionSpecs,
-		buildTagActionSpecs,
-		buildTemplateActionSpecs,
-		buildUserActionSpecs,
-		buildVulnerabilityActionSpecs,
-		buildWikiActionSpecs,
-	}
 }
 
 func buildAdminActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {

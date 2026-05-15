@@ -5,7 +5,7 @@
        mdlint mdlint-fix \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
-	gen-llms gen-readme gen-testing-docs \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -522,6 +522,14 @@ gen-readme:
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 gen-testing-docs:
 	go run ./cmd/gen_testing_docs/
+
+## gen-action-catalog-manifest: regenerate the ActionSpec group builder manifest.
+gen-action-catalog-manifest:
+	go run ./cmd/gen_action_catalog_manifest/
+
+## check-action-catalog-manifest: verify the generated ActionSpec manifest is current.
+check-action-catalog-manifest:
+	go run ./cmd/gen_action_catalog_manifest/ --check
 
 # ─── Output Quality Audit ────────────────────────────────────────────────────
 

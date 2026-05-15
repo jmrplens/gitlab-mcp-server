@@ -142,11 +142,13 @@ flowchart TD
 
     selector -->|meta| buildMeta[internal/tools.BuildActionCatalog]
     buildMeta --> collectSpecs[internal/tools.CollectActionSpecs]
+    collectSpecs --> generatedManifest[action_specs_manifest_gen.go]
     buildMeta --> registerMeta[internal/tools.RegisterMetaCatalog]
     registerMeta --> metaTools[Visible domain meta-tools]
 
     selector -->|dynamic or dynamic-3| buildDynamic[cmd/server.buildDynamicActionCatalog]
     buildDynamic --> collectDynamicSpecs[internal/tools.CollectActionSpecs]
+    collectDynamicSpecs --> generatedManifest
     buildDynamic --> standalone[dynamic.AddStandaloneCatalog]
     standalone --> dynamic3[dynamic.RegisterCatalogTools]
     dynamic3 --> threeTools[gitlab_search_tools\ngitlab_describe_tools\ngitlab_execute_tool]
@@ -177,6 +179,11 @@ Target builder rules:
   owns the action semantics; central aggregation builders remain appropriate for
   visible groups that span many packages, such as `gitlab_admin` or
   `gitlab_group`.
+- `action_specs_manifest_gen.go` is generated from the source-defined
+  `build*ActionSpecs` aggregation builders. Add or remove a builder in source,
+  then run `make gen-action-catalog-manifest`; CI and audits should use
+  `make check-action-catalog-manifest` or `cmd/audit_action_spec_coverage` to
+  fail when the manifest is stale.
 - Domain packages should expose typed handlers and individual `RegisterTools`
   functions. `RegisterTools` should obtain tool metadata through
   `toolutil.MustIndividualToolFromSpecs` or equivalent spec projection, while
@@ -184,9 +191,10 @@ Target builder rules:
   Domain packages should expose `ActionSpecs` without importing
   `internal/tools/actioncatalog`; catalog projection belongs to the central
   `internal/tools` layer.
-- Delegated meta groups are allowed only for packages explicitly called from
-  `registerAllMetaGroups`; otherwise ordinary GitLab API operations should flow
-  through the central catalog builders.
+- Package-level `RegisterMeta` functions are no longer an approved runtime
+  registration pattern. Ordinary GitLab API operations should flow through
+  ActionSpecs, the generated builder manifest, `BuildActionCatalog`, and the
+  catalog-backed surface registrars.
 
 Current direction: keep the catalog composition in `internal/tools`, keep
 domain-owned spec builders close to their handlers, and use central aggregation
@@ -194,8 +202,8 @@ only when a visible meta group intentionally spans multiple packages.
 
 ## Standalone Dynamic Actions
 
-Most dynamic actions come from the canonical catalog built from specs that match
-captured meta route definitions. A small set of actions are added only for
+Most dynamic actions come from the canonical catalog built directly from specs
+and the generated builder manifest. A small set of actions are added only for
 dynamic mode because they are standalone tools or interactive flows rather than
 normal meta-tool actions.
 
@@ -240,15 +248,15 @@ because every individual tool already advertises its own tool input schema.
 ## Historical Duplication
 
 ADR-0005 consolidated many standalone meta-tools into broader domain meta-tools.
-The visible taxonomy changed, but many package-level `RegisterMeta` functions
-were intentionally left in place during the migration.
+The visible taxonomy changed, and the intermediate package-level `RegisterMeta`
+bridge has now been removed from active runtime registration.
 
 Current baseline for delegated meta ownership:
 
 | Metric | Count |
 | --- | ---: |
-| Package-level `RegisterMeta` definitions under `internal/tools/*` | 4 |
-| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` | 4 |
+| Package-level `RegisterMeta` definitions under `internal/tools/*` | 0 |
+| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` | 0 |
 | Apparent legacy `RegisterMeta` definitions requiring verification | 0 |
 
 Historical names still handled as compatibility aliases:
@@ -262,9 +270,9 @@ Historical names still handled as compatibility aliases:
 | `gitlab_access_request` | `gitlab_access` |
 | `gitlab_project_snippet` | `gitlab_snippet` |
 
-Package-level `RegisterMeta` functions are currently limited to the approved
-delegated groups above. They are still captured by `registerAllMetaGroups`, and
-their actions must also be backed by collected specs.
+Package-level `RegisterMeta` functions are now treated as audit violations.
+Former delegated groups such as `gitlab_search`, `gitlab_runner`,
+`gitlab_analyze`, and `gitlab_orbit` are catalog-backed groups.
 
 ## Import Layering Rules
 
@@ -342,9 +350,9 @@ The migration is enforced by source-level tests and audits:
 
 - `TestActionSpecCoverage_AllCatalogRoutesClassified` builds the GitLab.com
   Enterprise dynamic catalog and fails if any catalog action is not spec-backed.
-- `TestCollectedActionSpecs_MigratedMetaToolParity` captures all meta route
-  groups for CE, self-managed Enterprise, and GitLab.com Enterprise, then checks
-  spec action counts, destructive flags, schemas, read-only projection, and
+- `TestCollectedActionSpecs_ProjectIntoActionCatalog` builds the catalog for
+  CE, self-managed Enterprise, and GitLab.com Enterprise, then checks spec
+  action routes, destructive flags, schemas, read-only projection, and
   individual-tool metadata.
 - `TestCollectedActionSpecs_KnownGuidancePreserved` locks the parameter guidance
   for historically ambiguous actions such as merge request creation, issue
@@ -367,7 +375,10 @@ The migration is enforced by source-level tests and audits:
   registered individual tool without ActionSpec metadata is an explicit
   standalone exception.
 - `cmd/audit_action_spec_coverage` writes `dist/action-spec-coverage.json` with
-  source-discovered surface classifications for domain coverage sweeps.
+  source-discovered surface classifications for domain coverage sweeps and
+  fails when `action_specs_manifest_gen.go` is stale.
+- `make check-action-catalog-manifest` verifies the generated ActionSpec group
+  builder manifest without writing files.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
 - `make audit-dynamic-aliases`, `go run ./cmd/audit_output/`,
@@ -377,11 +388,11 @@ The migration is enforced by source-level tests and audits:
 ## Useful Checks
 
 ```bash
+go run ./cmd/gen_action_catalog_manifest/ --check
 rg -n "func RegisterMeta\(" internal/tools --glob '*.go'
-rg -n "RegisterMeta\(server, client\)|RegisterMeta\(server, .*client" internal/tools/register_meta.go
 rg -n "\*gitlab\.Client" internal/tools -g 'register.go'
 rg -n "BuildActionCatalog\(|RegisterMetaCatalog\(|actioncatalog\.|internal/tools/actioncatalog|internal/tools/dynamic" --glob '*.go' cmd internal
 ```
 
-Use these checks before removing legacy registration functions or moving the
-catalog package.
+Use these checks after adding or moving catalog builders, changing registration
+paths, or tightening legacy registration audits.

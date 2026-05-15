@@ -52,6 +52,31 @@ func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
 	}
 }
 
+func TestAssertActionSpecManifestCurrent_DetectsStaleManifest(t *testing.T) {
+	root := t.TempDir()
+	toolsDir := filepath.Join(root, "internal", "tools")
+	if err := os.MkdirAll(toolsDir, 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs.go"), `package tools
+
+func buildAlphaActionSpecs() {}
+func buildBetaActionSpecs() {}
+`)
+	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs_manifest_gen.go"), `package tools
+
+func actionSpecGroupBuilders() []actionSpecGroupBuilder {
+	return []actionSpecGroupBuilder{
+		buildAlphaActionSpecs,
+	}
+}
+`)
+
+	if err := assertActionSpecManifestCurrent(root); err == nil {
+		t.Fatal("assertActionSpecManifestCurrent() error = nil, want stale manifest error")
+	}
+}
+
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -392,5 +417,12 @@ func assertStandaloneOnlyDomain(t *testing.T, report coverageReport, packageName
 	}
 	if domain.HasIndividualTools || domain.HasMetaSpecs || domain.HasDynamicCatalogEntries {
 		t.Fatalf("%s coverage should remain outside GitLab action specs/catalog: %+v", packageName, domain)
+	}
+}
+
+func writeAuditTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s) error = %v", path, err)
 	}
 }

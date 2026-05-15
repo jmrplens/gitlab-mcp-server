@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -172,7 +173,10 @@ func auditCatalogFirstSource(root string) error {
 	if err := assertNoProductionSelectorCall(root, "toolutil", "CaptureMetaToolDefinitions"); err != nil {
 		return err
 	}
-	return assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go"))
+	if err := assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go")); err != nil {
+		return err
+	}
+	return assertActionSpecManifestCurrent(root)
 }
 
 func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
@@ -231,6 +235,110 @@ func assertActionCatalogHasNoLegacyReferences(path string) error {
 		}
 	}
 	return nil
+}
+
+func assertActionSpecManifestCurrent(root string) error {
+	sourceBuilders, err := discoverActionSpecGroupBuilderNames(filepath.Join(root, "internal", "tools"))
+	if err != nil {
+		return err
+	}
+	manifestBuilders, err := readManifestActionSpecGroupBuilders(filepath.Join(root, "internal", "tools", "action_specs_manifest_gen.go"))
+	if err != nil {
+		return err
+	}
+	if strings.Join(sourceBuilders, "\x00") != strings.Join(manifestBuilders, "\x00") {
+		return fmt.Errorf("action spec manifest is stale: source builders %v, manifest builders %v; run go run ./cmd/gen_action_catalog_manifest/", sourceBuilders, manifestBuilders)
+	}
+	return nil
+}
+
+func discoverActionSpecGroupBuilderNames(toolsDir string) ([]string, error) {
+	fileSet := token.NewFileSet()
+	builders := make(map[string]string)
+	err := filepath.WalkDir(toolsDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != toolsDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, "_gen.go") {
+			return nil
+		}
+		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+		if parseErr != nil {
+			return fmt.Errorf("parse %s: %w", path, parseErr)
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Recv != nil || !isActionSpecGroupBuilderName(function.Name.Name) {
+				continue
+			}
+			if previousPath, exists := builders[function.Name.Name]; exists {
+				return fmt.Errorf("duplicate action spec group builder %s in %s and %s", function.Name.Name, previousPath, path)
+			}
+			builders[function.Name.Name] = path
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(builders) == 0 {
+		return nil, errors.New("no action spec group builders found")
+	}
+	names := make([]string, 0, len(builders))
+	for name := range builders {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func readManifestActionSpecGroupBuilders(path string) ([]string, error) {
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, path, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "actionSpecGroupBuilders" {
+			continue
+		}
+		return manifestBuilderNames(function), nil
+	}
+	return nil, fmt.Errorf("%s does not define actionSpecGroupBuilders", path)
+}
+
+func manifestBuilderNames(function *ast.FuncDecl) []string {
+	var names []string
+	ast.Inspect(function.Body, func(node ast.Node) bool {
+		returnStmt, ok := node.(*ast.ReturnStmt)
+		if !ok || len(returnStmt.Results) != 1 {
+			return true
+		}
+		literal, ok := returnStmt.Results[0].(*ast.CompositeLit)
+		if !ok {
+			return false
+		}
+		for _, element := range literal.Elts {
+			identifier, isIdentifier := element.(*ast.Ident)
+			if isIdentifier {
+				names = append(names, identifier.Name)
+			}
+		}
+		return false
+	})
+	return names
+}
+
+func isActionSpecGroupBuilderName(name string) bool {
+	return strings.HasPrefix(name, "build") && strings.HasSuffix(name, "ActionSpecs") && len(name) > len("buildActionSpecs")
 }
 
 func discoverDomainSources(root string) ([]domainSource, error) {
