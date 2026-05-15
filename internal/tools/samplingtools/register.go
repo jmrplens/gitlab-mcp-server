@@ -207,8 +207,8 @@ func samplingRoute[T any, R any](client *gitlabclient.Client, fn func(ctx contex
 	return route
 }
 
-// metaMarkdownForResult dispatches sampling output types to their Markdown formatters.
-func metaMarkdownForResult(result any) *mcp.CallToolResult {
+// MetaMarkdownForResult dispatches sampling output types to their Markdown formatters.
+func MetaMarkdownForResult(result any) *mcp.CallToolResult {
 	switch v := result.(type) {
 	case samplingUnsupportedOutput:
 		return SamplingUnsupportedResult("gitlab_analyze")
@@ -237,6 +237,10 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 	default:
 		return toolutil.ToolResultWithMarkdown(fmt.Sprintf("Unknown sampling output type: %T", result))
 	}
+}
+
+func metaMarkdownForResult(result any) *mcp.CallToolResult {
+	return MetaMarkdownForResult(result)
 }
 
 // RegisterMeta registers a single gitlab_analyze meta-tool that consolidates

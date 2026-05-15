@@ -571,7 +571,15 @@ func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecG
 	if len(specs) == 0 {
 		return nil
 	}
-	return []ActionSpecGroup{{ToolName: toolName, Actions: specs, OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}}
+	return []ActionSpecGroup{{
+		ToolName:     toolName,
+		ReadOnly:     catalogGroupReadOnly(specs),
+		Icons:        catalogGroupIcons(toolName),
+		FormatResult: catalogGroupFormatResult(toolName),
+		Actions:      specs,
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+	}}
 }
 
 func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.ActionSpec, error) {

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -54,6 +55,18 @@ func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
 			t.Fatalf("enterprise action count = %d, want greater than base %d", enterprise.CountActions(), base.CountActions())
 		}
 	})
+}
+
+func TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture(t *testing.T) {
+	source, err := os.ReadFile("action_catalog.go")
+	if err != nil {
+		t.Fatalf("ReadFile(action_catalog.go) error = %v", err)
+	}
+	for _, forbidden := range []string{"CaptureMetaToolDefinitions", "registerAllMetaGroups("} {
+		if strings.Contains(string(source), forbidden) {
+			t.Fatalf("action_catalog.go contains %q; catalog construction must use ActionSpec groups directly", forbidden)
+		}
+	}
 }
 
 func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
@@ -262,7 +275,7 @@ func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
 	}
 }
 
-func TestBuildActionCatalog_ExplicitSpecOverridesCapturedRoute(t *testing.T) {
+func TestBuildActionCatalog_ExplicitSpecOverridesCatalogRoute(t *testing.T) {
 	spec := toolutil.NewActionSpec("token_scope_add_project", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "spec_scope_project"}},
 	})
@@ -281,12 +294,15 @@ func TestBuildActionCatalog_ExplicitSpecOverridesCapturedRoute(t *testing.T) {
 	}
 }
 
-func TestBuildActionCatalog_RejectsSpecWithoutCapturedRoute(t *testing.T) {
+func TestBuildActionCatalog_AcceptsExplicitSpecGroupActions(t *testing.T) {
 	spec := toolutil.NewActionSpec("not_captured", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{})
 
-	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{spec}}}})
-	if err == nil || !strings.Contains(err.Error(), "spec actions missing captured routes") {
-		t.Fatalf("BuildActionCatalog() error = %v, want missing captured route rejection", err)
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{spec}}}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if _, ok := catalog.Action("project.not_captured"); !ok {
+		t.Fatal("catalog missing project.not_captured")
 	}
 }
 
@@ -301,11 +317,11 @@ func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T
 	}
 
 	merged := mergeActionSpecGroupOverrides(base, overrides)
-	if len(merged) != 3 {
-		t.Fatalf("merged groups = %+v, want base remainder plus original overrides", merged)
+	if len(merged) != 2 {
+		t.Fatalf("merged groups = %+v, want invalid override plus consolidated group", merged)
 	}
-	if len(merged[0].Actions) != 1 || merged[0].Actions[0].Name != "list" {
-		t.Fatalf("base remainder specs = %+v, want only list", merged[0].Actions)
+	if len(merged[1].Actions) != 3 || merged[1].Actions[0].Name != "list" || merged[1].Actions[2].Name != "get" {
+		t.Fatalf("merged specs = %+v, want list, invalid override, then get", merged[1].Actions)
 	}
 }
 

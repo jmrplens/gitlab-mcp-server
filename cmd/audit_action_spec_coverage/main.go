@@ -110,6 +110,9 @@ func main() {
 }
 
 func buildCoverageReport(root string) (coverageReport, error) {
+	if err := auditCatalogFirstSource(root); err != nil {
+		return coverageReport{}, err
+	}
 	sources, err := discoverDomainSources(root)
 	if err != nil {
 		return coverageReport{}, err
@@ -163,6 +166,71 @@ func buildCoverageReport(root string) (coverageReport, error) {
 		Summary:       summarizeCoverage(domains),
 		Domains:       domains,
 	}, nil
+}
+
+func auditCatalogFirstSource(root string) error {
+	if err := assertNoProductionSelectorCall(root, "toolutil", "CaptureMetaToolDefinitions"); err != nil {
+		return err
+	}
+	return assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go"))
+}
+
+func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
+	fileSet := token.NewFileSet()
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			name := entry.Name()
+			if name == ".git" || name == "dist" || name == "site" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			return nil
+		}
+		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+		if parseErr != nil {
+			return fmt.Errorf("parse %s: %w", path, parseErr)
+		}
+		var found bool
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != selectorName {
+				return true
+			}
+			identifier, ok := selector.X.(*ast.Ident)
+			if ok && identifier.Name == qualifier {
+				found = true
+				return false
+			}
+			return true
+		})
+		if found {
+			return fmt.Errorf("production source %s calls %s.%s; catalog construction must use specs directly", path, qualifier, selectorName)
+		}
+		return nil
+	})
+}
+
+func assertActionCatalogHasNoLegacyReferences(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	source := string(content)
+	for _, forbidden := range []string{"registerAllMetaGroups(", ".RegisterMeta("} {
+		if strings.Contains(source, forbidden) {
+			return fmt.Errorf("%s contains %q; BuildActionCatalog must not depend on legacy meta registration", path, forbidden)
+		}
+	}
+	return nil
 }
 
 func discoverDomainSources(root string) ([]domainSource, error) {

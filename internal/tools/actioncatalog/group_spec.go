@@ -41,6 +41,7 @@ type CatalogGroupSpec struct {
 	EnterpriseOnly         bool
 	GitLabDotComOnly       bool
 	CapabilityRequirements []string
+	FormatResult           toolutil.FormatResultFunc
 	Actions                []toolutil.ActionSpec
 	OwnerPackage           string
 	SurfaceKind            SurfaceKind
@@ -77,6 +78,7 @@ func (spec CatalogGroupSpec) GroupOptions() GroupOptions {
 		CapabilityRequirements: spec.CapabilityRequirements,
 		OwnerPackage:           spec.OwnerPackage,
 		SurfaceKind:            spec.SurfaceKind,
+		FormatResult:           spec.FormatResult,
 	}
 }
 

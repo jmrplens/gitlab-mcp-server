@@ -42,6 +42,16 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 }
 
+func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
+	root, err := repositoryRoot("../..")
+	if err != nil {
+		t.Fatalf("repositoryRoot() error = %v", err)
+	}
+	if auditErr := auditCatalogFirstSource(root); auditErr != nil {
+		t.Fatalf("auditCatalogFirstSource() error = %v", auditErr)
+	}
+}
+
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
