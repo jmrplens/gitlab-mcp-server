@@ -10,8 +10,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -1488,28 +1486,40 @@ func TestGetBurndownChartEvents_APIErrorAfterResolve(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanicCoverage verifies the behavior of register tools no panic coverage.
-func TestRegisterTools_NoPanicCoverage(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group milestone actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := groupMilestoneSpecsByTool(t, specs)
+
+	if len(specs) != 8 {
+		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "groupmilestones" {
+			t.Fatalf("OwnerPackage for %s = %q, want groupmilestones", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 8 tools
+// ActionSpecs route coverage for all 8 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCPCoverage validates register tools call all through m c p coverage across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCPCoverage(t *testing.T) {
-	session := newGroupMilestonesMCPSession(t)
+// TestActionSpecs_CallAllRoutes validates group milestone routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newGroupMilestonesSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -1528,38 +1538,27 @@ func TestRegisterTools_CallAllThroughMCPCoverage(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			requireToolSuccess(t, session, tt.tool, tt.args)
+			requireGroupMilestoneRouteSuccess(t, byTool, tt.tool, tt.args)
 		})
 	}
 }
 
-// requireToolSuccess calls an MCP tool and fails the test if the call
-// returns an error or an IsError result.
-func requireToolSuccess(t *testing.T, session *mcp.ClientSession, toolName string, args map[string]any) {
+func requireGroupMilestoneRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, toolName string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      toolName,
-		Arguments: args,
-	})
+	result, err := specs[toolName].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", toolName, err)
+		t.Fatalf("Route.Handler(%s) error: %v", toolName, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", toolName, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", toolName)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", toolName)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newGroupMilestonesMCPSession is an internal helper for the groupmilestones package.
-func newGroupMilestonesMCPSession(t *testing.T) *mcp.ClientSession {
+func newGroupMilestonesSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -1612,30 +1611,11 @@ func newGroupMilestonesMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return groupMilestoneSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestGroupMilestoneGet_EmbedsCanonicalResource asserts
-// gitlab_group_milestone_get attaches an EmbeddedResource block with URI
-// gitlab://group/{id}/milestone/{iid}.
-func TestGroupMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_GroupMilestoneGetRoute verifies the canonical group milestone get route output.
+func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	const milestoneJSON = `{"id":100,"iid":5,"group_id":99,"title":"v1.0","description":"first","state":"active"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1651,7 +1631,27 @@ func TestGroupMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"group_id": "99", "milestone_iid": 5}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_group_milestone_get", args, "gitlab://group/99/milestone/5", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := groupMilestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_group_milestone_get"].Route.Handler(t.Context(), map[string]any{"group_id": "99", "milestone_iid": 5})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.IID != 5 || out.ID != 100 {
+		t.Fatalf("group milestone output = %#v, want IID 5 ID 100", out)
+	}
+}
+
+func groupMilestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
