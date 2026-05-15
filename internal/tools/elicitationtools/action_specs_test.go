@@ -1,4 +1,4 @@
-// register_test.go validates that catalog-backed interactive tools translate
+// action_specs_test.go validates that catalog-backed interactive tools translate
 // elicitation cancellation into non-error CancelledResult responses.
 package elicitationtools
 

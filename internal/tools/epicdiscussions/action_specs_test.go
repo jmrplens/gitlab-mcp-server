@@ -1,4 +1,4 @@
-// register_test.go contains canonical-route tests for epic discussion actions.
+// action_specs_test.go contains canonical-route tests for epic discussion actions.
 package epicdiscussions
 
 import (

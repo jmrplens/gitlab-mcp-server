@@ -1,4 +1,4 @@
-// register_test.go contains canonical-route tests for custom emoji behavior.
+// action_specs_test.go contains canonical-route tests for custom emoji behavior.
 package customemoji
 
 import (
