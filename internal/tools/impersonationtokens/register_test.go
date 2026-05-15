@@ -1,33 +1,36 @@
-// Package impersonationtokens register_test exercises all RegisterTools closures
-// via MCP in-memory transport, covering every handler wired in register.go.
+// Package impersonationtokens register_test exercises canonical ActionSpecs routes.
 package impersonationtokens
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const registerTokenJSON = `{"id":1,"name":"tok","scopes":["api"],"active":true,"impersonation":true,"revoked":false}`
 const registerTokensJSON = `[{"id":1,"name":"tok","scopes":["api"],"active":true,"impersonation":true,"revoked":false}]`
 
-// TestRegisterTools_NoPanic verifies RegisterTools registers all tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies impersonation token action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "impersonationtokens" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all 5 impersonation token tools can
-// be called through MCP in-memory transport, covering every handler closure.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies all 5 impersonation token routes execute successfully.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -47,20 +50,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
 
 	tools := []struct {
 		name string
@@ -74,12 +68,16 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
