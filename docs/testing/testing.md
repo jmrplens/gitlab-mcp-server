@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.3% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.2% |
 | Overall coverage (`go test ./internal/...`) | 96.4% |
 | Average package coverage | 94.1% |
 

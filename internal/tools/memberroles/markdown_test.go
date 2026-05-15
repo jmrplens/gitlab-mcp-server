@@ -8,6 +8,8 @@ package memberroles
 import (
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestFormatOutputMarkdown validates that FormatOutputMarkdown renders a single
@@ -274,5 +276,13 @@ func TestFormatListMarkdown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMarkdownInit_Registry verifies the init markdown formatters are registered.
+func TestMarkdownInit_Registry(t *testing.T) {
+	out := toolutil.MarkdownForResult(ListOutput{})
+	if out == nil {
+		t.Fatal("expected non-nil result for ListOutput")
 	}
 }
