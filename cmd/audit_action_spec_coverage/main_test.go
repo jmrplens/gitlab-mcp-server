@@ -32,13 +32,13 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 
 	dynamic := requireDomain(t, report, "dynamic")
-	if dynamic.SurfaceClassification != "dynamic-catalog-surface" {
-		t.Fatalf("dynamic classification = %q, want dynamic-catalog-surface", dynamic.SurfaceClassification)
+	if dynamic.SurfaceClassification != "dynamic-controller-surface" || !dynamic.HasSurfaceSpecs || dynamic.SurfaceSpecCount != 4 {
+		t.Fatalf("dynamic coverage missing controller surface specs: %+v", dynamic)
 	}
 
 	serverUpdate := requireDomain(t, report, "serverupdate")
-	if !serverUpdate.HasStandaloneOnlyTools || serverUpdate.SurfaceClassification != "standalone-only" {
-		t.Fatalf("serverupdate coverage missing standalone classification: %+v", serverUpdate)
+	if !serverUpdate.HasStandaloneOnlyTools || serverUpdate.SurfaceClassification != "surface-backed" || serverUpdate.SurfaceSpecCount != 2 {
+		t.Fatalf("serverupdate coverage missing server maintenance surface specs: %+v", serverUpdate)
 	}
 }
 
@@ -333,13 +333,11 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 		"licensetemplates",
 		"markdown",
 		"modelregistry",
-		"samplingtools",
 	})
-	assertSourceSpecBackedDomains(t, report, []string{
-		"elicitationtools",
-		"projectdiscovery",
-	})
-	assertStandaloneOnlyDomain(t, report, "serverupdate")
+	assertSurfaceBackedDomain(t, report, "samplingtools", "sampling-utility", 11)
+	assertSurfaceBackedDomain(t, report, "elicitationtools", "interactive-utility", 4)
+	assertSurfaceBackedDomain(t, report, "projectdiscovery", "runtime-utility", 1)
+	assertSurfaceBackedDomain(t, report, "serverupdate", "server-maintenance", 2)
 }
 
 func TestWriteReport_WritesJSONFile(t *testing.T) {
@@ -409,14 +407,17 @@ func assertSourceSpecBackedDomains(t *testing.T, report coverageReport, packageN
 	}
 }
 
-func assertStandaloneOnlyDomain(t *testing.T, report coverageReport, packageName string) {
+func assertSurfaceBackedDomain(t *testing.T, report coverageReport, packageName, surfaceKind string, expectedUtilityActions int) {
 	t.Helper()
 	domain := requireDomain(t, report, packageName)
-	if domain.SurfaceClassification != "standalone-only" {
-		t.Fatalf("%s classification = %q, want standalone-only", packageName, domain.SurfaceClassification)
+	if domain.SurfaceClassification != "surface-backed" {
+		t.Fatalf("%s classification = %q, want surface-backed", packageName, domain.SurfaceClassification)
 	}
-	if domain.HasIndividualTools || domain.HasMetaSpecs || domain.HasDynamicCatalogEntries {
-		t.Fatalf("%s coverage should remain outside GitLab action specs/catalog: %+v", packageName, domain)
+	if domain.UtilitySurfaceActionCount != expectedUtilityActions {
+		t.Fatalf("%s utility action count = %d, want %d: %+v", packageName, domain.UtilitySurfaceActionCount, expectedUtilityActions, domain)
+	}
+	if domain.SurfaceKindCounts[surfaceKind] != expectedUtilityActions {
+		t.Fatalf("%s surface kind %q count = %d, want %d: %+v", packageName, surfaceKind, domain.SurfaceKindCounts[surfaceKind], expectedUtilityActions, domain)
 	}
 }
 

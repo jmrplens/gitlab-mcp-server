@@ -17,16 +17,19 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/surfaces"
 )
 
 const (
@@ -46,29 +49,40 @@ type coverageSummary struct {
 	RegisterMetaCount           int            `json:"register_meta_count"`
 	ActionSpecDomainCount       int            `json:"action_spec_domain_count"`
 	DynamicCatalogDomainCount   int            `json:"dynamic_catalog_domain_count"`
+	SurfaceSpecDomainCount      int            `json:"surface_spec_domain_count"`
 	StandaloneOnlyDomainCount   int            `json:"standalone_only_domain_count"`
 	NoGitLabActionSurfaceCount  int            `json:"no_gitlab_action_surface_count"`
+	OrdinaryGitLabActionCount   int            `json:"ordinary_gitlab_action_count"`
+	UtilitySurfaceActionCount   int            `json:"utility_surface_action_count"`
+	SurfaceSpecCount            int            `json:"surface_spec_count"`
 	SurfaceClassificationCounts map[string]int `json:"surface_classification_counts"`
+	SurfaceKindCounts           map[string]int `json:"surface_kind_counts"`
 }
 
 type domainCoverage struct {
-	Package                   string   `json:"package"`
-	HasRegisterTools          bool     `json:"has_register_tools"`
-	HasRegisterMeta           bool     `json:"has_register_meta"`
-	HasMarkdown               bool     `json:"has_markdown"`
-	HasTests                  bool     `json:"has_tests"`
-	SurfaceClassification     string   `json:"surface_classification"`
-	ClientType                string   `json:"client_type"`
-	MetaGroup                 string   `json:"meta_group"`
-	Notes                     []string `json:"notes"`
-	RegisteredInRegisterAll   bool     `json:"registered_in_register_all"`
-	DelegatedMeta             bool     `json:"delegated_meta"`
-	HasMetaSpecs              bool     `json:"has_meta_specs"`
-	HasIndividualTools        bool     `json:"has_individual_tools"`
-	HasDynamicCatalogEntries  bool     `json:"has_dynamic_catalog_entries"`
-	HasStandaloneOnlyTools    bool     `json:"has_standalone_only_tools"`
-	ActionSpecCount           int      `json:"action_spec_count"`
-	DynamicCatalogActionCount int      `json:"dynamic_catalog_action_count"`
+	Package                   string         `json:"package"`
+	HasRegisterTools          bool           `json:"has_register_tools"`
+	HasRegisterMeta           bool           `json:"has_register_meta"`
+	HasMarkdown               bool           `json:"has_markdown"`
+	HasTests                  bool           `json:"has_tests"`
+	SurfaceClassification     string         `json:"surface_classification"`
+	ClientType                string         `json:"client_type"`
+	MetaGroup                 string         `json:"meta_group"`
+	Notes                     []string       `json:"notes"`
+	RegisteredInRegisterAll   bool           `json:"registered_in_register_all"`
+	DelegatedMeta             bool           `json:"delegated_meta"`
+	HasMetaSpecs              bool           `json:"has_meta_specs"`
+	HasIndividualTools        bool           `json:"has_individual_tools"`
+	HasDynamicCatalogEntries  bool           `json:"has_dynamic_catalog_entries"`
+	HasSurfaceSpecs           bool           `json:"has_surface_specs"`
+	HasStandaloneOnlyTools    bool           `json:"has_standalone_only_tools"`
+	ActionSpecCount           int            `json:"action_spec_count"`
+	OrdinaryGitLabActionCount int            `json:"ordinary_gitlab_action_count"`
+	UtilitySurfaceActionCount int            `json:"utility_surface_action_count"`
+	DynamicCatalogActionCount int            `json:"dynamic_catalog_action_count"`
+	SurfaceSpecCount          int            `json:"surface_spec_count"`
+	SurfaceKinds              []string       `json:"surface_kinds"`
+	SurfaceKindCounts         map[string]int `json:"surface_kind_counts,omitempty"`
 }
 
 type domainSource struct {
@@ -84,7 +98,11 @@ type domainSource struct {
 
 type packageActionCoverage struct {
 	ActionSpecCount           int
+	OrdinaryGitLabActionCount int
+	UtilitySurfaceActionCount int
 	DynamicCatalogActionCount int
+	SurfaceSpecCount          int
+	SurfaceKindCounts         map[string]int
 	MetaGroups                map[string]struct{}
 }
 
@@ -146,10 +164,16 @@ func buildCoverageReport(root string) (coverageReport, error) {
 		}
 		if packageCoverage, ok := actionCoverage[source.Package]; ok {
 			coverage.ActionSpecCount = packageCoverage.ActionSpecCount
+			coverage.OrdinaryGitLabActionCount = packageCoverage.OrdinaryGitLabActionCount
+			coverage.UtilitySurfaceActionCount = packageCoverage.UtilitySurfaceActionCount
 			coverage.DynamicCatalogActionCount = packageCoverage.DynamicCatalogActionCount
+			coverage.SurfaceSpecCount = packageCoverage.SurfaceSpecCount
+			coverage.HasSurfaceSpecs = packageCoverage.SurfaceSpecCount > 0
 			coverage.HasMetaSpecs = coverage.HasMetaSpecs || packageCoverage.ActionSpecCount > 0
 			coverage.HasDynamicCatalogEntries = packageCoverage.DynamicCatalogActionCount > 0
 			coverage.MetaGroup = joinSortedSet(packageCoverage.MetaGroups)
+			coverage.SurfaceKinds = surfaceKinds(packageCoverage.SurfaceKindCounts)
+			coverage.SurfaceKindCounts = cloneStringIntMap(packageCoverage.SurfaceKindCounts)
 		}
 		coverage.HasIndividualTools = source.HasRegisterTools && isGitLabClientType(source.ClientType)
 		coverage.HasStandaloneOnlyTools = source.HasRegisterTools && !coverage.HasIndividualTools
@@ -480,6 +504,7 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 
 	coverage := make(map[string]packageActionCoverage)
 	for _, group := range tools.CollectActionSpecs(client, true) {
+		kind := normalizedSurfaceKind(group.SurfaceKind)
 		for _, spec := range group.Actions {
 			owner := strings.TrimSpace(spec.OwnerPackage)
 			if owner == "" {
@@ -487,10 +512,12 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 			}
 			packageCoverage := coverageForPackage(coverage, owner)
 			packageCoverage.ActionSpecCount++
+			packageCoverage.recordActionKind(kind)
 			packageCoverage.MetaGroups[group.ToolName] = struct{}{}
 			coverage[owner] = packageCoverage
 		}
 	}
+	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
 
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
@@ -500,18 +527,48 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
-	for _, action := range catalog.Actions() {
-		owner := actionOwnerPackage(action)
-		if owner == "" {
-			continue
+	for _, group := range catalog.Groups() {
+		for _, action := range group.ActionsInOrder() {
+			owner := actionOwnerPackage(action)
+			if owner == "" {
+				continue
+			}
+			packageCoverage := coverageForPackage(coverage, owner)
+			packageCoverage.DynamicCatalogActionCount++
+			packageCoverage.MetaGroups[action.ToolName] = struct{}{}
+			coverage[owner] = packageCoverage
 		}
-		packageCoverage := coverageForPackage(coverage, owner)
-		packageCoverage.DynamicCatalogActionCount++
-		packageCoverage.MetaGroups[action.ToolName] = struct{}{}
-		coverage[owner] = packageCoverage
 	}
 
 	return coverage, nil
+}
+
+func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToolSpec {
+	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
+		Mode:           autoupdate.ModeCheck,
+		Repository:     autoupdate.DefaultRepository,
+		CurrentVersion: "0.0.0",
+	}, nil)
+	specs := make([]actioncatalog.SurfaceToolSpec, 0, 11)
+	specs = append(specs, surfaces.StandaloneToolSpecs(client)...)
+	specs = append(specs, surfaces.ServerMaintenanceToolSpecs(updater)...)
+	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil, true)...)
+	return specs
+}
+
+func recordSurfaceSpecs(coverage map[string]packageActionCoverage, specs []actioncatalog.SurfaceToolSpec) {
+	for _, spec := range specs {
+		owner := strings.TrimSpace(spec.OwnerPackage)
+		if owner == "" {
+			continue
+		}
+		kind := normalizedSurfaceKind(spec.SurfaceKind)
+		packageCoverage := coverageForPackage(coverage, owner)
+		packageCoverage.SurfaceSpecCount++
+		packageCoverage.recordActionKind(kind)
+		packageCoverage.MetaGroups[spec.GroupToolName] = struct{}{}
+		coverage[owner] = packageCoverage
+	}
 }
 
 func coverageForPackage(coverage map[string]packageActionCoverage, packageName string) packageActionCoverage {
@@ -519,7 +576,42 @@ func coverageForPackage(coverage map[string]packageActionCoverage, packageName s
 	if packageCoverage.MetaGroups == nil {
 		packageCoverage.MetaGroups = make(map[string]struct{})
 	}
+	if packageCoverage.SurfaceKindCounts == nil {
+		packageCoverage.SurfaceKindCounts = make(map[string]int)
+	}
 	return packageCoverage
+}
+
+func (coverage *packageActionCoverage) recordActionKind(kind actioncatalog.SurfaceKind) {
+	if isOrdinaryGitLabActionKind(kind) {
+		coverage.OrdinaryGitLabActionCount++
+	} else {
+		coverage.UtilitySurfaceActionCount++
+	}
+	coverage.recordSurfaceKind(kind)
+}
+
+func (coverage *packageActionCoverage) recordSurfaceKind(kind actioncatalog.SurfaceKind) {
+	if coverage.SurfaceKindCounts == nil {
+		coverage.SurfaceKindCounts = make(map[string]int)
+	}
+	coverage.SurfaceKindCounts[string(kind)]++
+}
+
+func normalizedSurfaceKind(kind actioncatalog.SurfaceKind) actioncatalog.SurfaceKind {
+	if kind == "" {
+		return actioncatalog.SurfaceKindMetaGroup
+	}
+	return kind
+}
+
+func isOrdinaryGitLabActionKind(kind actioncatalog.SurfaceKind) bool {
+	switch normalizedSurfaceKind(kind) {
+	case actioncatalog.SurfaceKindGitLabAction, actioncatalog.SurfaceKindMetaGroup:
+		return true
+	default:
+		return false
+	}
 }
 
 func actionOwnerPackage(action actioncatalog.Action) string {
@@ -532,6 +624,10 @@ func actionOwnerPackage(action actioncatalog.Action) string {
 
 func classifySurface(source domainSource, coverage domainCoverage) string {
 	switch {
+	case source.HasDynamicCatalogRegistration && coverage.HasSurfaceSpecs:
+		return "dynamic-controller-surface"
+	case coverage.HasSurfaceSpecs || coverage.UtilitySurfaceActionCount > 0:
+		return "surface-backed"
 	case source.HasDynamicCatalogRegistration:
 		return "dynamic-catalog-surface"
 	case coverage.HasIndividualTools && (coverage.HasMetaSpecs || coverage.HasDynamicCatalogEntries):
@@ -554,6 +650,12 @@ func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	if source.HasDynamicCatalogRegistration {
 		notes = append(notes, "dynamic search/describe/execute surface registered from the canonical action catalog")
 	}
+	if coverage.HasSurfaceSpecs {
+		notes = append(notes, fmt.Sprintf("%d explicit surface specs: %s", coverage.SurfaceSpecCount, strings.Join(coverage.SurfaceKinds, ",")))
+	}
+	if coverage.UtilitySurfaceActionCount > 0 {
+		notes = append(notes, fmt.Sprintf("%d utility/controller actions are outside ordinary GitLab API action counting", coverage.UtilitySurfaceActionCount))
+	}
 	if coverage.HasStandaloneOnlyTools {
 		notes = append(notes, "RegisterTools does not use a GitLab client constructor")
 	}
@@ -570,7 +672,10 @@ func coverageNotes(source domainSource, coverage domainCoverage) []string {
 }
 
 func summarizeCoverage(domains []domainCoverage) coverageSummary {
-	summary := coverageSummary{SurfaceClassificationCounts: make(map[string]int)}
+	summary := coverageSummary{
+		SurfaceClassificationCounts: make(map[string]int),
+		SurfaceKindCounts:           make(map[string]int),
+	}
 	for _, domain := range domains {
 		summary.DomainCount++
 		if domain.HasRegisterTools {
@@ -585,15 +690,38 @@ func summarizeCoverage(domains []domainCoverage) coverageSummary {
 		if domain.HasDynamicCatalogEntries {
 			summary.DynamicCatalogDomainCount++
 		}
+		if domain.HasSurfaceSpecs {
+			summary.SurfaceSpecDomainCount++
+		}
 		if domain.HasStandaloneOnlyTools {
 			summary.StandaloneOnlyDomainCount++
 		}
 		if domain.SurfaceClassification == "no-gitlab-action-surface" {
 			summary.NoGitLabActionSurfaceCount++
 		}
+		summary.OrdinaryGitLabActionCount += domain.OrdinaryGitLabActionCount
+		summary.UtilitySurfaceActionCount += domain.UtilitySurfaceActionCount
+		summary.SurfaceSpecCount += domain.SurfaceSpecCount
 		summary.SurfaceClassificationCounts[domain.SurfaceClassification]++
+		for kind, count := range domain.SurfaceKindCounts {
+			summary.SurfaceKindCounts[kind] += count
+		}
 	}
 	return summary
+}
+
+func surfaceKinds(counts map[string]int) []string {
+	if len(counts) == 0 {
+		return nil
+	}
+	kinds := make([]string, 0, len(counts))
+	for kind := range counts {
+		if kind != "" {
+			kinds = append(kinds, kind)
+		}
+	}
+	sort.Strings(kinds)
+	return kinds
 }
 
 func isGitLabClientType(typeName string) bool {
@@ -610,6 +738,13 @@ func joinSortedSet(values map[string]struct{}) string {
 	}
 	sort.Strings(items)
 	return strings.Join(items, ",")
+}
+
+func cloneStringIntMap(values map[string]int) map[string]int {
+	if len(values) == 0 {
+		return nil
+	}
+	return maps.Clone(values)
 }
 
 func marshalReport(report coverageReport) ([]byte, error) {
