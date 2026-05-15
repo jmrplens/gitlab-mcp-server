@@ -4,8 +4,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type environmentNotFoundOutput struct {
+	Identifier string
+}
+
+func formatEnvironmentNotFound(out environmentNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Environment", out.Identifier,
+		"Use gitlab_environment_list with project_id to list environments",
+		"Verify the environment_id is correct for this project",
+	)
+}
 
 // FormatOutputMarkdown renders a single environment as Markdown.
 func FormatOutputMarkdown(e Output) string {
@@ -67,6 +80,7 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatEnvironmentNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 }

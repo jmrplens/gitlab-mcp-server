@@ -1,6 +1,10 @@
 package environments
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,12 +13,25 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		environmentReadSpec("list", toolutil.RouteAction(client, List), "gitlab_environment_list"),
-		environmentReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_environment_get"),
+		environmentReadSpec("get", environmentGetRoute(client), "gitlab_environment_get"),
 		environmentCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_environment_create"),
 		environmentUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_environment_update"),
 		environmentDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_environment_delete"),
 		environmentStopSpec(client),
 	}
+}
+
+func environmentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["environment_id"], input["project_id"])}, nil
+		}
+		return result, err
+	}
+	return route
 }
 
 func environmentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
