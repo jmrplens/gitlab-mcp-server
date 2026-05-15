@@ -1,6 +1,9 @@
 package epicnotes
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,8 +15,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		epicNoteReadSpec("epic_note_get", toolutil.RouteAction(client, Get), "gitlab_epic_note_get"),
 		epicNoteCreateSpec("epic_note_create", toolutil.RouteAction(client, Create), "gitlab_epic_note_create"),
 		epicNoteUpdateSpec("epic_note_update", toolutil.RouteAction(client, Update), "gitlab_epic_note_update"),
-		epicNoteDeleteSpec("epic_note_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_epic_note_delete"),
+		epicNoteDeleteSpec("epic_note_delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_epic_note_delete"),
 	}
+}
+
+// DeleteOutput deletes an epic note and returns the canonical success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{
+		Status:  "success",
+		Message: fmt.Sprintf("Successfully deleted note %d from epic &%d in group %s.", input.NoteID, input.IID, input.FullPath),
+	}, nil
 }
 
 func epicNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
