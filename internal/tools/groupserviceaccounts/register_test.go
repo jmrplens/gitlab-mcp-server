@@ -1,16 +1,12 @@
-// Package groupserviceaccounts register_test exercises all RegisterTools closures
-// via MCP in-memory transport, covering every handler wired in register.go.
 package groupserviceaccounts
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const registerAccountJSON = `{"id":1,"name":"svc","username":"svc-user","email":"svc@test.com"}`
@@ -18,18 +14,44 @@ const registerAccountsJSON = `[{"id":1,"name":"svc","username":"svc-user","email
 const registerPATJSON = `{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}`
 const registerPATsJSON = `[{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}]`
 
-// TestRegisterTools_NoPanic verifies RegisterTools registers all tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group service account actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "groupserviceaccounts" {
+			t.Errorf("OwnerPackage for %s = %q, want groupserviceaccounts", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+
+	byTool := groupServiceAccountSpecsByTool(t, specs)
+	for _, name := range []string{"gitlab_group_service_account_list", "gitlab_group_service_account_pat_list"} {
+		if !byTool[name].ReadOnly {
+			t.Errorf("%s should be read-only", name)
+		}
+	}
+	for _, name := range []string{"gitlab_group_service_account_delete", "gitlab_group_service_account_pat_revoke"} {
+		spec := byTool[name]
+		if !spec.Destructive || !spec.Route.Destructive {
+			t.Errorf("%s should be destructive", name)
+		}
+		if !spec.Idempotent {
+			t.Errorf("%s should be idempotent", name)
+		}
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all 7 group service account tools can
-// be called through MCP in-memory transport, covering every handler closure.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies all group service account routes execute through the catalog.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -51,20 +73,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupServiceAccountSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -80,20 +89,19 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteErrors verifies that both delete and pat_revoke handlers
-// return error results when the GitLab API fails, covering if-err-not-nil branches.
-func TestRegisterTools_DeleteErrors(t *testing.T) {
+// TestActionSpecs_CallRouteErrors verifies delete route errors propagate directly.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -103,20 +111,7 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupServiceAccountSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -127,13 +122,22 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.name, err)
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
 			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s with failing backend", tt.name)
+			if result != nil {
+				t.Errorf("Route.Handler(%s) result = %#v, want nil", tt.name, result)
 			}
 		})
 	}
+}
+
+func groupServiceAccountSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
