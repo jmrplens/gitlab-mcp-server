@@ -1,30 +1,33 @@
 // register_test.go contains integration tests for the epic issue link tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// closures in ActionSpecs routes with a mock GitLab API.
 package epicissues
 
 import (
-	"context"
 	"net/http"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all tools on the MCP server without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies epic issue action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "epicissues" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
-// TestRegisterTools_CallThroughMCP uses table-driven subtests to exercise each registered tool via an in-memory MCP session and verify no error result is returned.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes uses table-driven subtests to exercise each canonical route.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenData)
@@ -44,20 +47,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
 
 	tools := []struct {
 		name string
@@ -70,15 +64,16 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil result", tt.name)
-			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil result", tt.name)
 			}
 		})
 	}
