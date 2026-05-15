@@ -159,12 +159,13 @@ The consolidated surface reduces:
 
 Meta-tools are registered from the canonical action catalog built by `internal/tools.BuildActionCatalog()`.
 `RegisterAllMeta()` registers visible domain dispatchers from that catalog.
-Developers define route metadata through `ActionMap` and `ActionRoute`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, and result formatting.
+Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, aliases, usage hints, individual projection policy, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
+- `ActionSpec` — canonical action metadata, including the typed route, ownership, aliases, tags, usage hints, projection policy, result policies, and compatibility policy
+- `CatalogGroupSpec` — visible meta-tool group metadata and the ordered action set used to build the catalog
 - `ActionRoute` — pairs a handler with metadata-driven classification. Typed routes carry both `InputSchema` and `OutputSchema` so each action can expose exact params and result contracts
-- `ActionMap` — `map[string]ActionRoute` mapping action names to route definitions
 - `Route(fn)` / `DestructiveRoute(fn)` — legacy constructors for already-adapted handlers
 - `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
 - `MakeMetaHandler()` — creates action-dispatch handlers from route maps; successful results automatically enrich `structuredContent` with `next_steps` hints extracted from Markdown, while `isError` results omit structured content
@@ -189,7 +190,7 @@ sequenceDiagram
 
     User->>Meta: action=board_create, params={project_id, name}
     Meta->>Handler: Dispatch action
-    Handler->>Route: Lookup in ActionMap
+    Handler->>Route: Lookup in catalog action map
     Route->>Domain: Unmarshal typed params
     Domain->>GL: Create project board
     GL-->>Domain: Board response

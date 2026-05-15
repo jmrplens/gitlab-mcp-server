@@ -2,16 +2,16 @@
 
 > **Diátaxis type**: Explanation
 > **Audience**: Developers changing tool registration surfaces
-> **Prerequisites**: Familiarity with `RegisterTools`, meta-tools, and the canonical action catalog
+> **Prerequisites**: Familiarity with `ActionSpec`, meta-tools, and the canonical action catalog
 
-The individual MCP tool surface is still registered by domain packages, but its
-visible tool metadata is now catalog-first. Each normal GitLab API tool should
-obtain its `mcp.Tool` definition from `toolutil.ActionSpec` projection while the
-package keeps the handler closure, logging, not-found behavior, embedded
-resources, rich results, and compatibility-specific runtime logic local.
+The individual MCP tool surface is registered from the canonical action catalog.
+Each normal GitLab API tool obtains its visible `mcp.Tool` definition from
+`toolutil.ActionSpec` projection while the owning package keeps typed handlers,
+logging, not-found behavior, embedded resources, rich results, markdown
+formatting, and compatibility-specific runtime logic local.
 
 This policy keeps the individual surface stable for existing clients while
-removing duplicated metadata from hundreds of `RegisterTools` call sites.
+removing duplicated metadata from hundreds of former registration call sites.
 
 ## Current Policy
 
@@ -19,19 +19,20 @@ Individual tool registration has two layers:
 
 | Layer | Owner | Policy |
 | --- | --- | --- |
-| Handler behavior | Domain `RegisterTools` function | Keep explicit closures for logging, request-aware handlers, not-found conversion, embedded resources, rich results, and compatibility behavior |
+| Handler behavior | Typed domain handlers and `ActionSpec.Route` | Keep explicit closures for logging, request-aware handlers, not-found conversion, embedded resources, rich results, and compatibility behavior |
 | Visible tool metadata | `ActionSpec` projection | Derive title, description, icons, input/output schemas, annotations, and compatibility metadata from specs |
 
-Use `toolutil.MustIndividualToolFromSpecs` when registering normal individual
-GitLab API tools. The helper fails fast when the named individual tool has no
-matching spec or when spec metadata cannot produce a valid `mcp.Tool`.
+`RegisterAll` calls `RegisterIndividualCatalogTools`, which projects eligible
+catalog actions into individual MCP tools. Projection fails fast when an action
+has no individual tool policy or when spec metadata cannot produce a valid
+`mcp.Tool`.
 
 Documented source-level exceptions are intentionally narrow:
 
 | Package | Reason |
 | --- | --- |
-| `internal/tools/dynamic/register.go` | Registers the dynamic search/describe/execute surface generated from the canonical catalog, not individual GitLab API tools |
-| `internal/tools/serverupdate/register.go` | Registers updater tools from `cmd/server` with `*autoupdate.Updater`, outside the GitLab client action catalog |
+| `internal/tools/dynamic/register.go` | Registers the dynamic search/describe/execute controller surface generated from the canonical catalog, not individual GitLab API tools |
+| `internal/tools/serverupdate/register.go` | Defines updater tool handlers that are registered from catalog surface specs with `*autoupdate.Updater`, outside the GitLab client action catalog |
 
 ## Parity Checklist
 
@@ -43,7 +44,7 @@ When adding or changing an individual tool, verify each item before merging:
 - The spec carries the same input and output schemas as the registered handler route.
 - The spec annotations match the existing read-only, destructive, idempotent, and open-world semantics.
 - The spec sets content, not-found, embedded-resource, rich-result, schema-validation, and runtime-validation policies when the action needs non-default behavior.
-- `RegisterTools` uses `toolutil.MustIndividualToolFromSpecs` or an equivalent projection helper for the visible `mcp.Tool` metadata.
+- `RegisterIndividualCatalogTools` projects the action into the visible `mcp.Tool` metadata.
 - Any direct `&mcp.Tool{...}` construction is either removed or added to the documented standalone exception list with a reason.
 - Tool snapshots and ActionSpec guardrails pass without adding unexpected allowlist entries.
 
@@ -52,23 +53,32 @@ When adding or changing an individual tool, verify each item before merging:
 ### Standard Projected Tool
 
 Most tools follow the same shape: define the action spec near the domain
-handler, then use the projected tool metadata in `RegisterTools`.
+handler, then let the catalog-backed individual registrar project the visible
+tool metadata.
 
 ```go
-func projectTool(client *gitlabclient.Client, enterprise bool, name, description string) *mcp.Tool {
-  return toolutil.MustIndividualToolFromSpecs(
-    ActionSpecs(client, enterprise),
-    name,
-    toolutil.IndividualToolProjectionOptions{
-      Description: description,
-      Icons:       toolutil.IconProject,
-    },
-  )
+func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.ActionSpec {
+  route := toolutil.RouteAction(client, Get).
+    WithUsage("Use when you already know the project ID or full path.")
+
+  return []toolutil.ActionSpec{
+    toolutil.NewActionSpec("get", route, toolutil.ActionSpecOptions{
+      ReadOnly:     true,
+      Idempotent:   true,
+      OwnerPackage: "projects",
+      IndividualTool: toolutil.IndividualToolSpec{
+        Name:        "gitlab_get_project",
+        Title:       "Get project",
+        Description: "Get a single GitLab project by ID or path.",
+      },
+    }),
+  }
 }
 ```
 
-The explicit description option preserves long-form compatibility text while
-schemas, annotations, title, and shared metadata come from the matching spec.
+The individual registrar receives the built catalog and projects this metadata
+into the final `mcp.Tool`. Schemas, annotations, title, icons, compatibility
+aliases, and shared metadata all come from the matching spec.
 
 ### Handler-Specific Compatibility
 
@@ -92,6 +102,7 @@ The migration is enforced by tests and audits:
 
 | Guardrail | What it proves |
 | --- | --- |
+| `TestRegisterAllDoesNotUseDomainRegisterTools` | Root individual registration cannot regress to per-domain `RegisterTools` loops |
 | `TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection` | Source registration files do not reintroduce manual individual `mcp.Tool` metadata outside documented exceptions |
 | `TestIndividualToolProjection_GoldenSnapshotParity` | Projected metadata matches `internal/tools/testdata/tools_individual.json` except explicit, reviewed gaps |
 | `TestIndividualToolMetadata_CatalogBackedCoverage` | Every catalog-backed spec references a registered individual tool, and every individual tool without a spec is an explicit standalone exception |
@@ -123,4 +134,5 @@ UPDATE_TOOLSNAPS=true go test ./internal/tools -run 'TestToolSnapshots_(Individu
   from the historical individual surface, first decide whether the spec or the
   historical snapshot is correct.
 - Do not keep parallel descriptions, annotations, schemas, or icon choices in
-  `RegisterTools` once they can be represented by `ActionSpec` projection.
+  domain registration helpers once they can be represented by `ActionSpec`
+  projection.

@@ -170,7 +170,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
+The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -178,8 +178,8 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 
 | File               | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
-| `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
-| `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive (+ 15 enterprise inline, + 1 GitLab.com Enterprise Orbit) |
+| `register.go`      | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection |
+| `register_meta.go` | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces |
 | `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, schema resources, audits, and generators |
 | `meta_catalog.go`  | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog |
 | `actioncatalog/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
@@ -211,7 +211,8 @@ Infrastructure shared by all tool sub-packages:
 
 | File               | Purpose                                                        |
 | ------------------ | -------------------------------------------------------------- |
-| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `ActionMap`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute` |
+| `action_spec.go`   | `ActionSpec`, compatibility policy, individual projection metadata, and schema/result policy fields |
+| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute` |
 | `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
 | `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks` |
 | `addtool.go`       | `AddTool` wrapper — suppresses structuredContent for individual tools |
@@ -449,15 +450,13 @@ This pattern provides:
 The meta-tool pattern applies the **Strategy pattern** — a single endpoint dispatches to different handler functions based on the `action` parameter:
 
 ```go
-routes := toolutil.ActionMap{
-    "create": toolutil.RouteAction(client, Create),
-    "get":    toolutil.RouteAction(client, Get),
-    "list":   toolutil.RouteAction(client, List),
-    "delete": toolutil.DestructiveVoidAction(client, Delete),
-}
+spec := toolutil.NewActionSpec("create", toolutil.RouteAction(client, Create), toolutil.ActionSpecOptions{
+    OwnerPackage: "projects",
+    IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_create_project"},
+})
 ```
 
-The `ActionRoute` type pairs each handler with a `Destructive bool` field. `DeriveAnnotations(routes)` auto-computes tool-level annotations from route metadata:
+The `ActionSpec` wraps an `ActionRoute`, so handler schemas, destructive classification, aliases, usage hints, result policies, and individual projection metadata travel through the same catalog entry. Meta-tools still dispatch through `MakeMetaHandler`, but their route maps are projected from the canonical catalog:
 
 ```mermaid
 graph TD

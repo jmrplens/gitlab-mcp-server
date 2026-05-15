@@ -704,13 +704,14 @@ Validation tests in `internal/tools/register_validation_test.go` ensure structur
 
 | Test                                   | Purpose                                                                                     |
 | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `TestAllSubPackagesRegistered`         | Scans all immediate sub-directories under `internal/tools/` and verifies each has a `RegisterTools` call in `register.go` (with `knownExceptions` for `serverupdate`, which registers in `cmd/server/main.go`) |
+| `TestRegisterAllDoesNotUseDomainRegisterTools` | Verifies root individual registration stays catalog-backed and cannot regress to per-domain `RegisterTools` loops |
+| `TestActionSpecCoverage_AllCatalogRoutesClassified` | Builds the GitLab.com Enterprise dynamic catalog and verifies every catalog action is spec-backed |
 | `TestAllMarkdownFormattersRegistered`  | Verifies all ~266 output types across 76 sub-packages have registered markdown formatters via `toolutil.RegisterMarkdown[T]` |
 | `TestAllHintReferencesValid`           | Validates all `action 'xxx'` and backtick-quoted `` `gitlab_xxx` `` references in WriteHints across all markdown.go files match registered tools/actions |
 
 ```bash
 # Run validation tests
-go test ./internal/tools/ -run "TestAllSubPackages|TestAllMarkdown|TestAllHint" -count=1 -v
+go test ./internal/tools/ -run "TestRegisterAllDoesNotUseDomainRegisterTools|TestActionSpecCoverage|TestAllMarkdown|TestAllHint" -count=1 -v
 ```
 
 ## Running Tests

@@ -372,28 +372,29 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | File | Responsibility |
 | --- | --- |
 | `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
-| `internal/tools/action_catalog.go` | Builds the canonical catalog from meta-tool definitions without constructing an MCP server |
+| `internal/tools/action_catalog.go` | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from the canonical catalog |
 | `internal/tools/dynamic/register.go` | Public dynamic tools, catalog-backed registry, search, describe, find, and execute logic |
 | `internal/tools/dynamic/standalone.go` | Adds standalone actions such as project discovery and interactive creation flows to the canonical action catalog |
-| `internal/tools/register_meta.go` | Source of the domain meta-tool definitions used to build the canonical action catalog |
-| `internal/toolutil/metatool.go` | Shared `ActionMap`, `ActionRoute`, route classification, schema capture, and execution wrappers |
+| `internal/tools/actioncompat` | Historical action aliases, parameter aliases, and execute-time compatibility normalizers projected into catalog metadata |
+| `internal/toolutil/action_spec.go` | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance |
+| `internal/toolutil/metatool.go` | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers |
 | `cmd/server/main.go` | Selects `TOOL_SURFACE` and registers meta, individual, dynamic, or comparison surfaces |
 | `cmd/eval_meta_tools` | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks |
 | `test/e2e/suite/dynamic_test.go` | E2E coverage for the default dynamic three-tool surface |
 
 ### Registering New Actions
 
-Add or change GitLab actions in the domain route definitions that feed `internal/tools/register_meta.go`, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
+Add or change GitLab actions by updating the owning typed handler and its `ActionSpec` entry, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
 
 Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions. Keep `dynamic-2` as an evaluation-only comparison surface unless the project explicitly decides otherwise.
 
 When adding or changing GitLab actions, keep these rules in sync:
 
-1. Register the action in the normal meta-tool route map first.
-2. Preserve typed input/output structs so schema capture remains accurate.
-3. Add or update dynamic search tags only when natural language discovery would otherwise be weak.
-4. Keep destructive classification on the route, not in dynamic-specific code.
+1. Add or update the typed input/output structs and handler so schema capture remains accurate.
+2. Add or update the owning `ActionSpec`, including the individual tool policy, aliases, tags, usage hints, and related actions when needed.
+3. Regenerate the ActionSpec manifest when the source-defined builder set changes.
+4. Keep destructive classification on route/spec metadata, not in dynamic-specific code.
 5. Add regression tests for realistic search phrases that caused misses.
 6. Refresh generated testing documentation after adding tests.
 

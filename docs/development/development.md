@@ -41,8 +41,8 @@ gitlab-mcp-server/
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
-│   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 33 domain meta-tools (47 self-managed Enterprise/Premium, 48 GitLab.com Enterprise/Premium with Orbit)
+│   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
+│   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
 │   │   ├── branches/            # Branch management tools (example sub-package)
@@ -339,20 +339,18 @@ See [Error Handling](../error-handling.md) for the full architecture.
 
 ## Adding a New Tool
 
-With the modular sub-package architecture (ADR-0004):
+With the catalog-first modular sub-package architecture:
 
 1. **Create sub-package**: `internal/tools/{domain}/`
 2. **Create handler file**: `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace)
 3. **Create test file**: `{domain}_test.go` with table-driven tests using `testutil.NewTestClient`
-4. **Create register file**: `register.go` with `RegisterTools(server, client)` for the individual tool surface
+4. **Create ActionSpecs**: define `ActionSpecs(client, ...)` or update the owning aggregation builder with typed `ActionRoute` constructors and individual projection metadata
 5. **Create markdown formatters**: register output formatters from the sub-package with `toolutil.RegisterMarkdown` or `toolutil.RegisterMarkdownResult`
-6. **Wire in orchestration**:
-    - Add to `internal/tools/register.go` (call `{domain}.RegisterTools()`)
-    - Add catalog-backed action routes to `internal/tools/register_meta.go` or an approved delegated meta group
+6. **Regenerate catalog manifest**: run `make gen-action-catalog-manifest` when the source-defined builder set changes, then run `make check-action-catalog-manifest`
 7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
-When adding a normal GitLab operation, define the route once with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Avoid adding dynamic-only copies of ordinary GitLab actions.
+When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Avoid adding dynamic-only copies of ordinary GitLab actions.
 
 See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 
@@ -385,21 +383,26 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 ```
 
 ```go
-// internal/tools/branches/register.go
+// internal/tools/branches/action_specs.go
 
 package branches
 
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-    mcp.AddTool(server, &mcp.Tool{
-        Name:        "gitlab_create_branch",
-        Description: "Create a new branch in a GitLab project.",
-        Annotations: toolutil.CreateAnnotations,
-    }, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
-        start := time.Now()
-        out, err := Create(ctx, client, input)
-        toolutil.LogToolCallAll(ctx, req, "gitlab_create_branch", start, err)
-        return toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err
-    })
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+    route := toolutil.RouteAction(client, Create).
+        WithUsage("Use to create a branch from an existing branch, tag, or commit SHA.")
+
+    return []toolutil.ActionSpec{
+        toolutil.NewActionSpec("create", route, toolutil.ActionSpecOptions{
+            ReadOnly:     false,
+            Idempotent:   false,
+            OwnerPackage: "branches",
+            IndividualTool: toolutil.IndividualToolSpec{
+                Name:        "gitlab_create_branch",
+                Title:       "Create branch",
+                Description: "Create a new branch in a GitLab project.",
+            },
+        }),
+    }
 }
 ```
 
