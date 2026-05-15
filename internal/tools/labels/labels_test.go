@@ -773,18 +773,30 @@ func TestFormatListMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic + MCP round-trip
+// ActionSpecs and catalog-surface coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for project label actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := labelSpecsByTool(t, specs)
+
+	if len(specs) != 8 {
+		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "labels" {
+			t.Fatalf("OwnerPackage for %s = %q, want labels", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
+// TestActionSpecs_CallAllRoutes validates label routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	const labelPath = "/api/v4/projects/42/labels"
 
 	mux := http.NewServeMux()
@@ -822,18 +834,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+	byTool := labelSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -851,60 +852,49 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
+				t.Fatalf("Route.Handler(%s): nil result", tc.name)
 			}
 		})
 	}
 }
 
-// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
-// gitlab_label_get when the label does not exist.
-func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound covers the canonical 404 output for label get.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Label Not Found"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := labelSpecsByTool(t, ActionSpecs(client))
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_label_get",
-		Arguments: map[string]any{"project_id": "42", "label_id": "nonexist"},
-	})
+	result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "label_id": "nonexist"})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404")
+	callResult := toolutil.MarkdownForResult(result)
+	if callResult == nil || !callResult.IsError {
+		t.Fatalf("MarkdownForResult() = %#v, want IsError result for 404", callResult)
 	}
 }
 
-// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in gitlab_label_delete when user declines.
-func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
+// confirmation for label delete when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_label_delete" {
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test label destructive confirmation.", Icons: toolutil.IconLabel})
+		}
+	}
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -916,7 +906,10 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_label_delete",
@@ -930,39 +923,17 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_DeleteError covers the delete error path through register.go.
-func TestMCPRoundTrip_DeleteError(t *testing.T) {
+// TestActionSpecs_DeleteError covers the label delete route error path.
+func TestActionSpecs_DeleteError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "accept"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := labelSpecsByTool(t, ActionSpecs(client))
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_label_delete",
-		Arguments: map[string]any{"project_id": "42", "label_id": "bug"},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected error result for 500 backend")
+	_, err := byTool["gitlab_label_delete"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "label_id": "bug"})
+	if err == nil {
+		t.Fatal("expected error for forbidden backend")
 	}
 }
 
@@ -999,9 +970,8 @@ func TestPromote_ForbiddenError(t *testing.T) {
 	}
 }
 
-// TestLabelGet_EmbedsCanonicalResource asserts gitlab_label_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}/label/{label_id}.
-func TestLabelGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_LabelGetRoute verifies the canonical label get route output.
+func TestActionSpecs_LabelGetRoute(t *testing.T) {
 	const respJSON = `{"id":5,"name":"bug","color":"#d9534f","description":"Bug report","open_issues_count":5,"open_merge_requests_count":1}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/labels/5") {
@@ -1010,7 +980,27 @@ func TestLabelGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "label_id": "5"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_label_get", args, "gitlab://project/42/label/5", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := labelSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "label_id": "5"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 5 || out.Name != "bug" {
+		t.Fatalf("label output = %#v, want ID 5 name bug", out)
+	}
+}
+
+func labelSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
