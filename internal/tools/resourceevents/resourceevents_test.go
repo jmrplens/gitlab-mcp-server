@@ -12,7 +12,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -948,19 +947,10 @@ func TestFormatStateEventMarkdown(t *testing.T) {
 	}
 }
 
-// ======================== Register ========================.
+// ======================== ActionSpecs Route Round-trip ========================.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, covBadHandler())
-	RegisterTools(server, client)
-}
-
-// ======================== MCP Round-trip ========================.
-
-// TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_CoverageRoundTrip validates route calls across core resource event tools.
+func TestActionSpecs_CoverageRoundTrip(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -988,44 +978,32 @@ func TestMCPRound_Trip(t *testing.T) {
 		}
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+	byTool := resourceEventSpecsByTool(t, append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...))
 
 	tests := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
-		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "label_event_id": 10}},
-		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "label_event_id": 10}},
-		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
-		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "milestone_event_id": 30}},
-		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "milestone_event_id": 30}},
-		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
-		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "state_event_id": 40}},
-		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "state_event_id": 40}},
+		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "label_event_id": int64(10)}},
+		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "label_event_id": int64(10)}},
+		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "milestone_event_id": int64(30)}},
+		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "milestone_event_id": int64(30)}},
+		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "state_event_id": int64(40)}},
+		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "state_event_id": int64(40)}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if res == nil {
 				t.Fatalf("nil result for %s", tc.name)

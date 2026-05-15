@@ -1,15 +1,9 @@
-// Package resourceevents register_test exercises the iteration/weight event
-// handler closures in RegisterTools via MCP roundtrip, plus the uncovered
-// markdown formatters for iteration and weight events.
 package resourceevents
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -26,10 +20,29 @@ const regMilestoneEventsJSON = `[` + regMilestoneEventJSON + `]`
 const regStateEventJSON = `{"id":1,"state":"closed","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
 const regStateEventsJSON = `[` + regStateEventJSON + `]`
 
-// TestRegisterTools_CallThroughMCP exercises all handler closures in RegisterTools
-// via MCP in-memory transport, covering iteration and weight event tools that
-// existing tests miss.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for resource event actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+
+	if len(specs) != 15 {
+		t.Fatalf("len(ActionSpecs) = %d, want 15", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "resourceevents" {
+			t.Errorf("OwnerPackage for %s = %q, want resourceevents", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+		if !spec.ReadOnly || !spec.Idempotent {
+			t.Errorf("%s should be read-only and idempotent", spec.Name)
+		}
+	}
+}
+
+// TestActionSpecs_CallThroughRoutes covers every resource event route.
+func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -62,57 +75,48 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := resourceEventSpecsByTool(t, append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...))
 
 	tools := []struct {
 		name string
 		args map[string]any
 	}{
-		// Label events
-		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
-		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "label_event_id": float64(1)}},
-		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "label_event_id": float64(1)}},
-		// Milestone events
-		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
-		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "milestone_event_id": float64(1)}},
-		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "milestone_event_id": float64(1)}},
-		// State events
-		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
-		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "state_event_id": float64(1)}},
-		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "state_event_id": float64(1)}},
-		// Iteration events (enterprise)
-		{"gitlab_issue_iteration_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
-		{"gitlab_issue_iteration_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "iteration_event_id": float64(1)}},
-		// Weight events (enterprise)
-		{"gitlab_issue_weight_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
+		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "label_event_id": int64(1)}},
+		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "label_event_id": int64(1)}},
+		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "milestone_event_id": int64(1)}},
+		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "milestone_event_id": int64(1)}},
+		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "state_event_id": int64(1)}},
+		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": int64(1)}},
+		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": int64(1), "state_event_id": int64(1)}},
+		{"gitlab_issue_iteration_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_issue_iteration_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "iteration_event_id": int64(1)}},
+		{"gitlab_issue_weight_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
+}
+
+func resourceEventSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // TestFormatIterationEventsMarkdown_NonEmpty verifies the iteration events formatter.
