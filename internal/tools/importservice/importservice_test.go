@@ -4,15 +4,13 @@
 package importservice
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const errExpectedErr = "expected error"
@@ -435,23 +433,37 @@ func TestFormatImportGists(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for import service actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "importservice" {
+			t.Errorf("OwnerPackage for %s = %q, want importservice", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+	if !importServiceSpecsByTool(t, specs)["gitlab_cancel_github_import"].Idempotent {
+		t.Error("cancel GitHub import action should be idempotent")
+	}
 }
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — all tools
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	session := newImportMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates all import service routes through the catalog.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	client := testutil.NewTestClient(t, importHandler())
+	byTool := importServiceSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -460,11 +472,11 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 	}{
 		{"import_github", "gitlab_import_from_github", map[string]any{
 			"personal_access_token": "ghp_token",
-			"repo_id":               float64(12345),
+			"repo_id":               int64(12345),
 			"target_namespace":      "ns",
 		}},
 		{"cancel_github", "gitlab_cancel_github_import", map[string]any{
-			"project_id": float64(1),
+			"project_id": int64(1),
 		}},
 		{"import_gists", "gitlab_import_github_gists", map[string]any{
 			"personal_access_token": "ghp_token",
@@ -486,20 +498,12 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
@@ -541,70 +545,38 @@ func importHandler() *http.ServeMux {
 	return handler
 }
 
-// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
-// handlers when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+// TestActionSpecs_ErrorPaths covers error returns from import service routes.
+func TestActionSpecs_ErrorPaths(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := importServiceSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_import_from_github", map[string]any{"personal_access_token": "tok", "repo_id": float64(1), "target_namespace": "ns"}},
-		{"gitlab_cancel_github_import", map[string]any{"project_id": "1"}},
+		{"gitlab_import_from_github", map[string]any{"personal_access_token": "tok", "repo_id": int64(1), "target_namespace": "ns"}},
+		{"gitlab_cancel_github_import", map[string]any{"project_id": int64(1)}},
 		{"gitlab_import_github_gists", map[string]any{"personal_access_token": "tok"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("unexpected transport error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
 			}
 		})
 	}
 }
 
-// newImportMCPSession is an internal helper for the importservice package.
-func newImportMCPSession(t *testing.T) *mcp.ClientSession {
+func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
-
-	client := testutil.NewTestClient(t, importHandler())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
