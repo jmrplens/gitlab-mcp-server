@@ -403,7 +403,6 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
-		"META_TOOLS=true",
 		"TOOL_SURFACE=dynamic",
 		"CAPABILITY_SURFACE=minimal",
 		"META_PARAM_SCHEMA=compact",
@@ -419,6 +418,9 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 			t.Errorf("generated env file missing %q\ncontent:\n%s", want, content)
 		}
 	}
+	if strings.Contains(content, "META_TOOLS=") {
+		t.Fatalf("generated env file should not write deprecated META_TOOLS\ncontent:\n%s", content)
+	}
 }
 
 // TestHandleConfigure_DerivesMetaToolsFromToolSurface verifies meta-tools are
@@ -429,8 +431,8 @@ func TestHandleConfigure_DerivesMetaToolsFromToolSurface(t *testing.T) {
 		toolSurface string
 		wantLine    string
 	}{
-		{name: "individual disables meta tools", toolSurface: "individual", wantLine: "META_TOOLS=false"},
-		{name: "dynamic enables meta tools", toolSurface: "dynamic", wantLine: "META_TOOLS=true"},
+		{name: "individual writes explicit tool surface", toolSurface: "individual", wantLine: "TOOL_SURFACE=individual"},
+		{name: "dynamic writes explicit tool surface", toolSurface: "dynamic", wantLine: "TOOL_SURFACE=dynamic"},
 	}
 
 	for _, tt := range tests {
@@ -479,6 +481,9 @@ func TestHandleConfigure_DerivesMetaToolsFromToolSurface(t *testing.T) {
 			}
 			if !strings.Contains(string(data), tt.wantLine+"\n") {
 				t.Fatalf("generated env file missing %q\ncontent:\n%s", tt.wantLine, string(data))
+			}
+			if strings.Contains(string(data), "META_TOOLS=") {
+				t.Fatalf("generated env file should not write deprecated META_TOOLS\ncontent:\n%s", string(data))
 			}
 		})
 	}

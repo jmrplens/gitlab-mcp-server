@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Epics, Epic Issues, Epic Notes, Epic Discussions & Epic Boards
 > **Individual tools**: 24
-> **Meta-tool**: `gitlab_group` (epic routes, when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_group` (epic routes in the default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Work Items API (GraphQL)](https://docs.gitlab.com/ee/api/graphql/reference/#workitem) · [Epic Links API (REST)](https://docs.gitlab.com/ee/api/epic_links.html) · [Epic Boards API (REST)](https://docs.gitlab.com/ee/api/group_boards.html)
 > **Audience**: 👤 End users, AI assistant users
 > **Tier**: GitLab Premium / Ultimate

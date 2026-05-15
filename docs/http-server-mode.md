@@ -48,8 +48,8 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--meta-tools` | `true` | Enable domain-level meta-tools. Set `false` for individual tools |
-| `--tool-surface` | _(empty)_ | Explicit tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options). Overrides `--meta-tools` when set |
+| `--tool-surface` | `meta` | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
+| `--meta-tools` | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
 | `--capability-surface` | `full` | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
@@ -79,7 +79,9 @@ gitlab-mcp-server --http \
 - `dynamic-3`: explicit selector for the same three-tool dynamic surface, useful for pinned configurations.
 - `dynamic-2`: experimental two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
 
-`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments.
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because `gitlab_describe_tools` and `gitlab_find_action` return schemas inline.
+
+`--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client cannot read schema resources and needs `compact` or `full` schemas in `tools/list`; current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 
 ### Configuration Precedence
 
@@ -89,7 +91,7 @@ HTTP mode has a narrow request-controlled surface. GitLab identity always comes 
 | --- | --- | --- | --- |
 | GitLab token | `PRIVATE-TOKEN` or `Authorization: Bearer` request header | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry |
 | GitLab URL | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted | Conditional | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options` |
-| Tool catalog and behavior | `--meta-tools`, `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE` |
+| Tool catalog and behavior | `--tool-surface`, deprecated `--meta-tools`, `--capability-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE`; `META-TOOLS` is also logged in `deprecated_options` |
 | Rate limits and HTTP pool policy | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--trusted-proxy-header` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS` |
 | Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl` | No | Ignored and logged in `ignored_options` |
 | Update policy and logging | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL` | No | Ignored and logged in `ignored_options` |

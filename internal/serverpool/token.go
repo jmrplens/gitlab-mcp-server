@@ -13,8 +13,9 @@ const RequestOptionGitLabURL = "GITLAB-URL"
 // requestOptionAlias maps one canonical server-managed option name to all
 // accepted HTTP header spellings for compatibility diagnostics.
 type requestOptionAlias struct {
-	name    string
-	headers []string
+	name       string
+	headers    []string
+	deprecated bool
 }
 
 // serverManagedRequestOptions enumerates request headers that are intentionally
@@ -22,7 +23,7 @@ type requestOptionAlias struct {
 var serverManagedRequestOptions = []requestOptionAlias{
 	{name: "GITLAB_URL", headers: []string{"GITLAB_URL"}},
 	{name: "GITLAB_SKIP_TLS_VERIFY", headers: []string{"GITLAB_SKIP_TLS_VERIFY", "GITLAB-SKIP-TLS-VERIFY", "SKIP-TLS-VERIFY"}},
-	{name: "META_TOOLS", headers: []string{"META_TOOLS", "META-TOOLS"}},
+	{name: "META_TOOLS", headers: []string{"META_TOOLS", "META-TOOLS"}, deprecated: true},
 	{name: "TOOL_SURFACE", headers: []string{"TOOL_SURFACE", "TOOL-SURFACE"}},
 	{name: "META_PARAM_SCHEMA", headers: []string{"META_PARAM_SCHEMA", "META-PARAM-SCHEMA"}},
 	{name: "GITLAB_ENTERPRISE", headers: []string{"GITLAB_ENTERPRISE", "GITLAB-ENTERPRISE", "ENTERPRISE"}},
@@ -50,14 +51,21 @@ var serverManagedRequestOptions = []requestOptionAlias{
 // RequestOptions contains the effective per-request options after applying
 // server-wide MCP configuration precedence.
 type RequestOptions struct {
-	GitLabURL      string
-	IgnoredOptions []string
+	GitLabURL         string
+	IgnoredOptions    []string
+	DeprecatedOptions []string
 }
 
 // HasIgnoredOptions reports whether any request-provided options were ignored
 // because server-wide MCP configuration is authoritative.
 func (o RequestOptions) HasIgnoredOptions() bool {
 	return len(o.IgnoredOptions) > 0
+}
+
+// HasDeprecatedOptions reports whether any ignored request options are also
+// deprecated compatibility options.
+func (o RequestOptions) HasDeprecatedOptions() bool {
+	return len(o.DeprecatedOptions) > 0
 }
 
 // ExtractToken retrieves the GitLab Personal Access Token from the HTTP
@@ -97,7 +105,7 @@ func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
 func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, error) {
 	header := strings.TrimSpace(r.Header.Get(RequestOptionGitLabURL))
 	trimmedDefault := strings.TrimSpace(defaultURL)
-	ignoredOptions := ignoredServerManagedOptions(r)
+	ignoredOptions, deprecatedOptions := ignoredServerManagedOptions(r)
 
 	if trimmedDefault != "" {
 		normalizedDefault, err := normalizeGitLabURL(trimmedDefault)
@@ -105,7 +113,7 @@ func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, 
 			return RequestOptions{}, err
 		}
 
-		options := RequestOptions{GitLabURL: normalizedDefault, IgnoredOptions: ignoredOptions}
+		options := RequestOptions{GitLabURL: normalizedDefault, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}
 		if header == "" {
 			return options, nil
 		}
@@ -114,13 +122,13 @@ func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, 
 	}
 
 	if header == "" {
-		return RequestOptions{IgnoredOptions: ignoredOptions}, nil
+		return RequestOptions{IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
 	}
 	normalizedHeader, err := normalizeGitLabURL(header)
 	if err != nil {
 		return RequestOptions{}, err
 	}
-	return RequestOptions{GitLabURL: normalizedHeader, IgnoredOptions: ignoredOptions}, nil
+	return RequestOptions{GitLabURL: normalizedHeader, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
 }
 
 // IgnoredOptionsCopy returns a defensive copy of the ignored option names.
@@ -128,16 +136,26 @@ func (o RequestOptions) IgnoredOptionsCopy() []string {
 	return slices.Clone(o.IgnoredOptions)
 }
 
+// DeprecatedOptionsCopy returns a defensive copy of deprecated ignored option
+// names.
+func (o RequestOptions) DeprecatedOptionsCopy() []string {
+	return slices.Clone(o.DeprecatedOptions)
+}
+
 // ignoredServerManagedOptions returns canonical option names for request
 // headers that tried to override server-managed settings.
-func ignoredServerManagedOptions(r *http.Request) []string {
-	ignoredOptions := make([]string, 0)
+func ignoredServerManagedOptions(r *http.Request) (ignoredOptions, deprecatedOptions []string) {
+	ignoredOptions = make([]string, 0)
+	deprecatedOptions = make([]string, 0)
 	for _, option := range serverManagedRequestOptions {
 		if hasAnyHeader(r, option.headers) {
 			ignoredOptions = appendOptionName(ignoredOptions, option.name)
+			if option.deprecated {
+				deprecatedOptions = appendOptionName(deprecatedOptions, option.name)
+			}
 		}
 	}
-	return ignoredOptions
+	return ignoredOptions, deprecatedOptions
 }
 
 // hasAnyHeader reports whether any alias header in headers is present with a

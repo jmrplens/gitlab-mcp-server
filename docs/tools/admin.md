@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Administration
 > **Individual tools**: 83
-> **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_page`, `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_avatar`, `gitlab_dependency_proxy` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_page`, `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_avatar`, `gitlab_dependency_proxy` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Pages](https://docs.gitlab.com/ee/api/pages.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The administration domain covers instance-level settings, appearance, broadcast messages, admin feature flags, licensing, system hooks, Sidekiq metrics, plan limits, usage data, database migrations, OAuth2 applications, application statistics, instance metadata, custom attributes, bulk imports, avatars, dependency proxy, GitLab Pages, Terraform states, and cluster agents.
 
-When `META_TOOLS=true` (the default), the smaller sub-packages (settings through bulk imports) are consolidated into a single `gitlab_admin` meta-tool. The larger sub-packages — pages, terraform states, cluster agents, avatar, and dependency proxy — each have their own meta-tool.
+With the default `TOOL_SURFACE=meta` catalog, the smaller sub-packages (settings through bulk imports) are consolidated into a single `gitlab_admin` meta-tool. The larger sub-packages — pages, terraform states, cluster agents, avatar, and dependency proxy — each have their own meta-tool.
 
 ### Common Questions
 

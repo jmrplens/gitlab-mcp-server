@@ -60,11 +60,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -181,11 +180,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -302,11 +300,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -423,11 +420,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -544,11 +540,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -665,11 +660,10 @@
           "format": "boolean"
         },
         {
-          "name": "META_TOOLS",
-          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "name": "TOOL_SURFACE",
+          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "true",
-          "format": "boolean"
+          "default": "meta"
         },
         {
           "name": "GITLAB_ENTERPRISE",

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Wikis
 > **Individual tools**: 6
-> **Meta-tool**: `gitlab_wiki` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_wiki` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Project Wikis API](https://docs.gitlab.com/ee/api/wikis.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The wikis domain covers the full lifecycle of GitLab project wiki pages: listing, retrieving, creating, updating, deleting, and uploading file attachments. Supports Markdown, RDoc, AsciiDoc, and Org formats.
 
-When `META_TOOLS=true` (the default), all 6 individual tools below are consolidated into a single `gitlab_wiki` meta-tool that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 6 individual tools below are consolidated into a single `gitlab_wiki` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

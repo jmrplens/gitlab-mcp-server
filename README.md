@@ -33,7 +33,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals estimate startup context visible to an MCP client: tool schemas plus shared resources and prompts, using a 200K-token context window as a reference.
 
-**Default configuration**: with `TOOL_SURFACE` unset, `META_TOOLS` unset or `true`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses **base meta-tools**. That means 33 visible tools, 855 reachable actions, and no Enterprise/Premium-only catalog.
+**Default configuration**: with `TOOL_SURFACE=meta` or unset, `META_TOOLS` unset, and `GITLAB_ENTERPRISE` unset or `false`, the server uses **base meta-tools**. That means 33 visible tools, 855 reachable actions, and no Enterprise/Premium-only catalog. `META_TOOLS` remains a deprecated compatibility selector; use `TOOL_SURFACE` for new configs.
 
 | Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -238,12 +238,12 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 ## Tool Modes
 
-Three registration modes, controlled by `META_TOOLS` or `TOOL_SURFACE`:
+Three registration modes, controlled by `TOOL_SURFACE`:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic` or `META_TOOLS=dynamic`. `dynamic-3` is an explicit alias for the current three-tool surface, and `dynamic-2` is an experimental find/execute variant. |
+| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic`. `dynamic-3` is an explicit alias for the current three-tool surface, and `dynamic-2` is an experimental find/execute variant. |
 | **Individual** | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources, prompts, and meta-schema resources. The default remains `full`.

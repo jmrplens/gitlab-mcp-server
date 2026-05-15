@@ -228,6 +228,7 @@ func TestExtractGitLabURL(t *testing.T) {
 func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
 	req.Header.Set("GITLAB-URL", "https://other.gitlab.example.com")
+	req.Header.Set("META-TOOLS", "true")
 	req.Header.Set("RATE-LIMIT-RPS", "999")
 	req.Header.Set("TOOL-SURFACE", "dynamic")
 	req.Header.Set("META-PARAM-SCHEMA", "full")
@@ -243,9 +244,13 @@ func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 		t.Fatal("HasIgnoredOptions() = false, want true")
 	}
 	ignored := options.IgnoredOptionsCopy()
-	want := []string{"TOOL_SURFACE", "META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
+	want := []string{"META_TOOLS", "TOOL_SURFACE", "META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
 	if !slicesEqual(ignored, want) {
 		t.Fatalf("IgnoredOptions = %v, want %v", ignored, want)
+	}
+	deprecated := options.DeprecatedOptionsCopy()
+	if !slicesEqual(deprecated, []string{"META_TOOLS"}) {
+		t.Fatalf("DeprecatedOptions = %v, want [META_TOOLS]", deprecated)
 	}
 }
 

@@ -13,7 +13,7 @@
                 "-e",
                 "GITLAB_SKIP_TLS_VERIFY",
                 "-e",
-                "META_TOOLS",
+                "TOOL_SURFACE",
                 "-e",
                 "GITLAB_ENTERPRISE",
                 "-e",
@@ -30,7 +30,7 @@
             "env": {
                 "GITLAB_TOKEN": "${GITLAB_TOKEN}",
                 "GITLAB_SKIP_TLS_VERIFY": "${GITLAB_SKIP_TLS_VERIFY:-false}",
-                "META_TOOLS": "${META_TOOLS:-true}",
+                "TOOL_SURFACE": "${TOOL_SURFACE:-meta}",
                 "GITLAB_ENTERPRISE": "${GITLAB_ENTERPRISE:-false}",
                 "GITLAB_READ_ONLY": "${GITLAB_READ_ONLY:-false}",
                 "GITLAB_SAFE_MODE": "${GITLAB_SAFE_MODE:-false}",

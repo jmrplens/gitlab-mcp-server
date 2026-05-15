@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Repository Storage Moves
 > **Individual tools**: 18
-> **Meta-tool**: `gitlab_storage_move` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_storage_move` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Project Repository Storage Moves](https://docs.gitlab.com/ee/api/project_repository_storage_moves.html) · [Group Repository Storage Moves](https://docs.gitlab.com/ee/api/group_repository_storage_moves.html) · [Snippet Repository Storage Moves](https://docs.gitlab.com/ee/api/snippet_repository_storage_moves.html)
 > **Audience**: 👤 GitLab administrators
 
@@ -15,7 +15,7 @@ Repository storage moves allow GitLab administrators to migrate repositories bet
 
 All operations require **admin access**.
 
-When `META_TOOLS=true` (the default), all 18 tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 18 tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter.
 
 ### Common Questions
 
@@ -262,7 +262,7 @@ Schedule repository storage moves for all snippets (admin only). Migrates all sn
 
 ## Meta-tool: `gitlab_storage_move`
 
-When `META_TOOLS=true`, all 18 tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation.
+With `TOOL_SURFACE=meta`, all 18 tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation.
 
 ### Action Mapping
 

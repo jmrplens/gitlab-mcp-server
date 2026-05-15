@@ -8,7 +8,7 @@ Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`.
 
 ## Meta-Tools
 
-Meta-tools are the default mode (META_TOOLS=true). Each groups related
+Meta-tools are the default mode (`TOOL_SURFACE=meta`). Each groups related
 operations under a single tool with an `action` parameter.
 
 ### gitlab_access
@@ -10272,7 +10272,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When META_TOOLS=false, up to 1011 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1006.
+When `TOOL_SURFACE=individual`, up to 1011 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1006.
 Grouped by domain:
 
 ### access (8 tools)
@@ -11238,7 +11238,7 @@ Set the pipeline status of a commit. State can be: pending, running, success, fa
 - `state` (string) (required): Status state: pending, running, success, failed, canceled
 - `target_url` (string): URL to link from the status
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_commit_statuses
 
@@ -14265,7 +14265,7 @@ Rotate a group access token, generating a new token value. Optionally set a new 
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_access_token_rotate_self
 
@@ -14276,7 +14276,7 @@ Rotate the group access token used for the current request. Returns the new toke
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `group_id` (string) (required): Group ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_archive
 
@@ -19214,7 +19214,7 @@ Rotate a personal access token, generating a new token value. Optionally set a n
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_personal_access_token_rotate_self
 
@@ -19224,7 +19224,7 @@ Rotate the personal access token used for the current request. Returns the new t
 
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### pipeline (30 tools)
 
@@ -19691,7 +19691,7 @@ Rotate a project access token, generating a new token value. Optionally set a ne
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_access_token_rotate_self
 
@@ -19702,7 +19702,7 @@ Rotate the project access token used for the current request. Returns the new to
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `project_id` (string) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_add_push_rule
 

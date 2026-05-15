@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Integrations, Badges, Topics, Epic Discussions, Import
 > **Individual tools**: 32
-> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_epic_discussion`, `gitlab_import` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_epic_discussion`, `gitlab_import` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Epic Discussions API](https://docs.gitlab.com/ee/api/epic_discussions.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The integrations domain covers miscellaneous GitLab tools that don't belong to other major domains: project/group integrations (services), project/group badges, instance-level topics, epic discussion threads, and repository import from external services (GitHub, Bitbucket).
 
-When `META_TOOLS=true` (the default), integration and badge tools are consolidated into `gitlab_project`, topic tools into `gitlab_admin`, epic discussion tools into `gitlab_epic_discussion`, and import tools into `gitlab_import`.
+With the default `TOOL_SURFACE=meta` catalog, integration and badge tools are consolidated into `gitlab_project`, topic tools into `gitlab_admin`, epic discussion tools into `gitlab_epic_discussion`, and import tools into `gitlab_import`.
 
 ### Common Questions
 

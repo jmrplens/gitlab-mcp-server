@@ -73,6 +73,8 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
+`CAPABILITY_SURFACE=minimal` keeps workspace roots and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic still has schema discovery because `gitlab_describe_tools` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
+
 :::tip[Current names]
 `TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` both select the current three-tool surface. Use `dynamic` for normal configuration and `dynamic-3` only when you need to pin the three-tool variant explicitly.
 

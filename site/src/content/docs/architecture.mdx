@@ -106,7 +106,7 @@ See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for detailed 
 
 ### Meta-tool mode (default)
 
-With `META_TOOLS=true` (default), the server exposes a baseline of **32 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 15 Enterprise/Premium tools for 47 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 48 total. Each meta-tool groups related operations:
+With `TOOL_SURFACE=meta` (default), the server exposes a baseline of **32 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 15 Enterprise/Premium tools for 47 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 48 total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -138,7 +138,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `META_TOOLS=false`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1006 on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1006 on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
 ### Dynamic toolset
 

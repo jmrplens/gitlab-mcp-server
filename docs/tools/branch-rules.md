@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Branch Rules
 > **Individual tools**: 1
-> **Meta-tool**: `gitlab_branch` (when `META_TOOLS=true`, routed as a branch action)
+> **Meta-tool**: `gitlab_branch` (with `TOOL_SURFACE=meta`, routed as a branch action)
 > **GitLab API**: [Branch Rules GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#projectbranchrules)
 > **Audience**: 👤 End users, AI assistant users
 

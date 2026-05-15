@@ -106,7 +106,7 @@ Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) par
 
 ### Modo meta-herramientas (predeterminado)
 
-Con `META_TOOLS=true` (predeterminado), el servidor expone una base de **32 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 15 herramientas Enterprise/Premium para un total de 47, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 48. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `TOOL_SURFACE=meta` (predeterminado), el servidor expone una base de **32 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 15 herramientas Enterprise/Premium para un total de 47, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 48. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -138,7 +138,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `META_TOOLS=false`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): 1006 en Enterprise/Premium autoalojado, o 1011 en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): 1006 en Enterprise/Premium autoalojado, o 1011 en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ### Conjunto de herramientas dinámico
 

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Snippets
 > **Individual tools**: 26
-> **Meta-tool**: `gitlab_snippet` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_snippet` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Snippets API](https://docs.gitlab.com/ee/api/snippets.html), [Project Snippets API](https://docs.gitlab.com/ee/api/project_snippets.html), [Snippet Discussions API](https://docs.gitlab.com/ee/api/discussions.html#snippets), [Notes API — Snippets](https://docs.gitlab.com/ee/api/notes.html#snippets)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The snippets domain covers personal snippets, project snippets, snippet discussion threads, and snippet notes. Personal snippets belong to the authenticated user, while project snippets are scoped to a specific project. Discussion threads enable threaded conversations on project snippets. Snippet notes are individual comments (non-threaded) on project snippets.
 
-When `META_TOOLS=true` (the default), the 26 individual tools below are consolidated into the `gitlab_snippet` meta-tool. Personal snippet actions use direct names such as `list`, `get`, `create`, and `delete`; project-scoped snippets use `project_*`; threaded discussions use `discussion_*`; project snippet notes use `note_*`; award emoji actions use `emoji_snippet_*` and `emoji_snippet_note_*`.
+With the default `TOOL_SURFACE=meta` catalog, the 26 individual tools below are consolidated into the `gitlab_snippet` meta-tool. Personal snippet actions use direct names such as `list`, `get`, `create`, and `delete`; project-scoped snippets use `project_*`; threaded discussions use `discussion_*`; project snippet notes use `note_*`; award emoji actions use `emoji_snippet_*` and `emoji_snippet_note_*`.
 
 ### Common Questions
 

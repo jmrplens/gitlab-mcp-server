@@ -22,7 +22,7 @@ LLMs have limited context windows. When an MCP server registers hundreds of indi
 Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
 :::note[Client compatibility]
-Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you disable meta-tools (`META_TOOLS=false`), clients with such limits will only see a subset of the complete individual tool set.
+Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
 :::
 
 ## How meta-tools work
@@ -55,7 +55,7 @@ Meta-tools use a common envelope:
 }
 ```
 
-By default, `META_PARAM_SCHEMA=opaque` keeps the tool schema small: clients see the valid `action` enum, while `params` remains an action-specific object. To discover the exact shape for a specific action, read the schema resources:
+By default, `META_PARAM_SCHEMA=opaque` keeps the tool schema small: clients see the valid `action` enum, while `params` remains an action-specific object. To discover the exact shape for a specific action, read the schema resources when `CAPABILITY_SURFACE=full` is enabled:
 
 | Resource                               | Use                                                                                            |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -82,7 +82,7 @@ Example resource reads:
 }
 ```
 
-The per-action schema response describes only `params`. The final tool call still uses the meta-tool envelope with both `action` and `params`. These resources are always available, even if you set `META_PARAM_SCHEMA=compact` or `META_PARAM_SCHEMA=full` to inline more schema detail in `tools/list`.
+The per-action schema response describes only `params`. The final tool call still uses the meta-tool envelope with both `action` and `params`. These resources are omitted when `CAPABILITY_SURFACE=minimal` is enabled. Dynamic deployments can still use `gitlab_describe_tools` or `gitlab_find_action` for inline schemas; meta-tool deployments can keep `CAPABILITY_SURFACE=full` or set `META_PARAM_SCHEMA=compact`/`full` to inline schemas in `tools/list`. Current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 
 ## Example usage
 
@@ -276,9 +276,9 @@ You can check which tools your server has registered by looking at the startup l
 
 | Variable             | Default  | Description                                                                                                                                                                                |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `META_TOOLS`         | `true`   | Legacy boolean selector: `true` for meta-tools or `false` for individual tools. Prefer `TOOL_SURFACE=meta` for new configurations.                                                         |
-| `TOOL_SURFACE`       | —        | Explicit selector for this mode: set `meta` to use meta-tools. Set `individual` only when you intentionally want one MCP tool per GitLab operation.                                        |
-| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and omits optional resources and prompts.                                         |
-| `META_PARAM_SCHEMA`  | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Schema resources remain available unless `CAPABILITY_SURFACE=minimal` is enabled. |
+| `TOOL_SURFACE`       | `meta`   | Canonical selector for this mode: set `meta` to use meta-tools. Set `individual` only when you intentionally want one MCP tool per GitLab operation.                                       |
+| `META_TOOLS`         | legacy   | Deprecated compatibility selector: `true` maps to `meta`, and `false` maps to `individual` when `TOOL_SURFACE` is absent.                                                                  |
+| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and omits optional resources, meta-schema resources, guides, and prompts.          |
+| `META_PARAM_SCHEMA`  | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Schema resources require `CAPABILITY_SURFACE=full`.                               |
 | `GITLAB_ENTERPRISE`  | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                                                               |
 | `--enterprise`       | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                                                             |

@@ -29,10 +29,10 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `META_TOOLS` | `true` | Tool catalog selector: `true` (32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools), `false` (individual tools), `dynamic` (low-token search/describe/execute surface), experimental `dynamic-2` comparison surface, or `dynamic-3` (explicit current dynamic surface) |
-| `TOOL_SURFACE` | *(empty)* | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. When set, it overrides `META_TOOLS` |
-| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
-| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. When `CAPABILITY_SURFACE=full`, the per-action JSON Schema is discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource for meta and dynamic surfaces |
+| `TOOL_SURFACE` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, `dynamic` -> `dynamic`, `dynamic-2` -> `dynamic-2`, and `dynamic-3` -> `dynamic-3`. Ignored when `TOOL_SURFACE` is set |
+| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts. Dynamic describe/find still returns action schemas inline with `minimal` |
+| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, 6.5x opaque size) or `full` (oneOf with full per-action JSON Schemas, 11.9x opaque size). Applies to visible meta-tool schemas in `meta`; has no practical effect on `dynamic`, `dynamic-2`, `dynamic-3`, or `individual` tool schemas. When `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` for meta and dynamic catalog-backed surfaces |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |
@@ -117,7 +117,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Optional
 GITLAB_SKIP_TLS_VERIFY=false
-META_TOOLS=true
+TOOL_SURFACE=meta
 LOG_LEVEL=info
 UPLOAD_MAX_FILE_SIZE=500MB
 AUTO_UPDATE=true
@@ -138,8 +138,8 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode unless `--auth-mode=oauth` is used, which requires a fixed `--gitlab-url`. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
-| `META_TOOLS` | `--meta-tools` | Legacy boolean selector. `META_TOOLS=dynamic`, `dynamic-2`, and `dynamic-3` are supported in stdio mode; use `--tool-surface` in HTTP mode |
-| `TOOL_SURFACE` | `--tool-surface` | Explicit selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `TOOL_SURFACE` | `--tool-surface` | Canonical selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `META_TOOLS` | `--meta-tools` | Deprecated compatibility selector. `META_TOOLS=dynamic`, `dynamic-2`, and `dynamic-3` are supported in stdio mode for one compatibility window; use `TOOL_SURFACE` or `--tool-surface` for new configs |
 | `CAPABILITY_SURFACE` | `--capability-surface` | Explicit selector: `full` or `minimal` |
 | `META_PARAM_SCHEMA` | `--meta-param-schema` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |

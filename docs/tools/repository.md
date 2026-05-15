@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Repository (tree, compare, files, commits, submodules, discussions, markdown)
 > **Individual tools**: 38
-> **Meta-tool**: `gitlab_repository` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_repository` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Repositories API](https://docs.gitlab.com/ee/api/repositories.html), [Repository Files API](https://docs.gitlab.com/ee/api/repository_files.html), [Commits API](https://docs.gitlab.com/ee/api/commits.html), [Commit Discussions API](https://docs.gitlab.com/ee/api/discussions.html#commits), [Repository Submodules API](https://docs.gitlab.com/ee/api/repository_submodules.html), [Markdown API](https://docs.gitlab.com/ee/api/markdown.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -15,7 +15,7 @@ The repository domain covers operations on GitLab repository content: browsing t
 
 This domain spans six sub-packages: `repository`, `files`, `commits`, `commitdiscussions`, `repositorysubmodules`, and `markdown`.
 
-When `META_TOOLS=true` (the default), all 38 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 38 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

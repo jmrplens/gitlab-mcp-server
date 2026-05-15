@@ -427,7 +427,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
         "GITLAB_URL": "https://your-gitlab",
         "GITLAB_TOKEN": "glpat-your-token",
         "GITLAB_SKIP_TLS_VERIFY": "true",
-        "META_TOOLS": "true"
+        "TOOL_SURFACE": "meta"
       }
     }
   }

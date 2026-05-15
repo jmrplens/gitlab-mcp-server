@@ -138,8 +138,8 @@ func main() {
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
-	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
-	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic, dynamic-2, dynamic-3; overrides --meta-tools when set")
+	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Legacy boolean tool selector; prefer --tool-surface")
+	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic, dynamic-2, dynamic-3")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
@@ -257,8 +257,8 @@ FLAGS
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
-  -meta-tools               Enable meta-tools for tool discovery (default true)
-  -tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides -meta-tools
+  -meta-tools               Legacy boolean tool selector; prefer -tool-surface (default true)
+  -tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3
   -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
@@ -278,8 +278,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  META_TOOLS                Legacy tool selector: true|false (default true)
-  TOOL_SURFACE              Explicit tool surface: meta|individual|dynamic|dynamic-2|dynamic-3; overrides META_TOOLS
+  TOOL_SURFACE              Canonical tool surface: meta|individual|dynamic|dynamic-2|dynamic-3 (default meta)
+  META_TOOLS                Deprecated legacy selector: true|false|dynamic|dynamic-2|dynamic-3; ignored when TOOL_SURFACE is set
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
@@ -303,7 +303,7 @@ JSON CONFIGURATION EXAMPLES
           "GITLAB_URL": "https://gitlab.example.com",
           "GITLAB_TOKEN": "glpat-your-token",
           "GITLAB_SKIP_TLS_VERIFY": "true",
-          "META_TOOLS": "true"
+          "TOOL_SURFACE": "meta"
         }
       }
     }
@@ -486,6 +486,7 @@ func runStdio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	logLegacyMetaToolsDeprecation(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
@@ -946,9 +947,30 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	if !options.HasIgnoredOptions() {
 		return
 	}
-	slog.Warn("request options ignored due to MCP configuration", //#nosec G706 -- structured log uses constant option names and a masked token suffix only
+	args := []any{
 		"ignored_options", options.IgnoredOptionsCopy(),
 		"token_suffix", safeTokenSuffix(token),
+	}
+	if deprecated := options.DeprecatedOptionsCopy(); len(deprecated) > 0 {
+		args = append(args,
+			"deprecated_options", deprecated,
+			"deprecation_hint", "use TOOL_SURFACE instead of META_TOOLS",
+		)
+	}
+	slog.Warn("request options ignored due to MCP configuration", args...) //#nosec G706 -- structured log uses constant option names and a masked token suffix only
+}
+
+func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
+	if !config.LegacyMetaToolsSelectorInUse(toolSurfaceValue, metaToolsValue) {
+		return
+	}
+	replacement := config.LegacyMetaToolsReplacement(metaToolsValue)
+	if replacement == "" {
+		return
+	}
+	slog.Warn("META_TOOLS is deprecated; use TOOL_SURFACE instead",
+		"legacy_selector", "META_TOOLS",
+		"replacement", "TOOL_SURFACE="+replacement,
 	)
 }
 

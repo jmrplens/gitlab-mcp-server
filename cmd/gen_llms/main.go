@@ -294,8 +294,8 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: %s; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
-	b.WriteString("- META_TOOLS: Enable meta-tools for reduced tool count (default: true)\n")
-	b.WriteString("- TOOL_SURFACE: Explicit catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2\n")
+	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2\n")
+	b.WriteString("- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs\n")
 	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
 	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
 
@@ -305,7 +305,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString(".\n\n")
 
 	b.WriteString("## Meta-Tools (default mode)\n\n")
-	fmt.Fprintf(&b, "When META_TOOLS=true (default), %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
+	fmt.Fprintf(&b, "When TOOL_SURFACE=meta (default), %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
 	fmt.Fprintf(&b, "up to %d individual tools. Enterprise/Premium entries register %d meta-tools on self-managed GitLab,\n", len(catalog.Individual), len(catalog.MetaEnterprise))
 	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
@@ -369,7 +369,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 
 	// --- Meta-tools (primary mode) ---
 	b.WriteString("## Meta-Tools\n\n")
-	b.WriteString("Meta-tools are the default mode (META_TOOLS=true). Each groups related\n")
+	b.WriteString("Meta-tools are the default mode (`TOOL_SURFACE=meta`). Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
 
 	for _, t := range catalog.MetaBase {
@@ -417,7 +417,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 
 	// --- Individual tools (by domain) ---
 	b.WriteString("## Individual Tools\n\n")
-	fmt.Fprintf(&b, "When META_TOOLS=false, up to %d individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers %d.\n", len(catalog.Individual), len(catalog.IndividualSelfManaged))
+	fmt.Fprintf(&b, "When `TOOL_SURFACE=individual`, up to %d individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers %d.\n", len(catalog.Individual), len(catalog.IndividualSelfManaged))
 	b.WriteString("Grouped by domain:\n\n")
 
 	domainTools := groupByDomain(catalog.Individual)

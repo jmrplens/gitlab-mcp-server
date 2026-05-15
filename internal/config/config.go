@@ -476,6 +476,23 @@ func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, met
 	return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
 }
 
+// LegacyMetaToolsSelectorInUse reports whether a configuration relies on the
+// deprecated META_TOOLS selector instead of the canonical TOOL_SURFACE selector.
+func LegacyMetaToolsSelectorInUse(toolSurfaceValue, metaToolsValue string) bool {
+	return strings.TrimSpace(toolSurfaceValue) == "" && strings.TrimSpace(metaToolsValue) != ""
+}
+
+// LegacyMetaToolsReplacement returns the canonical TOOL_SURFACE value that
+// corresponds to a legacy META_TOOLS value. It returns an empty string when the
+// legacy value is invalid.
+func LegacyMetaToolsReplacement(metaToolsValue string) string {
+	mode, err := parseToolSurfaceValue(metaToolsValue, "META_TOOLS")
+	if err != nil {
+		return ""
+	}
+	return mode
+}
+
 func parseToolSurfaceValue(value, name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {

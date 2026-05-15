@@ -41,10 +41,10 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                                                                                                                           |
 | `--gitlab-url`           | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                                                                             |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                              |
-| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio. Establécelo a `false` para herramientas individuales                                                                                        |
-| `--tool-surface`         | _(vacío)_                    | Selector explícito del catálogo; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades). Sobrescribe `--meta-tools` |
+| `--tool-surface`         | `meta`                       | Selector canónico del catálogo; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades)                              |
+| `--meta-tools`           | `true`                       | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                                   |
 | `--capability-surface`   | `full`                       | Selector de recursos y prompts; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades)                              |
-| `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                                                                                       |
+| `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`; solo afecta schemas de meta-herramientas                                                             |
 | `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                                                                                       |
 | `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                                                                                   |
 | `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                                                                                       |
@@ -75,13 +75,15 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 - `dynamic-3`: selector explícito para la misma superficie dinámica de tres herramientas, útil para configuraciones fijadas.
 - `dynamic-2`: superficie experimental de dos herramientas con `gitlab_find_action` y `gitlab_execute_tool`.
 
-`--capability-surface` controla recursos y prompts de forma independiente a las herramientas: `full` registra todos los recursos y prompts, mientras que `minimal` conserva solo el recurso de roots del workspace para despliegues dinámicos de bajo consumo.
+`--capability-surface` controla recursos y prompts de forma independiente a las herramientas: `full` registra todos los recursos, recursos de meta-schema, guías de flujo y prompts, mientras que `minimal` conserva solo el recurso de roots del workspace para despliegues dinámicos de bajo consumo. El descubrimiento de schemas dinámicos sigue funcionando con `minimal` porque dynamic describe/find devuelve schemas inline.
+
+`--meta-param-schema` solo afecta los schemas visibles de meta-herramientas de dominio. Mantén `opaque` salvo que un cliente no pueda leer recursos de schema y necesite `compact` o `full` en `tools/list`.
 
 ### Precedencia de configuración
 
 Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode` y `--trusted-proxy-header` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
 
-Si un cliente envía cabeceras con aspecto de configuración, como `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores.
+Si un cliente envía cabeceras con aspecto de configuración, como `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores. Las cabeceras deprecadas `META-TOOLS` también se identifican en `deprecated_options`.
 
 ## Autenticación
 
@@ -434,7 +436,7 @@ El `fly.toml` incluido usa el `Dockerfile` multi-stage de la raíz del repositor
   cmd = [
     "--http",
     "--http-addr", "0.0.0.0:8080",
-    "--meta-tools",
+    "--tool-surface=meta",
     "--auto-update=false",
     "--trusted-proxy-header", "Fly-Client-IP"
   ]

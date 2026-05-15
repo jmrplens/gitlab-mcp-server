@@ -153,7 +153,8 @@ Loads settings from environment variables with optional `.env` file support (via
 | `GITLAB_URL`             | No       | `https://gitlab.com` | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
-| `META_TOOLS`             | No       | `true`  | Use meta-tools instead of individual tools            |
+| `TOOL_SURFACE`           | No       | `meta`  | Canonical tool catalog selector (`meta`, `individual`, `dynamic`, `dynamic-2`, `dynamic-3`) |
+| `META_TOOLS`             | No       | —       | Deprecated compatibility selector mapped to `TOOL_SURFACE` when `TOOL_SURFACE` is absent |
 | `ISSUE_REPORTS`          | No       | `false` | Auto-generate GitLab issues on tool errors            |
 | `YOLO_MODE`              | No       | `false` | Skip destructive action confirmations                |
 | `UPLOAD_MAX_FILE_SIZE`   | No       | `2GB`   | Maximum allowed upload file size                     |

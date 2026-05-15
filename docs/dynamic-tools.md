@@ -66,7 +66,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources and prompts. Dynamic execution still works because `gitlab_describe_tools` returns exact action schemas inline.
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic execution still works because `gitlab_describe_tools` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 
@@ -355,7 +355,8 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 | --- | --- | --- |
 | Initial tool count | 32/47/48 | 3 |
 | Model selection | Choose a domain tool and action | Search an action registry, describe, execute |
-| Schema discovery | `action` enum plus optional schema resources | `gitlab_describe_tools` returns action schemas inline |
+| Schema discovery | `action` enum plus optional schema resources or `META_PARAM_SCHEMA=compact/full` | `gitlab_describe_tools` returns action schemas inline |
+| Minimal capabilities | Loses meta-schema resources and prompts | Keeps action schema discovery through describe |
 | Compatibility | Best current default | Best low-token alternative |
 | Failure mode | Wrong domain/action choice | Skipped search/describe or wrong action ID |
 | Rollback | Default path | Switch back to `TOOL_SURFACE=meta` or unset `TOOL_SURFACE` |

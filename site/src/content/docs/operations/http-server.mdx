@@ -41,10 +41,10 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                                                                                         |
 | `--gitlab-url`           | _(optional)_                 | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                                                       |
 | `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                                                                                   |
-| `--meta-tools`           | `true`                       | Enable domain meta-tools. Set `false` for individual tools                                                                                |
-| `--tool-surface`         | _(empty)_                    | Explicit tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options). Overrides `--meta-tools` |
+| `--tool-surface`         | `meta`                       | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                          |
+| `--meta-tools`           | `true`                       | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                            |
 | `--capability-surface`   | `full`                       | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                             |
-| `--meta-param-schema`    | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                                               |
+| `--meta-param-schema`    | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`; applies to meta-tool schemas only                                            |
 | `--enterprise`           | `false`                      | Force Enterprise/Premium tools; omit to auto-detect CE/EE per token+URL entry                                                             |
 | `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                                                |
 | `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                                                              |
@@ -75,13 +75,15 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 - `dynamic-3`: explicit selector for the same three-tool dynamic surface, useful for pinned configurations.
 - `dynamic-2`: experimental two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
 
-`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments.
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because dynamic describe/find returns schemas inline.
+
+`--meta-param-schema` affects visible domain meta-tool schemas only. Keep `opaque` unless a client cannot read schema resources and needs `compact` or `full` in `tools/list`.
 
 ### Configuration precedence
 
 HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
 
-If a client sends config-like headers such as `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values.
+If a client sends config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values. Deprecated `META-TOOLS` headers are also identified in `deprecated_options`.
 
 ## Authentication
 
@@ -434,7 +436,7 @@ The shipped `fly.toml` uses the multi-stage `Dockerfile` at the repository root 
   cmd = [
     "--http",
     "--http-addr", "0.0.0.0:8080",
-    "--meta-tools",
+    "--tool-surface=meta",
     "--auto-update=false",
     "--trusted-proxy-header", "Fly-Client-IP"
   ]

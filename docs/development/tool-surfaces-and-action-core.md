@@ -12,7 +12,7 @@ GitLab business logic.
 
 | Surface | Selector | Visible MCP tools | Source of action metadata |
 | --- | --- | ---: | --- |
-| Individual tools | `TOOL_SURFACE=individual` or `META_TOOLS=false` | One tool per GitLab operation | Domain `RegisterTools` handlers with tool metadata projected from `ActionSpec` |
+| Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) | One tool per GitLab operation | Domain `RegisterTools` handlers with tool metadata projected from `ActionSpec` |
 | Meta-tools | default, `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
 | Dynamic / dynamic-3 | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Canonical action catalog |
 | Dynamic-2 | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |

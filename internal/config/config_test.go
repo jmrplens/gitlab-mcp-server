@@ -178,6 +178,56 @@ func TestLoad_MetaToolsDynamic(t *testing.T) {
 	}
 }
 
+// TestLegacyMetaToolsSelectorInUse verifies that legacy selector detection is
+// limited to configurations that set META_TOOLS without TOOL_SURFACE.
+func TestLegacyMetaToolsSelectorInUse(t *testing.T) {
+	tests := []struct {
+		name             string
+		toolSurfaceValue string
+		metaToolsValue   string
+		want             bool
+	}{
+		{name: "empty values", want: false},
+		{name: "legacy only", metaToolsValue: "false", want: true},
+		{name: "canonical only", toolSurfaceValue: "individual", want: false},
+		{name: "canonical wins", toolSurfaceValue: "dynamic", metaToolsValue: "false", want: false},
+		{name: "whitespace legacy only", metaToolsValue: " dynamic ", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := LegacyMetaToolsSelectorInUse(tt.toolSurfaceValue, tt.metaToolsValue)
+			if got != tt.want {
+				t.Fatalf("LegacyMetaToolsSelectorInUse() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLegacyMetaToolsReplacement verifies that legacy META_TOOLS spellings map
+// to their canonical TOOL_SURFACE replacements.
+func TestLegacyMetaToolsReplacement(t *testing.T) {
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{value: "true", want: ToolSurfaceMeta},
+		{value: "false", want: ToolSurfaceIndividual},
+		{value: "dynamic", want: ToolSurfaceDynamic},
+		{value: "dynamic-2", want: ToolSurfaceDynamic2},
+		{value: "dynamic-3", want: ToolSurfaceDynamic3},
+		{value: "notabool", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			if got := LegacyMetaToolsReplacement(tt.value); got != tt.want {
+				t.Fatalf("LegacyMetaToolsReplacement(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestLoad_ToolSurfaceOverridesMetaTools verifies that TOOL_SURFACE is the
 // explicit catalog-mode knob when both new and legacy settings are present.
 func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {

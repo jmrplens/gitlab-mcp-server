@@ -63,4 +63,4 @@ In meta-tool mode, action parameter schemas are available through MCP resources:
 | `gitlab://schema/meta/gitlab_orbit/query`        | Parameters for Knowledge Graph queries  |
 | `gitlab://schema/meta/gitlab_orbit/graph_status` | Parameters for indexing status checks   |
 
-These resources remain available regardless of `META_PARAM_SCHEMA` mode.
+These resources remain available with `CAPABILITY_SURFACE=full` regardless of `META_PARAM_SCHEMA` mode. They are omitted with `CAPABILITY_SURFACE=minimal`.
