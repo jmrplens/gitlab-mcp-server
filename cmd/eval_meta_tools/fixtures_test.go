@@ -32,6 +32,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		MergeRequestThreadID:   "thread-123",
 		PipelineScheduleID:     23,
 		PipelineSchedulePlayID: 24,
+		SnippetID:              26,
 		CleanupReleaseTag:      "v0.0.0-eval-delete",
 		ReleaseSummaryTag:      "v0.0.0-eval-summary",
 	}
@@ -51,6 +52,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MS-004", Prompt: "Clean up release `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`."},
 		{ID: "MS-012", Prompt: "Compare refs `main` and `v0.0.0-eval-ms` in project `my-org/tools/gitlab-mcp-server`."},
 		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
+		{ID: "MT-174", Prompt: "Schedule a storage move for numeric snippet ID `44` to shard `default`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -74,6 +76,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[12].Prompt, "release `v0.0.0-eval-delete`")
 	assertContains(t, got[13].Prompt, "`v0.0.0-eval-summary`")
 	assertContains(t, got[14].Prompt, "MR `25`")
+	assertContains(t, got[15].Prompt, "numeric snippet ID `26`")
 }
 
 // TestFilterTasksByLiveFixtureState_SkipsMissingJobResources verifies that missing Docker job fixtures do not become model failures.

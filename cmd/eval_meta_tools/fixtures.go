@@ -1574,6 +1574,8 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 		prompt = replaceID(prompt, "environment ID", 7, state.EnvironmentID)
 	case "MT-050", "MT-051":
 		prompt = replaceID(prompt, "personal snippet ID", 33, state.SnippetID)
+	case "MT-174":
+		prompt = replaceID(prompt, "numeric snippet ID", 44, state.SnippetID)
 	case "MT-054", "MS-009":
 		return prompt
 	case "MT-057":
