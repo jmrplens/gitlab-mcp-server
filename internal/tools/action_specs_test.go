@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
+func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 	testCases := []struct {
 		name       string
 		client     *gitlabclient.Client
@@ -31,38 +32,23 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			captured := toolutil.CaptureMetaToolDefinitions(func() {
-				registerAllMetaGroups(nil, tc.client, tc.enterprise)
-			})
-			capturedByTool := make(map[string]toolutil.MetaToolDefinition, len(captured))
-			for _, definition := range captured {
-				capturedByTool[definition.Name] = definition
+			catalog, catalogErr := BuildActionCatalog(tc.client, ActionCatalogOptions{Enterprise: tc.enterprise})
+			if catalogErr != nil {
+				t.Fatalf("BuildActionCatalog() error = %v", catalogErr)
 			}
 
-			specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(tc.client, tc.enterprise))
-			if err != nil {
-				t.Fatalf("actionSpecGroupsByTool() error = %v", err)
-			}
-
-			toolNames := make([]string, 0, len(capturedByTool))
-			for toolName := range capturedByTool {
-				toolNames = append(toolNames, toolName)
-			}
-			sort.Strings(toolNames)
-
-			for _, toolName := range toolNames {
-				t.Run(toolName, func(t *testing.T) {
-					definition := capturedByTool[toolName]
-					specs, ok := specsByTool[toolName]
+			for _, specGroup := range CollectActionSpecs(tc.client, tc.enterprise) {
+				t.Run(specGroup.ToolName, func(t *testing.T) {
+					catalogGroup, ok := catalog.Group(specGroup.ToolName)
 					if !ok {
-						t.Fatalf("collected action specs missing %s", toolName)
+						t.Fatalf("catalog missing group %s", specGroup.ToolName)
 					}
-					specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specs)
+					specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specGroup.Actions)
 					if routeErr != nil {
 						t.Fatalf("ActionSpecsToMapWithError() error = %v", routeErr)
 					}
-					assertActionRouteParity(t, toolName, definition.Routes, specRoutes)
-					assertSpecProjectionParity(t, toolName, specs)
+					assertActionRouteParity(t, specGroup.ToolName, specRoutes, catalogGroup.ActionMap())
+					assertSpecProjectionParity(t, specGroup.ToolName, specGroup.Actions)
 				})
 			}
 		})
@@ -105,7 +91,6 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
 	owners := sourceToolPackageNames(t)
 	owners["tools"] = struct{}{}
-
 	var missingGroupOwners []string
 	var unknownGroupOwners []string
 	var missingActionOwners []string
@@ -136,6 +121,25 @@ func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
 		sort.Strings(missingActionOwners)
 		sort.Strings(unknownActionOwners)
 		t.Fatalf("catalog ownership drift:\nmissing group owners: %v\nunknown group owners: %v\nmissing action owners: %v\nunknown action owners: %v", missingGroupOwners, unknownGroupOwners, missingActionOwners, unknownActionOwners)
+	}
+}
+
+func TestCollectedActionSpecs_ClassifySamplingUtility(t *testing.T) {
+	var analyzeGroup ActionSpecGroup
+	for _, group := range CollectActionSpecs(nil, false) {
+		if group.ToolName == "gitlab_analyze" {
+			analyzeGroup = group
+			break
+		}
+	}
+	if analyzeGroup.ToolName == "" {
+		t.Fatal("CollectActionSpecs() missing gitlab_analyze")
+	}
+	if analyzeGroup.SurfaceKind != actioncatalog.SurfaceKindSamplingUtility {
+		t.Fatalf("gitlab_analyze surface kind = %q, want %q", analyzeGroup.SurfaceKind, actioncatalog.SurfaceKindSamplingUtility)
+	}
+	if !slices.Contains(analyzeGroup.CapabilityRequirements, "sampling") {
+		t.Fatalf("gitlab_analyze capability requirements = %#v, want sampling", analyzeGroup.CapabilityRequirements)
 	}
 }
 

@@ -1699,7 +1699,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterMeta(server, client)
+	registerLegacyMeta(server, client)
 }
 
 // TestRegisterTools_SearchTypeSchemaEnum verifies that every individual
@@ -1738,7 +1738,7 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, client)
+		registerLegacyMeta(nil, client)
 	})
 	routes := map[string]toolutil.ActionMap{"gitlab_search": searchMetaRoutesFromDefinitions(t, definitions)}
 
@@ -1760,7 +1760,7 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, client)
+		registerLegacyMeta(nil, client)
 	})
 	got := searchMetaRoutesFromDefinitions(t, definitions)
 	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
@@ -1987,7 +1987,7 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"basename":"f","data":"d","path":"f.go","filename":"f.go","ref":"main","startline":1,"project_id":1}]`, defaultPagination)
 	}))
-	RegisterMeta(server, client)
+	registerLegacyMeta(server, client)
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()

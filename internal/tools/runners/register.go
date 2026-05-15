@@ -179,8 +179,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	})
 }
 
-// RegisterMeta registers the gitlab_runner meta-tool with all runner actions.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
+// registerLegacyMeta registers the pre-catalog gitlab_runner meta-tool used by package-level parity tests.
+func registerLegacyMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
 	if err != nil {
 		panic(fmt.Sprintf("runner action specs: %v", err))

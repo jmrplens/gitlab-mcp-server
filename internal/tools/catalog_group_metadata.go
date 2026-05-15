@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -58,6 +59,20 @@ func catalogGroupReadOnly(specs []toolutil.ActionSpec) bool {
 		}
 	}
 	return true
+}
+
+func catalogGroupSurfaceKind(toolName string) actioncatalog.SurfaceKind {
+	if toolName == "gitlab_analyze" {
+		return actioncatalog.SurfaceKindSamplingUtility
+	}
+	return actioncatalog.SurfaceKindMetaGroup
+}
+
+func catalogGroupCapabilityRequirements(toolName string) []string {
+	if toolName == "gitlab_analyze" {
+		return []string{"sampling"}
+	}
+	return nil
 }
 
 func catalogGroupIcons(toolName string) []mcp.Icon {

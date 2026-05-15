@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
@@ -106,13 +104,6 @@ func TestBuildActionCatalog_DoesNotLeakCaptureState(t *testing.T) {
 
 	if leaked := toolutil.CaptureMetaToolDefinitions(func() {}); len(leaked) != 0 {
 		t.Fatalf("BuildActionCatalog() leaked captured meta-tool definitions: %v", leaked)
-	}
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	registerProjectMeta(server, nil, false)
-	names := toolNamesFromServer(t, server)
-	if !slices.Contains(names, "gitlab_project") {
-		t.Fatalf("registerProjectMeta() after BuildActionCatalog() registered tools %v, want gitlab_project", names)
 	}
 }
 

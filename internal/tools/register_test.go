@@ -1924,84 +1924,19 @@ func isExactMatchException(action string) bool {
 func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	// routeEntry captures a single action definition found in source code.
 	type routeEntry struct {
-		file        string
-		line        int
+		id          string
 		action      string
 		destructive bool
 	}
 
-	// Regex patterns for register_meta*.go files (lowercase wrappers, no package prefix).
-	reMetaMapDestructive := regexp.MustCompile(
-		`"(\w+)":\s+destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
-	reMetaMapNonDestructive := regexp.MustCompile(
-		`"(\w+)":\s+route(?:Action|VoidAction|ActionWithRequest)\b`)
-	reMetaAssignDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
-	reMetaAssignNonDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*route(?:Action|VoidAction|ActionWithRequest)\b`)
-
-	// Regex patterns for sub-package register.go files (toolutil. prefix).
-	reSubDestructive := regexp.MustCompile(
-		`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
-	reSubNonDestructive := regexp.MustCompile(
-		`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
-
 	var allRoutes []routeEntry
-
-	// Scan register_meta*.go files for inline route definitions.
-	for _, sourceFile := range readRegisterMetaSources(t) {
-		metaLines := strings.Split(sourceFile.content, "\n")
-		for i, line := range metaLines {
-			lineNum := i + 1
-			for _, re := range []*regexp.Regexp{reMetaMapDestructive, reMetaAssignDestructive} {
-				for _, m := range re.FindAllStringSubmatch(line, -1) {
-					allRoutes = append(allRoutes, routeEntry{
-						file: sourceFile.path, line: lineNum,
-						action: m[1], destructive: true,
-					})
-				}
-			}
-			for _, re := range []*regexp.Regexp{reMetaMapNonDestructive, reMetaAssignNonDestructive} {
-				for _, m := range re.FindAllStringSubmatch(line, -1) {
-					allRoutes = append(allRoutes, routeEntry{
-						file: sourceFile.path, line: lineNum,
-						action: m[1], destructive: false,
-					})
-				}
-			}
-		}
-	}
-
-	// Scan sub-package register.go files.
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		lines := strings.Split(string(src), "\n")
-		for i, line := range lines {
-			lineNum := i + 1
-			for _, m := range reSubDestructive.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: regPath, line: lineNum,
-					action: m[1], destructive: true,
-				})
-			}
-			for _, m := range reSubNonDestructive.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: regPath, line: lineNum,
-					action: m[1], destructive: false,
-				})
-			}
-		}
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	for _, action := range catalog.Actions() {
+		allRoutes = append(allRoutes, routeEntry{
+			id:          string(action.ID),
+			action:      action.Name,
+			destructive: action.Route.Destructive,
+		})
 	}
 
 	if len(allRoutes) == 0 {
@@ -2043,8 +1978,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 1: Action with destructive keyword MUST be marked destructive.
 		if hasDestructiveKw && !r.destructive {
-			t.Errorf("%s:%d action %q contains destructive keyword but uses non-destructive wrapper",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q contains destructive keyword but is non-destructive", r.id, r.action)
 			failures++
 		}
 
@@ -2052,15 +1986,13 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		// UNLESS it also contains a destructive keyword or is a known exception.
 		_, isKnownException := knownNonKeywordDestructive[r.action]
 		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
-			t.Errorf("%s:%d action %q contains safe keyword but uses destructive wrapper",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q contains safe keyword but is destructive", r.id, r.action)
 			failures++
 		}
 
 		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
 		if r.destructive && !hasDestructiveKw && !isKnownException {
-			t.Errorf("%s:%d action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive", r.id, r.action)
 			failures++
 		}
 	}

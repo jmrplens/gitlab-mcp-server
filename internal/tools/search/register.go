@@ -161,9 +161,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	})
 }
 
-// RegisterMeta registers the gitlab_search meta-tool with all search
-// scopes available in the GitLab Search API.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
+// registerLegacyMeta registers the pre-catalog gitlab_search meta-tool used by package-level parity tests.
+func registerLegacyMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
 	if err != nil {
 		panic(fmt.Sprintf("search action specs: %v", err))

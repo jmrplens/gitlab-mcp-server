@@ -8,11 +8,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/orbit"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
@@ -39,65 +35,6 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 // alongside the catalog-backed meta-tools.
 func RegisterMetaStandaloneTools(server *mcp.Server, client *gitlabclient.Client) {
 	registerStandaloneUtilities(server, client)
-}
-
-func registerAllMetaGroups(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
-	// Core domain meta-tools (inline handlers — enterprise routes injected when enabled)
-	registerProjectMeta(server, client, enterprise)
-	registerBranchMeta(server, client)
-	registerTagMeta(server, client)
-	registerReleaseMeta(server, client)
-	registerMergeRequestMeta(server, client)
-	registerMRReviewMeta(server, client)
-	registerRepositoryMeta(server, client)
-	registerGroupMeta(server, client, enterprise)
-	registerIssueMeta(server, client, enterprise)
-	registerPipelineMeta(server, client)
-	registerJobMeta(server, client)
-	registerUserMeta(server, client, enterprise)
-	registerWikiMeta(server, client)
-	registerEnvironmentMeta(server, client)
-	registerCIVariableMeta(server, client)
-	registerTemplateMeta(server, client)
-	registerAdminMeta(server, client)
-
-	// Consolidated domain meta-tools (inline handlers)
-	registerAccessMeta(server, client)
-	registerPackageMeta(server, client)
-	registerSnippetMeta(server, client)
-	registerFeatureFlagsMeta(server, client)
-
-	// Free-tier meta-tools (available on CE — GraphQL/REST based)
-	registerModelRegistryMeta(server, client)
-	registerCICatalogMeta(server, client)
-	registerCustomEmojiMeta(server, client)
-
-	// Enterprise meta-tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
-	if enterprise {
-		registerMergeTrainMeta(server, client)
-		registerAuditEventMeta(server, client)
-		registerDORAMetricsMeta(server, client)
-		registerDependencyMeta(server, client)
-		registerExternalStatusCheckMeta(server, client)
-		registerGroupSCIMMeta(server, client)
-		registerMemberRoleMeta(server, client)
-		registerEnterpriseUserMeta(server, client)
-		registerAttestationMeta(server, client)
-		registerCompliancePolicyMeta(server, client)
-		registerProjectAliasMeta(server, client)
-		registerGeoMeta(server, client)
-		registerStorageMoveMeta(server, client)
-		registerVulnerabilityMeta(server, client)
-		registerSecurityFindingsMeta(server, client)
-		if client.IsGitLabDotCom() {
-			orbit.RegisterMeta(server, client)
-		}
-	}
-
-	// Delegated meta-tools (sub-package RegisterMeta)
-	search.RegisterMeta(server, client)
-	runners.RegisterMeta(server, client)
-	samplingtools.RegisterMeta(server, client)
 }
 
 func registerStandaloneUtilities(server *mcp.Server, client *gitlabclient.Client) {

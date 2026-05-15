@@ -82,8 +82,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	})
 }
 
-// RegisterMeta registers the gitlab_orbit meta-tool. Callers gate this package to GitLab.com and the Enterprise catalog.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
+// registerLegacyMeta registers the pre-catalog gitlab_orbit meta-tool used by package-level parity tests.
+func registerLegacyMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
 	if err != nil {
 		panic(fmt.Sprintf("orbit action specs: %v", err))

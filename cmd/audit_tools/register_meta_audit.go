@@ -26,16 +26,7 @@ type unexpectedRegisterMetaDefinition struct {
 	Reason  string
 }
 
-var delegatedRegisterMetaPackages = map[string]struct{}{
-	// GitLab.com-only enterprise meta-tool gated inside the central meta hub.
-	"orbit": {},
-	// Large runner domain still delegates route capture from the sub-package.
-	"runners": {},
-	// MCP sampling utilities remain outside the GitLab action catalog builders.
-	"samplingtools": {},
-	// Cross-scope search meta-tool still delegates route capture from the sub-package.
-	"search": {},
-}
+var delegatedRegisterMetaPackages = map[string]struct{}{}
 
 func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error) {
 	toolsDir := filepath.Join(root, "internal", "tools")
@@ -73,7 +64,7 @@ func unexpectedRegisterMetaDefinitions(definitions []registerMetaDefinition) []u
 			unexpected = append(unexpected, unexpectedRegisterMetaDefinition{
 				Package: definition.Package,
 				File:    definition.File,
-				Reason:  "package-level RegisterMeta is not an approved delegated meta-tool",
+				Reason:  "package-level RegisterMeta is not an approved catalog-first runtime pattern",
 			})
 			continue
 		}

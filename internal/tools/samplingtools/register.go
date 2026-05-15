@@ -243,10 +243,9 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 	return MetaMarkdownForResult(result)
 }
 
-// RegisterMeta registers a single gitlab_analyze meta-tool that consolidates
-// all 11 sampling analysis tools under one action-dispatched interface.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+// registerLegacyMeta registers the pre-catalog gitlab_analyze meta-tool used by package-level parity tests.
+func registerLegacyMeta(server *mcp.Server) {
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(nil))
 	if err != nil {
 		panic(fmt.Sprintf("sampling action specs: %v", err))
 	}

@@ -1774,7 +1774,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, client)
+	registerLegacyMeta(server, client)
 }
 
 // TestRegisterMeta_UsesActionSpecs verifies that gitlab_runner meta routes are
@@ -1784,7 +1784,7 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, client)
+		registerLegacyMeta(nil, client)
 	})
 	got := runnerMetaRoutesFromDefinitions(t, definitions)
 	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))

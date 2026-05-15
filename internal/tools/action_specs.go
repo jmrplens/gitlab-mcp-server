@@ -572,13 +572,14 @@ func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecG
 		return nil
 	}
 	return []ActionSpecGroup{{
-		ToolName:     toolName,
-		ReadOnly:     catalogGroupReadOnly(specs),
-		Icons:        catalogGroupIcons(toolName),
-		FormatResult: catalogGroupFormatResult(toolName),
-		Actions:      specs,
-		OwnerPackage: "tools",
-		SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		ToolName:               toolName,
+		ReadOnly:               catalogGroupReadOnly(specs),
+		Icons:                  catalogGroupIcons(toolName),
+		CapabilityRequirements: catalogGroupCapabilityRequirements(toolName),
+		FormatResult:           catalogGroupFormatResult(toolName),
+		Actions:                specs,
+		OwnerPackage:           "tools",
+		SurfaceKind:            catalogGroupSurfaceKind(toolName),
 	}}
 }
 
