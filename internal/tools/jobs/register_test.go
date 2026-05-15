@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the CI job tool closures
-// in register.go. Tests cover ConfirmAction early-return branches and
-// error propagation for job operations via an in-memory MCP session.
+// register_test.go contains catalog-surface regression tests for CI job actions.
 package jobs
 
 import (
@@ -16,19 +14,27 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_ConfirmDeclined covers the ConfirmAction early-return
+// TestCatalogSurface_ConfirmDeclined covers confirmation early-return
 // branches in erase, delete_artifacts, and delete_project_artifacts handlers
 // when the user declines the destructive action confirmation.
-func TestRegisterTools_ConfirmDeclined(t *testing.T) {
+func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := jobSpecsByTool(t, ActionSpecs(client))
+	for _, toolName := range []string{"gitlab_job_erase", "gitlab_job_delete_artifacts", "gitlab_job_delete_project_artifacts"} {
+		toolutil.RegisterSurfaceToolFromSpec(server, byTool[toolName], toolutil.SurfaceToolRegisterOptions{
+			Description: "Test job destructive confirmation.",
+			Icons:       toolutil.IconJob,
+		})
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -40,7 +46,10 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	tools := []struct {
 		name string
