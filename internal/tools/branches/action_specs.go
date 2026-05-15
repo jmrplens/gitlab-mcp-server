@@ -1,6 +1,10 @@
 package branches
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,7 +13,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		branchSpec("create", toolutil.RouteAction(client, Create), "gitlab_branch_create", false, false),
-		branchSpec("get", toolutil.RouteAction(client, Get), "gitlab_branch_get", true, true),
+		branchSpec("get", branchGetRoute(client), "gitlab_branch_get", true, true),
 		branchSpec("list", toolutil.RouteAction(client, List), "gitlab_branch_list", true, true),
 		branchSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_branch_delete", false, true),
 		branchSpec("delete_merged", toolutil.DestructiveVoidAction(client, DeleteMerged), "gitlab_branch_delete_merged", false, true),
@@ -19,6 +23,21 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		branchSpec("get_protected", toolutil.RouteAction(client, ProtectedGet), "gitlab_protected_branch_get", true, true),
 		branchSpec("update_protected", toolutil.RouteAction(client, ProtectedUpdate), "gitlab_protected_branch_update", false, true),
 	}
+}
+
+func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			branchName, _ := input["branch_name"].(string)
+			projectID, _ := input["project_id"].(string)
+			return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, projectID)}, nil
+		}
+		return result, err
+	}
+	return route
 }
 
 func branchSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {

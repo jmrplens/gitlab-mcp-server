@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -1153,7 +1152,7 @@ func TestBranchList_PaginationQueryParams(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools + CallAllThroughMCP
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
 // branchMockResp holds a canned response for a mock branch endpoint.
@@ -1163,8 +1162,7 @@ type branchMockResp struct {
 	pgHdr  *testutil.PaginationHeaders
 }
 
-// newBranchMCPSession is an internal helper for the branches package.
-func newBranchMCPSession(t *testing.T) *mcp.ClientSession {
+func newBranchSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	base := "/api/v4/projects/42/repository/branches"
@@ -1211,47 +1209,19 @@ func newBranchMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return branchSpecsByTool(t, ActionSpecs(client))
 }
 
-// requireToolSuccess calls the named MCP tool and fails the test if the
-// call returns an error or an IsError result with embedded text.
-func requireToolSuccess(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) {
+func requireBranchRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := specs[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if !result.IsError {
-		return
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-		}
-	}
-	t.Fatalf("CallTool(%s) returned IsError=true", name)
 }
 
 // ---------------------------------------------------------------------------
@@ -1365,9 +1335,9 @@ func TestBranchProtect_ForcePush_WithRestrictiveAccess(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newBranchMCPSession(t)
+// TestActionSpecs_CallAllRoutes validates branch routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newBranchSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -1387,7 +1357,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			requireToolSuccess(t, session, tt.name, tt.args)
+			requireBranchRouteSuccess(t, specs, tt.name, tt.args)
 		})
 	}
 }
@@ -1527,9 +1497,8 @@ func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchGet_EmbedsCanonicalResource asserts gitlab_branch_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}/branch/{name}.
-func TestBranchGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_BranchGetRoute verifies the canonical branch get route output.
+func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gitlab.example.com/p/-/tree/main","commit":{"id":"abc"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/branches/main") {
@@ -1538,7 +1507,27 @@ func TestBranchGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "branch_name": "main"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_branch_get", args, "gitlab://project/42/branch/main", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := branchSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "main"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.Name != "main" || out.CommitID != "abc" {
+		t.Fatalf("branch output = %#v, want name main and commit abc", out)
+	}
+}
+
+func branchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
