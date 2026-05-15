@@ -1,31 +1,49 @@
-// register_test.go contains integration tests for the group LDAP tool closures
-// in register.go. Tests exercise mutation error paths via an in-memory MCP
-// session with a mock GitLab API.
 package groupldap
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all group LDAP
-// link tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group LDAP actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "groupldap" {
+			t.Errorf("OwnerPackage for %s = %q, want groupldap", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+
+	byTool := groupLDAPSpecsByTool(t, specs)
+	if !byTool["gitlab_group_ldap_link_list"].ReadOnly {
+		t.Error("list action should be read-only")
+	}
+	for _, name := range []string{"gitlab_group_ldap_link_delete", "gitlab_group_ldap_link_delete_for_provider"} {
+		spec := byTool[name]
+		if !spec.Destructive || !spec.Route.Destructive {
+			t.Errorf("%s should be destructive", name)
+		}
+		if !spec.Idempotent {
+			t.Errorf("%s should be idempotent", name)
+		}
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all registered group LDAP link tools
-// can be called through MCP in-memory transport, covering the handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies all group LDAP routes execute through the catalog.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -40,20 +58,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -66,20 +71,19 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteErrors covers the if-err branches after
-// DeleteWithCNOrFilter() and DeleteForProvider() in register.go closures.
-func TestRegisterTools_DeleteErrors(t *testing.T) {
+// TestActionSpecs_CallRouteErrors verifies delete route errors propagate directly.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -89,18 +93,7 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -111,13 +104,22 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
 			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s", tt.name)
+			if result != nil {
+				t.Errorf("Route.Handler(%s) result = %#v, want nil", tt.name, result)
 			}
 		})
 	}
+}
+
+func groupLDAPSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
