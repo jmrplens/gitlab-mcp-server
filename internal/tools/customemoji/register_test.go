@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the custom emoji tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains canonical-route tests for custom emoji behavior.
 package customemoji
 
 import (
@@ -12,21 +10,30 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all custom
-// emoji tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for custom emoji actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := customEmojiSpecsByTool(t, specs)
+
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_custom_emoji"].Route.Destructive {
+		t.Fatal("gitlab_delete_custom_emoji should be destructive")
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all registered custom emoji tools
-// can be called through MCP in-memory transport, covering the handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallAllRoutes verifies custom emoji routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondGraphQL(w, http.StatusOK, `{
@@ -55,21 +62,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 			}`)
 		},
 	})
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := customEmojiSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 
 	tools := []struct {
 		name string
@@ -81,12 +74,12 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
@@ -110,9 +103,8 @@ func TestFormatCreateMarkdown_ExternalEmoji(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_DeleteError covers the if-err branch after Delete()
-// in the gitlab_custom_emoji_delete closure in register.go.
-func TestRegisterTools_DeleteError(t *testing.T) {
+// TestActionSpecs_DeleteError covers the error branch after Delete.
+func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "graphql") {
@@ -122,45 +114,33 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := customEmojiSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_custom_emoji",
-		Arguments: map[string]any{"id": "gid://gitlab/CustomEmoji/1"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Error("expected error result from gitlab_delete_custom_emoji")
+	_, err := byTool["gitlab_delete_custom_emoji"].Route.Handler(t.Context(), map[string]any{"id": "gid://gitlab/CustomEmoji/1"})
+	if err == nil {
+		t.Fatal("expected error from gitlab_delete_custom_emoji")
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the gitlab_delete_custom_emoji handler when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, mux)
+	byTool := customEmojiSpecsByTool(t, ActionSpecs(client))
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_custom_emoji"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test custom emoji destructive confirmation.",
+		Icons:       toolutil.IconLabel,
+	})
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -172,7 +152,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_delete_custom_emoji",
@@ -193,4 +176,20 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 		}
 	}
 	t.Error("expected text content in cancellation result")
+}
+
+func customEmojiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }
