@@ -4,14 +4,11 @@
 package appstatistics
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestGet verifies the behavior of get.
@@ -108,80 +105,46 @@ func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic_Coverage verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata_Coverage verifies application statistics action spec metadata.
+func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].OwnerPackage != "appstatistics" || specs[0].IndividualTool.Name != "gitlab_get_application_statistics" {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
 }
 
-// TestMCPRound_Trip_Coverage verifies the behavior of cov m c p round trip.
-func TestMCPRound_Trip_Coverage(t *testing.T) {
+// TestActionSpecs_CallRoute_Coverage verifies the application statistics canonical route.
+func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
 	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := ActionSpecs(client)[0]
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_application_statistics",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
 }
 
-// TestMCPRoundTrip_Error validates the register.go error path for the
-// application statistics tool via MCP round-trip against a 500 backend.
-func TestMCPRoundTrip_Error(t *testing.T) {
+// TestActionSpecs_CallRouteError validates the application statistics route error path.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_application_statistics",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true")
+	spec := ActionSpecs(client)[0]
+	if _, err := spec.Route.Handler(t.Context(), map[string]any{}); err == nil {
+		t.Fatal("expected route error")
 	}
 }

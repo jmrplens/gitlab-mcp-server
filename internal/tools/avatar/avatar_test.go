@@ -4,12 +4,9 @@
 package avatar
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
@@ -86,77 +83,45 @@ func TestFormatMarkdown_Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic_Coverage verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata_Coverage verifies avatar action spec metadata.
+func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"x"}`)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].OwnerPackage != "avatar" || specs[0].IndividualTool.Name != "gitlab_get_avatar" {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
 }
 
-// TestMCPRound_Trip_Coverage verifies the behavior of cov m c p round trip.
-func TestMCPRound_Trip_Coverage(t *testing.T) {
+// TestActionSpecs_CallRoute_Coverage verifies the avatar canonical route.
+func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://x.com/a.png"}`)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := ActionSpecs(client)[0]
+	res, err := spec.Route.Handler(t.Context(), map[string]any{"email": "a@b.c", "size": float64(100)})
 	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_avatar",
-		Arguments: map[string]any{"email": "a@b.c", "size": float64(100)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
 }
 
-// TestMCPRoundTrip_ErrorPath covers the error return path in register.go
-// when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPath(t *testing.T) {
+// TestActionSpecs_CallRouteError covers the avatar canonical route error path.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_avatar",
-		Arguments: map[string]any{"email": "a@b.c"},
-	})
-	if err != nil {
-		t.Fatalf("unexpected transport error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected error result for 500 backend")
+	spec := ActionSpecs(client)[0]
+	if _, err := spec.Route.Handler(t.Context(), map[string]any{"email": "a@b.c"}); err == nil {
+		t.Fatal("expected route error")
 	}
 }
