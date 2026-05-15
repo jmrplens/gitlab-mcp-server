@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // Shared test constants used across accesstokens_test.go and coverage_test.go.
@@ -1624,30 +1623,30 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools -- no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for access token actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := accessTokenSpecsByTool(t, specs)
+
+	if len(specs) != 18 {
+		t.Fatalf("len(ActionSpecs) = %d, want 18", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "accesstokens" {
+			t.Fatalf("OwnerPackage for %s = %q, want accesstokens", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP -- full MCP roundtrip for all 20 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newAccessTokensMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates access token routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newAccessTokenRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -1676,39 +1675,30 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.tool, tt.args)
+			assertAccessTokenRouteOK(t, byTool, tt.tool, tt.args)
 		})
 	}
 }
 
-// assertToolCallSuccess calls a tool via MCP and fails the test if the call
-// returns an error or if the result indicates failure.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, toolName string, args map[string]any) {
+// assertAccessTokenRouteOK calls a canonical route and fails the test if it returns an error.
+func assertAccessTokenRouteOK(t *testing.T, byTool map[string]toolutil.ActionSpec, toolName string, args map[string]any) {
 	t.Helper()
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      toolName,
-		Arguments: args,
-	})
+	result, err := byTool[toolName].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", toolName, err)
+		t.Fatalf("Route.Handler(%s) error: %v", toolName, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", toolName, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", toolName)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", toolName)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newAccessTokensMCPSession is an internal helper for the accesstokens package.
-func newAccessTokensMCPSession(t *testing.T) *mcp.ClientSession {
+// newAccessTokenRouteSpecs is an internal helper for the accesstokens package.
+func newAccessTokenRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	projectTokenJSON := `{"id":5,"name":"proj-token","active":true,"revoked":false,"scopes":["api"],"access_level":30,"token":"glpat-proj"}`
@@ -1778,22 +1768,14 @@ func newAccessTokensMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	return accessTokenSpecsByTool(t, ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+func accessTokenSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
