@@ -22,14 +22,14 @@
 | Unit test functions | 9,467 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 419 |
+| Test files (internal/) | 420 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 86.4% |
 | Overall coverage (`go test ./internal/...`) | 96.5% |
-| Average package coverage | 94.1% |
+| Average package coverage | 94.2% |
 
 ### Naming Convention Stats
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,104 | 321 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,104 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,714** | **545** |  |
+| **Total** | **9,714** | **546** |  |
 
 ### Core Packages
 
@@ -168,7 +168,7 @@
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
 | groupanalytics | 8 | 2 | 100.0% | 3 |
-| groupboards | 54 | 2 | 98.9% | 10 |
+| groupboards | 54 | 2 | 98.7% | 10 |
 | groupcredentials | 33 | 3 | 97.4% | 4 |
 | groupepicboards | 8 | 2 | 100.0% | 2 |
 | groupimportexport | 25 | 1 | 96.5% | 3 |
@@ -193,7 +193,7 @@
 | health | 17 | 1 | 100.0% | 2 |
 | impersonationtokens | 38 | 3 | 100.0% | 5 |
 | importservice | 26 | 1 | 100.0% | 5 |
-| instancevariables | 37 | 2 | 98.0% | 5 |
+| instancevariables | 37 | 2 | 97.6% | 5 |
 | integrations | 31 | 2 | 100.0% | 4 |
 | invites | 30 | 1 | 98.1% | 4 |
 | issuediscussions | 40 | 2 | 99.4% | 6 |
@@ -205,7 +205,7 @@
 | jobtokenscope | 48 | 2 | 100.0% | 8 |
 | keys | 20 | 1 | 100.0% | 2 |
 | labels | 55 | 1 | 100.0% | 8 |
-| license | 17 | 1 | 98.8% | 3 |
+| license | 17 | 2 | 100.0% | 3 |
 | licensetemplates | 18 | 1 | 100.0% | 2 |
 | markdown | 8 | 1 | 100.0% | 1 |
 | memberroles | 40 | 3 | 100.0% | 6 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,104** | **321** |  | **1,018** |
+| **Total** | **7,104** | **322** |  | **1,018** |
 
 </details>
 
@@ -385,7 +385,7 @@
 | geo | 100.0% |
 | gitignoretemplates | 100.0% |
 | groupanalytics | 100.0% |
-| groupboards | 98.9% |
+| groupboards | 98.7% |
 | groupcredentials | 97.4% |
 | groupepicboards | 100.0% |
 | groupimportexport | 96.5% |
@@ -410,7 +410,7 @@
 | health | 100.0% |
 | impersonationtokens | 100.0% |
 | importservice | 100.0% |
-| instancevariables | 98.0% |
+| instancevariables | 97.6% |
 | integrations | 100.0% |
 | invites | 98.1% |
 | issuediscussions | 99.4% |
@@ -422,7 +422,7 @@
 | jobtokenscope | 100.0% |
 | keys | 100.0% |
 | labels | 100.0% |
-| license | 98.8% |
+| license | 100.0% |
 | licensetemplates | 100.0% |
 | markdown | 100.0% |
 | memberroles | 100.0% |

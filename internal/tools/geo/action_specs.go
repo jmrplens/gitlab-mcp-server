@@ -1,6 +1,9 @@
 package geo
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,11 +15,21 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		geoReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_geo_sites"),
 		geoReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_get_geo_site"),
 		geoUpdateSpec("edit", toolutil.RouteAction(client, Edit), "gitlab_edit_geo_site"),
-		geoDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_geo_site"),
+		geoDeleteSpec("delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_geo_site"),
 		geoUpdateSpec("repair", toolutil.RouteAction(client, Repair), "gitlab_repair_geo_site"),
 		geoReadSpec("list_status", toolutil.RouteAction(client, ListStatus), "gitlab_list_status_all_geo_sites"),
 		geoReadSpec("get_status", toolutil.RouteAction(client, GetStatus), "gitlab_get_status_geo_site"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input IDInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{
+		Status:  "success",
+		Message: fmt.Sprintf("Successfully deleted Geo site %d.", input.ID),
+	}, nil
 }
 
 func geoReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
