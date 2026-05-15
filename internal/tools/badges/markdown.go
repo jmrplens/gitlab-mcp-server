@@ -9,6 +9,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type badgeNotFoundOutput struct {
+	Resource   string   `json:"resource"`
+	Identifier string   `json:"identifier"`
+	Hints      []string `json:"hints,omitempty"`
+}
+
+func formatBadgeNotFound(out badgeNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(out.Resource, out.Identifier, out.Hints...)
+}
+
 // FormatBadgeListMarkdown formats a list of badges.
 func FormatBadgeListMarkdown(badges []BadgeItem, title string, pagination toolutil.PaginationOutput) *mcp.CallToolResult {
 	if len(badges) == 0 {
@@ -50,6 +60,57 @@ func FormatBadgeMarkdown(b BadgeItem) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
+func formatListProjectOutput(out ListProjectOutput) *mcp.CallToolResult {
+	return FormatBadgeListMarkdown(out.Badges, "Project Badges", out.Pagination)
+}
+
+func formatGetProjectOutput(out GetProjectOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatAddProjectOutput(out AddProjectOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatEditProjectOutput(out EditProjectOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatPreviewProjectOutput(out PreviewProjectOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatListGroupOutput(out ListGroupOutput) *mcp.CallToolResult {
+	return FormatBadgeListMarkdown(out.Badges, "Group Badges", out.Pagination)
+}
+
+func formatGetGroupOutput(out GetGroupOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatAddGroupOutput(out AddGroupOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatEditGroupOutput(out EditGroupOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
+func formatPreviewGroupOutput(out PreviewGroupOutput) *mcp.CallToolResult {
+	return FormatBadgeMarkdown(out.Badge)
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(FormatBadgeMarkdown)
+	toolutil.RegisterMarkdownResult(formatBadgeNotFound)
+	toolutil.RegisterMarkdownResult(formatListProjectOutput)
+	toolutil.RegisterMarkdownResult(formatGetProjectOutput)
+	toolutil.RegisterMarkdownResult(formatAddProjectOutput)
+	toolutil.RegisterMarkdownResult(formatEditProjectOutput)
+	toolutil.RegisterMarkdownResult(formatPreviewProjectOutput)
+	toolutil.RegisterMarkdownResult(formatListGroupOutput)
+	toolutil.RegisterMarkdownResult(formatGetGroupOutput)
+	toolutil.RegisterMarkdownResult(formatAddGroupOutput)
+	toolutil.RegisterMarkdownResult(formatEditGroupOutput)
+	toolutil.RegisterMarkdownResult(formatPreviewGroupOutput)
 }
