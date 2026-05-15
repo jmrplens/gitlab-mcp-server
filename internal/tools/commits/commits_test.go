@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -1752,16 +1751,28 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools Tests
+// ActionSpecs Tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for commit actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := commitSpecsByTool(t, specs)
+
+	if len(specs) != 14 {
+		t.Fatalf("len(ActionSpecs) = %d, want 14", len(specs))
+	}
+	if len(byTool) != 13 {
+		t.Fatalf("unique individual tools = %d, want 13", len(byTool))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "commits" {
+			t.Errorf("OwnerPackage for %s = %q, want commits", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // commitMockResp holds a canned response for a mock commit endpoint.
@@ -1792,36 +1803,17 @@ func commitRouteHandler(routes map[string]commitMockResp) http.HandlerFunc {
 	}
 }
 
-// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
-// gitlab_commit_get when the commit does not exist.
-func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound covers the canonical get route 404 error path.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := commitSpecsByTool(t, ActionSpecs(client))
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_commit_get",
-		Arguments: map[string]any{"project_id": "42", "sha": "deadbeef"},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404")
+	_, err := byTool["gitlab_commit_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "sha": "deadbeef"})
+	if err == nil {
+		t.Fatal("expected error for 404")
 	}
 }
 
@@ -1910,8 +1902,7 @@ func TestRevert_409Conflict(t *testing.T) {
 	}
 }
 
-// newCommitsMCPSession is an internal helper for the commits package.
-func newCommitsMCPSession(t *testing.T) *mcp.ClientSession {
+func newCommitSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	commitJSON := `{"id":"c1","short_id":"c1","title":"t","author_name":"A","committed_date":"2026-01-01T00:00:00Z","web_url":"u"}`
@@ -1937,51 +1928,23 @@ func newCommitsMCPSession(t *testing.T) *mcp.ClientSession {
 	}
 
 	client := testutil.NewTestClient(t, commitRouteHandler(routes))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return commitSpecsByTool(t, ActionSpecs(client))
 }
 
-// assertToolCallSuccess is an internal helper for the commits package.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+func assertCommitRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := specs[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCommitsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates all commit routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newCommitSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -2004,14 +1967,13 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.name, tt.args)
+			assertCommitRouteSuccess(t, specs, tt.name, tt.args)
 		})
 	}
 }
 
-// TestCommitGet_EmbedsCanonicalResource asserts gitlab_commit_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}/commit/{sha}.
-func TestCommitGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_CommitGetRoute verifies the canonical commit get route output.
+func TestActionSpecs_CommitGetRoute(t *testing.T) {
 	const respJSON = `{"id":"abc123","short_id":"abc123","title":"T","message":"M","author_name":"A","author_email":"a@b","authored_date":"2026-01-01T00:00:00Z","committed_date":"2026-01-01T00:00:00Z","web_url":"https://gitlab.example.com/g/p/-/commit/abc123"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
@@ -2020,7 +1982,27 @@ func TestCommitGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "sha": "abc123"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_commit_get", args, "gitlab://project/42/commit/abc123", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := commitSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_commit_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "sha": "abc123"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(DetailOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want DetailOutput", result)
+	}
+	if out.ID != "abc123" {
+		t.Fatalf("ID = %q, want abc123", out.ID)
+	}
+}
+
+func commitSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
