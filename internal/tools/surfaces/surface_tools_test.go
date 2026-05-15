@@ -48,6 +48,32 @@ func TestToolGroupSpecs_ProjectsSurfaceMetadata(t *testing.T) {
 	}
 }
 
+func TestStandaloneToolSpecs_ProjectPoliciesAndReadOnlyFilter(t *testing.T) {
+	specs := StandaloneToolSpecs(nil)
+	for _, spec := range specs {
+		if spec.SafeModePolicy != surfaceSafeModeGlobalWrapper || spec.ReadOnlyPolicy != surfaceReadOnlyGlobalFilter {
+			t.Fatalf("spec %s policies = safe:%q readonly:%q, want global wrappers", spec.Name, spec.SafeModePolicy, spec.ReadOnlyPolicy)
+		}
+	}
+
+	groups := ToolGroupSpecs(specs)
+	interactive := findGroupSpec(t, groups, "gitlab_interactive")
+	if len(interactive.CapabilityRequirements) != 1 || interactive.CapabilityRequirements[0] != "elicitation" {
+		t.Fatalf("interactive capability requirements = %v, want elicitation", interactive.CapabilityRequirements)
+	}
+
+	catalog, err := AddToolCatalog(nil, specs, CatalogOptions{ReadOnlyOnly: true})
+	if err != nil {
+		t.Fatalf("AddToolCatalog() error = %v", err)
+	}
+	if _, ok := catalog.Action(actioncatalog.ActionID("discover_project.resolve")); !ok {
+		t.Fatal("read-only surface catalog missing discover_project.resolve")
+	}
+	if _, ok := catalog.Action(actioncatalog.ActionID("interactive.issue_create")); ok {
+		t.Fatal("read-only surface catalog included mutating interactive.issue_create")
+	}
+}
+
 func findSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name string) actioncatalog.SurfaceToolSpec {
 	t.Helper()
 	for _, spec := range specs {
@@ -57,6 +83,17 @@ func findSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name s
 	}
 	t.Fatalf("surface spec %q not found in %+v", name, specs)
 	return actioncatalog.SurfaceToolSpec{}
+}
+
+func findGroupSpec(t *testing.T, groups []actioncatalog.CatalogGroupSpec, name string) actioncatalog.CatalogGroupSpec {
+	t.Helper()
+	for _, group := range groups {
+		if group.ToolName == name {
+			return group
+		}
+	}
+	t.Fatalf("catalog group spec %q not found in %+v", name, groups)
+	return actioncatalog.CatalogGroupSpec{}
 }
 
 func hasActionAlias(spec actioncatalog.SurfaceToolSpec, alias string) bool {
