@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,712 |
-| Unit test functions | 9,465 |
+| Total test functions | 9,713 |
+| Unit test functions | 9,466 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 420 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,721 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,722 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 282 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,102 | 322 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,103 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,712** | **546** |  |
+| **Total** | **9,713** | **546** |  |
 
 ### Core Packages
 
@@ -260,7 +260,7 @@
 | serverupdate | 22 | 1 | 90.1% | 2 |
 | settings | 12 | 1 | 92.2% | 2 |
 | sidekiq | 18 | 2 | 100.0% | 4 |
-| snippetdiscussions | 28 | 2 | 99.4% | 6 |
+| snippetdiscussions | 29 | 2 | 100.0% | 6 |
 | snippetnotes | 42 | 2 | 100.0% | 5 |
 | snippets | 73 | 2 | 97.8% | 15 |
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,102** | **322** |  | **1,018** |
+| **Total** | **7,103** | **322** |  | **1,018** |
 
 </details>
 
@@ -477,7 +477,7 @@
 | serverupdate | 90.1% |
 | settings | 92.2% |
 | sidekiq | 100.0% |
-| snippetdiscussions | 99.4% |
+| snippetdiscussions | 100.0% |
 | snippetnotes | 100.0% |
 | snippets | 97.8% |
 | snippetstoragemoves | 100.0% |

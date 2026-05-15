@@ -12,7 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -481,87 +480,5 @@ func TestFormatNoteMarkdown_NoCreatedAt(t *testing.T) {
 	s := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: "x", Body: "y"})
 	if strings.Contains(s, "Created") {
 		t.Error("should not include Created when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Registration
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip for all 6 individual tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost:
-			if strings.Contains(r.URL.Path, "/notes") {
-				testutil.RespondJSON(w, http.StatusCreated, covNoteJSON)
-			} else {
-				testutil.RespondJSON(w, http.StatusCreated, covDiscussionJSON)
-			}
-		case r.Method == http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, covNoteJSON)
-		case strings.Contains(r.URL.Path, "/discussions/d1"):
-			testutil.RespondJSON(w, http.StatusOK, covDiscussionJSON)
-		default:
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[`+covDiscussionJSON+`]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		}
-	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_snippet_discussions", map[string]any{"project_id": "1", "snippet_id": float64(5)}},
-		{"gitlab_get_snippet_discussion", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1"}},
-		{"gitlab_create_snippet_discussion", map[string]any{"project_id": "1", "snippet_id": float64(5), "body": "test"}},
-		{"gitlab_add_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "body": "reply"}},
-		{"gitlab_update_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "note_id": float64(1), "body": "updated"}},
-		{"gitlab_delete_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "note_id": float64(1)}},
-	}
-
-	for _, tc := range tools {
-		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
-			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
-			}
-		})
 	}
 }

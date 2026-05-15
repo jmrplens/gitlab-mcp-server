@@ -1,6 +1,8 @@
 package snippetdiscussions
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,8 +15,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		snippetDiscussionCreateSpec("discussion_create", toolutil.RouteAction(client, Create), "gitlab_create_snippet_discussion"),
 		snippetDiscussionCreateSpec("discussion_add_note", toolutil.RouteAction(client, AddNote), "gitlab_add_snippet_discussion_note"),
 		snippetDiscussionUpdateSpec("discussion_update_note", toolutil.RouteAction(client, UpdateNote), "gitlab_update_snippet_discussion_note"),
-		snippetDiscussionDeleteSpec("discussion_delete_note", toolutil.DestructiveVoidAction(client, DeleteNote), "gitlab_delete_snippet_discussion_note"),
+		snippetDiscussionDeleteSpec("discussion_delete_note", toolutil.DestructiveAction(client, deleteNoteOutput), "gitlab_delete_snippet_discussion_note"),
 	}
+}
+
+func deleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteNote(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("snippet discussion note")
+	return out, nil
 }
 
 func snippetDiscussionReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
