@@ -1,6 +1,5 @@
-// register_test.go contains integration tests for the deployment tool closures
-// in register.go. Tests exercise mutation error paths via an in-memory MCP
-// session with a mock GitLab API.
+// register_test.go contains route and catalog-surface tests for behavior that
+// used to live in register.go: mutation errors, not-found output, and destructive confirmation.
 package deployments
 
 import (
@@ -11,13 +10,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_MutationErrors verifies that delete, create, update, and
-// approve/reject handler closures in register.go return error results when
-// the GitLab API responds with errors. Covers the if-err branches and the
-// NotFoundResult 404 path for get.
-func TestRegisterTools_MutationErrors(t *testing.T) {
+// TestActionSpecs_MutationErrors verifies mutation error branches and the
+// not-found output path for get.
+func TestActionSpecs_MutationErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -28,52 +26,53 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := deploymentSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
-		name string
-		args map[string]any
+		name        string
+		args        map[string]any
+		expectError bool
 	}{
-		{"gitlab_deployment_get", map[string]any{"project_id": "42", "deployment_id": 999}},
-		{"gitlab_deployment_create", map[string]any{"project_id": "42", "environment": "prod", "ref": "main", "sha": "abc123", "tag": false, "status": "created"}},
-		{"gitlab_deployment_update", map[string]any{"project_id": "42", "deployment_id": 1, "status": "failed"}},
-		{"gitlab_deployment_delete", map[string]any{"project_id": "42", "deployment_id": 1}},
-		{"gitlab_deployment_approve_or_reject", map[string]any{"project_id": "42", "deployment_id": 1, "status": "approved"}},
+		{"gitlab_deployment_get", map[string]any{"project_id": "42", "deployment_id": 999}, false},
+		{"gitlab_deployment_create", map[string]any{"project_id": "42", "environment": "prod", "ref": "main", "sha": "abc123", "tag": false, "status": "created"}, true},
+		{"gitlab_deployment_update", map[string]any{"project_id": "42", "deployment_id": 1, "status": "failed"}, true},
+		{"gitlab_deployment_delete", map[string]any{"project_id": "42", "deployment_id": 1}, true},
+		{"gitlab_deployment_approve_or_reject", map[string]any{"project_id": "42", "deployment_id": 1, "status": "approved"}, true},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error from %s", tt.name)
+				}
+				return
 			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s", tt.name)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
+			}
+			if _, ok := result.(deploymentNotFoundOutput); !ok {
+				t.Fatalf("result type = %T, want deploymentNotFoundOutput", result)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the deployment delete handler when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
+// confirmation for deployment delete when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_deployment_delete" {
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test deployment destructive confirmation.", Icons: toolutil.IconDeploy})
+		}
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -85,7 +84,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_deployment_delete",
