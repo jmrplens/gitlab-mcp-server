@@ -1,6 +1,8 @@
 package runnercontrollertokens
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,8 +14,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerControllerTokenReadSpec("controller_token_get", toolutil.RouteAction(client, Get), "gitlab_runner_controller_token_get"),
 		runnerControllerTokenCreateSpec("controller_token_create", toolutil.RouteAction(client, Create), "gitlab_runner_controller_token_create"),
 		runnerControllerTokenUpdateSpec("controller_token_rotate", toolutil.RouteAction(client, Rotate), "gitlab_runner_controller_token_rotate"),
-		runnerControllerTokenUpdateSpec("controller_token_revoke", toolutil.DestructiveVoidAction(client, Revoke), "gitlab_runner_controller_token_revoke"),
+		runnerControllerTokenDeleteSpec("controller_token_revoke", toolutil.DestructiveAction(client, revokeOutput), "gitlab_runner_controller_token_revoke"),
 	}
+}
+
+func revokeOutput(ctx context.Context, client *gitlabclient.Client, input RevokeInput) (toolutil.DeleteOutput, error) {
+	if err := Revoke(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("runner controller token")
+	return out, nil
 }
 
 func runnerControllerTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -29,6 +39,13 @@ func runnerControllerTokenCreateSpec(name string, route toolutil.ActionRoute, in
 
 func runnerControllerTokenUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := runnerControllerTokenOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func runnerControllerTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerControllerTokenOptions(individualTool)
+	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
