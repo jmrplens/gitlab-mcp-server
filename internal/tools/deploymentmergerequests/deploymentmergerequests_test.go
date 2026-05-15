@@ -398,26 +398,35 @@ func TestFormatListMarkdown_NilSlice(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for deployment merge request actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := deploymentMRSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(byTool))
+	}
+	spec := byTool["gitlab_list_deployment_merge_requests"]
+	if spec.OwnerPackage != "deploymentmergerequests" {
+		t.Errorf("OwnerPackage = %q, want deploymentmergerequests", spec.OwnerPackage)
+	}
+	if !spec.ReadOnly || !spec.Idempotent {
+		t.Error("deployment merge request list action should be read-only and idempotent")
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all endpoints
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newDeploymentMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates deployment merge request route coverage.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newDeploymentMRSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -431,102 +440,66 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCPWithFilters verifies the behavior of register tools call all through m c p with filters.
-func TestRegisterTools_CallAllThroughMCPWithFilters(t *testing.T) {
-	session := newDeploymentMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRouteWithFilters verifies the list route accepts filters.
+func TestActionSpecs_CallRouteWithFilters(t *testing.T) {
+	byTool := newDeploymentMRSpecsByTool(t)
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_list_deployment_merge_requests",
-		Arguments: map[string]any{
-			"project_id":    "42",
-			"deployment_id": 7,
-			"state":         "merged",
-			"order_by":      "created_at",
-			"sort":          "desc",
-			"page":          1,
-			"per_page":      10,
-		},
+	result, err := byTool["gitlab_list_deployment_merge_requests"].Route.Handler(t.Context(), map[string]any{
+		"project_id":    "42",
+		"deployment_id": 7,
+		"state":         "merged",
+		"order_by":      "created_at",
+		"sort":          "desc",
+		"page":          1,
+		"per_page":      10,
 	})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true")
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
 	}
 }
 
-// TestRegisterTools_CallThroughMCPEmptyResult verifies the behavior of register tools call through m c p empty result.
-func TestRegisterTools_CallThroughMCPEmptyResult(t *testing.T) {
+// TestActionSpecs_CallRouteEmptyResult verifies the list route handles empty results.
+func TestActionSpecs_CallRouteEmptyResult(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/42/deployments/7/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := deploymentMRSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_list_deployment_merge_requests"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "deployment_id": 7})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_deployment_merge_requests",
-		Arguments: map[string]any{"project_id": "42", "deployment_id": 7},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+	out, ok := result.(ListOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want ListOutput", result)
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true for empty result")
-	}
-	found := false
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			if strings.Contains(tc.Text, "No merge requests found") {
-				found = true
-			}
-		}
-	}
-	if !found {
-		t.Error("expected 'No merge requests found' in empty MCP response")
+	if len(out.MergeRequests) != 0 {
+		t.Fatalf("len(MergeRequests) = %d, want 0", len(out.MergeRequests))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route factory
 // ---------------------------------------------------------------------------.
 
-// newDeploymentMRMCPSession is an internal helper for the deploymentmergerequests package.
-func newDeploymentMRMCPSession(t *testing.T) *mcp.ClientSession {
+func newDeploymentMRSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -556,21 +529,14 @@ func newDeploymentMRMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return deploymentMRSpecsByTool(t, ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+func deploymentMRSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
