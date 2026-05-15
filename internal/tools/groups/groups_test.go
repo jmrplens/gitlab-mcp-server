@@ -2095,6 +2095,8 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"update", "gitlab_group_update", map[string]any{"group_id": "99", "name": "updated"}},
 		{"delete", "gitlab_group_delete", map[string]any{"group_id": "99"}},
 		{"restore", "gitlab_group_restore", map[string]any{"group_id": "99"}},
+		{"archive", "gitlab_group_archive", map[string]any{"group_id": "99"}},
+		{"unarchive", "gitlab_group_unarchive", map[string]any{"group_id": "99"}},
 		{"search", "gitlab_group_search", map[string]any{"query": "infra"}},
 		{"transfer_project", "gitlab_group_transfer_project", map[string]any{"group_id": "99", "project_id": "42"}},
 		{"list_projects", "gitlab_group_projects", map[string]any{"group_id": "99"}},
