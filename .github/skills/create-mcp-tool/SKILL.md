@@ -1,6 +1,6 @@
 ---
 name: create-mcp-tool
-description: "Create a new MCP tool end-to-end: sub-package, input/output structs, handler, markdown formatter, tests, registration, and documentation. Use when adding a new GitLab API endpoint as an MCP tool."
+description: "Create a new MCP tool end-to-end: sub-package, input/output structs, handler, ActionSpec metadata, markdown formatter, tests, catalog projection, and documentation. Use when adding a new GitLab API endpoint as an MCP tool."
 ---
 
 # Create MCP Tool — GitLab
@@ -19,8 +19,9 @@ Create a new sub-package under `internal/tools/{domain}/`:
 
 ```text
 {domain}/
-├── register.go         # RegisterTools() + RegisterMeta()
 ├── {domain}.go         # Input/Output structs + handler logic
+├── action_specs.go     # Canonical ActionSpec route metadata
+├── register.go         # Existing individual compatibility registration, if the domain already uses it
 ├── markdown.go         # Markdown formatters + init() registry
 └── {domain}_test.go    # Table-driven tests with httptest
 ```
@@ -112,61 +113,44 @@ Error handling rules:
 - `WrapErrWithMessage(op, err)` — mutating operations (extracts GitLab error detail)
 - `WrapErrWithHint(op, err, hint)` — when a recovery action is known
 
-## Step 3: Register Tools
+## Step 3: Add ActionSpecs
 
-In `register.go`:
+In `action_specs.go`, define the canonical route metadata once. Meta-tools, Dynamic search/describe/execute, schema resources, audits, and individual tool projection consume this spec.
 
 ```go
 package {domain}
 
 import (
-    "context"
-    "time"
-
-    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
     gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-    "github.com/modelcontextprotocol/go-sdk/mcp"
+    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-    mcp.AddTool(server, &mcp.Tool{
-        Name:        "gitlab_{domain}_list",
-        Title:       toolutil.TitleFromName("gitlab_{domain}_list"),
-        Description: "List {resources} in a project. Returns: ID, name, ...\n\nSee also: gitlab_{domain}_get, gitlab_{domain}_create",
-        Annotations: toolutil.ReadAnnotations,
-        Icons:       toolutil.Icon{Domain},
-    }, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
-        start := time.Now()
-        out, err := List(ctx, client, input)
-        toolutil.LogToolCallAll(ctx, req, "gitlab_{domain}_list", start, err)
-        return toolutil.WithHints(FormatListMarkdown(out), out, err)
-    })
-
-    mcp.AddTool(server, &mcp.Tool{
-        Name:        "gitlab_{domain}_create",
-        Title:       toolutil.TitleFromName("gitlab_{domain}_create"),
-        Description: "Create a {resource}. Returns: created resource details.\n\nSee also: gitlab_{domain}_list, gitlab_{domain}_get",
-        Annotations: toolutil.CreateAnnotations,
-        Icons:       toolutil.Icon{Domain},
-    }, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
-        start := time.Now()
-        out, err := Create(ctx, client, input)
-        toolutil.LogToolCallAll(ctx, req, "gitlab_{domain}_create", start, err)
-        return toolutil.WithHints(FormatOutputMarkdown(out), out, err)
-    })
+// ActionSpecs returns canonical specs for {domain} actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+    return []toolutil.ActionSpec{
+        toolutil.NewActionSpec("list", toolutil.RouteAction(client, List), actionOptions("gitlab_{domain}_list", true)),
+        toolutil.NewActionSpec("create", toolutil.RouteAction(client, Create), actionOptions("gitlab_{domain}_create", false)),
+    }
 }
 
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-    // Register meta-tool if domain uses inline meta-tool pattern
+func actionOptions(individualTool string, readOnly bool) toolutil.ActionSpecOptions {
+    return toolutil.ActionSpecOptions{
+        ReadOnly:       readOnly,
+        Idempotent:     readOnly,
+        Tags:           []string{"{domain}"},
+        OwnerPackage:   "{domain}",
+        IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+    }
 }
 ```
 
-Annotation presets:
+Spec rules:
 
-- `ReadAnnotations` — GET/list/search (read-only, idempotent)
-- `CreateAnnotations` — POST/create
-- `UpdateAnnotations` — PUT/update (idempotent)
-- `DeleteAnnotations` — DELETE (destructive, idempotent)
+- Set `ReadOnly`, `Destructive`, and `Idempotent` accurately; destructive actions must use destructive route helpers or options.
+- Set `OwnerPackage` to the sub-package name.
+- Set `IndividualTool` so `TOOL_SURFACE=individual` can project the visible per-action tool.
+- Add compatibility aliases and parameter aliases through the approved `actioncompat` policy when historical names must keep working.
+- New domains must be added through the catalog aggregation/generation path, not by hand-adding root runtime registration calls.
 
 ## Step 4: Markdown Formatters
 
@@ -236,21 +220,17 @@ Rules:
 - Markdown tables use `toolutil.TableSep2`, `TableSep3`, etc.
 - Empty state: always handle `len(items) == 0`
 
-## Step 5: Wire Registration
+## Step 5: Wire Catalog Aggregation
 
-In `internal/tools/register.go`, add the import and call:
+For a new domain, add its `ActionSpecs(client)` builder to the audited catalog aggregation path used by `BuildActionCatalog`.
 
-```go
-import "{domain}" "{module}/internal/tools/{domain}"
-// ...
-{domain}.RegisterTools(server, client)
-```
+Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions, and do not add root `RegisterTools` calls as the final runtime path. Root individual registration is catalog-backed through `RegisterIndividualCatalogTools`.
 
-In `internal/tools/register_meta.go` (if meta-tool):
+Expected checks:
 
-```go
-{domain}.RegisterMeta(server, client)
-```
+- `make audit-action-spec-coverage`
+- `go test ./internal/tools -run 'TestActionSpecCoverage|TestRegisterAllDoesNotUseDomainRegisterTools' -count=1`
+- `go test ./internal/tools/{domain}/ -count=1`
 
 ## Step 6: Write Tests
 
@@ -358,7 +338,7 @@ golangci-lint run ./internal/tools/{domain}/
 - [ ] Empty state handled in list formatters
 - [ ] `HintPreserveLinks` in list formatters with links
 - [ ] Error handling uses correct WrapErr variant
-- [ ] Wired in `register.go` and `register_meta.go`
+- [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-action-spec-coverage`
 - [ ] Tests cover success, validation, API error, and markdown
 - [ ] `go vet` + `go test` + `golangci-lint` pass
 - [ ] Documentation updated

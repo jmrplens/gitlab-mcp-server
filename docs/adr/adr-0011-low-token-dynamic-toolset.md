@@ -5,7 +5,7 @@ date: "2026-05-07"
 authors: "jmrplens, GitHub Copilot"
 tags: ["architecture", "decision", "mcp", "meta-tools", "tokens", "tool-discovery"]
 supersedes: ""
-superseded_by: ""
+superseded_by: "ADR-0014 for catalog source and compatibility ownership"
 ---
 
 # ADR-0011: Low-token dynamic toolset mode
@@ -51,7 +51,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **POS-001**: Reduces the initial visible tool count from 32/47/48 to 3 in low-token mode.
 - **POS-002**: Keeps plain MCP compatibility because discovery and execution remain ordinary tool calls.
-- **POS-003**: Reuses existing `ActionMap` routes, per-action schemas, handlers, markdown formatters, destructive flags,
+- **POS-003**: Reuses canonical `ActionSpec`/catalog routes, per-action schemas, handlers, markdown formatters, destructive flags,
   read-only mode, safe mode, and scope filtering.
 - **POS-004**: Avoids arbitrary generated-code execution and the sandbox burden of Code Mode.
 - **POS-005**: Aligns with Speakeasy-style dynamic toolsets, MCP lazy hydration direction, and provider-native tool search.
@@ -98,8 +98,8 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ## Implementation Notes
 
-- **IMP-001**: Add the dynamic toolset behind the non-default `TOOL_SURFACE=dynamic` / `TOOL_SURFACE=dynamic-3`
-  selector, while preserving existing `META_TOOLS=true|false` boolean behavior.
+- **IMP-001**: Add the dynamic toolset behind the explicit `TOOL_SURFACE=dynamic` / `TOOL_SURFACE=dynamic-3`
+  selector. Legacy `META_TOOLS=true|false` remains only as a compatibility fallback when `TOOL_SURFACE` is absent.
 - **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
   enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
   MCP server.

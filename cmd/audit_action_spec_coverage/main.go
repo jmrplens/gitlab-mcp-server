@@ -302,6 +302,9 @@ func auditCatalogFirstSource(root string) error {
 	if err := assertDynamicCompatibilityPolicyOwnedByActionCompat(root); err != nil {
 		return err
 	}
+	if err := assertNoStaleAIContextGuidance(root); err != nil {
+		return err
+	}
 	return assertActionSpecManifestCurrent(root)
 }
 
@@ -376,6 +379,85 @@ func legacyRuntimeBridgeFindings(root string) ([]string, error) {
 	}
 	sort.Strings(findings)
 	return findings, nil
+}
+
+func assertNoStaleAIContextGuidance(root string) error {
+	files, err := aiContextFiles(root)
+	if err != nil {
+		return err
+	}
+	var findings []string
+	for _, path := range files {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read %s: %w", path, readErr)
+		}
+		for lineNumber, line := range strings.Split(string(content), "\n") {
+			if staleAIContextLine(line) {
+				findings = append(findings, fmt.Sprintf("%s:%d contains stale registration guidance: %s", path, lineNumber+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+	if len(findings) > 0 {
+		sort.Strings(findings)
+		return fmt.Errorf("AI context audit failed: %s", strings.Join(findings, "; "))
+	}
+	return nil
+}
+
+func aiContextFiles(root string) ([]string, error) {
+	paths := []string{
+		filepath.Join(root, ".github", "copilot-instructions.md"),
+		filepath.Join(root, "AGENTS.md"),
+		filepath.Join(root, "CLAUDE.md"),
+	}
+	for _, dir := range []string{
+		filepath.Join(root, ".github", "agents"),
+		filepath.Join(root, ".github", "skills"),
+		filepath.Join(root, ".github", "instructions"),
+	} {
+		if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || filepath.Ext(path) != ".md" {
+				return nil
+			}
+			paths = append(paths, path)
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("walk AI context %s: %w", dir, err)
+		}
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func staleAIContextLine(line string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	if normalized == "" || strings.Contains(normalized, "do not") || strings.Contains(normalized, "cannot regress") {
+		return false
+	}
+	staleNeedles := []string{
+		"registerall() — delegates to sub-package registertools",
+		"create `register.go` with `registertools",
+		"wire the sub-package in `internal/tools/register.go`",
+		"internal/tools/register.go delegates to all sub-package",
+		"validated by `testallsubpackagesregistered`",
+		"developers add normal gitlab actions through the route definitions that feed `internal/tools/register_meta.go`",
+		"create `${sourcepackage}/{domain}/register_meta.go`",
+		"func registermeta(server",
+		"{domain}.registermeta(server",
+		"registermeta() functions register",
+		"check `register.go` and `register_meta.go` for registration",
+		"tools are registered via [registertools]",
+	}
+	for _, needle := range staleNeedles {
+		if strings.Contains(normalized, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func legacyBridgeFindingsInContent(path, content string, forbidden []string) []string {

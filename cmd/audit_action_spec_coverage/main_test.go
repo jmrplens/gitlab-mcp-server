@@ -98,6 +98,26 @@ func TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences(t *testing.T) 
 	}
 }
 
+func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{name: "legacy create register tools", line: "4. Create `register.go` with `RegisterTools(server, client)`", want: true},
+		{name: "legacy register meta function", line: "func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {", want: true},
+		{name: "negative guidance allowed", line: "Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions.", want: false},
+		{name: "catalog guidance allowed", line: "Add or update domain-local `ActionSpecs` and the audited catalog aggregation path.", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := staleAIContextLine(tt.line); got != tt.want {
+				t.Fatalf("staleAIContextLine(%q) = %t, want %t", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
 	err := assertCoverageInvariants([]domainCoverage{{
 		Package:               "example",

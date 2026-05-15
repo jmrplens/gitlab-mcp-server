@@ -41,7 +41,7 @@ Scan the source package and classify every file:
 | **Domain handlers** | branches.go, commits.go, etc. | Move to `${sourcePackage}/{domain}/` |
 | **Domain tests** | branches_test.go, commits_test.go, etc. | Move with their domain |
 | **Test helpers** | helpers_test.go | Extract to `${utilPackage}` as testutil |
-| **Registration** | register.go, register_meta.go | Keep in `${sourcePackage}`, update to delegate |
+| **Catalog wiring** | action_specs.go, catalog aggregation | Keep runtime surfaces catalog-backed; do not add package-level meta registration as the final path |
 | **Package doc** | (doc comment in any file) | Create `${sourcePackage}/doc.go` |
 
 ### CRITICAL: Dynamic Discovery
@@ -62,7 +62,7 @@ Compare the result against the domain mapping table in this skill. For any file 
 
 1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
-3. **Check `register.go` / `register_meta.go`** → determines registration status
+3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
 4. **Check `docs/api-mapping/{domain}.md`** IF it exists → supplementary field mapping context
 
 The sub-package name must align with the client-go service name, not with our file naming.
@@ -129,48 +129,27 @@ mkdir -p ${sourcePackage}/{domain}
    - `logToolCallAll(...)` → `toolutil.LogToolCallAll(...)`
    - `readAnnotations` → `toolutil.ReadAnnotations`
 
-#### 3c. Create Registration File
+#### 3c. Create ActionSpec File
 
-Create `${sourcePackage}/{domain}/register.go`:
-
-```go
-package {domain}
-
-import (
-    "context"
-    "time"
-
-    "github.com/modelcontextprotocol/go-sdk/mcp"
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-)
-
-// RegisterTools registers all {domain} MCP tools on the server.
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-    // ... tool registrations moved from register.go
-}
-```
-
-#### 3d. Create Meta Registration File
-
-Create `${sourcePackage}/{domain}/register_meta.go`:
+Create `${sourcePackage}/{domain}/action_specs.go`:
 
 ```go
 package {domain}
 
 import (
-    "github.com/modelcontextprotocol/go-sdk/mcp"
     gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
     "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// RegisterMeta registers the {domain} meta-tool on the server.
-func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-    // ... meta-tool registration moved from register_meta.go
+// ActionSpecs returns canonical specs for {domain} actions.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+   // ... specs moved from the old registration metadata and wired to handlers
 }
 ```
 
-#### 3e. Move and Transform Test File
+Existing package-local `register.go` files can remain during migration if needed for compatibility, but the root runtime must use catalog projection from `ActionSpecs`. Do not create package-level `RegisterMeta` for ordinary GitLab API domains.
+
+#### 3d. Move and Transform Test File
 
 1. Copy `{domain}_test.go` → `${sourcePackage}/{domain}/{domain}_test.go`
 2. Change package: `package tools` → `package {domain}` (or `package {domain}_test` for black-box)
@@ -178,30 +157,18 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 4. Import test helpers from `${utilPackage}` or recreate locally
 5. Update handler function references
 
-#### 3f. Update Orchestration Layer
+#### 3e. Update Catalog Aggregation
 
-In `${sourcePackage}/register.go`, replace:
+Add the domain's `ActionSpecs(client)` builder to the audited catalog aggregation/generation path. Validate that `RegisterAll` projects individual tools from the catalog rather than calling domain `RegisterTools` directly.
 
-```go
-register{Domain}Tools(server, client)
-```
-
-with:
-
-```go
-{domain}.RegisterTools(server, client)
-```
-
-Remove the old `register{Domain}Tools` function body.
-
-#### 3g. Remove Old Files
+#### 3f. Remove Old Files
 
 Delete the original files from `${sourcePackage}/`:
 
 - `{domain}.go`
 - `{domain}_test.go`
 
-#### 3h. Verify
+#### 3g. Verify
 
 ```bash
 go build ./...
@@ -243,7 +210,7 @@ After completing all migrations:
 - [ ] `go test ./internal/... -count=1` — all pass
 - [ ] No import cycles: `go vet -vettool=$(which findcall) ./...` or manual review
 - [ ] `cmd/server/main.go` unchanged (still imports `internal/tools`)
-- [ ] Each sub-package has: handler file, register.go, register_meta.go, test file
+- [ ] Each sub-package has: handler file, `action_specs.go`, markdown formatter, and test file
 - [ ] `${utilPackage}` has no imports from domain sub-packages
 - [ ] Domain sub-packages don't import each other
 
@@ -372,7 +339,7 @@ Before migrating each domain:
 
 1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Environment`, `gl.CreateEnvironmentOptions`). This defines the canonical fields, types, and API contract.
 2. **Read the source file(s)** in `internal/tools/{domain}.go` — shows our implementation: which client-go fields we expose, our Input/Output structs, and `client.GL().{Service}` calls.
-3. **Check `register.go` and `register_meta.go`** for registration. Unregistered files are in-progress — still migrate them.
+3. **Check `action_specs.go` and catalog aggregation** for runtime exposure. Files absent from the catalog are in-progress — still migrate them, but note the gap.
 4. **Read `docs/api-mapping/{domain}.md` IF it exists** — supplementary field mapping context. If no doc exists, the combination of steps 1+2 provides everything needed.
 5. **Discover new domains** by scanning `*.go` files AND running `go doc` on the client to find services we haven't wrapped yet.
 

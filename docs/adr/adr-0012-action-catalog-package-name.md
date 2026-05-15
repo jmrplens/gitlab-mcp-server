@@ -20,7 +20,7 @@ The project now has an explicit canonical action core shared by meta-tools and d
 placed the core data model under `internal/tools/actionregistry`, which accurately described a lookup structure but did
 not describe the architectural role of the package.
 
-After removing unreferenced legacy `RegisterMeta` definitions, the package is no longer just a registry-like helper. It
+After removing the production dependency on legacy meta-registration side effects, the package is no longer just a registry-like helper. It
 owns the canonical action catalog data model, deterministic action ordering, `domain.action` IDs, catalog filters, and
 compatibility adapters used by schema resources, audits, meta registration, and dynamic discovery.
 

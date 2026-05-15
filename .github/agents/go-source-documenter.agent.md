@@ -138,7 +138,8 @@ For packages with multiple `.go` files, each file gets a header describing its s
 // operations: create, list, protect, and unprotect.
 //
 // Each handler follows the pattern: typed input struct → GitLab API call →
-// typed output struct. Handlers are registered in [RegisterTools].
+// typed output struct. Handlers are exposed through domain ActionSpecs and
+// catalog-backed runtime projections.
 package branches
 ```
 
@@ -335,14 +336,12 @@ Even unexported helpers deserve documentation when their logic is non-trivial:
 func branchToOutput(b *gl.Branch) BranchOutput {
 ```
 
-#### 7. Registration Functions
+#### 7. ActionSpec Functions
 
 ```go
-// RegisterTools registers all branch-related MCP tools on the given
-// server. Each tool is configured with annotations indicating whether
-// the operation is read-only ([mcp.AnnotationReadOnlyHint]) or
-// destructive ([mcp.AnnotationDestructiveHint]).
-func RegisterTools(srv *server.MCPServer, client *gitlabclient.Client) {
+// ActionSpecs returns canonical branch action specs. The specs feed meta-tools,
+// dynamic discovery, schema resources, audits, and individual tool projection.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 ```
 
 #### 8. Deprecation Notices

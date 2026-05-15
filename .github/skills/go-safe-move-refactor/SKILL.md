@@ -45,7 +45,7 @@ Record:
 
 1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types to understand the canonical fields and API contract
 2. List all non-test handler files in the source package to find everything that exists
-3. Check `register.go` and `register_meta.go` for the domain's registration functions
+3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
 5. If `docs/api-mapping/{domain}.md` exists, read it for supplementary field mapping context — but do NOT skip the move if no doc exists
 
@@ -158,47 +158,29 @@ func registerBranchTools(server *mcp.Server, client *gitlabclient.Client) {
 
 Verify after each consumer update: `go build ./...`
 
-### Step 7: Move Registration
+### Step 7: Move Catalog Metadata
 
-Create `${dstDir}/register.go` with `RegisterTools()`:
+Create or update `${dstDir}/action_specs.go` with canonical `ActionSpecs()` metadata:
 
 ```go
 package branches
 
 import (
-    "context"
-    "time"
-
-    "github.com/modelcontextprotocol/go-sdk/mcp"
     gitlabclient "module/path/internal/gitlab"
     "module/path/internal/toolutil"
 )
 
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-    mcp.AddTool(server, &mcp.Tool{
-        Name:        "gitlab_branch_create",
-        Description: "...",
-        Annotations: toolutil.CreateAnnotations,
-    }, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
-        start := time.Now()
-        out, err := Create(ctx, client, input)
-        toolutil.LogToolCallAll(ctx, req, "gitlab_branch_create", start, err)
-        return toolutil.MarkdownForResult(out), out, err
-    })
-    // ... other tools
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+  return []toolutil.ActionSpec{
+    toolutil.NewActionSpec("create", toolutil.RouteAction(client, Create), toolutil.ActionSpecOptions{
+      OwnerPackage:   "branches",
+      IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_branch_create", Title: toolutil.TitleFromName("gitlab_branch_create")},
+    }),
+  }
 }
 ```
 
-Update `internal/tools/register.go`:
-
-```go
-// Replace:
-registerBranchTools(server, client)
-// With:
-branches.RegisterTools(server, client)
-```
-
-Remove the old `registerBranchTools` function.
+Update the audited catalog aggregation/generation path if this is a new domain. Root runtime registration must remain catalog-backed; do not add new package-level `RegisterMeta` calls for ordinary GitLab actions.
 
 Verify: `go build ./...`
 
@@ -379,4 +361,4 @@ Before moving any domain:
 1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
 2. **Read the source file(s)** (`internal/tools/{domain}.go`) to understand our implementation: handler functions, `client.GL().{Service}.*` calls, and our Input/Output struct subset.
 3. **If `docs/api-mapping/{domain}.md` exists**, read it for supplementary field-level context. If no doc exists, `go doc` + source code provide everything needed.
-4. **Check registration**: verify the domain appears in both `register.go` and `register_meta.go`. Unregistered files are in-progress features — still move them, but note the gap.
+4. **Check catalog exposure**: verify the domain appears in `ActionSpecs` and catalog aggregation. Uncataloged files are in-progress features — still move them, but note the gap.

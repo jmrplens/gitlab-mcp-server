@@ -39,8 +39,8 @@ Every package needs exactly one `Package` comment, typically in the main file or
 // tags defining the parameter schema, a handler function that calls the GitLab
 // API, and a typed output struct for the response.
 //
-// Tools are registered via [RegisterTools] which wires each handler into the
-// MCP server with appropriate tool annotations (readOnlyHint, destructiveHint).
+// Actions are exposed through [ActionSpecs], which feed catalog-backed meta,
+// dynamic, schema, and individual tool surfaces with appropriate annotations.
 //
 // # Supported Operations
 //
@@ -219,14 +219,11 @@ Document the contract, not the implementation. List the method set and explain t
 behavioral expectations:
 
 ```go
-// ToolRegistrar registers MCP tools and meta-tools with the server.
-// Implementations must be safe for concurrent use from multiple goroutines.
-//
-// RegisterTools registers individual, fine-grained tools.
-// RegisterMeta registers aggregated meta-tools that dispatch to individual tools.
-type ToolRegistrar interface {
-    RegisterTools(server *mcp.Server, client *gitlabclient.Client)
-    RegisterMeta(server *mcp.Server, client *gitlabclient.Client)
+// ActionSpecProvider returns canonical action specs for one GitLab API domain.
+// Implementations provide route metadata consumed by meta-tools, dynamic
+// discovery, schema resources, audits, and individual tool projection.
+type ActionSpecProvider interface {
+    ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec
 }
 ```
 
@@ -345,9 +342,9 @@ This project (gitlab-mcp-server) has specific patterns to recognize:
 
 - **MCP tool input structs** have `jsonschema` tags — mention the tool parameters they define
 - **Handler functions** follow `func name(ctx, client, input) (output, error)` — document the API operation
-- **Registration functions** use `mcp.AddTool()` — document which tools are registered
+- **ActionSpec functions** describe canonical route metadata — document which actions and surfaces they feed
 - **Tests use `httptest`** — mention the API endpoint being mocked and HTTP method
 - **Constants like endpoint paths** — document they are test fixtures for specific API routes
 - **`gitlabclient.Client`** wraps the GitLab API — reference it as `[gitlabclient.Client]`
 - **`toolutil` helpers** — reference using doc links: `[toolutil.WrapErr]`, `[toolutil.BuildPaginationResponse]`
-- **Meta-tool registration** — `RegisterMeta()` functions register domain-level dispatch tools
+- **Catalog registration** — ordinary GitLab actions flow through `ActionSpecs` and the canonical action catalog; package-level meta registration is historical compatibility context only

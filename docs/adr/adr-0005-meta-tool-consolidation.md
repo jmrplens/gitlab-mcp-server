@@ -1,23 +1,25 @@
 ---
-title: "ADR-0005: Meta-tool consolidation from 68 to 32 base tools"
+title: "ADR-0005: Meta-tool consolidation into a compact domain catalog"
 status: "Accepted"
 date: "2026-03-06"
 authors: "jmrplens"
 tags: ["architecture", "decision", "meta-tools", "consolidation", "llm-optimization"]
-superseded_by: ""
+superseded_by: "ADR-0014 for meta registration mechanics"
 ---
 
-# ADR-0005: Meta-tool consolidation from 68 to 32 base tools
+# ADR-0005: Meta-tool consolidation into a compact domain catalog
 
 ## Status
 
-**Accepted** — refines ADR-0004 (modular tools sub-packages).
+**Accepted** — refines ADR-0004 (modular tools sub-packages). Runtime mechanics are superseded by the catalog-first architecture in [tool surfaces and action core](../development/tool-surfaces-and-action-core.md): meta-tool groups are now projected from `CatalogGroupSpec` and `ActionSpec` metadata instead of package-level meta registration side effects.
 
-> **Update (2026-03-08)**: Phase 7 of the tool metadata audit refined the consolidation:
->
-> - `gitlab_security` renamed to `gitlab_feature_flags` (only contains feature flag actions; secure-files, error-tracking, alert-management moved to `gitlab_admin`)
-> - 28 routes redistributed: MR emoji/events → `gitlab_merge_request`, snippet emoji → `gitlab_snippet`, epic discussions → `gitlab_group`
-> - Annotation differentiation: `gitlab_template` and `gitlab_search` now use `ReadOnlyMetaAnnotations`, `gitlab_user` uses `NonDestructiveMetaAnnotations`
+**Update (2026-03-08)**: Phase 7 of the tool metadata audit refined the consolidation:
+
+- `gitlab_security` renamed to `gitlab_feature_flags` (only contains feature flag actions; secure-files, error-tracking moved to `gitlab_admin`)
+- 28 routes redistributed: MR emoji/events → `gitlab_merge_request`, snippet emoji → `gitlab_snippet`, epic discussions → `gitlab_group`
+- Annotation differentiation: `gitlab_template` and `gitlab_search` now use `ReadOnlyMetaAnnotations`, `gitlab_user` uses `NonDestructiveMetaAnnotations`
+
+**Update (2026-05-15)**: Catalog-first consolidation preserved the domain-scoped meta-tool decision while replacing the registration mechanism. `RegisterAllMeta` now registers catalog-backed groups and standalone surface tools from canonical specs; package-level `RegisterMeta` functions are no longer an approved path for ordinary GitLab API actions.
 
 ## Context
 
@@ -69,7 +71,7 @@ Analysis of production MCP servers reveals common patterns for managing large to
 
 ## Decision
 
-**Consolidate 68 meta-tools into a 32-tool base catalog** by absorbing standalone `RegisterMeta` calls into the existing inline meta-tool registration functions and retaining standalone tools only where the MCP flow requires them.
+**Consolidate 68 meta-tools into a compact domain catalog** by grouping ordinary GitLab API actions under domain meta-tools and retaining standalone tools only where the MCP flow requires them. The original implementation used inline registration functions; the current implementation uses catalog group specs and action specs as the source of truth.
 
 ### Target architecture
 
@@ -171,7 +173,7 @@ Enterprise/Premium deployments add 15 gated meta-tools. GitLab.com Enterprise/Pr
 2. **Backward compatibility**: Individual tools remain unchanged (RegisterAll). Only meta-mode changes.
 3. **Action naming**: Absorbed actions use `{subdomain}_{verb}` prefix to avoid collisions (e.g., `member_list`, `label_create`)
 4. **Description enhancement**: Each consolidated meta-tool gets comprehensive action documentation in its tool description
-5. **No code deletion**: Sub-package `RegisterMeta()` functions remain but stop being called from `RegisterAllMeta()`
+5. **Catalog-first migration**: package-level meta registration is not used by `RegisterAllMeta()` for ordinary GitLab API actions; visible meta groups are built from catalog metadata.
 
 ## Consequences
 
@@ -187,11 +189,11 @@ Enterprise/Premium deployments add 15 gated meta-tools. GitLab.com Enterprise/Pr
 
 - **NEG-001**: Larger tool descriptions — mega-tools have long action lists in their descriptions
 - **NEG-002**: Action name collisions — must be careful with prefix naming in consolidated tools
-- **NEG-003**: Migration effort — requires updating `register_meta.go` and testing all routes
+- **NEG-003**: Migration effort — requires updating catalog group/spec metadata and testing all routes
 
 ### Risks mitigated
 
-- **No individual tool changes**: `RegisterAll()` path is unaffected
+- **Shared catalog source**: meta, dynamic, schema, and individual surfaces now consume the same canonical action catalog
 - **Phased rollout**: One domain at a time, verified by compilation and tests
 - **Action naming convention**: `{subdomain}_{verb}` prevents collisions
 - **E2E validation**: Meta-tool workflow test covers all routes
@@ -202,6 +204,6 @@ After consolidation:
 
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
-- `META_TOOLS=true` exposes exactly 32 base tools, 47 self-managed Enterprise/Premium tools, or 48 GitLab.com Enterprise/Premium tools with Orbit
-- `META_TOOLS=false` exposes the individual catalog: 1006 tools on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit
+- `TOOL_SURFACE=meta` exposes the compact base meta catalog and Enterprise/GitLab.com gated catalog groups when enabled
+- `TOOL_SURFACE=individual` exposes the individual catalog projection: 1006 tools on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

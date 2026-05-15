@@ -4,14 +4,14 @@ status: "Accepted"
 date: "2026-02-15"
 authors: "jmrplens"
 tags: ["architecture", "decision", "modular", "sub-packages", "domain-isolation"]
-superseded_by: ""
+superseded_by: "ADR-0014 for runtime registration mechanics"
 ---
 
 # ADR-0004: Modular sub-packages under internal/tools/{domain}/
 
 ## Status
 
-**Accepted** — refined by [ADR-0005](adr-0005-meta-tool-consolidation.md) (meta-tool consolidation).
+**Accepted** — refined by [ADR-0005](adr-0005-meta-tool-consolidation.md) (meta-tool consolidation). Runtime registration mechanics are superseded by the catalog-first architecture in [tool surfaces and action core](../development/tool-surfaces-and-action-core.md): domain sub-packages remain the ownership boundary, but root tool surfaces are projected from canonical `ActionSpec` metadata.
 
 ## Context
 
@@ -71,16 +71,16 @@ Each domain gets its own sub-package with a standard structure:
 internal/tools/{domain}/
 ├── {domain}.go          # Types (Input/Output structs) and handler functions
 ├── {domain}_test.go     # Table-driven tests with httptest mocks
-├── register.go          # RegisterTools(server, client) — tool registration
+├── action_specs.go      # ActionSpecs(client) — canonical route metadata
+├── register.go          # Existing individual compatibility registration, where retained
 ├── markdown.go          # Markdown formatters with content annotations
-└── meta.go              # RegisterMeta(server, client) — optional meta-tool
 ```
 
-The orchestration layer in `internal/tools/` delegates to all sub-packages:
+The current orchestration layer in `internal/tools/` builds surfaces from catalog metadata:
 
-- `register.go` → calls each sub-package's `RegisterTools()`
-- `register_meta.go` → calls each sub-package's `RegisterMeta()` (or defines inline handlers)
-- `markdown.go` → type-switches over sub-package output types for Markdown dispatch
+- `register.go` → projects individual tools from the canonical action catalog
+- `register_meta.go` → registers catalog-backed meta groups and standalone surface tools
+- `markdown.go` → delegates to the type-based Markdown registry
 
 ### Conventions
 
@@ -103,13 +103,13 @@ The orchestration layer in `internal/tools/` delegates to all sub-packages:
 ### Negative
 
 - **NEG-001**: Directory count increased from 1 to 157+ under `internal/tools/`
-- **NEG-002**: Orchestration files (`register.go`, `register_meta.go`, `markdown.go`) must be updated when adding new domains
+- **NEG-002**: Catalog aggregation and Markdown registration must be updated when adding new domains
 - **NEG-003**: Cross-domain operations (rare) require shared types in `toolutil/`
 
 ## Compliance Checklist
 
 - [x] Sub-packages never import sibling sub-packages
 - [x] All shared types live in `toolutil/` or `testutil/`
-- [x] Every sub-package has `RegisterTools()` and test coverage
-- [x] `register.go` wires all sub-packages
+- [x] Runtime-visible actions have `ActionSpec` coverage and tests
+- [x] Root registration is catalog-backed rather than a per-domain registration loop
 - [x] Standard file layout followed across all 163 sub-packages
