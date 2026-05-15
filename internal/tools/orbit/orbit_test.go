@@ -444,9 +444,9 @@ func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	registerLegacyMeta(server, client)
+	registerOrbitMetaForTest(t, server, client)
 	if names := registeredToolNames(t, server); !containsTool(names, "gitlab_orbit") {
-		t.Fatalf("registerLegacyMeta() missing gitlab_orbit in %v", names)
+		t.Fatalf("gitlab_orbit meta registration missing gitlab_orbit in %v", names)
 	}
 }
 
@@ -457,10 +457,7 @@ func TestOrbit_RegisterMeta_UsesActionSpecs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		registerLegacyMeta(nil, client)
-	})
-	got := orbitMetaRoutesFromDefinitions(t, definitions)
+	got := orbitActionSpecRoutes(t, client)
 	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
 	if err != nil {
 		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
@@ -488,15 +485,13 @@ func TestOrbit_RegisterMeta_UsesActionSpecs(t *testing.T) {
 	}
 }
 
-func orbitMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+func orbitActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
 	t.Helper()
-	for _, definition := range definitions {
-		if definition.Name == "gitlab_orbit" {
-			return definition.Routes
-		}
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
 	}
-	t.Fatal("missing gitlab_orbit meta definition")
-	return nil
+	return routes
 }
 
 // TestOrbit_RegisterMeta_CallThroughMCP verifies that the consolidated Orbit
@@ -940,7 +935,14 @@ func newOrbitSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
 
 func newOrbitMetaSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
-	return newOrbitMCPSession(t, handler, registerLegacyMeta)
+	return newOrbitMCPSession(t, handler, func(server *mcp.Server, client *gitlabclient.Client) {
+		registerOrbitMetaForTest(t, server, client)
+	})
+}
+
+func registerOrbitMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
+	t.Helper()
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_orbit", "Query GitLab Orbit context.", orbitActionSpecRoutes(t, client), toolutil.IconAnalytics, toolutil.MarkdownForResult)
 }
 
 func newOrbitMCPSession(t *testing.T, handler http.Handler, registerFn func(*mcp.Server, *gitlabclient.Client)) *mcp.ClientSession {

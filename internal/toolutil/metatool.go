@@ -108,16 +108,6 @@ func (route ActionRoute) WithRelatedActions(actions ...string) ActionRoute {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-// MetaToolDefinition describes one action-dispatched meta-tool registration.
-type MetaToolDefinition struct {
-	Name         string
-	Description  string
-	Routes       ActionMap
-	Icons        []mcp.Icon
-	ReadOnly     bool
-	FormatResult FormatResultFunc
-}
-
 //nolint:gosec // Alias keys and values are MCP action route names, not credentials.
 var commonActionAliases = map[string]string{
 	"badge.add":                "project.badge_add",
@@ -249,79 +239,6 @@ func (e *ParamValidationError) Unwrap() error {
 		return nil
 	}
 	return e.Err
-}
-
-// Meta-tool definition capture lets the canonical catalog collect meta-tool
-// metadata without constructing an MCP server.
-var (
-	metaToolDefinitionMu          sync.Mutex
-	metaToolDefinitionCapture     []MetaToolDefinition
-	metaToolDefinitionCaptureLock sync.Mutex
-)
-
-// CaptureMetaToolDefinitions runs register and returns the meta-tool
-// definitions registered during that call without requiring an MCP server.
-func CaptureMetaToolDefinitions(register func()) []MetaToolDefinition {
-	metaToolDefinitionCaptureLock.Lock()
-	defer metaToolDefinitionCaptureLock.Unlock()
-
-	metaToolDefinitionMu.Lock()
-	metaToolDefinitionCapture = []MetaToolDefinition{}
-	metaToolDefinitionMu.Unlock()
-
-	defer func() {
-		metaToolDefinitionMu.Lock()
-		metaToolDefinitionCapture = nil
-		metaToolDefinitionMu.Unlock()
-	}()
-
-	register()
-
-	metaToolDefinitionMu.Lock()
-	defer metaToolDefinitionMu.Unlock()
-	return cloneMetaToolDefinitions(metaToolDefinitionCapture)
-}
-
-func captureMetaToolDefinition(def MetaToolDefinition) {
-	metaToolDefinitionMu.Lock()
-	defer metaToolDefinitionMu.Unlock()
-	if metaToolDefinitionCapture == nil {
-		return
-	}
-	metaToolDefinitionCapture = append(metaToolDefinitionCapture, cloneMetaToolDefinition(def))
-}
-
-func cloneMetaToolDefinitions(defs []MetaToolDefinition) []MetaToolDefinition {
-	out := make([]MetaToolDefinition, 0, len(defs))
-	for _, def := range defs {
-		out = append(out, cloneMetaToolDefinition(def))
-	}
-	return out
-}
-
-func cloneMetaToolDefinition(def MetaToolDefinition) MetaToolDefinition {
-	return MetaToolDefinition{
-		Name:         def.Name,
-		Description:  def.Description,
-		Routes:       cloneActionMap(def.Routes),
-		Icons:        append([]mcp.Icon(nil), def.Icons...),
-		ReadOnly:     def.ReadOnly,
-		FormatResult: def.FormatResult,
-	}
-}
-
-func cloneActionMap(routes ActionMap) ActionMap {
-	out := make(ActionMap, len(routes))
-	for action, route := range routes {
-		route.InputSchema = cloneSchemaMap(route.InputSchema)
-		route.OutputSchema = cloneSchemaMap(route.OutputSchema)
-		route.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
-		route.Aliases = cloneRouteStrings(route.Aliases)
-		route.Tags = cloneRouteStrings(route.Tags)
-		route.RelatedActions = cloneRouteStrings(route.RelatedActions)
-		out[action] = route
-	}
-	return out
 }
 
 func cloneRouteStrings(values []string) []string {
@@ -1787,13 +1704,6 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // actions; if any route is destructive, the tool receives DestructiveHint=true.
 func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
 	if server == nil {
-		captureMetaToolDefinition(MetaToolDefinition{
-			Name:         name,
-			Description:  desc,
-			Routes:       routes,
-			Icons:        icons,
-			FormatResult: formatResult,
-		})
 		return
 	}
 	mcp.AddTool(server, &mcp.Tool{
@@ -1811,14 +1721,6 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 // are all read-only list/get/search-style operations.
 func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
 	if server == nil {
-		captureMetaToolDefinition(MetaToolDefinition{
-			Name:         name,
-			Description:  desc,
-			Routes:       routes,
-			Icons:        icons,
-			ReadOnly:     true,
-			FormatResult: formatResult,
-		})
 		return
 	}
 	mcp.AddTool(server, &mcp.Tool{

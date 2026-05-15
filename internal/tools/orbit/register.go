@@ -2,7 +2,6 @@ package orbit
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -80,27 +79,4 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		toolutil.LogToolCallAll(ctx, req, "gitlab_orbit_graph_status", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatGraphStatusMarkdown(out), toolutil.ContentDetail), out, err)
 	})
-}
-
-// registerLegacyMeta registers the pre-catalog gitlab_orbit meta-tool used by package-level parity tests.
-func registerLegacyMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		panic(fmt.Sprintf("orbit action specs: %v", err))
-	}
-
-	toolutil.AddReadOnlyMetaTool(server, "gitlab_orbit", `Experimental GitLab.com-only Orbit Knowledge Graph operations. Read-only.
-When to use: inspect Orbit availability and graph indexing, discover the Orbit MCP tool/query schema, or execute a Knowledge Graph query on GitLab.com.
-NOT for: GitLab self-managed instances (Orbit is GitLab.com-only), standard project/group/issue/MR CRUD (use gitlab_project, gitlab_group, gitlab_issue, gitlab_merge_request), or full-text search (use gitlab_search).
-
-This meta-tool is registered only when the MCP server is connected to https://gitlab.com and the Enterprise/Premium catalog is enabled. Orbit itself is experimental and also depends on GitLab's knowledge_graph feature flag and namespace/project access.
-
-Actions:
-- status: response_format (raw/llm) — cluster health and component status.
-- schema: expand, format (raw/llm) — graph ontology domains, nodes, and edges.
-- tools: no params — Orbit MCP tool manifest and parameter schemas.
-- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. First call gitlab_orbit with action "tools" (or use gitlab_orbit_tools) to inspect the live query schema.
-- graph_status: exactly one of namespace_id, project_id, full_path; response_format (raw/llm) — graph indexing state.
-
-Errors: 404 means Orbit is not enabled or not available; 403 means the token lacks access to a Knowledge Graph-enabled namespace/project; 503 means Orbit is temporarily unavailable.`, routes, toolutil.IconAnalytics, toolutil.MarkdownForResult)
 }

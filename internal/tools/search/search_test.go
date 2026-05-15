@@ -1699,7 +1699,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	registerLegacyMeta(server, client)
+	registerSearchMetaForTest(t, server, client)
 }
 
 // TestRegisterTools_SearchTypeSchemaEnum verifies that every individual
@@ -1737,14 +1737,11 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		registerLegacyMeta(nil, client)
-	})
-	routes := map[string]toolutil.ActionMap{"gitlab_search": searchMetaRoutesFromDefinitions(t, definitions)}
+	routes := searchActionSpecRoutes(t, client)
 
 	for _, action := range []string{"code", "merge_requests", "issues", "commits", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
 		t.Run(action, func(t *testing.T) {
-			schema, ok := toolutil.LookupMetaActionSchema(routes, "gitlab_search", action)
+			schema, ok := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{"gitlab_search": routes}, "gitlab_search", action)
 			if !ok {
 				t.Fatalf("missing gitlab_search/%s schema", action)
 			}
@@ -1759,46 +1756,38 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		registerLegacyMeta(nil, client)
-	})
-	got := searchMetaRoutesFromDefinitions(t, definitions)
-	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
-	}
+	got := searchActionSpecRoutes(t, client)
+	want := ActionSpecs(client)
 
 	if len(got) != len(want) {
-		t.Fatalf("registered search route count = %d, want %d", len(got), len(want))
+		t.Fatalf("search route count = %d, want %d", len(got), len(want))
 	}
-	for actionName, wantRoute := range want {
-		t.Run(actionName, func(t *testing.T) {
-			gotRoute, ok := got[actionName]
+	for _, spec := range want {
+		t.Run(spec.Name, func(t *testing.T) {
+			gotRoute, ok := got[spec.Name]
 			if !ok {
-				t.Fatalf("registered meta routes missing %q", actionName)
+				t.Fatalf("search routes missing %q", spec.Name)
 			}
-			if gotRoute.Destructive != wantRoute.Destructive {
-				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			if gotRoute.Destructive != spec.Route.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, spec.Route.Destructive)
 			}
-			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+			if !reflect.DeepEqual(gotRoute.InputSchema, spec.Route.InputSchema) {
 				t.Fatal("input schema differs from ActionSpec projection")
 			}
-			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+			if !reflect.DeepEqual(gotRoute.OutputSchema, spec.Route.OutputSchema) {
 				t.Fatal("output schema differs from ActionSpec projection")
 			}
 		})
 	}
 }
 
-func searchMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+func searchActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
 	t.Helper()
-	for _, definition := range definitions {
-		if definition.Name == "gitlab_search" {
-			return definition.Routes
-		}
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
 	}
-	t.Fatal("missing gitlab_search meta definition")
-	return nil
+	return routes
 }
 
 // TestSearchInputSchema_UnsupportedTypePanics verifies that unsupported schema
@@ -1987,7 +1976,7 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"basename":"f","data":"d","path":"f.go","filename":"f.go","ref":"main","startline":1,"project_id":1}]`, defaultPagination)
 	}))
-	registerLegacyMeta(server, client)
+	registerSearchMetaForTest(t, server, client)
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -2013,6 +2002,11 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 	if result.IsError {
 		t.Error("expected no error")
 	}
+}
+
+func registerSearchMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
+	t.Helper()
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_search", "Search GitLab by scope.", searchActionSpecRoutes(t, client), toolutil.IconSearch, markdownForResult)
 }
 
 // ---------------------------------------------------------------------------

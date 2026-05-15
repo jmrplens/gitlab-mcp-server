@@ -93,20 +93,6 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 	}
 }
 
-func TestBuildActionCatalog_DoesNotLeakCaptureState(t *testing.T) {
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
-	if catalog.CountGroups() == 0 || catalog.CountActions() == 0 {
-		t.Fatalf("catalog counts = groups %d actions %d, want non-zero", catalog.CountGroups(), catalog.CountActions())
-	}
-
-	if leaked := toolutil.CaptureMetaToolDefinitions(func() {}); len(leaked) != 0 {
-		t.Fatalf("BuildActionCatalog() leaked captured meta-tool definitions: %v", leaked)
-	}
-}
-
 // TestBuildActionCatalog_KeyBuilderRoutes verifies that representative split
 // meta builders preserve catalog metadata. It builds the enterprise catalog and
 // checks expected tool names, derived action IDs and domains, destructive flags,

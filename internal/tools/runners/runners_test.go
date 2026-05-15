@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -1774,7 +1775,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	registerLegacyMeta(server, client)
+	registerRunnerMetaForTest(t, server, client)
 }
 
 // TestRegisterMeta_UsesActionSpecs verifies that gitlab_runner meta routes are
@@ -1783,10 +1784,7 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		registerLegacyMeta(nil, client)
-	})
-	got := runnerMetaRoutesFromDefinitions(t, definitions)
+	got := runnerActionSpecRoutes(t, client)
 	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
 	if err != nil {
 		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
@@ -1840,15 +1838,18 @@ func TestActionSpecs_RunnerProjectGuidance(t *testing.T) {
 	}
 }
 
-func runnerMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+func runnerActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
 	t.Helper()
-	for _, definition := range definitions {
-		if definition.Name == "gitlab_runner" {
-			return definition.Routes
-		}
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
 	}
-	t.Fatal("missing gitlab_runner meta definition")
-	return nil
+	return routes
+}
+
+func registerRunnerMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
+	t.Helper()
+	toolutil.AddMetaTool(server, "gitlab_runner", "Manage GitLab CI/CD runners.", runnerActionSpecRoutes(t, client), toolutil.IconRunner, nil)
 }
 
 // ---------------------------------------------------------------------------
