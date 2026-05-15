@@ -1,21 +1,15 @@
-// register_test.go contains integration tests for the commit discussion tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains canonical-route tests for commit discussion delete behavior.
 package commitdiscussions
 
 import (
-	"context"
 	"net/http"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestRegisterTools_DeleteNoteError verifies the delete note handler closure in register.go
-// returns an error result when the GitLab API fails, covering the if-err branch.
-func TestRegisterTools_DeleteNoteError(t *testing.T) {
+// TestActionSpecs_DeleteNoteError verifies that the delete note route returns an error when the GitLab API fails.
+func TestActionSpecs_DeleteNoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -25,27 +19,10 @@ func TestRegisterTools_DeleteNoteError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := commitDiscussionSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_commit_discussion_note",
-		Arguments: map[string]any{"project_id": "42", "commit_sha": "abc123", "discussion_id": "d1", "note_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Error("expected error result from delete with failing backend")
+	_, err := byTool["gitlab_delete_commit_discussion_note"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "commit_sha": "abc123", "discussion_id": "d1", "note_id": 1})
+	if err == nil {
+		t.Fatal("expected error from delete with failing backend")
 	}
 }

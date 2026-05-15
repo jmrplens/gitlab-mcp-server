@@ -12,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const errExpAPIFailure = "expected error for API failure, got nil"
@@ -463,22 +464,6 @@ func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
 // Test helpers
 // ---------------------------------------------------------------------------.
 
-// callToolExpectSuccess is an internal helper for the commitdiscussions package.
-func callToolExpectSuccess(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) {
-	t.Helper()
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
-	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-	}
-}
-
 // newCommitDiscussionMockHandler is an internal helper for the commitdiscussions package.
 func newCommitDiscussionMockHandler(t *testing.T) http.Handler {
 	t.Helper()
@@ -506,57 +491,34 @@ func newCommitDiscussionMockHandler(t *testing.T) http.Handler {
 	})
 }
 
-// setupMCPSession is an internal helper for the commitdiscussions package.
-func setupMCPSession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
-	t.Helper()
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
 // ---------------------------------------------------------------------------
-// RegisterTools Tests
+// ActionSpecs Tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for commit discussion actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-}
+	specs := ActionSpecs(client)
+	byTool := commitDiscussionSpecsByTool(t, specs)
 
-// callToolAndCheck is an internal helper for the commitdiscussions package.
-func callToolAndCheck(t *testing.T, session *mcp.ClientSession, tools []struct {
-	name string
-	args map[string]any
-}) {
-	t.Helper()
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			callToolExpectSuccess(t, session, tt.name, tt.args)
-		})
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_commit_discussion_note"].Route.Destructive {
+		t.Fatal("gitlab_delete_commit_discussion_note should be destructive")
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	client := testutil.NewTestClient(t, newCommitDiscussionMockHandler(t))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-	session := setupMCPSession(t, server)
+// TestActionSpecs_CallAllRoutes validates commit discussion routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := commitDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, newCommitDiscussionMockHandler(t))))
 
-	callToolAndCheck(t, session, []struct {
+	tools := []struct {
 		name string
 		args map[string]any
 	}{
@@ -566,5 +528,87 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		{"gitlab_add_commit_discussion_note", map[string]any{"project_id": testProjectID, "commit_sha": testCommitSHA, "discussion_id": testDiscussionID, "body": "note"}},
 		{"gitlab_update_commit_discussion_note", map[string]any{"project_id": testProjectID, "commit_sha": testCommitSHA, "discussion_id": testDiscussionID, "note_id": float64(1), "body": "upd"}},
 		{"gitlab_delete_commit_discussion_note", map[string]any{"project_id": testProjectID, "commit_sha": testCommitSHA, "discussion_id": testDiscussionID, "note_id": float64(1)}},
+	}
+
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
+			}
+		})
+	}
+}
+
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	byTool := commitDiscussionSpecsByTool(t, ActionSpecs(client))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_commit_discussion_note"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test commit discussion destructive confirmation.",
+		Icons:       toolutil.IconDiscussion,
 	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: testVersion}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_commit_discussion_note",
+		Arguments: map[string]any{"project_id": testProjectID, "commit_sha": testCommitSHA, "discussion_id": testDiscussionID, "note_id": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+	found := false
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected non-empty text content in cancellation result")
+	}
+}
+
+func commitDiscussionSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }
