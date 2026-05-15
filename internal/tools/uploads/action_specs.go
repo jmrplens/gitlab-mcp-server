@@ -1,6 +1,9 @@
 package uploads
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -10,8 +13,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		uploadCreateSpec("upload", toolutil.RouteActionWithRequest(client, Upload), "gitlab_project_upload"),
 		uploadReadSpec("upload_list", toolutil.RouteAction(client, List), "gitlab_project_upload_list"),
-		uploadDeleteSpec("upload_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_project_upload_delete"),
+		uploadDeleteSpec("upload_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_project_upload_delete"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("upload %d from project %s", input.UploadID, input.ProjectID))
+	return out, nil
 }
 
 func uploadReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
