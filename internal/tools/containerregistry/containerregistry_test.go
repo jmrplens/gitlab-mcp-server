@@ -1188,9 +1188,6 @@ func registrySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]t
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// Ensure unused import is consumed.
-var _ = toolutil.ReadAnnotations
-
 // ---------------------------------------------------------------------------
 // Additional formatter tests for TASK-053 improvements
 // ---------------------------------------------------------------------------.
