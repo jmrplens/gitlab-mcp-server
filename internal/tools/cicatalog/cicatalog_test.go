@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -599,10 +597,9 @@ func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies that both CI/CD catalog tools
-// can be called through the MCP in-memory transport, exercising the
-// RegisterTools closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies that both CI/CD catalog canonical routes
+// execute successfully through ActionSpecs.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondGraphQL(w, http.StatusOK, `{
@@ -620,20 +617,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
 
 	tools := []struct {
 		name string
@@ -644,12 +632,19 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
+			}
+			if !spec.ReadOnly || !spec.Idempotent || spec.OwnerPackage != "cicatalog" {
+				t.Fatalf("unexpected ActionSpec semantics for %s: %+v", tt.name, spec)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
