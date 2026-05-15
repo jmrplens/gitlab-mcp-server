@@ -11,8 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestList verifies the behavior of list.
@@ -300,27 +298,29 @@ func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies CI YAML template action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "ciyamltemplates" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all tools
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCIYAMLTemplatesMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates CI YAML template canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newCIYAMLTemplatesRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -334,51 +334,29 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
-// handlers when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+// TestActionSpecs_CallRouteErrors covers canonical route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := ciyamlTemplateSpecsByTool(ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -389,19 +367,18 @@ func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("unexpected transport error: %v", err)
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
 			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.name)
 			}
 		})
 	}
 }
 
-// newCIYAMLTemplatesMCPSession is an internal helper for the ciyamltemplates package.
-func newCIYAMLTemplatesMCPSession(t *testing.T) *mcp.ClientSession {
+func newCIYAMLTemplatesRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -417,22 +394,13 @@ func newCIYAMLTemplatesMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return ciyamlTemplateSpecsByTool(ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+func ciyamlTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }
