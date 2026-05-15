@@ -1545,26 +1545,37 @@ func TestFormatTestReportSummaryMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for pipeline actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := pipelineSpecsByTool(t, specs)
+
+	if len(specs) != 12 {
+		t.Fatalf("len(ActionSpecs) = %d, want 12", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "pipelines" {
+			t.Fatalf("OwnerPackage for %s = %q, want pipelines", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 11 tools
+// ActionSpecsCallAllRoutes — route coverage for all 12 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newPipelinesMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates pipeline routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newPipelinesRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -1582,24 +1593,17 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		{"latest", "gitlab_pipeline_latest", map[string]any{"project_id": "1"}},
 		{"create", "gitlab_pipeline_create", map[string]any{"project_id": "1", "ref": "main"}},
 		{"update_metadata", "gitlab_pipeline_update_metadata", map[string]any{"project_id": "1", "pipeline_id": 1, "name": "new"}},
+		{"wait", "gitlab_pipeline_wait", map[string]any{"project_id": "1", "pipeline_id": 1, "timeout_seconds": 1}},
 	}
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
@@ -1609,8 +1613,8 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// newPipelinesMCPSession is an internal helper for the pipelines package.
-func newPipelinesMCPSession(t *testing.T) *mcp.ClientSession {
+// newPipelinesRouteSpecs is an internal helper for the pipelines package.
+func newPipelinesRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	pipelineJSON := `{"id":1,"iid":1,"project_id":1,"status":"success","source":"push","ref":"main","sha":"abc123","name":"Pipeline","duration":120,"queued_duration":5,"web_url":"https://gitlab.example.com/-/pipelines/1","created_at":"2026-03-01T10:00:00Z","updated_at":"2026-03-01T10:05:00Z"}`
@@ -1678,24 +1682,7 @@ func newPipelinesMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return pipelineSpecsByTool(t, ActionSpecs(client))
 }
 
 // TestPipelineCancel_403Hint verifies that Cancel returns a WrapErrWithHint
@@ -1852,51 +1839,39 @@ func TestGetLatest_FallbackGetPipelineError(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_Get404NotFound verifies the get handler returns a
-// NotFoundResult when the API returns 404.
-func TestRegisterTools_Get404NotFound(t *testing.T) {
+// TestActionSpecs_Get404NotFound verifies the get route returns a not-found output when the API returns 404.
+func TestActionSpecs_Get404NotFound(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_pipeline_get"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "pipeline_id": 1})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_pipeline_get",
-		Arguments: map[string]any{"project_id": "1", "pipeline_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404")
+	if _, ok := result.(pipelineNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want pipelineNotFoundOutput", result)
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined verifies the delete handler returns
+// TestCatalogSurface_DeleteConfirmDeclined verifies the delete handler returns
 // early when the user declines the confirmation prompt.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_pipeline_delete"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test pipeline destructive confirmation.",
+		Icons:       toolutil.IconPipeline,
+	})
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -1908,7 +1883,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_pipeline_delete",
@@ -1922,45 +1900,23 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_DeleteAPIError verifies the delete handler returns
+// TestActionSpecs_DeleteAPIError verifies the delete route returns
 // an error when the delete API call fails.
-func TestRegisterTools_DeleteAPIError(t *testing.T) {
+func TestActionSpecs_DeleteAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_pipeline_delete",
-		Arguments: map[string]any{"project_id": "1", "pipeline_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected error result from delete API failure")
+	if _, err := byTool["gitlab_pipeline_delete"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "pipeline_id": 1}); err == nil {
+		t.Fatal("expected route error from delete API failure")
 	}
 }
 
-// TestPipelineGet_EmbedsCanonicalResource asserts gitlab_pipeline_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/pipeline/{pipeline_id}.
-func TestPipelineGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_PipelineGetRoute verifies the canonical pipeline get route output.
+func TestActionSpecs_PipelineGetRoute(t *testing.T) {
 	const respJSON = `{"id":100,"project_id":42,"status":"success","ref":"main","sha":"abc","web_url":"https://gitlab.example.com/g/p/-/pipelines/100"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/pipelines/100") {
@@ -1969,7 +1925,27 @@ func TestPipelineGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "pipeline_id": 100}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_pipeline_get", args, "gitlab://project/42/pipeline/100", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_pipeline_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "pipeline_id": 100})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(DetailOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want DetailOutput", result)
+	}
+	if out.ID != 100 || out.ProjectID != 42 {
+		t.Fatalf("pipeline output = %#v, want ID 100 project 42", out)
+	}
+}
+
+func pipelineSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

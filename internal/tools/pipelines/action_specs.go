@@ -1,6 +1,10 @@
 package pipelines
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,10 +13,10 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		pipelineReadSpec("list", toolutil.RouteAction(client, List), "gitlab_pipeline_list"),
-		pipelineReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_pipeline_get"),
+		pipelineReadSpec("get", pipelineGetRoute(client), "gitlab_pipeline_get"),
 		pipelineUpdateSpec("cancel", toolutil.RouteAction(client, Cancel), "gitlab_pipeline_cancel"),
 		pipelineUpdateSpec("retry", toolutil.RouteAction(client, Retry), "gitlab_pipeline_retry"),
-		pipelineDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_pipeline_delete"),
+		pipelineDeleteSpec("delete", toolutil.RouteAction(client, DeleteOutput), "gitlab_pipeline_delete"),
 		pipelineReadSpec("variables", toolutil.RouteAction(client, GetVariables), "gitlab_pipeline_variables"),
 		pipelineReadSpec("test_report", toolutil.RouteAction(client, GetTestReport), "gitlab_pipeline_test_report"),
 		pipelineReadSpec("test_report_summary", toolutil.RouteAction(client, GetTestReportSummary), "gitlab_pipeline_test_report_summary"),
@@ -21,6 +25,27 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineUpdateSpec("update_metadata", toolutil.RouteAction(client, UpdateMetadata), "gitlab_pipeline_update_metadata"),
 		pipelineReadSpec("wait", toolutil.RouteActionWithRequest(client, Wait), "gitlab_pipeline_wait"),
 	}
+}
+
+func pipelineGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["pipeline_id"], input["project_id"])}, nil
+		}
+		return result, err
+	}
+	return route
+}
+
+// DeleteOutput deletes a pipeline and returns the legacy success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted pipeline %d from project %s.", input.PipelineID, input.ProjectID)}, nil
 }
 
 func pipelineReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
