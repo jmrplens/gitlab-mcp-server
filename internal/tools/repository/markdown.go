@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -147,6 +149,24 @@ func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 	return b.String()
 }
 
+func blobResult(out BlobOutput) *mcp.CallToolResult {
+	switch out.ContentCategory {
+	case "image":
+		return toolutil.ToolResultWithImage(FormatBlobMarkdown(out), toolutil.ContentAssistant, out.ImageData, out.ImageMIMEType)
+	default:
+		return toolutil.ToolResultWithMarkdown(FormatBlobMarkdown(out))
+	}
+}
+
+func rawBlobResult(out RawBlobContentOutput) *mcp.CallToolResult {
+	switch out.ContentCategory {
+	case "image":
+		return toolutil.ToolResultWithImage(FormatRawBlobContentMarkdown(out), toolutil.ContentAssistant, out.ImageData, out.ImageMIMEType)
+	default:
+		return toolutil.ToolResultWithMarkdown(FormatRawBlobContentMarkdown(out))
+	}
+}
+
 // FormatArchiveMarkdown renders archive download info.
 func FormatArchiveMarkdown(out ArchiveOutput) string {
 	var b strings.Builder
@@ -197,8 +217,8 @@ func init() {
 	toolutil.RegisterMarkdown(FormatTreeMarkdown)
 	toolutil.RegisterMarkdown(FormatCompareMarkdown)
 	toolutil.RegisterMarkdown(FormatContributorsMarkdown)
-	toolutil.RegisterMarkdown(FormatBlobMarkdown)
-	toolutil.RegisterMarkdown(FormatRawBlobContentMarkdown)
+	toolutil.RegisterMarkdownResult(blobResult)
+	toolutil.RegisterMarkdownResult(rawBlobResult)
 	toolutil.RegisterMarkdown(FormatArchiveMarkdown)
 	toolutil.RegisterMarkdown(FormatAddChangelogMarkdown)
 	toolutil.RegisterMarkdown(FormatChangelogDataMarkdown)

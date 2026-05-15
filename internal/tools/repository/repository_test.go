@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -1158,20 +1156,31 @@ func TestFormatChangelogDataMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools Tests
+// ActionSpecs Tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for repository actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := repositorySpecsByTool(t, specs)
+
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "repository" {
+			t.Errorf("OwnerPackage for %s = %q, want repository", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// newRepoMCPSession is an internal helper for the repository package.
-func newRepoMCPSession(t *testing.T) *mcp.ClientSession {
+func newRepositorySpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1220,31 +1229,12 @@ func newRepoMCPSession(t *testing.T) *mcp.ClientSession {
 			http.NotFound(w, r)
 		}
 	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return repositorySpecsByTool(t, ActionSpecs(client))
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newRepoMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates all repository routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newRepositorySpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -1263,21 +1253,22 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
+			result, err := specs[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
+}
+
+func repositorySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
