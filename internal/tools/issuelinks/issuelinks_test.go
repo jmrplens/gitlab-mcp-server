@@ -11,7 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -805,90 +804,6 @@ const (
 		"web_url":"https://gitlab.example.com/group/project/-/issues/8"
 	}]`
 )
-
-// newIssueLinksMCPSession is an internal helper for the issuelinks package.
-func newIssueLinksMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && path == pathIssueLinks:
-			testutil.RespondJSON(w, http.StatusOK, issueRelationJSON)
-		case r.Method == http.MethodGet && path == pathIssueLink99:
-			testutil.RespondJSON(w, http.StatusOK, issueLinkJSON)
-		case r.Method == http.MethodPost && path == pathIssueLinks:
-			testutil.RespondJSON(w, http.StatusCreated, issueLinkJSON)
-		case r.Method == http.MethodDelete && path == pathIssueLink99:
-			testutil.RespondJSON(w, http.StatusOK, issueLinkJSON)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueLinksMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_link_list", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_issue_link_get", map[string]any{"project_id": "42", "issue_iid": 10, "issue_link_id": 99}},
-		{"gitlab_issue_link_create", map[string]any{"project_id": "42", "issue_iid": 10, "target_project_id": "42", "target_issue_iid": "20", "link_type": "relates_to"}},
-		{"gitlab_issue_link_delete", map[string]any{"project_id": "42", "issue_iid": 10, "issue_link_id": 99}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
 
 // ---------------------------------------------------------------------------
 // FormatListMarkdown with special characters

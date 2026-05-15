@@ -1,6 +1,8 @@
 package issuelinks
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -42,8 +44,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				OwnerPackage:   "issuelinks",
 				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_link_create", Title: toolutil.TitleFromName("gitlab_issue_link_create")},
 			}),
-		issueLinkDeleteSpec("link_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_issue_link_delete"),
+		issueLinkDeleteSpec("link_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_link_delete"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("issue link")
+	return out, nil
 }
 
 func issueLinkReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

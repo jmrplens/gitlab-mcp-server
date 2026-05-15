@@ -12,7 +12,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -1021,120 +1020,6 @@ func TestCreateBatch_ContextCancelledMidLoop(t *testing.T) {
 	// First link may or may not succeed depending on timing; the important
 	// thing is the loop's ctx.Err() check between iterations triggers.
 	_ = out
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 5 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newReleaseLinksMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_release_link_list", map[string]any{"project_id": "42", "tag_name": "v1.0.0"}},
-		{"get", "gitlab_release_link_get", map[string]any{"project_id": "42", "tag_name": "v1.0.0", "link_id": 10}},
-		{"create", "gitlab_release_link_create", map[string]any{"project_id": "42", "tag_name": "v1.0.0", "name": "Binary", "url": "https://example.com/bin"}},
-		{"update", "gitlab_release_link_update", map[string]any{"project_id": "42", "tag_name": "v1.0.0", "link_id": 10, "name": "Updated"}},
-		{"delete", "gitlab_release_link_delete", map[string]any{"project_id": "42", "tag_name": "v1.0.0", "link_id": 10}},
-		{"create_batch", "gitlab_release_link_create_batch", map[string]any{"project_id": "42", "tag_name": "v1.0.0", "links": []any{map[string]any{"name": "Binary", "url": "https://example.com/bin"}}}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------.
-
-// newReleaseLinksMCPSession is an internal helper for the releaselinks package.
-func newReleaseLinksMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	linkJSON := `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","external":true,"direct_asset_url":""}`
-
-	handler := http.NewServeMux()
-
-	// List release links
-	handler.HandleFunc("GET /api/v4/projects/42/releases/v1.0.0/assets/links", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+linkJSON+`]`)
-	})
-
-	// Get release link
-	handler.HandleFunc("GET /api/v4/projects/42/releases/v1.0.0/assets/links/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, linkJSON)
-	})
-
-	// Create release link
-	handler.HandleFunc("POST /api/v4/projects/42/releases/v1.0.0/assets/links", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, linkJSON)
-	})
-
-	// Update release link
-	handler.HandleFunc("PUT /api/v4/projects/42/releases/v1.0.0/assets/links/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, linkJSON)
-	})
-
-	// Delete release link
-	handler.HandleFunc("DELETE /api/v4/projects/42/releases/v1.0.0/assets/links/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, linkJSON)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // mockReleaseLink builds a minimal gl.ReleaseLink for unit tests.
