@@ -9,6 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -75,7 +76,7 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 		Icons:       toolutil.IconHealth,
 		ReadOnly:    updater == nil,
 	})
-	specActions, specErr := actioncatalog.ActionsFromSpecs(health.ActionSpecs(client))
+	specActions, specErr := actioncatalog.ActionsFromSpecs(actioncompat.ApplyToActionSpecs("gitlab_server", "server", health.ActionSpecs(client)))
 	if specErr != nil {
 		slog.Error("failed to build MCP health action specs", "error", specErr)
 	}

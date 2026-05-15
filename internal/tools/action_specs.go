@@ -10,6 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/adminspecs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
@@ -158,7 +159,7 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 	for _, build := range actionSpecGroupBuilders() {
 		groups = append(groups, build(client, enterprise)...)
 	}
-	return cloneSortedActionSpecGroups(groups)
+	return cloneSortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups))
 }
 
 func buildAdminActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {

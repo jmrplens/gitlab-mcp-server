@@ -14,6 +14,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -1819,6 +1820,26 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 	for _, actionID := range wantActions {
 		if !slices.ContainsFunc(aliases, func(alias actionScopedParamAlias) bool { return alias.ActionID == actionID }) {
 			t.Fatalf("actionScopedParamAliases() = %+v, want action %s", aliases, actionID)
+		}
+	}
+}
+
+// TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables guards the
+// catalog-first boundary: Dynamic may adapt compatibility metadata, but the
+// source policy tables belong to actioncompat and ActionSpec projection.
+func TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables(t *testing.T) {
+	source, err := os.ReadFile("register.go")
+	if err != nil {
+		t.Fatalf("ReadFile(register.go) error = %v", err)
+	}
+	for _, forbidden := range []string{
+		"return annotateCompatibilityAliases([]actionAlias{",
+		"func buildSnippetCreateFilesFromSingleFileParams(",
+		"func gitlabAccessLevelValue(",
+		"func boolStringValue(",
+	} {
+		if strings.Contains(string(source), forbidden) {
+			t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
 		}
 	}
 }
@@ -3687,15 +3708,15 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 func TestActionScopedParamValueConversions(t *testing.T) {
 	stateCases := map[any]string{"closed": "close", "OPEN": "reopen"}
 	for input, want := range stateCases {
-		got, ok := issueStateEventValue(input)
+		got, ok := actioncompat.IssueStateEventValue(input)
 		if !ok || got != want {
 			t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", input, got, ok, want)
 		}
 	}
-	if _, ok := issueStateEventValue(123); ok {
+	if _, ok := actioncompat.IssueStateEventValue(123); ok {
 		t.Fatal("issueStateEventValue(non-string) converted unexpectedly")
 	}
-	if _, ok := issueStateEventValue("archived"); ok {
+	if _, ok := actioncompat.IssueStateEventValue("archived"); ok {
 		t.Fatal("issueStateEventValue(archived) converted unexpectedly")
 	}
 
@@ -3711,22 +3732,22 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 		"owner":        50,
 	}
 	for input, want := range accessCases {
-		got, ok := gitlabAccessLevelValue(input)
+		got, ok := actioncompat.GitLabAccessLevelValue(input)
 		if !ok || got != want {
 			t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", input, got, ok, want)
 		}
 	}
 	for _, input := range []any{float64(30.5), 70, int64(70), "70", "admin", true} {
-		if got, ok := gitlabAccessLevelValue(input); ok {
+		if got, ok := actioncompat.GitLabAccessLevelValue(input); ok {
 			t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", input, got)
 		}
 	}
 
-	if value, ok := boolStringValue(" true "); !ok || !value {
+	if value, ok := actioncompat.BoolStringValue(" true "); !ok || !value {
 		t.Fatalf("boolStringValue(true) = %t, %t; want true, true", value, ok)
 	}
 	for _, input := range []any{true, "not-bool"} {
-		if _, ok := boolStringValue(input); ok {
+		if _, ok := actioncompat.BoolStringValue(input); ok {
 			t.Fatalf("boolStringValue(%v) converted unexpectedly", input)
 		}
 	}
@@ -3736,32 +3757,28 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 // normalization helpers preserve invalid entries and only clone maps when a
 // conversion is possible. It uses in-memory parameter maps as fixtures.
 func TestSnippetParamNormalization_DefensiveBranches(t *testing.T) {
-	cloneCalls := 0
+	schema := map[string]any{"properties": map[string]any{"files": map[string]any{}}}
 	params := map[string]any{"content": "body"}
-	clone := func() map[string]any {
-		cloneCalls++
-		return params
-	}
-	if buildSnippetCreateFilesFromSingleFileParams(clone, params) {
-		t.Fatal("buildSnippetCreateFilesFromSingleFileParams() converted without file_name")
-	}
-	if cloneCalls != 0 {
-		t.Fatalf("cloneCalls = %d, want 0", cloneCalls)
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("snippet.project_create", params, schema)
+	if _, hasFiles := normalized["files"]; hasFiles || len(explanations) != 0 {
+		t.Fatalf("NormalizeActionScopedParamsWithExplanation() = %+v, %+v; want no snippet conversion without file_name", normalized, explanations)
 	}
 
 	files := map[string]any{"files": []any{"not-a-map", map[string]any{"file_name": "a.go"}}}
-	if !normalizeSnippetFileNameFields(cloneMap(files), files) {
-		t.Fatal("normalizeSnippetFileNameFields() = false, want true for map entry")
+	normalized, explanations = NormalizeActionScopedParamsWithExplanation("snippet.project_create", files, schema)
+	if len(explanations) == 0 {
+		t.Fatal("NormalizeActionScopedParamsWithExplanation() produced no explanation, want files.file_name normalization")
 	}
-	if got := files["files"].([]any)[0]; got != "not-a-map" {
+	if got := normalized["files"].([]any)[0]; got != "not-a-map" {
 		t.Fatalf("first file entry = %#v, want original non-map", got)
 	}
 
 	actions := map[string]any{"files": []any{"not-a-map", map[string]any{"action": "create", "file_path": "a.go"}}}
-	if !stripSnippetCreateFileActions(cloneMap(actions), actions) {
-		t.Fatal("stripSnippetCreateFileActions() = false, want true for create action")
+	normalized, explanations = NormalizeActionScopedParamsWithExplanation("snippet.project_create", actions, schema)
+	if len(explanations) == 0 {
+		t.Fatal("NormalizeActionScopedParamsWithExplanation() produced no explanation, want files.action normalization")
 	}
-	if got := actions["files"].([]any)[0]; got != "not-a-map" {
+	if got := normalized["files"].([]any)[0]; got != "not-a-map" {
 		t.Fatalf("first action entry = %#v, want original non-map", got)
 	}
 }
@@ -3964,10 +3981,6 @@ func TestRequiredParamAndPlaceholderBranches(t *testing.T) {
 	if got := placeholderForParam("group_id"); got != "group/subgroup" {
 		t.Fatalf("placeholderForParam(group_id) = %v, want group/subgroup", got)
 	}
-}
-
-func cloneMap(target map[string]any) func() map[string]any {
-	return func() map[string]any { return target }
 }
 
 func schemaWithProperties(names ...string) map[string]any {

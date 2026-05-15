@@ -6,6 +6,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -44,7 +45,7 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 			Description: "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
 			Icons:       toolutil.IconProject,
 			ReadOnly:    true,
-		}, projectdiscovery.ActionSpecs(client))
+		}, actioncompat.ApplyToActionSpecs("gitlab_discover_project", "discover_project", projectdiscovery.ActionSpecs(client)))
 		if groupErr != nil {
 			return nil, fmt.Errorf("build standalone dynamic group gitlab_discover_project: %w", groupErr)
 		}
@@ -56,7 +57,7 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		return catalog, nil
 	}
 
-	interactiveSpecs := slices.DeleteFunc(elicitationtools.ActionSpecs(client), func(spec toolutil.ActionSpec) bool {
+	interactiveSpecs := slices.DeleteFunc(actioncompat.ApplyToActionSpecs("gitlab_interactive", "interactive", elicitationtools.ActionSpecs(client)), func(spec toolutil.ActionSpec) bool {
 		return standaloneExcluded(opts.ExcludeTools, spec.IndividualTool.Name)
 	})
 	if len(interactiveSpecs) == 0 {
