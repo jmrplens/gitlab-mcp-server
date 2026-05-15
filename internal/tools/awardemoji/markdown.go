@@ -9,6 +9,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type awardEmojiNotFoundOutput struct {
+	Identifier string `json:"identifier"`
+	ListHint   string `json:"list_hint"`
+	VerifyHint string `json:"verify_hint"`
+}
+
+func formatAwardEmojiNotFound(out awardEmojiNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(awardEmojiResourceName, out.Identifier, out.ListHint, out.VerifyHint)
+}
+
 // FormatListMarkdown formats award emoji list as a Markdown CallToolResult.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
@@ -59,4 +69,5 @@ func FormatMarkdownString(out Output) string {
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatMarkdownString)
+	toolutil.RegisterMarkdownResult(formatAwardEmojiNotFound)
 }

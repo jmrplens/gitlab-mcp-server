@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -1262,23 +1264,37 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// ======================== Register ========================.
+// ======================== Action Specs ========================.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for all award emoji actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	RegisterTools(server, client)
+	specs := allAwardEmojiActionSpecs(client)
+	byTool := awardEmojiSpecsByTool(t, specs)
+
+	if len(specs) != 24 {
+		t.Fatalf("len(ActionSpecs) = %d, want 24", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "awardemoji" {
+			t.Fatalf("OwnerPackage for %s = %q, want awardemoji", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// ======================== MCP Round-trip ========================.
-
-// TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_CallAllRoutes validates all award emoji routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusOK, covEmojiSingle)
 			return
 		}
 		path := r.URL.Path
@@ -1290,115 +1306,86 @@ func TestMCPRound_Trip(t *testing.T) {
 		}
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	tests := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_list", map[string]any{"project_id": "p", "issue_iid": 1}},
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_list", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_list", map[string]any{"project_id": "p", "merge_request_iid": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_list", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_list", map[string]any{"project_id": "p", "snippet_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_list", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
 			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
 }
 
-// TestMCPRound_Trip_NotFound validates that get tools return NotFoundResult
-// when the GitLab API responds with 404, covering the register.go 404 paths.
-func TestMCPRound_Trip_NotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound validates get routes preserve NotFoundResult details.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	getTools := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
 	}
 	for _, tc := range getTools {
 		t.Run(tc.name+"_404", func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, callErr)
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
-			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
+			if _, ok := res.(awardEmojiNotFoundOutput); !ok {
+				t.Fatalf("result type = %T, want awardEmojiNotFoundOutput", res)
 			}
-			if !res.IsError {
-				t.Errorf("expected IsError=true for 404 on %s", tc.name)
+			toolResult := toolutil.MarkdownForResult(res)
+			if toolResult == nil || !toolResult.IsError {
+				t.Fatalf("expected MarkdownForResult to return an error CallToolResult for %s", tc.name)
 			}
 		})
 	}
@@ -1445,9 +1432,8 @@ func TestCreateAPIErrors(t *testing.T) {
 	})
 }
 
-// TestMCPRound_Trip_CreateErrors validates the register.go create error paths
-// via MCP round-trip where the GitLab API returns 500.
-func TestMCPRound_Trip_CreateErrors(t *testing.T) {
+// TestActionSpecs_CreateErrors validates create routes return API errors.
+func TestActionSpecs_CreateErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -1457,46 +1443,102 @@ func TestMCPRound_Trip_CreateErrors(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	createTools := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
 	}
 	for _, tc := range createTools {
 		t.Run(tc.name, func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, callErr)
-			}
-			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
-			}
-			if !res.IsError {
-				t.Errorf("expected IsError=true for create error on %s", tc.name)
+			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
 			}
 		})
 	}
+}
+
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.name], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test award emoji destructive confirmation.",
+				Icons:       toolutil.IconLabel,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, connectErr := mcpClient.Connect(ctx, ct, nil)
+			if connectErr != nil {
+				t.Fatalf("client connect: %v", connectErr)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("expected non-nil result for declined confirmation on %s", tt.name)
+			}
+		})
+	}
+}
+
+func allAwardEmojiActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+	return append(specs, SnippetActionSpecs(client)...)
+}
+
+func awardEmojiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }
