@@ -1,6 +1,5 @@
-// register_test.go contains integration tests for the wiki tool closures
-// in register.go. Tests exercise mutation error paths and ConfirmAction
-// branches via an in-memory MCP session with a mock GitLab API.
+// register_test.go contains route and catalog-surface tests for behavior that
+// used to live in register.go: not-found output and destructive confirmation.
 package wikis
 
 import (
@@ -12,18 +11,24 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_ConfirmDeclined covers the ConfirmAction early-return
-// branch in the wiki delete handler when the user declines.
-func TestRegisterTools_ConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_ConfirmDeclined covers generic destructive confirmation
+// for wiki delete when the user declines.
+func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_wiki_delete" {
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test wiki destructive confirmation.", Icons: toolutil.IconWiki})
+		}
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -35,7 +40,10 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_wiki_delete",
@@ -49,38 +57,21 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_GetNotFound covers the NotFoundResult branch in the
-// gitlab_wiki_get handler when the API returns 404.
-func TestRegisterTools_GetNotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound covers the not-found route output when the API returns 404.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Wiki Page Not Found"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_wiki_get",
-		Arguments: map[string]any{"project_id": "42", "slug": "NonExistent"},
-	})
+	result, err := byTool["gitlab_wiki_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "slug": "NonExistent"})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404 wiki page")
+	if _, ok := result.(wikiNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want wikiNotFoundOutput", result)
 	}
 }
 

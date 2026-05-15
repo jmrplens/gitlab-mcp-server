@@ -9,6 +9,17 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type wikiNotFoundOutput struct {
+	Identifier string
+}
+
+func formatWikiNotFound(out wikiNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Wiki Page", out.Identifier,
+		"Use gitlab_wiki_list with project_id to list wiki pages",
+		"Wiki slugs are case-sensitive and may differ from the page title",
+	)
+}
+
 // FormatOutputMarkdownString formats a single wiki page as Markdown.
 func FormatOutputMarkdownString(w Output) string {
 	var b strings.Builder
@@ -85,6 +96,7 @@ func FormatAttachmentMarkdown(o AttachmentOutput) *mcp.CallToolResult {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatWikiNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdownString)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatAttachmentMarkdownString)

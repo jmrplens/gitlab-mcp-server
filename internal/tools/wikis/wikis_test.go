@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -891,21 +889,32 @@ func TestFormatAttachmentMarkdown_NonNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration and MCP round-trip
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for wiki actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := wikiSpecsByTool(t, specs)
+
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "wikis" {
+			t.Fatalf("OwnerPackage for %s = %q, want wikis", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// TestMCPRoundTrip_AllWikiTools validates m c p round trip all wiki tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllWikiTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallAllRoutes validates wiki routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/wikis"):
@@ -924,18 +933,7 @@ func TestMCPRoundTrip_AllWikiTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -951,24 +949,19 @@ func TestMCPRoundTrip_AllWikiTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
 }
 
-// TestWikiGet_EmbedsCanonicalResource asserts gitlab_wiki_get attaches an
-// EmbeddedResource block with URI gitlab://project/{id}/wiki/{slug}.
-func TestWikiGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_WikiGetRoute verifies the canonical wiki get route output.
+func TestActionSpecs_WikiGetRoute(t *testing.T) {
 	const respJSON = `{"title":"Home","slug":"Home","format":"markdown","content":"hello","encoding":"UTF-8"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/wikis/Home") {
@@ -977,7 +970,27 @@ func TestWikiGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "slug": "Home"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_wiki_get", args, "gitlab://project/42/wiki/Home", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_wiki_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "slug": "Home"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.Slug != "Home" || out.Title != "Home" {
+		t.Fatalf("wiki output = %#v, want title and slug Home", out)
+	}
+}
+
+func wikiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
