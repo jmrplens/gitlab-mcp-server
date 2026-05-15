@@ -134,7 +134,7 @@ func main() {
 	printRow("Dynamic catalog actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
 	printDynamicSearchMetrics(dynamicBaseMetrics, dynamicEnterpriseMetrics, dynamicGitLabComEnterpriseMetrics)
 	printRow("Spec-backed enterprise catalog actions", len(enterpriseActionAudit.SpecBacked))
-	printRow("Legacy route-only enterprise catalog actions", len(enterpriseActionAudit.LegacyRouteOnly))
+	printRow("Enterprise catalog actions missing ActionSpec", len(enterpriseActionAudit.MissingSpec))
 	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
 	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
 	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
@@ -203,8 +203,8 @@ func main() {
 }
 
 type enterpriseActionSpecAudit struct {
-	SpecBacked      []string
-	LegacyRouteOnly []string
+	SpecBacked  []string
+	MissingSpec []string
 }
 
 func auditEnterpriseActionSpecs(base, selfManagedEnterprise, gitLabComEnterprise *actioncatalog.Catalog) enterpriseActionSpecAudit {
@@ -221,11 +221,11 @@ func auditEnterpriseActionSpecs(base, selfManagedEnterprise, gitLabComEnterprise
 				audit.SpecBacked = append(audit.SpecBacked, string(action.ID))
 				continue
 			}
-			audit.LegacyRouteOnly = append(audit.LegacyRouteOnly, string(action.ID))
+			audit.MissingSpec = append(audit.MissingSpec, string(action.ID))
 		}
 	}
 	sort.Strings(audit.SpecBacked)
-	sort.Strings(audit.LegacyRouteOnly)
+	sort.Strings(audit.MissingSpec)
 	return audit
 }
 
@@ -243,8 +243,8 @@ func printEnterpriseActionSpecAudit(audit enterpriseActionSpecAudit) {
 	fmt.Println("### Spec-backed enterprise actions (" + strconv.Itoa(len(audit.SpecBacked)) + ")")
 	printActionIDList(audit.SpecBacked)
 	fmt.Println()
-	fmt.Println("### Legacy route-only enterprise actions (" + strconv.Itoa(len(audit.LegacyRouteOnly)) + ")")
-	printActionIDList(audit.LegacyRouteOnly)
+	fmt.Println("### Enterprise actions missing ActionSpec (" + strconv.Itoa(len(audit.MissingSpec)) + ")")
+	printActionIDList(audit.MissingSpec)
 }
 
 func printActionIDList(actionIDs []string) {
