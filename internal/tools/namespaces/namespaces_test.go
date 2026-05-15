@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -402,62 +402,64 @@ func TestFormatExistsMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Registration tests
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies namespace action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "namespaces" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// markdownForResult dispatch
+// Markdown registry dispatch
 // ---------------------------------------------------------------------------.
 
-// TestMarkdownForResult_ListOutput verifies the behavior of markdown for result list output.
-func TestMarkdownForResult_ListOutput(t *testing.T) {
-	r := markdownForResult(ListOutput{})
+// TestMarkdownRegistry_ListOutput verifies namespace list output markdown registration.
+func TestMarkdownRegistry_ListOutput(t *testing.T) {
+	r := toolutil.MarkdownForResult(ListOutput{})
 	if r == nil {
 		t.Error(errExpNonNil)
 	}
 }
 
-// TestMarkdownForResult_Output verifies the behavior of markdown for result output.
-func TestMarkdownForResult_Output(t *testing.T) {
-	r := markdownForResult(Output{ID: 1, Name: "n"})
+// TestMarkdownRegistry_Output verifies namespace detail output markdown registration.
+func TestMarkdownRegistry_Output(t *testing.T) {
+	r := toolutil.MarkdownForResult(Output{ID: 1, Name: "n"})
 	if r == nil {
 		t.Error(errExpNonNil)
 	}
 }
 
-// TestMarkdownForResult_ExistsOutput verifies the behavior of markdown for result exists output.
-func TestMarkdownForResult_ExistsOutput(t *testing.T) {
-	r := markdownForResult(ExistsOutput{})
+// TestMarkdownRegistry_ExistsOutput verifies namespace existence output markdown registration.
+func TestMarkdownRegistry_ExistsOutput(t *testing.T) {
+	r := toolutil.MarkdownForResult(ExistsOutput{})
 	if r == nil {
 		t.Error(errExpNonNil)
 	}
 }
 
-// TestMarkdownForResult_Unknown verifies the behavior of markdown for result unknown.
-func TestMarkdownForResult_Unknown(t *testing.T) {
-	r := markdownForResult("unknown")
+// TestMarkdownRegistry_Unknown verifies unknown output types do not have namespace markdown.
+func TestMarkdownRegistry_Unknown(t *testing.T) {
+	r := toolutil.MarkdownForResult("unknown")
 	if r != nil {
 		t.Error("expected nil for unknown type")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllNamespaceTools validates m c p round trip all namespace tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllNamespaceTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallRoutes validates all namespace canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/api/v4/namespaces" && r.Method == http.MethodGet:
@@ -476,18 +478,11 @@ func TestMCPRoundTrip_AllNamespaceTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	defer session.Close()
 
 	tools := []struct {
 		name string
@@ -501,16 +496,16 @@ func TestMCPRoundTrip_AllNamespaceTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			result, err := spec.Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}

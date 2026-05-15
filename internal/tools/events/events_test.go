@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -646,35 +646,34 @@ func TestListProjectEvents_InvalidDates(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestUserActionSpecs_Metadata verifies event action spec metadata.
+func TestUserActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	RegisterTools(server, client)
+	specs := UserActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(UserActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "events" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
-// MCP round-trip.
+// ActionSpec route execution.
 
-// TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
+// TestUserActionSpecs_CallRoutes validates event canonical routes.
+func TestUserActionSpecs_CallRoutes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	specs := UserActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
 
 	tests := []struct {
@@ -686,13 +685,16 @@ func TestMCPRound_Trip(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
+			}
+			res, err := spec.Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
