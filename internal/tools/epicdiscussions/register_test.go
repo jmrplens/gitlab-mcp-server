@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the epic discussion tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains canonical-route tests for epic discussion actions.
 package epicdiscussions
 
 import (
@@ -11,48 +9,87 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_DeleteNoteError verifies that the delete note handler returns
-// an error result when the GitLab API fails, covering the if-err-not-nil branch
-// in the handler closure.
-func TestRegisterTools_DeleteNoteError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
+// TestActionSpecs_DeleteNoteError verifies the delete note route returns an error when GraphQL rejects it.
+func TestActionSpecs_DeleteNoteError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"destroyNote":{"errors":["server error"]}}`)
+		},
 	})
-	client := testutil.NewTestClient(t, mux)
+	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+
+	_, err := byTool["gitlab_delete_epic_discussion_note"].Route.Handler(t.Context(), map[string]any{
+		"full_path": testFullPath,
+		"epic_iid":  1,
+		"note_id":   10,
+	})
+	if err == nil {
+		t.Fatal("expected error from delete with failing backend")
+	}
+}
+
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(client))
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_epic_discussion_note"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test epic discussion note destructive confirmation.",
+		Icons:       toolutil.IconDiscussion,
+	})
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "gitlab_delete_epic_discussion_note",
 		Arguments: map[string]any{
-			"full_path": "42",
-			"epic_iid":  float64(1),
-			"note_id":   float64(10),
+			"full_path": testFullPath,
+			"epic_iid":  float64(5),
+			"note_id":   float64(100),
 		},
 	})
 	if err != nil {
-		t.Fatalf("CallTool returned transport error: %v", err)
+		t.Fatalf("CallTool error: %v", err)
 	}
-	if result == nil || !result.IsError {
-		t.Error("expected error result from delete with failing backend")
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
 	}
+}
+
+func epicDiscussionSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }

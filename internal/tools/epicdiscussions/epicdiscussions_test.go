@@ -825,53 +825,40 @@ func TestFormatNoteMarkdown(t *testing.T) {
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all tools on the MCP server without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// --------------------------------------------------------------------------
-// MCP round-trip — all tools
-// --------------------------------------------------------------------------
-
-// TestMCPRoundTrip_AllTools uses table-driven subtests to invoke every individual tool via an in-memory MCP session and verify that none returns an error result.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	session := newEpicDiscussionsMCPSession(t)
-	ctx := context.Background()
-
+// TestActionSpecs_CallAllRoutes invokes every individual tool through its canonical route.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, graphqlSessionMux())))
 	tools := []struct {
 		name string
 		tool string
 		args map[string]any
+		want string
 	}{
-		{"list", "gitlab_list_epic_discussions", map[string]any{"full_path": testFullPath, "epic_iid": float64(5)}},
-		{"get", "gitlab_get_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex"}},
-		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}},
-		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
-		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}},
-		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}},
+		{"list", "gitlab_list_epic_discussions", map[string]any{"full_path": testFullPath, "epic_iid": float64(5)}, ""},
+		{"get", "gitlab_get_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex"}, ""},
+		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}, ""},
+		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}, ""},
+		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}, ""},
+		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}, "Successfully deleted epic discussion note."},
 	}
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			}
+			if tt.want != "" {
+				out, ok := result.(toolutil.DeleteOutput)
+				if !ok {
+					t.Fatalf("Route.Handler(%s) returned %T, want toolutil.DeleteOutput", tt.tool, result)
 				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+				if out.Message != tt.want {
+					t.Fatalf("delete message = %q, want %q", out.Message, tt.want)
+				}
 			}
 		})
 	}
@@ -881,11 +868,7 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 // MCP round-trip — meta tool
 // --------------------------------------------------------------------------
 
-// --------------------------------------------------------------------------
-// Helpers: MCP session factories
-// --------------------------------------------------------------------------
-
-// graphqlSessionMux creates a GraphQL handler for MCP round-trip tests.
+// graphqlSessionMux creates a GraphQL handler for canonical route tests.
 func graphqlSessionMux() http.Handler {
 	return graphqlMux(map[string]http.HandlerFunc{
 		"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
@@ -904,28 +887,4 @@ func graphqlSessionMux() http.Handler {
 			testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
 		},
 	})
-}
-
-func newEpicDiscussionsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, graphqlSessionMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
