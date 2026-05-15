@@ -102,6 +102,58 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 	}
 }
 
+func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
+	owners := sourceToolPackageNames(t)
+	owners["tools"] = struct{}{}
+
+	var missingGroupOwners []string
+	var unknownGroupOwners []string
+	var missingActionOwners []string
+	var unknownActionOwners []string
+
+	for _, group := range CollectActionSpecs(newGitLabDotComClient(t), true) {
+		groupOwner := strings.TrimSpace(group.OwnerPackage)
+		if groupOwner == "" {
+			missingGroupOwners = append(missingGroupOwners, group.ToolName)
+		} else if _, ok := owners[groupOwner]; !ok {
+			unknownGroupOwners = append(unknownGroupOwners, fmt.Sprintf("%s owner %s", group.ToolName, groupOwner))
+		}
+		for _, spec := range group.Actions {
+			actionOwner := strings.TrimSpace(spec.OwnerPackage)
+			if actionOwner == "" {
+				missingActionOwners = append(missingActionOwners, group.ToolName+"."+spec.Name)
+				continue
+			}
+			if _, ok := owners[actionOwner]; !ok {
+				unknownActionOwners = append(unknownActionOwners, fmt.Sprintf("%s.%s owner %s", group.ToolName, spec.Name, actionOwner))
+			}
+		}
+	}
+
+	if len(missingGroupOwners)+len(unknownGroupOwners)+len(missingActionOwners)+len(unknownActionOwners) > 0 {
+		sort.Strings(missingGroupOwners)
+		sort.Strings(unknownGroupOwners)
+		sort.Strings(missingActionOwners)
+		sort.Strings(unknownActionOwners)
+		t.Fatalf("catalog ownership drift:\nmissing group owners: %v\nunknown group owners: %v\nmissing action owners: %v\nunknown action owners: %v", missingGroupOwners, unknownGroupOwners, missingActionOwners, unknownActionOwners)
+	}
+}
+
+func sourceToolPackageNames(t *testing.T) map[string]struct{} {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	owners := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			owners[entry.Name()] = struct{}{}
+		}
+	}
+	return owners
+}
+
 func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	openWorldOverride := false
 	handlerCalled := false
@@ -371,7 +423,7 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	specNames := make(map[string]string)
 	duplicateSpecNames := make([]string, 0)
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.IndividualTool.Name)
 			if name == "" {
 				t.Fatalf("%s.%s missing individual tool name", group.ToolName, spec.Name)
@@ -467,7 +519,7 @@ var sharedIndividualToolSpecNames = map[string]string{
 func individualSpecsByToolNameMap(groups []ActionSpecGroup) map[string][]toolutil.ActionSpec {
 	byName := make(map[string][]toolutil.ActionSpec)
 	for _, group := range groups {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.IndividualTool.Name)
 			if name != "" {
 				byName[name] = append(byName[name], spec)

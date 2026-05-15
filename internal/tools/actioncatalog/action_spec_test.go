@@ -14,10 +14,14 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 		},
 	}}
 	spec := toolutil.NewActionSpec("get", route, toolutil.ActionSpecOptions{
-		Aliases:                []string{"project.show"},
-		Tags:                   []string{"Project"},
-		Usage:                  "Use for reading one project.",
-		RelatedActions:         []string{"project.list"},
+		Aliases:        []string{"project.show"},
+		Tags:           []string{"Project"},
+		Usage:          "Use for reading one project.",
+		RelatedActions: []string{"project.list"},
+		Compatibility: toolutil.CompatibilityPolicy{
+			ActionAliases:    []toolutil.ActionAliasSpec{{Alias: "project.view", Target: "get", Source: "dynamic", Reason: "Preserve old prompt phrasing."}},
+			ParameterAliases: []toolutil.ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic", Reason: "Map shorthand prompts to project_id."}},
+		},
 		ParameterGuidance:      map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
 		ReadOnly:               true,
 		Idempotent:             true,
@@ -49,6 +53,12 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	}
 	if len(action.RelatedActions) != 1 || action.RelatedActions[0] != "project.list" {
 		t.Fatalf("related actions = %+v, want projected related action", action.RelatedActions)
+	}
+	if len(action.Compatibility.ActionAliases) != 1 || action.Compatibility.ActionAliases[0].Alias != "project.view" {
+		t.Fatalf("compatibility action aliases = %+v, want projected action alias", action.Compatibility.ActionAliases)
+	}
+	if len(action.Compatibility.ParameterAliases) != 1 || action.Compatibility.ParameterAliases[0].Target != "project_id" {
+		t.Fatalf("compatibility parameter aliases = %+v, want projected parameter alias", action.Compatibility.ParameterAliases)
 	}
 	if action.Route.ParameterGuidance["project_id"].SemanticRole != "scope_project" {
 		t.Fatalf("route guidance = %+v, want projected spec guidance", action.Route.ParameterGuidance)

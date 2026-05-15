@@ -63,9 +63,9 @@ func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup)
 			continue
 		}
 		if overrideNamesByTool[toolName] == nil {
-			overrideNamesByTool[toolName] = make(map[string]struct{}, len(group.Specs))
+			overrideNamesByTool[toolName] = make(map[string]struct{}, len(group.Actions))
 		}
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.Name)
 			if name != "" {
 				overrideNamesByTool[toolName][name] = struct{}{}
@@ -80,14 +80,16 @@ func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup)
 			merged = append(merged, group)
 			continue
 		}
-		specs := make([]toolutil.ActionSpec, 0, len(group.Specs))
-		for _, spec := range group.Specs {
+		specs := make([]toolutil.ActionSpec, 0, len(group.Actions))
+		for _, spec := range group.Actions {
 			if _, overridden := overrideNames[strings.TrimSpace(spec.Name)]; !overridden {
 				specs = append(specs, spec)
 			}
 		}
 		if len(specs) > 0 {
-			merged = append(merged, ActionSpecGroup{ToolName: group.ToolName, Specs: specs})
+			group = actioncatalog.CloneCatalogGroupSpec(group)
+			group.Actions = specs
+			merged = append(merged, group)
 		}
 	}
 	return append(merged, overrideGroups...)

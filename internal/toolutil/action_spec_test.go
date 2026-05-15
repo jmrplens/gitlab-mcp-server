@@ -22,6 +22,10 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases := []string{" Project.Delete ", "project.delete"}
 	tags := []string{" Admin ", "ADMIN"}
 	relatedActions := []string{"Project.Get"}
+	compatibility := CompatibilityPolicy{
+		ActionAliases:    []ActionAliasSpec{{Alias: " Project.Remove ", Target: " Delete ", Source: "dynamic", Searchable: true, Reason: "Historical dynamic alias."}},
+		ParameterAliases: []ParameterAliasSpec{{Alias: " Project ", Target: "project_id", Source: "dynamic", Reason: "Historical dynamic parameter alias."}},
+	}
 	schemaNotes := []string{"Schema cannot express file source exclusivity."}
 	runtimeNotes := []string{"Validate project ownership."}
 	individualIdempotent := false
@@ -29,6 +33,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 		Aliases:                aliases,
 		Tags:                   tags,
 		RelatedActions:         relatedActions,
+		Compatibility:          compatibility,
 		ParameterGuidance:      map[string]ParameterGuidance{"project_id": specGuidance},
 		ReadOnly:               false,
 		OwnerPackage:           "projects",
@@ -47,6 +52,8 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases[0] = "changed"
 	tags[0] = "changed"
 	relatedActions[0] = "changed"
+	compatibility.ActionAliases[0].Alias = "changed"
+	compatibility.ParameterAliases[0].Alias = "changed"
 	schemaNotes[0] = "changed"
 	runtimeNotes[0] = "changed"
 	individualIdempotent = true
@@ -72,8 +79,74 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	if spec.RelatedActions[0] != "project.get" || spec.SchemaValidationNotes[0] != "Schema cannot express file source exclusivity." || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
 		t.Fatalf("related/actions notes = %+v / %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.SchemaValidationNotes, spec.RuntimeValidationNotes)
 	}
+	if spec.Compatibility.ActionAliases[0].Alias != "project.remove" || spec.Compatibility.ActionAliases[0].Target != "delete" {
+		t.Fatalf("action compatibility aliases = %+v, want cloned normalized action alias", spec.Compatibility.ActionAliases)
+	}
+	if spec.Compatibility.ParameterAliases[0].Alias != "project" || spec.Compatibility.ParameterAliases[0].Target != "project_id" {
+		t.Fatalf("parameter compatibility aliases = %+v, want cloned normalized parameter alias", spec.Compatibility.ParameterAliases)
+	}
 	if spec.IndividualTool.AnnotationOverrides.Idempotent == nil || *spec.IndividualTool.AnnotationOverrides.Idempotent {
 		t.Fatalf("individual idempotent override = %v, want cloned false", spec.IndividualTool.AnnotationOverrides.Idempotent)
+	}
+}
+
+func TestActionSpecValidate_CompatibilityPolicy(t *testing.T) {
+	spec := NewActionSpec("delete", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{
+		Compatibility: CompatibilityPolicy{
+			ActionAliases:    []ActionAliasSpec{{Alias: "remove", Target: "delete", Source: "dynamic", Searchable: true, Deprecated: true, RemovalVersion: "v3.0.0", Reason: "Preserve old Dynamic phrasing."}},
+			ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic", Reason: "Map shorthand prompts to the canonical parameter."}},
+		},
+	})
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+}
+
+func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
+	testCases := []struct {
+		name string
+		opts ActionSpecOptions
+		want string
+	}{
+		{
+			name: "action alias target mismatch",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Alias: "remove", Target: "archive", Source: "dynamic", Reason: "wrong action"}}}},
+			want: "targets \"archive\"",
+		},
+		{
+			name: "missing source",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Alias: "remove", Target: "delete", Reason: "missing source"}}}},
+			want: "has no source",
+		},
+		{
+			name: "deprecated alias without removal version",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Alias: "remove", Target: "delete", Source: "dynamic", Deprecated: true, Reason: "missing version"}}}},
+			want: "has no removal version",
+		},
+		{
+			name: "unknown parameter target",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project", Source: "dynamic", Reason: "wrong parameter"}}}},
+			want: "targets unknown parameter \"project\"",
+		},
+		{
+			name: "parameter alias conflicting target",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{
+				{Alias: "project", Target: "project_id", Source: "dynamic", Reason: "first target"},
+				{Alias: "project", Target: "namespace_id", Source: "dynamic", Reason: "second target"},
+			}}},
+			want: "targets both \"project_id\" and \"namespace_id\"",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := NewActionSpec("delete", ActionRoute{InputSchema: testActionSpecSchema("project_id", "namespace_id")}, tc.opts)
+			err := spec.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 

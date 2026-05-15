@@ -9,6 +9,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/adminspecs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
@@ -144,11 +145,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// ActionSpecGroup contains specs owned by one meta-tool group.
-type ActionSpecGroup struct {
-	ToolName string
-	Specs    []toolutil.ActionSpec
-}
+// ActionSpecGroup contains specs owned by one catalog group.
+type ActionSpecGroup = actioncatalog.CatalogGroupSpec
 
 type actionSpecGroupBuilder func(*gitlabclient.Client, bool) []ActionSpecGroup
 
@@ -573,7 +571,7 @@ func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecG
 	if len(specs) == 0 {
 		return nil
 	}
-	return []ActionSpecGroup{{ToolName: toolName, Specs: specs}}
+	return []ActionSpecGroup{{ToolName: toolName, Actions: specs, OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}}
 }
 
 func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.ActionSpec, error) {
@@ -585,7 +583,7 @@ func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.Act
 			errs = append(errs, errors.New("action spec group tool name is required"))
 			continue
 		}
-		byTool[toolName] = append(byTool[toolName], cloneActionSpecs(group.Specs)...)
+		byTool[toolName] = append(byTool[toolName], cloneActionSpecs(group.Actions)...)
 	}
 	for toolName, specs := range byTool {
 		seen := make(map[string]struct{}, len(specs))
@@ -615,7 +613,7 @@ func cloneSortedActionSpecGroups(groups []ActionSpecGroup) []ActionSpecGroup {
 	}
 	out := make([]ActionSpecGroup, 0, len(groups))
 	for _, group := range groups {
-		out = append(out, ActionSpecGroup{ToolName: strings.TrimSpace(group.ToolName), Specs: cloneActionSpecs(group.Specs)})
+		out = append(out, actioncatalog.CloneCatalogGroupSpec(group))
 	}
 	sort.SliceStable(out, func(left, right int) bool {
 		return out[left].ToolName < out[right].ToolName
@@ -634,6 +632,7 @@ func cloneActionSpecs(specs []toolutil.ActionSpec) []toolutil.ActionSpec {
 			Tags:                   spec.Tags,
 			Usage:                  spec.Usage,
 			RelatedActions:         spec.RelatedActions,
+			Compatibility:          spec.Compatibility,
 			ParameterGuidance:      spec.ParameterGuidance,
 			ReadOnly:               spec.ReadOnly,
 			Destructive:            spec.Destructive,

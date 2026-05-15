@@ -66,6 +66,7 @@ The core pieces are:
 | `internal/toolutil/action_spec_individual.go` | `ActionSpec` projection into individual `mcp.Tool` metadata and schema/annotation policy |
 | `internal/toolutil/metatool.go` | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
 | `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs |
+| `internal/tools/actioncatalog/group_spec.go` | `CatalogGroupSpec`, `SurfaceKind`, group validation, group option projection, and compatibility alias conflict checks |
 | `internal/tools/action_specs.go` | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating |
 | `internal/tools/action_catalog.go` | Captures meta route definitions, prefers matching specs, and fails when a spec targets a missing route |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from catalog groups |
@@ -89,6 +90,38 @@ client.
 Standalone dynamic actions such as `discover_project.resolve` and interactive
 elicitation flows are added through their own spec builders before dynamic mode
 registers visible tools.
+
+## Final Model Vocabulary
+
+The catalog-first runtime uses these model terms consistently:
+
+- `ActionSpec`: one executable GitLab action, including the typed route,
+  action name, behavior annotations, ownership, individual-tool projection
+  metadata, discovery hints, result policies, validation notes, and
+  compatibility policy.
+- `CatalogGroupSpec`: one visible catalog group or utility surface. It declares
+  the MCP tool name, title, description, icons, base dynamic domain, ownership,
+  edition gates, GitLab.com-only gates, capability requirements, surface kind,
+  and owned actions.
+- `SurfaceKind`: an explicit classification for catalog and non-catalog
+  surfaces. Valid values are `gitlab-action`, `meta-group`,
+  `dynamic-controller`, `runtime-utility`, `interactive-utility`,
+  `sampling-utility`, and `server-maintenance`.
+- `SurfaceToolSpec`: the planned non-GitLab utility model for visible tools that
+  are not ordinary GitLab API actions, such as dynamic controllers,
+  interactive elicitation flows, sampling helpers, and server maintenance.
+- Compatibility alias: an action-level alias with `Alias`, `Target`, `Source`,
+  `Searchable`, `Deprecated`, `RemovalVersion`, and `Reason`. These replace
+  hardcoded action-specific Dynamic aliases as the owned metadata source.
+- Parameter alias: an action-scoped parameter alias with the same policy fields
+  as compatibility aliases. Parameter aliases must target an input schema
+  property owned by the same action.
+- Surface controller: a visible controller tool that orchestrates catalog
+  actions rather than representing one GitLab API endpoint, for example Dynamic
+  search/describe/execute.
+- Runtime utility: a non-GitLab helper tool that supports the server runtime or
+  user workflow. Runtime utilities need explicit surface classification,
+  capability requirements when applicable, and guardrail tests.
 
 ## Registration Flow
 
@@ -317,6 +350,9 @@ The migration is enforced by source-level tests and audits:
   for historically ambiguous actions such as merge request creation, issue
   links, epic issue assignment, CI job token scope removal, and deploy token
   deletion.
+- `TestCollectedActionSpecs_DeclareCatalogOwnership` requires every collected
+  catalog group to declare an owner and every action owner to resolve to the
+  central `tools` package or a real `internal/tools/*` package.
 - `TestIndividualToolProjection_RepresentativeDomainParity` pilots the
   `ActionSpec`-to-`mcp.Tool` projection adapter against registered individual
   tools for project, issue, merge request, job, and group domains.

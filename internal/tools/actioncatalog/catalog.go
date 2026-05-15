@@ -32,6 +32,7 @@ type Action struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
+	Compatibility          toolutil.CompatibilityPolicy
 	ReadOnly               bool
 	Edition                string
 	GitLabDotComOnly       bool
@@ -48,11 +49,18 @@ type Action struct {
 
 // GroupOptions contains metadata for creating a catalog group.
 type GroupOptions struct {
-	ToolName     string
-	Description  string
-	Icons        []mcp.Icon
-	ReadOnly     bool
-	FormatResult toolutil.FormatResultFunc
+	ToolName               string
+	Title                  string
+	Description            string
+	Icons                  []mcp.Icon
+	ReadOnly               bool
+	FormatResult           toolutil.FormatResultFunc
+	BaseDomain             string
+	EnterpriseOnly         bool
+	GitLabDotComOnly       bool
+	CapabilityRequirements []string
+	OwnerPackage           string
+	SurfaceKind            SurfaceKind
 }
 
 // FilterOptions describes catalog-level filtering inputs.
@@ -64,13 +72,20 @@ type FilterOptions struct {
 
 // Group describes all actions exposed through one logical meta-tool group.
 type Group struct {
-	ToolName     string
-	Description  string
-	Icons        []mcp.Icon
-	ReadOnly     bool
-	FormatResult toolutil.FormatResultFunc
-	Actions      map[string]Action
-	ActionOrder  []string
+	ToolName               string
+	Title                  string
+	Description            string
+	Icons                  []mcp.Icon
+	ReadOnly               bool
+	FormatResult           toolutil.FormatResultFunc
+	BaseDomain             string
+	EnterpriseOnly         bool
+	GitLabDotComOnly       bool
+	CapabilityRequirements []string
+	OwnerPackage           string
+	SurfaceKind            SurfaceKind
+	Actions                map[string]Action
+	ActionOrder            []string
 }
 
 // Catalog stores deterministic groups and action lookup indexes. A Catalog is
@@ -137,13 +152,24 @@ func ToActionMaps(catalog *Catalog) map[string]toolutil.ActionMap {
 
 // NewGroup creates an action group with initialized maps.
 func NewGroup(opts GroupOptions) Group {
+	surfaceKind := opts.SurfaceKind
+	if surfaceKind == "" {
+		surfaceKind = SurfaceKindMetaGroup
+	}
 	return Group{
-		ToolName:     strings.TrimSpace(opts.ToolName),
-		Description:  opts.Description,
-		Icons:        cloneIcons(opts.Icons),
-		ReadOnly:     opts.ReadOnly,
-		FormatResult: opts.FormatResult,
-		Actions:      make(map[string]Action),
+		ToolName:               strings.TrimSpace(opts.ToolName),
+		Title:                  strings.TrimSpace(opts.Title),
+		Description:            opts.Description,
+		Icons:                  cloneIcons(opts.Icons),
+		ReadOnly:               opts.ReadOnly,
+		FormatResult:           opts.FormatResult,
+		BaseDomain:             strings.TrimSpace(opts.BaseDomain),
+		EnterpriseOnly:         opts.EnterpriseOnly,
+		GitLabDotComOnly:       opts.GitLabDotComOnly,
+		CapabilityRequirements: cloneStrings(opts.CapabilityRequirements),
+		OwnerPackage:           strings.TrimSpace(opts.OwnerPackage),
+		SurfaceKind:            surfaceKind,
+		Actions:                make(map[string]Action),
 	}
 }
 
@@ -508,14 +534,21 @@ func normalizeGroup(group Group) (Group, error) {
 		return Group{}, errors.New(errToolNameRequired)
 	}
 	normalized := NewGroup(GroupOptions{
-		ToolName:     toolName,
-		Description:  group.Description,
-		Icons:        group.Icons,
-		ReadOnly:     group.ReadOnly,
-		FormatResult: group.FormatResult,
+		ToolName:               toolName,
+		Title:                  group.Title,
+		Description:            group.Description,
+		Icons:                  group.Icons,
+		ReadOnly:               group.ReadOnly,
+		FormatResult:           group.FormatResult,
+		BaseDomain:             group.BaseDomain,
+		EnterpriseOnly:         group.EnterpriseOnly,
+		GitLabDotComOnly:       group.GitLabDotComOnly,
+		CapabilityRequirements: group.CapabilityRequirements,
+		OwnerPackage:           group.OwnerPackage,
+		SurfaceKind:            group.SurfaceKind,
 	})
 	for _, action := range group.ActionsInOrder() {
-		normalizedAction, err := normalizeAction(toolName, action)
+		normalizedAction, err := normalizeAction(toolName, normalized.BaseDomain, action)
 		if err != nil {
 			return Group{}, err
 		}
@@ -524,7 +557,7 @@ func normalizeGroup(group Group) (Group, error) {
 	return normalized, nil
 }
 
-func normalizeAction(toolName string, action Action) (Action, error) {
+func normalizeAction(toolName, baseDomain string, action Action) (Action, error) {
 	action.Name = strings.TrimSpace(action.Name)
 	if action.Name == "" {
 		return Action{}, fmt.Errorf("action name is required for tool %q", toolName)
@@ -537,6 +570,9 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 		return Action{}, fmt.Errorf("action %q belongs to tool %q, want %q", action.Name, action.ToolName, toolName)
 	}
 	action.Domain = strings.TrimSpace(action.Domain)
+	if action.Domain == "" {
+		action.Domain = strings.TrimSpace(baseDomain)
+	}
 	if action.Domain == "" {
 		action.Domain = DomainFromToolName(action.ToolName)
 	}
@@ -564,6 +600,7 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)
+	action.Compatibility = toolutil.CloneCompatibilityPolicy(action.Compatibility)
 	action.SchemaValidationNotes = cloneStrings(action.SchemaValidationNotes)
 	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return cloneAction(action), nil
@@ -571,13 +608,20 @@ func normalizeAction(toolName string, action Action) (Action, error) {
 
 func cloneGroup(group Group) Group {
 	cloned := Group{
-		ToolName:     group.ToolName,
-		Description:  group.Description,
-		Icons:        cloneIcons(group.Icons),
-		ReadOnly:     group.ReadOnly,
-		FormatResult: group.FormatResult,
-		Actions:      make(map[string]Action, len(group.Actions)),
-		ActionOrder:  cloneStrings(group.ActionOrder),
+		ToolName:               group.ToolName,
+		Title:                  group.Title,
+		Description:            group.Description,
+		Icons:                  cloneIcons(group.Icons),
+		ReadOnly:               group.ReadOnly,
+		FormatResult:           group.FormatResult,
+		BaseDomain:             group.BaseDomain,
+		EnterpriseOnly:         group.EnterpriseOnly,
+		GitLabDotComOnly:       group.GitLabDotComOnly,
+		CapabilityRequirements: cloneStrings(group.CapabilityRequirements),
+		OwnerPackage:           group.OwnerPackage,
+		SurfaceKind:            group.SurfaceKind,
+		Actions:                make(map[string]Action, len(group.Actions)),
+		ActionOrder:            cloneStrings(group.ActionOrder),
 	}
 	for name, action := range group.Actions {
 		cloned.Actions[name] = cloneAction(action)
@@ -593,6 +637,7 @@ func cloneAction(action Action) Action {
 	}
 	action.Route = route
 	action.IndividualTool = toolutil.CloneIndividualToolSpec(action.IndividualTool)
+	action.Compatibility = toolutil.CloneCompatibilityPolicy(action.Compatibility)
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)

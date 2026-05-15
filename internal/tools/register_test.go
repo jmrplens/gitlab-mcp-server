@@ -1680,7 +1680,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 	}
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
 				validTools[name] = true
 			}
@@ -1740,7 +1740,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 	}
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
 				validActions[actionName] = true
 			}
