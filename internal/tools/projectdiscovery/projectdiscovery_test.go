@@ -4,7 +4,7 @@
 // All tests use [httptest] to mock the GitLab REST API endpoints. Tests
 // cover URL parsing (HTTPS, SSH shorthand, ssh:// protocol, edge cases),
 // project resolution via the API, markdown formatting of results, and
-// MCP round-trip registration via in-memory transports.
+// canonical ActionSpecs route execution.
 package projectdiscovery
 
 import (
@@ -13,9 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // Test constants shared across project discovery tests.
@@ -488,115 +487,90 @@ func TestFormatMarkdown_ContainsHints(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers the tool
-// on the MCP server without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical project discovery metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	spec := specs[0]
+	if spec.OwnerPackage != "projectdiscovery" {
+		t.Errorf("OwnerPackage = %q, want projectdiscovery", spec.OwnerPackage)
+	}
+	if spec.IndividualTool.Name != "gitlab_discover_project" {
+		t.Errorf("IndividualTool.Name = %q, want gitlab_discover_project", spec.IndividualTool.Name)
+	}
+	if !spec.ReadOnly || !spec.Idempotent {
+		t.Error("project discovery should be read-only and idempotent")
+	}
 }
 
-// newMCPSession creates an in-memory MCP client session with the project
-// discovery tool registered, backed by the provided HTTP handler.
-func newMCPSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallThroughMCP validates that the registered tool can be
-// called through the MCP protocol and returns the expected project data.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoute validates project discovery through the canonical route.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, testProjectJSON)
 	})
 
-	session := newMCPSession(t, handler)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_discover_project",
-		Arguments: map[string]any{
-			"remote_url": "https://gitlab.example.com/group/subgroup/my-project.git",
-		},
+	client := testutil.NewTestClient(t, handler)
+	byTool := projectDiscoverySpecsByTool(t, ActionSpecs(client))
+	result, err := byTool["gitlab_discover_project"].Route.Handler(context.Background(), map[string]any{
+		"remote_url": "https://gitlab.example.com/group/subgroup/my-project.git",
 	})
 	if err != nil {
-		t.Fatalf("CallTool() transport error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result.IsError {
-		t.Fatal("CallTool() returned IsError=true")
+	out, ok := result.(ResolveOutput)
+	if !ok {
+		t.Fatalf("Route.Handler result = %T, want ResolveOutput", result)
 	}
-	// Verify output contains expected project data
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			if !strings.Contains(tc.Text, "my-project") {
-				t.Errorf("CallTool() response missing project name, got: %s", tc.Text)
-			}
-			return
-		}
+	if out.Name != "my-project" {
+		t.Errorf("Route.Handler response missing project name, got: %s", out.Name)
 	}
-	t.Error("CallTool() response has no TextContent")
 }
 
-// TestRegisterTools_CallThroughMCP_Error validates that the registered tool
-// returns IsError=true when the GitLab API returns an error.
-func TestRegisterTools_CallThroughMCP_Error(t *testing.T) {
+// TestActionSpecs_CallRouteError validates API errors through the canonical route.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	})
 
-	session := newMCPSession(t, handler)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_discover_project",
-		Arguments: map[string]any{
-			"remote_url": "https://gitlab.example.com/group/project.git",
-		},
+	client := testutil.NewTestClient(t, handler)
+	byTool := projectDiscoverySpecsByTool(t, ActionSpecs(client))
+	_, err := byTool["gitlab_discover_project"].Route.Handler(context.Background(), map[string]any{
+		"remote_url": "https://gitlab.example.com/group/project.git",
 	})
-	if err != nil {
-		t.Fatalf("CallTool() transport error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("CallTool() expected IsError=true for API error")
+	if err == nil {
+		t.Fatal("Route.Handler expected error for API error")
 	}
 }
 
-// TestRegisterTools_CallThroughMCP_InvalidInput validates that the tool
-// returns IsError=true when given an invalid (empty) remote URL.
-func TestRegisterTools_CallThroughMCP_InvalidInput(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// TestActionSpecs_CallRouteInvalidInput validates input errors through the canonical route.
+func TestActionSpecs_CallRouteInvalidInput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
+	byTool := projectDiscoverySpecsByTool(t, ActionSpecs(client))
 
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_discover_project",
-		Arguments: map[string]any{
-			"remote_url": "",
-		},
+	_, err := byTool["gitlab_discover_project"].Route.Handler(context.Background(), map[string]any{
+		"remote_url": "",
 	})
-	if err != nil {
-		t.Fatalf("CallTool() transport error: %v", err)
+	if err == nil {
+		t.Fatal("Route.Handler expected error for empty URL input")
 	}
-	if !result.IsError {
-		t.Fatal("CallTool() expected IsError=true for empty URL input")
+
+}
+
+func projectDiscoverySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
+	return byTool
 }
