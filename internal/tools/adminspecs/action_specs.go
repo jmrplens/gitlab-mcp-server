@@ -78,7 +78,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("custom_attr_list", toolutil.RouteAction(client, customattributes.List), "gitlab_list_custom_attributes"),
 		adminReadSpec("custom_attr_get", toolutil.RouteAction(client, customattributes.Get), "gitlab_get_custom_attribute"),
 		adminUpdateCreateIndividualSpec("custom_attr_set", toolutil.RouteAction(client, customattributes.Set), "gitlab_set_custom_attribute"),
-		adminDeleteSpec("custom_attr_delete", toolutil.DestructiveVoidAction(client, customattributes.Delete), "gitlab_delete_custom_attribute"),
+		adminDeleteSpec("custom_attr_delete", toolutil.DestructiveAction(client, customattributes.DeleteOutput), "gitlab_delete_custom_attribute"),
 		adminCreateSpec("bulk_import_start", toolutil.RouteAction(client, bulkimports.StartMigration), "gitlab_start_bulk_import"),
 		adminReadSpec("bulk_import_list", toolutil.RouteAction(client, bulkimports.List), "gitlab_list_bulk_imports"),
 		adminReadSpec("bulk_import_get", toolutil.RouteAction(client, bulkimports.Get), "gitlab_get_bulk_import"),

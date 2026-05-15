@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -457,24 +458,33 @@ func TestFormatSetMarkdown_Coverage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for custom attribute actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := customAttributeSpecsByTool(t, specs)
+
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_custom_attribute"].Route.Destructive {
+		t.Fatal("gitlab_delete_custom_attribute should be destructive")
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newCustomAttrsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates custom attribute routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newCustomAttributeRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -497,42 +507,25 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
-// handlers when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+// TestActionSpecs_ErrorPaths covers the error return paths in canonical routes.
+func TestActionSpecs_ErrorPaths(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := customAttributeSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -544,28 +537,30 @@ func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("unexpected transport error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("expected error for %s with failing backend", tt.name)
 			}
 		})
 	}
 }
 
-// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in delete_custom_attribute when user declines.
-func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	handler := http.NewServeMux()
 	client := testutil.NewTestClient(t, handler)
+	byTool := customAttributeSpecsByTool(t, ActionSpecs(client))
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_custom_attribute"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test custom attribute destructive confirmation.",
+		Icons:       toolutil.IconConfig,
+	})
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -577,7 +572,10 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_delete_custom_attribute",
@@ -589,9 +587,18 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
 	}
+	found := false
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected non-empty text content in cancellation result")
+	}
 }
 
-func newCustomAttrsMCPSession(t *testing.T) *mcp.ClientSession {
+func newCustomAttributeRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -608,23 +615,21 @@ func newCustomAttrsMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return customAttributeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+func customAttributeSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
