@@ -10,8 +10,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -1140,18 +1138,30 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic + MCP round-trip
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for milestone actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := milestoneSpecsByTool(t, specs)
+
+	if len(specs) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "milestones" {
+			t.Fatalf("OwnerPackage for %s = %q, want milestones", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
+// TestActionSpecs_CallAllRoutes validates milestone routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	const milestonePath = "/api/v4/projects/42/milestones"
 
 	mux := http.NewServeMux()
@@ -1188,18 +1198,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -1216,24 +1215,19 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
+				t.Fatalf("Route.Handler(%s): nil result", tc.name)
 			}
 		})
 	}
 }
 
-// TestMilestoneGet_EmbedsCanonicalResource asserts gitlab_milestone_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/milestone/{iid}. The handler resolves IID to global
-// ID via ListMilestones with iids filter, then GetMilestone, so two mock
-// endpoints are required.
-func TestMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_MilestoneGetRoute verifies the canonical milestone get route output.
+func TestActionSpecs_MilestoneGetRoute(t *testing.T) {
 	const listJSON = `[{"id":99,"iid":3,"project_id":42,"title":"M3","description":"","state":"active"}]`
 	const getJSON = `{"id":99,"iid":3,"project_id":42,"title":"M3","description":"","state":"active"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1250,7 +1244,27 @@ func TestMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "milestone_iid": 3}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_milestone_get", args, "gitlab://project/42/milestone/3", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 3})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.IID != 3 || out.ID != 99 {
+		t.Fatalf("milestone output = %#v, want IID 3 ID 99", out)
+	}
+}
+
+func milestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

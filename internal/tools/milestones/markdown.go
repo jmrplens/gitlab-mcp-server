@@ -4,10 +4,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type milestoneNotFoundOutput struct {
+	Identifier string
+}
+
+func formatMilestoneNotFound(out milestoneNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Milestone", out.Identifier,
+		"Use gitlab_milestone_list with project_id to list milestones",
+		"Verify the milestone IID is correct for this project",
+	)
+}
 
 // FormatListMarkdownString renders a ListOutput as a Markdown table string.
 func FormatListMarkdownString(v ListOutput) string {
@@ -156,6 +167,7 @@ func FormatMergeRequestsMarkdown(v MilestoneMergeRequestsOutput) *mcp.CallToolRe
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatMilestoneNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatIssuesMarkdownString)
