@@ -16,13 +16,6 @@ import (
 // understand that the MCP client must support human-approved sampling.
 const samplingRequirement = "Requires the MCP client to support the sampling capability (human-in-the-loop approval)."
 
-// RegisterTools wires sampling-powered tools to the MCP server.
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-	for _, spec := range ActionSpecs(client) {
-		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Icons: toolutil.IconAnalytics, FormatResult: MetaMarkdownForResult})
-	}
-}
-
 // samplingUnsupportedOutput is a sentinel type returned by wrapSamplingAction
 // when the MCP client does not support the sampling capability.
 type samplingUnsupportedOutput struct {

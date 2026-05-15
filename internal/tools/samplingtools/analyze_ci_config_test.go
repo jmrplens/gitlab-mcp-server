@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -286,69 +287,67 @@ func TestFormatSummarizeIssueMarkdown_EmptyModel(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools no-panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for sampling actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	RegisterTools(server, client)
+	byTool := samplingSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 11 {
+		t.Fatalf("len(ActionSpecs) = %d, want 11", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "samplingtools" {
+			t.Errorf("OwnerPackage for %s = %q, want samplingtools", spec.Name, spec.OwnerPackage)
+		}
+		if !spec.ReadOnly || !spec.Idempotent {
+			t.Errorf("%s should be read-only and idempotent", spec.Name)
+		}
+		if spec.IndividualTool.Description == "" {
+			t.Errorf("%s should include a description", spec.IndividualTool.Name)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — without sampling (covers unsupported path in register.go)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripNoSampling validates cov m c p round trip no sampling across multiple scenarios using table-driven subtests.
-func TestMCPRound_TripNoSampling(t *testing.T) {
+// TestActionSpecs_NoSampling validates unsupported sampling through direct routes.
+func TestActionSpecs_NoSampling(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
+	byTool := samplingSpecsByTool(t, ActionSpecs(client))
 
 	tests := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
+		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": 10}},
 		{"gitlab_generate_release_notes", map[string]any{"project_id": "42", "from": "v1.0.0", "to": "v2.0.0"}},
-		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": float64(1)}},
-		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
+		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": 1}},
+		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": 1}},
 		{"gitlab_analyze_ci_configuration", map[string]any{"project_id": "42", "content_ref": "main"}},
-		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
-		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
+		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": 10}},
+		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 		{"gitlab_find_technical_debt", map[string]any{"project_id": "42", "ref": "main"}},
 		{"gitlab_analyze_deployment_history", map[string]any{"project_id": "42"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			res, err := byTool[tc.name].Route.Handler(context.Background(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
 			}
-			if res == nil {
+			if _, ok := res.(samplingUnsupportedOutput); !ok {
 				t.Fatalf("nil result for %s", tc.name)
-			}
-			if !res.IsError {
-				t.Errorf("%s should return IsError=true (sampling unsupported)", tc.name)
 			}
 		})
 	}
@@ -358,8 +357,8 @@ func TestMCPRound_TripNoSampling(t *testing.T) {
 // MCP round-trip — with sampling (covers success path in register.go)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_WithSampling validates cov m c p round trip with sampling across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_WithSampling(t *testing.T) {
+// TestActionSpecs_WithSampling validates direct routes with a sampling-capable request context.
+func TestActionSpecs_WithSampling(t *testing.T) {
 	mux := http.NewServeMux()
 
 	// MR endpoints (analyze_mr_changes, review_mr_security, summarize_mr_review).
@@ -465,58 +464,49 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 	})
 
 	gitlabClient := testutil.NewTestClient(t, mux)
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := samplingSpecsByTool(t, ActionSpecs(gitlabClient))
 
 	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		CreateMessageHandler: func(_ context.Context, _ *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-			return &mcp.CreateMessageResult{
-				Model:   testModelName,
-				Content: &mcp.TextContent{Text: "LLM mock analysis response"},
-			}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
+	_, session, cleanup := setupSamplingSession(t, ctx)
+	t.Cleanup(cleanup)
+	routeCtx := toolutil.ContextWithRequest(ctx, &mcp.CallToolRequest{Session: session})
 
 	tests := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
+		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": 10}},
 		{"gitlab_generate_release_notes", map[string]any{"project_id": "42", "from": "v1.0.0", "to": "v2.0.0"}},
-		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": float64(1)}},
-		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
-		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
+		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": 1}},
+		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": 1}},
 		{"gitlab_analyze_ci_configuration", map[string]any{"project_id": "42", "content_ref": "main"}},
-		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
-		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
+		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": 10}},
+		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 		{"gitlab_find_technical_debt", map[string]any{"project_id": "42", "ref": "main"}},
 		{"gitlab_analyze_deployment_history", map[string]any{"project_id": "42"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			res, err := byTool[tc.name].Route.Handler(routeCtx, tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
 			}
 			if res == nil {
 				t.Fatalf("nil result for %s", tc.name)
 			}
-			if res.IsError {
-				t.Errorf("%s should not return IsError=true", tc.name)
-			}
 		})
 	}
+}
+
+func samplingSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // ---------------------------------------------------------------------------
