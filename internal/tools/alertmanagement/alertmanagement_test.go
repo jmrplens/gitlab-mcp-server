@@ -4,7 +4,6 @@
 package alertmanagement
 
 import (
-	"context"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -12,8 +11,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const errExpectedErr = "expected error"
@@ -364,27 +362,29 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies alert management action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "alertmanagement" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 4 tools (success)
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewAlertMgmtMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates all alert management canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtHandler())
 
 	tools := []struct {
 		name string
@@ -399,33 +399,28 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 4 tools (error paths)
+// ActionSpec route execution error paths
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCPError validates cov register tools call all through m c p error across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
-	session := covNewAlertMgmtErrorMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRouteErrors validates canonical route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
+	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtErrorHandler())
 
 	tools := []struct {
 		name string
@@ -440,15 +435,12 @@ func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
 			}
 		})
 	}
@@ -460,14 +452,7 @@ func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (success)
-// ---------------------------------------------------------------------------.
-
-// covNewAlertMgmtMCPSession is an internal helper for the alertmanagement package.
-func covNewAlertMgmtMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
+func covAlertMgmtHandler() http.Handler {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("GET /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
@@ -486,95 +471,28 @@ func covNewAlertMgmtMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return handler
 }
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (error paths)
-// ---------------------------------------------------------------------------.
-
-// covNewAlertMgmtErrorMCPSession is an internal helper for the alertmanagement package.
-func covNewAlertMgmtErrorMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
+func covAlertMgmtErrorHandler() http.Handler {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	})
 
+	return handler
+}
+
+func covAlertMgmtSpecsByTool(t *testing.T, handler http.Handler) map[string]toolutil.ActionSpec {
+	t.Helper()
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
-
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the alert metric image delete handler when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_alert_metric_image",
-		Arguments: map[string]any{"project_id": "42", "alert_iid": 1, "image_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
-	}
-}

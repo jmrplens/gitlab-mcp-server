@@ -1,22 +1,17 @@
-// register_test.go contains integration tests for the alert management tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains canonical route tests for alert management actions.
+// Tests exercise mutation error paths with a mock GitLab API.
 package alertmanagement
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_MutationErrors verifies that delete/update handler closures in
-// register.go return error results when the GitLab API returns internal server error,
-// covering the if-err-not-nil branches.
-func TestRegisterTools_MutationErrors(t *testing.T) {
+// TestActionSpecs_MutationErrors verifies mutation route error paths.
+func TestActionSpecs_MutationErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -27,18 +22,11 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	t.Cleanup(func() { session.Close() })
 
 	tools := []struct {
 		name string
@@ -49,12 +37,12 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
 			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s", tt.name)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.name)
 			}
 		})
 	}
