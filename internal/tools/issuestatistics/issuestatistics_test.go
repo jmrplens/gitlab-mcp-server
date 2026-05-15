@@ -4,15 +4,12 @@
 package issuestatistics
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const errExpectedErr = "expected error"
@@ -617,13 +614,12 @@ func TestGetProject_APIError401(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP integration -- RegisterTools
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
 const covStatsJSON = `{"statistics":{"counts":{"all":100,"closed":40,"opened":60}}}`
 
-// newIssueStatsMCPSession is an internal helper for the issuestatistics package.
-func newIssueStatsMCPSession(t *testing.T) *mcp.ClientSession {
+func newIssueStatsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -639,50 +635,35 @@ func newIssueStatsMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return issueStatsSpecsByTool(ActionSpecs(client))
 }
 
-// assertToolCallSuccess is an internal helper for the issuestatistics package.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+func issueStatsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+	return specByTool
+}
+
+func assertRouteCallSuccess(t *testing.T, specByTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+	spec, ok := specByTool[name]
+	if !ok {
+		t.Fatalf("missing ActionSpec for %s", name)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	result, err := spec.Route.Handler(t.Context(), args)
+	if err != nil {
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
+	}
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueStatsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates issue statistics canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newIssueStatsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -701,48 +682,40 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.name, tt.args)
+			assertRouteCallSuccess(t, specByTool, tt.name, tt.args)
 		})
 	}
 }
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies issue statistics action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "issuestatistics" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // panics due to nil FormatResultFunc in production code -- tracked separately)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_Errors validates register.go error paths for the 3 statistics
-// tools via MCP round-trip against a 500 backend.
-func TestMCPRoundTrip_Errors(t *testing.T) {
+// TestActionSpecs_CallRouteErrors validates issue statistics route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := issueStatsSpecsByTool(ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -754,14 +727,12 @@ func TestMCPRoundTrip_Errors(t *testing.T) {
 	}
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-				Name: tc.name, Arguments: tc.args,
-			})
-			if callErr != nil {
-				t.Fatalf("CallTool: %v", callErr)
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
 			}
-			if !res.IsError {
-				t.Error("expected IsError=true")
+			if _, err := spec.Route.Handler(t.Context(), tc.args); err == nil {
+				t.Fatal("expected route error")
 			}
 		})
 	}
