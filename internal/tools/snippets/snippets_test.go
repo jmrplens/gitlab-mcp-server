@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const snippetJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go","description":"A test","visibility":"private","author":{"id":1,"username":"admin","name":"Admin","email":"admin@example.com","state":"active"},"project_id":0,"web_url":"https://gitlab.example.com/snippets/42","raw_url":"https://gitlab.example.com/snippets/42/raw","files":[{"path":"test.go","raw_url":"https://gitlab.example.com/snippets/42/raw/main/test.go"}]}`
@@ -373,47 +371,39 @@ func TestResolveProjectLabel_Fallback(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_Get404 validates that the snippet get tool returns NotFound
-// for 404 responses (register.go 404 paths).
-func TestMCPRoundTrip_Get404(t *testing.T) {
+// TestActionSpecs_Get404 validates not-found and error behavior for snippet get routes.
+func TestActionSpecs_Get404(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
-		name string
-		args map[string]any
+		name         string
+		args         map[string]any
+		expectResult bool
 	}{
-		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}},
-		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}},
+		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}, true},
+		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}, false},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name+"_404", func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool: %v", callErr)
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if tc.expectResult {
+				if err != nil {
+					t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
+				}
+				if _, ok := result.(snippetNotFoundOutput); !ok {
+					t.Fatalf("result type = %T, want snippetNotFoundOutput", result)
+				}
+				return
 			}
-			if !res.IsError {
-				t.Error("expected IsError=true for 404")
+			if err == nil {
+				t.Fatalf("expected error from %s", tc.name)
 			}
 		})
 	}
@@ -430,9 +420,8 @@ func TestResolveProjectLabel_ZeroProjectID(t *testing.T) {
 	}
 }
 
-// TestSnippetGet_EmbedsCanonicalResource asserts gitlab_snippet_get
-// attaches an EmbeddedResource block with URI gitlab://snippet/{id}.
-func TestSnippetGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_SnippetGetRoute verifies the canonical personal snippet get route output.
+func TestActionSpecs_SnippetGetRoute(t *testing.T) {
 	const respJSON = `{"id":33,"title":"hello","file_name":"hello.txt","description":"","visibility":"public","author":{"id":1,"username":"u","name":"u"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/snippets/33") {
@@ -441,7 +430,27 @@ func TestSnippetGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"snippet_id": 33}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_snippet_get", args, "gitlab://snippet/33", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_snippet_get"].Route.Handler(t.Context(), map[string]any{"snippet_id": 33})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 33 || out.Title != "hello" {
+		t.Fatalf("snippet output = %#v, want ID 33 title hello", out)
+	}
+}
+
+func snippetSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

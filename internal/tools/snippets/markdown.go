@@ -4,8 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type snippetNotFoundOutput struct {
+	Identifier string
+}
+
+func formatSnippetNotFound(out snippetNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Snippet", out.Identifier,
+		"Use gitlab_snippet_list to list your snippets",
+		"Verify the snippet_id is correct",
+		"The snippet may be private or have been deleted",
+	)
+}
 
 const hintUpdateSnippet = "Use action 'update' to modify a personal snippet; for project snippets use action 'project_update'"
 
@@ -111,6 +125,7 @@ func FormatFileContentMarkdown(out FileContentOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatSnippetNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatContentMarkdown)

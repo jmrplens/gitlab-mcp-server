@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -797,21 +795,32 @@ func TestConvertSnippet_NilFiles(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration and MCP round-trip
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for snippet actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := snippetSpecsByTool(t, specs)
+
+	if len(specs) != 15 {
+		t.Fatalf("len(ActionSpecs) = %d, want 15", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "snippets" {
+			t.Fatalf("OwnerPackage for %s = %q, want snippets", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// TestMCPRoundTrip_AllSnippetTools validates m c p round trip all snippet tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllSnippetTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallAllRoutes validates snippet routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodDelete:
@@ -832,18 +841,7 @@ func TestMCPRoundTrip_AllSnippetTools(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, covListSnippetJSON)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -868,16 +866,12 @@ func TestMCPRoundTrip_AllSnippetTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
@@ -934,10 +928,8 @@ func TestProjectUpdate_SingleFileFallback(t *testing.T) {
 	}
 }
 
-// TestProjectSnippetGet_EmbedsCanonicalResource asserts
-// gitlab_project_snippet_get attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/snippet/{snippet_id}.
-func TestProjectSnippetGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_ProjectSnippetGetRoute verifies the canonical project snippet get route output.
+func TestActionSpecs_ProjectSnippetGetRoute(t *testing.T) {
 	const respJSON = `{"id":7,"title":"hi","file_name":"f.txt","description":"","visibility":"private","author":{"id":1,"username":"u","name":"u"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/snippets/7") {
@@ -946,7 +938,18 @@ func TestProjectSnippetGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "snippet_id": 7}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_project_snippet_get", args, "gitlab://project/42/snippet/7", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_project_snippet_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "snippet_id": 7})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 7 || out.Title != "hi" {
+		t.Fatalf("project snippet output = %#v, want ID 7 title hi", out)
+	}
 }

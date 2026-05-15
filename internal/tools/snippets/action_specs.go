@@ -1,6 +1,10 @@
 package snippets
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -15,7 +19,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		snippetReadSpec("list", toolutil.RouteAction(client, List), "gitlab_snippet_list"),
 		snippetReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_snippet_list_all"),
-		snippetReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_snippet_get"),
+		snippetReadSpec("get", snippetGetRoute(client), "gitlab_snippet_get"),
 		snippetReadSpec("content", toolutil.RouteAction(client, Content), "gitlab_snippet_content"),
 		snippetReadSpec("file_content", toolutil.RouteAction(client, FileContent), "gitlab_snippet_file_content"),
 		snippetCreateSpec("create", createRoute, "gitlab_snippet_create"),
@@ -29,6 +33,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		snippetUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_project_snippet_update"),
 		snippetDeleteSpec("project_delete", toolutil.DestructiveVoidAction(client, ProjectDelete), "gitlab_project_snippet_delete"),
 	}
+}
+
+func snippetGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return snippetNotFoundOutput{Identifier: fmt.Sprintf("ID %v", input["snippet_id"])}, nil
+		}
+		return result, err
+	}
+	return route
 }
 
 func snippetReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
