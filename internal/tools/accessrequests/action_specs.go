@@ -1,6 +1,8 @@
 package accessrequests
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -14,9 +16,25 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		accessRequestCreateSpec("request_group", toolutil.RouteAction(client, RequestGroup), "gitlab_access_request_request_group"),
 		accessRequestUpdateSpec("approve_project", toolutil.RouteAction(client, ApproveProject), "gitlab_access_request_approve_project"),
 		accessRequestUpdateSpec("approve_group", toolutil.RouteAction(client, ApproveGroup), "gitlab_access_request_approve_group"),
-		accessRequestDeleteSpec("deny_project", toolutil.DestructiveVoidAction(client, DenyProject), "gitlab_access_request_deny_project"),
-		accessRequestDeleteSpec("deny_group", toolutil.DestructiveVoidAction(client, DenyGroup), "gitlab_access_request_deny_group"),
+		accessRequestDeleteSpec("deny_project", toolutil.RouteAction(client, DenyProjectOutput), "gitlab_access_request_deny_project"),
+		accessRequestDeleteSpec("deny_group", toolutil.RouteAction(client, DenyGroupOutput), "gitlab_access_request_deny_group"),
 	}
+}
+
+// DenyProjectOutput denies a project access request and returns the legacy success message shape.
+func DenyProjectOutput(ctx context.Context, client *gitlabclient.Client, input DenyProjectInput) (toolutil.DeleteOutput, error) {
+	if err := DenyProject(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted project access request."}, nil
+}
+
+// DenyGroupOutput denies a group access request and returns the legacy success message shape.
+func DenyGroupOutput(ctx context.Context, client *gitlabclient.Client, input DenyGroupInput) (toolutil.DeleteOutput, error) {
+	if err := DenyGroup(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group access request."}, nil
 }
 
 func accessRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

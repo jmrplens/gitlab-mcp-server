@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the access request tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains catalog-surface tests for access request actions.
 package accessrequests
 
 import (
@@ -11,11 +9,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_DenyErrors verifies that deny handler closures in register.go
-// return error results when the GitLab API responds with 500.
-func TestRegisterTools_DenyErrors(t *testing.T) {
+// TestActionSpecs_DenyErrors verifies deny routes return errors when the GitLab API rejects them.
+func TestActionSpecs_DenyErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -25,18 +23,7 @@ func TestRegisterTools_DenyErrors(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := accessRequestSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -47,39 +34,18 @@ func TestRegisterTools_DenyErrors(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s with failing backend", tt.name)
+			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DenyConfirmDeclined covers the ConfirmAction early-return
-// branches in the deny project and deny group handlers when the user declines.
-func TestRegisterTools_DenyConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DenyConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DenyConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := accessRequestSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -90,6 +56,32 @@ func TestRegisterTools_DenyConfirmDeclined(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.name], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test access request destructive confirmation.",
+				Icons:       toolutil.IconUser,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, connectErr := mcpClient.Connect(ctx, ct, nil)
+			if connectErr != nil {
+				t.Fatalf("client connect: %v", connectErr)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
 			if err != nil {
 				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
