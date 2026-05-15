@@ -419,19 +419,26 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 	}
 }
 
-// TestOrbit_RegisterTools_RegistersToolDefinitions verifies that individual
-// Orbit tools are registered with the MCP server.
-func TestOrbit_RegisterTools_RegistersToolDefinitions(t *testing.T) {
+// TestOrbit_ActionSpecs_Metadata verifies canonical individual Orbit metadata.
+func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	names := registeredToolNames(t, server)
+	specs := ActionSpecs(client)
+	names := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		if spec.OwnerPackage != "orbit" {
+			t.Fatalf("OwnerPackage for %s = %q, want orbit", spec.Name, spec.OwnerPackage)
+		}
+		if !spec.GitLabDotComOnly || spec.Edition != "premium" {
+			t.Fatalf("spec %s gating = dotcom:%t edition:%q, want GitLab.com premium", spec.Name, spec.GitLabDotComOnly, spec.Edition)
+		}
+		names = append(names, spec.IndividualTool.Name)
+	}
 	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
 		if !containsTool(names, want) {
-			t.Fatalf("RegisterTools() missing %s in %v", want, names)
+			t.Fatalf("ActionSpecs() missing %s in %v", want, names)
 		}
 	}
 }
@@ -515,10 +522,10 @@ func TestOrbit_RegisterMeta_CallThroughMCP(t *testing.T) {
 	}
 }
 
-// TestOrbit_RegisterTools_CallThroughMCP verifies that each individual Orbit
-// MCP tool can be invoked through an in-memory MCP session.
-func TestOrbit_RegisterTools_CallThroughMCP(t *testing.T) {
-	session := newOrbitSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// TestOrbit_ActionSpecs_CallAllRoutes verifies that each individual Orbit
+// route can be invoked through the canonical action specs.
+func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v4/orbit/status":
 			testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -553,21 +560,21 @@ func TestOrbit_RegisterTools_CallThroughMCP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := routes[tt.name].Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool() error: %v", err)
+				t.Fatalf("Route.Handler() error: %v", err)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool() returned error result for %s", tt.name)
+			if result == nil {
+				t.Fatalf("Route.Handler() returned nil for %s", tt.name)
 			}
 		})
 	}
 }
 
-// TestOrbit_RegisterTools_NotFoundReturnsInformationalResult verifies that
+// TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult verifies that
 // Orbit 404 responses become informational MCP errors with setup guidance.
-func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
-	session := newOrbitSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
@@ -584,19 +591,20 @@ func TestOrbit_RegisterTools_NotFoundReturnsInformationalResult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := routes[tt.name].Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool() error = %v, want nil", err)
+				t.Fatalf("Route.Handler() error = %v, want nil", err)
 			}
-			if !result.IsError {
-				t.Fatal("CallTool() IsError = false, want true informational error result")
+			callResult := toolutil.MarkdownForResult(result)
+			if callResult == nil || !callResult.IsError {
+				t.Fatalf("MarkdownForResult() = %#v, want informational error result", callResult)
 			}
-			if len(result.Content) == 0 {
-				t.Fatal("CallTool() content is empty, want Orbit not-found guidance")
+			if len(callResult.Content) == 0 {
+				t.Fatal("MarkdownForResult() content is empty, want Orbit not-found guidance")
 			}
-			textContent, ok := result.Content[0].(*mcp.TextContent)
+			textContent, ok := callResult.Content[0].(*mcp.TextContent)
 			if !ok {
-				t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+				t.Fatalf("content type = %T, want *mcp.TextContent", callResult.Content[0])
 			}
 			if !strings.Contains(textContent.Text, "Not Found") || !strings.Contains(textContent.Text, "GitLab Orbit") {
 				t.Fatalf("content = %q, want Orbit not-found guidance", textContent.Text)
@@ -928,16 +936,21 @@ func registeredToolNames(t *testing.T, server *mcp.Server) []string {
 	return names
 }
 
-func newOrbitSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
-	t.Helper()
-	return newOrbitMCPSession(t, handler, RegisterTools)
-}
-
 func newOrbitMetaSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
 	return newOrbitMCPSession(t, handler, func(server *mcp.Server, client *gitlabclient.Client) {
 		registerOrbitMetaForTest(t, server, client)
 	})
+}
+
+func newOrbitSpecsByTool(t *testing.T, handler http.Handler) map[string]toolutil.ActionRoute {
+	t.Helper()
+	client := testutil.NewTestClient(t, handler)
+	routes := make(map[string]toolutil.ActionRoute)
+	for _, spec := range ActionSpecs(client) {
+		routes[spec.IndividualTool.Name] = spec.Route
+	}
+	return routes
 }
 
 func registerOrbitMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {

@@ -5,15 +5,30 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+type orbitNotFoundOutput struct {
+	Resource   string
+	Identifier string
+}
+
 func init() {
+	toolutil.RegisterMarkdownResult(formatOrbitNotFound)
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
 	toolutil.RegisterMarkdown[SchemaOutput](FormatSchemaMarkdown)
 	toolutil.RegisterMarkdown[ToolsOutput](FormatToolsMarkdown)
 	toolutil.RegisterMarkdown[QueryOutput](FormatQueryMarkdown)
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
+}
+
+func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(out.Resource, out.Identifier,
+		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
+		"Check that the token can access a Knowledge Graph-enabled namespace or project",
+	)
 }
 
 // FormatStatusMarkdown formats Orbit status output for LLM consumption.
