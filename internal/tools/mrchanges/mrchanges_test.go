@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestMRChangesGet_Success verifies that mrChangesGet returns the correct file
@@ -714,13 +712,16 @@ func TestGetDiffVersion_Unidiff(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRegisterTools_CallAllThroughMCP — full MCP roundtrip for all 4 tools
+// TestActionSpecs_CallAllRoutes — canonical route execution for all 4 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMRChangesMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates all MR change actions through their canonical ActionSpecs routes.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newMRChangesActionSpecs(t)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -734,20 +735,19 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
+			if !spec.ReadOnly || !spec.Idempotent || spec.OwnerPackage != "mrchanges" {
+				t.Fatalf("unexpected ActionSpec semantics for %s: %+v", tt.name, spec)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
@@ -757,8 +757,8 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// newMRChangesMCPSession is an internal helper for the mrchanges package.
-func newMRChangesMCPSession(t *testing.T) *mcp.ClientSession {
+// newMRChangesActionSpecs builds canonical action specs backed by a mock GitLab API.
+func newMRChangesActionSpecs(t *testing.T) []toolutil.ActionSpec {
 	t.Helper()
 
 	const diffsJSON = `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1 +1 @@\n-old\n+new","new_file":false,"renamed_file":false,"deleted_file":false,"a_mode":"100644","b_mode":"100644"}]`
@@ -792,22 +792,5 @@ func newMRChangesMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return ActionSpecs(client)
 }
