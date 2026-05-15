@@ -1681,16 +1681,27 @@ func TestMarkdownForResult_WikiOutput(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration tests
+// ActionSpecs tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for search actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 10 {
+		t.Fatalf("len(ActionSpecs) = %d, want 10", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "search" {
+			t.Errorf("OwnerPackage for %s = %q, want search", spec.Name, spec.OwnerPackage)
+		}
+		if !spec.ReadOnly || !spec.Idempotent {
+			t.Errorf("%s should be read-only and idempotent", spec.Name)
+		}
+	}
 }
 
 // TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
@@ -1702,16 +1713,14 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	registerSearchMetaForTest(t, server, client)
 }
 
-// TestRegisterTools_SearchTypeSchemaEnum verifies that every individual
-// search tool exposes search_type as a constrained enum in tools/list.
-func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_SearchTypeSchemaEnum verifies that every search route exposes
+// search_type as a constrained enum in its input schema.
+func TestActionSpecs_SearchTypeSchemaEnum(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
 
-	tools := listSearchTools(t, server)
 	for _, name := range []string{
 		"gitlab_search_code",
 		"gitlab_search_merge_requests",
@@ -1725,8 +1734,7 @@ func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
 		"gitlab_search_wiki",
 	} {
 		t.Run(name, func(t *testing.T) {
-			tool := findSearchTool(t, tools, name)
-			requireSearchTypeEnum(t, schemaMapFromAny(t, tool.InputSchema))
+			requireSearchTypeEnum(t, schemaMapFromAny(t, byTool[name].Route.InputSchema))
 		})
 	}
 }
@@ -1824,36 +1832,6 @@ func TestSearchSchemaPanic_ErrorPanics(t *testing.T) {
 	searchSchemaPanic("marshal", errors.New("boom"))
 }
 
-func listSearchTools(t *testing.T, server *mcp.Server) []*mcp.Tool {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
-	tools, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
-	}
-	return tools.Tools
-}
-
-func findSearchTool(t *testing.T, tools []*mcp.Tool, name string) *mcp.Tool {
-	t.Helper()
-	for _, tool := range tools {
-		if tool.Name == name {
-			return tool
-		}
-	}
-	t.Fatalf("tool %q not found", name)
-	return nil
-}
-
 func schemaMapFromAny(t *testing.T, raw any) map[string]any {
 	t.Helper()
 	data, err := json.Marshal(raw)
@@ -1894,9 +1872,8 @@ func requireSearchTypeEnum(t *testing.T, schema map[string]any) {
 // MCP round-trip
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllSearchTools validates m c p round trip all search tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_AllSearchRoutes validates all search routes across multiple scenarios.
+func TestActionSpecs_AllSearchRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scope := r.URL.Query().Get("scope")
 		switch scope {
@@ -1924,18 +1901,7 @@ func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -1955,19 +1921,24 @@ func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			if result == nil {
+				t.Fatalf("nil result for %s", tc.name)
 			}
 		})
 	}
+}
+
+func searchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // TestMCPRound_TripMetaTool verifies the behavior of m c p round trip meta tool.
