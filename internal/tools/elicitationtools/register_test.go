@@ -1,7 +1,5 @@
-// register_test.go validates that the four registered MCP tool wrappers in
-// [register.go] correctly translate elicitation cancellation/decline errors
-// returned by the underlying handlers into a non-error CancelledResult,
-// rather than propagating the error to the client.
+// register_test.go validates that catalog-backed interactive tools translate
+// elicitation cancellation into non-error CancelledResult responses.
 package elicitationtools
 
 import (
@@ -13,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // roundTripCancelCase describes one tool registration's cancellation flow.
@@ -22,10 +21,9 @@ type roundTripCancelCase struct {
 	wantInBody string // substring that must appear in the CancelledResult text
 }
 
-// runRoundTripCancelCase calls the named registered MCP tool through an
+// runRoundTripCancelCase calls the named catalog-backed MCP tool through an
 // in-memory client whose elicitation handler immediately cancels. The tool
-// handler returns a wrapped ErrCancelled, and the registered closure should
-// translate that into a non-error CancelledResult — the path exercised here.
+// route translates the wrapped ErrCancelled into a non-error CancelledResult.
 func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	t.Helper()
 
@@ -34,11 +32,23 @@ func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec, ok := byTool[tc.tool]
+	if !ok {
+		t.Fatalf("missing spec for %s", tc.tool)
+	}
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
-	go func() { _, _ = server.Connect(ctx, st, nil) }()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
 		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -49,6 +59,10 @@ func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.tool, Arguments: tc.args})
 	if err != nil {
@@ -79,10 +93,10 @@ func contentText(res *mcp.CallToolResult) string {
 	return b.String()
 }
 
-// TestRegisterTools_IssueCancelRoundTrip verifies that the registered
+// TestCatalogSurface_IssueCancelRoundTrip verifies that the catalog-backed
 // gitlab_interactive_issue_create tool returns a non-error CancelledResult
 // when elicitation is cancelled mid-flow.
-func TestRegisterTools_IssueCancelRoundTrip(t *testing.T) {
+func TestCatalogSurface_IssueCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_issue_create",
 		args:       map[string]any{keyProjectID: "42"},
@@ -90,9 +104,9 @@ func TestRegisterTools_IssueCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestRegisterTools_MRCancelRoundTrip verifies the MR registration's
+// TestCatalogSurface_MRCancelRoundTrip verifies the MR surface tool's
 // cancellation wrapper.
-func TestRegisterTools_MRCancelRoundTrip(t *testing.T) {
+func TestCatalogSurface_MRCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_mr_create",
 		args:       map[string]any{keyProjectID: "42"},
@@ -100,9 +114,9 @@ func TestRegisterTools_MRCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestRegisterTools_ReleaseCancelRoundTrip verifies the release registration's
+// TestCatalogSurface_ReleaseCancelRoundTrip verifies the release surface tool's
 // cancellation wrapper.
-func TestRegisterTools_ReleaseCancelRoundTrip(t *testing.T) {
+func TestCatalogSurface_ReleaseCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_release_create",
 		args:       map[string]any{keyProjectID: "42"},
@@ -110,12 +124,28 @@ func TestRegisterTools_ReleaseCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestRegisterTools_ProjectCancelRoundTrip verifies the project registration's
+// TestCatalogSurface_ProjectCancelRoundTrip verifies the project surface tool's
 // cancellation wrapper.
-func TestRegisterTools_ProjectCancelRoundTrip(t *testing.T) {
+func TestCatalogSurface_ProjectCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_project_create",
 		args:       map[string]any{},
 		wantInBody: "Project creation cancelled",
 	})
+}
+
+func elicitationSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }

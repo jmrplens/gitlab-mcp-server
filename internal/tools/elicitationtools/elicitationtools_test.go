@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/elicitation"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -637,16 +638,22 @@ func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools no-panic
+// Catalog surface projection no-panic
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestCatalogSurface_NoPanic verifies elicitation specs can be projected as MCP tools.
+func TestCatalogSurface_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+			Description:  spec.IndividualTool.Description,
+			Icons:        toolutil.IconConfig,
+			FormatResult: FormatResult,
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -660,7 +667,13 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+			Description:  spec.IndividualTool.Description,
+			Icons:        toolutil.IconConfig,
+			FormatResult: FormatResult,
+		})
+	}
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -715,7 +728,13 @@ func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_issue_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -771,7 +790,13 @@ func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(client))
+	spec := byTool["gitlab_interactive_issue_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1322,7 +1347,13 @@ func TestMCPRoundTripMRCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_mr_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1382,7 +1413,13 @@ func TestMCPRoundTripReleaseCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_release_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1440,7 +1477,13 @@ func TestMCPRoundTripProjectCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_project_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
