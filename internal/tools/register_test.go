@@ -1522,6 +1522,7 @@ var knownExceptions = map[string]string{
 	"actioncatalog": "infrastructure package for catalog metadata, not an MCP tool package",
 	"dynamic":       "registered in cmd/server/main.go from the canonical action catalog",
 	"serverupdate":  "registered in cmd/server/main.go with *autoupdate.Updater",
+	"surfaces":      "infrastructure package for catalog-backed standalone surface tool specs",
 	"testdata":      "contains test data, not a tool package",
 }
 

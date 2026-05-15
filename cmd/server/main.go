@@ -660,7 +660,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 	default:
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
-		serverupdate.RegisterTools(server, updater)
+		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
 	}
 
 	if len(cfg.ExcludeTools) > 0 {

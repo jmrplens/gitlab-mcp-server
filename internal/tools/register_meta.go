@@ -6,9 +6,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
@@ -38,13 +35,5 @@ func RegisterMetaStandaloneTools(server *mcp.Server, client *gitlabclient.Client
 }
 
 func registerStandaloneUtilities(server *mcp.Server, client *gitlabclient.Client) {
-	// Standalone utility tools (not consolidated into meta-tools).
-	// projectdiscovery: git-remote → project resolution helper.
-	// elicitationtools: 4 gitlab_interactive_* tools that drive multi-step MCP
-	// elicitation flows. They cannot be folded into an action+params meta-tool
-	// because each step requires a separate elicitation/create round-trip with
-	// the client. They degrade gracefully on clients without the elicitation
-	// capability via UnsupportedResult (IsError: true).
-	projectdiscovery.RegisterTools(server, client)
-	elicitationtools.RegisterTools(server, client)
+	RegisterSurfaceTools(server, StandaloneSurfaceToolSpecs(client))
 }

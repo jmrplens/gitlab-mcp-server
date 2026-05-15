@@ -373,6 +373,54 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
 }
 
+// RouteFunc wraps a typed function as a non-destructive ActionRoute without a
+// GitLab client dependency and attaches input and output schemas.
+func RouteFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+	inputType := reflect.TypeFor[T]()
+	return ActionRoute{
+		Handler: func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := UnmarshalParams[T](params)
+			if err != nil {
+				var zero R
+				return zero, err
+			}
+			return fn(ctx, input)
+		},
+		Destructive:  false,
+		InputType:    inputType,
+		InputSchema:  inputSchemaForType(inputType),
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
+}
+
+// RouteRequestFunc wraps a typed request-aware function as a non-destructive
+// ActionRoute without a GitLab client dependency and attaches schemas.
+func RouteRequestFunc[T any, R any](fn func(ctx context.Context, req *mcp.CallToolRequest, input T) (R, error)) ActionRoute {
+	inputType := reflect.TypeFor[T]()
+	return ActionRoute{
+		Handler: func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := UnmarshalParams[T](params)
+			if err != nil {
+				var zero R
+				return zero, err
+			}
+			return fn(ctx, RequestFromContext(ctx), input)
+		},
+		Destructive:  false,
+		InputType:    inputType,
+		InputSchema:  inputSchemaForType(inputType),
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
+}
+
+// DestructiveFunc wraps a typed function as a destructive ActionRoute without a
+// GitLab client dependency and attaches input and output schemas.
+func DestructiveFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+	route := RouteFunc(fn)
+	route.Destructive = true
+	return route
+}
+
 // outputSchemaCache stores reflected output schemas by Go type to avoid
 // regenerating identical JSON Schemas for every route registration.
 var (
