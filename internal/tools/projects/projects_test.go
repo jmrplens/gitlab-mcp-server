@@ -3637,17 +3637,28 @@ func TestBuildUserProjectOpts_NoFields(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — ensures registration doesn't panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for project actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client) // should not panic
+	specs := ActionSpecs(client, true)
+	byTool := projectSpecsByTool(t, specs)
+
+	if len(specs) != 54 {
+		t.Fatalf("len(ActionSpecs) = %d, want 54", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "projects" {
+			t.Fatalf("OwnerPackage for %s = %q, want projects", spec.Name, spec.OwnerPackage)
+		}
+	}
+	if !byTool["gitlab_project_transfer"].Destructive {
+		t.Fatal("gitlab_project_transfer should be destructive for confirmation prompts")
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -4430,7 +4441,7 @@ type mockRoute struct {
 }
 
 // mcpMockHandler returns an HTTP handler that responds with valid JSON for all
-// project-related GitLab API endpoints used by the 33 registered tools.
+// project-related GitLab API endpoints used by the canonical project actions.
 // Routes are organized as a map to keep cognitive complexity low.
 func mcpMockHandler() http.Handler {
 	// Method-specific routes: key = "METHOD /path"
@@ -4537,41 +4548,17 @@ func mcpMockHandler() http.Handler {
 	})
 }
 
-// newProjectsMCPSession creates an in-memory MCP session with only the
-// projects sub-package tools registered. Returns the client session for
-// calling tools.
-func newProjectsMCPSession(t *testing.T) *mcp.ClientSession {
+// newProjectRouteSpecs creates canonical project route specs for the package tests.
+func newProjectRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	client := testutil.NewTestClient(t, mcpMockHandler())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	RegisterPushRuleTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return projectSpecsByTool(t, ActionSpecs(client, true))
 }
 
-// TestRegisterTools_CallAllThroughMCP exercises every handler closure registered
-// by RegisterTools by calling each tool through the MCP in-memory transport.
-// This covers the start-timer → call-function → log → return-markdown paths
-// in register.go that unit tests cannot reach.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newProjectsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes exercises every canonical project action route.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newProjectRouteSpecs(t)
 
 	// Each entry: tool name → minimal arguments that produce a successful call
 	tools := []struct {
@@ -4665,7 +4652,57 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallOK(t, session, ctx, tt.name, tt.args)
+			assertProjectRouteOK(t, byTool, tt.name, tt.args)
+		})
+	}
+}
+
+// TestCatalogSurface_ProjectDestructiveConfirmDeclined verifies destructive project tools return early when confirmation is declined.
+func TestCatalogSurface_ProjectDestructiveConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := projectSpecsByTool(t, ActionSpecs(client, false))
+
+	for _, tt := range []struct {
+		toolName string
+		args     map[string]any
+	}{
+		{toolName: "gitlab_project_delete", args: map[string]any{"project_id": "42"}},
+		{toolName: "gitlab_project_transfer", args: map[string]any{"project_id": "42", "namespace": "new-ns"}},
+	} {
+		t.Run(tt.toolName, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.toolName], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test project destructive confirmation.",
+				Icons:       toolutil.IconProject,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, err := mcpClient.Connect(ctx, ct, nil)
+			if err != nil {
+				t.Fatalf("client connect: %v", err)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.toolName, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result for declined confirmation")
+			}
 		})
 	}
 }
@@ -4817,24 +4854,25 @@ func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	}
 }
 
-// assertToolCallOK is an internal helper for the projects package.
-func assertToolCallOK(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+// assertProjectRouteOK is an internal helper for the projects package.
+func assertProjectRouteOK(t *testing.T, byTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := byTool[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
+}
+
+func projectSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // Test paths for webhook customization, fork relations, avatars, maintenance, and admin operations.
@@ -6411,9 +6449,8 @@ func TestChangeApprovalConfig_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProjectGet_EmbedsCanonicalResource asserts gitlab_project_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}.
-func TestProjectGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_ProjectGetRoute verifies the canonical project get route output.
+func TestActionSpecs_ProjectGetRoute(t *testing.T) {
 	const respJSON = `{"id":42,"name":"P","path":"p","path_with_namespace":"g/p","default_branch":"main","web_url":"https://gitlab.example.com/g/p","visibility":"private"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42" {
@@ -6422,7 +6459,34 @@ func TestProjectGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_project_get", args, "gitlab://project/42", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := projectSpecsByTool(t, ActionSpecs(client, false))
+
+	result, err := byTool["gitlab_project_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 42 || out.PathWithNamespace != "g/p" {
+		t.Fatalf("project output = %#v, want ID 42 path g/p", out)
+	}
+}
+
+// TestActionSpecs_ProjectGetNotFound verifies the canonical get route preserves rich 404 output.
+func TestActionSpecs_ProjectGetNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	byTool := projectSpecsByTool(t, ActionSpecs(client, false))
+
+	result, err := byTool["gitlab_project_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if _, ok := result.(projectNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want projectNotFoundOutput", result)
+	}
 }

@@ -6,7 +6,20 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+type projectNotFoundOutput struct {
+	Identifier string
+}
+
+func formatProjectNotFound(out projectNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Project", out.Identifier,
+		"Use gitlab_project_list to search for projects by name or path",
+		"Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')",
+		"The project may have been deleted or you may lack access",
+	)
+}
 
 // FormatMarkdown renders a single project as a Markdown summary.
 func FormatMarkdown(p Output) string {
@@ -299,6 +312,11 @@ func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 	return b.String()
 }
 
+// FormatTriggerTestHookMarkdown renders a webhook test trigger result as markdown.
+func FormatTriggerTestHookMarkdown(out TriggerTestHookOutput) string {
+	return fmt.Sprintf(toolutil.EmojiSuccess+" %s", out.Message)
+}
+
 // FormatPushRuleMarkdown renders a push rule as markdown.
 func FormatPushRuleMarkdown(out PushRuleOutput) string {
 	var b strings.Builder
@@ -506,6 +524,7 @@ func FormatRepositoryStorageMarkdown(out RepositoryStorageOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatProjectNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatDeleteMarkdown)
@@ -516,6 +535,8 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListProjectUsersMarkdown)
 	toolutil.RegisterMarkdown(FormatListProjectGroupsMarkdown)
 	toolutil.RegisterMarkdown(FormatListStarrersMarkdown)
+	toolutil.RegisterMarkdown(FormatShareProjectMarkdown)
+	toolutil.RegisterMarkdown(FormatTriggerTestHookMarkdown)
 	toolutil.RegisterMarkdown(FormatPushRuleMarkdown)
 	toolutil.RegisterMarkdown(FormatForkRelationMarkdown)
 	toolutil.RegisterMarkdown(FormatDownloadAvatarMarkdown)
