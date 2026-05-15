@@ -229,7 +229,7 @@
 | pages | 53 | 2 | 97.9% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 80 | 2 | 97.5% | 11 |
-| pipelinetriggers | 48 | 2 | 99.4% | 6 |
+| pipelinetriggers | 48 | 2 | 99.3% | 6 |
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
@@ -446,7 +446,7 @@
 | pages | 97.9% |
 | pipelines | 97.9% |
 | pipelineschedules | 97.5% |
-| pipelinetriggers | 99.4% |
+| pipelinetriggers | 99.3% |
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
 | projectdiscovery | 100.0% |

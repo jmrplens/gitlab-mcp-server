@@ -1,6 +1,8 @@
 package pipelinetriggers
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,9 +14,17 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineTriggerReadSpec("trigger_get", toolutil.RouteAction(client, GetTrigger), "gitlab_pipeline_trigger_get"),
 		pipelineTriggerCreateSpec("trigger_create", toolutil.RouteAction(client, CreateTrigger), "gitlab_pipeline_trigger_create"),
 		pipelineTriggerUpdateSpec("trigger_update", toolutil.RouteAction(client, UpdateTrigger), "gitlab_pipeline_trigger_update"),
-		pipelineTriggerDeleteSpec("trigger_delete", toolutil.DestructiveVoidAction(client, DeleteTrigger), "gitlab_pipeline_trigger_delete"),
+		pipelineTriggerDeleteSpec("trigger_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_pipeline_trigger_delete"),
 		pipelineTriggerCreateSpec("trigger_run", toolutil.RouteAction(client, RunTrigger), "gitlab_pipeline_trigger_run"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteTrigger(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("pipeline trigger")
+	return out, nil
 }
 
 func pipelineTriggerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
