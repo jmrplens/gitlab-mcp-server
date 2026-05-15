@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,713 |
-| Unit test functions | 9,466 |
+| Total test functions | 9,712 |
+| Unit test functions | 9,465 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 420 |
@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.3% |
 | Overall coverage (`go test ./internal/...`) | 96.4% |
 | Average package coverage | 94.1% |
 
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,722 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,721 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 282 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,103 | 322 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,102 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,713** | **546** |  |
+| **Total** | **9,712** | **546** |  |
 
 ### Core Packages
 
@@ -254,7 +254,7 @@
 | runners | 99 | 1 | 96.0% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
-| securefiles | 25 | 2 | 99.1% | 4 |
+| securefiles | 24 | 2 | 98.8% | 4 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
 | serverupdate | 22 | 1 | 90.1% | 2 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,103** | **322** |  | **1,018** |
+| **Total** | **7,102** | **322** |  | **1,018** |
 
 </details>
 
@@ -471,7 +471,7 @@
 | runners | 96.0% |
 | samplingtools | 100.0% |
 | search | 100.0% |
-| securefiles | 99.1% |
+| securefiles | 98.8% |
 | securityfindings | 100.0% |
 | securitysettings | 100.0% |
 | serverupdate | 90.1% |
