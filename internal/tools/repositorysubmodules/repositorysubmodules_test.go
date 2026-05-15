@@ -4,7 +4,6 @@
 package repositorysubmodules
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestUpdate_Success verifies that Update handles the success scenario correctly.
@@ -164,17 +164,33 @@ func TestUpdate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools handles the no panic scenario correctly.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for repository submodule actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "repositorysubmodules" {
+			t.Errorf("OwnerPackage for %s = %q, want repositorysubmodules", spec.Name, spec.OwnerPackage)
+		}
+	}
+	for _, name := range []string{"gitlab_list_repository_submodules", "gitlab_read_repository_submodule_file"} {
+		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+			t.Errorf("%s should be read-only and idempotent", name)
+		}
+	}
+	if byTool["gitlab_update_repository_submodule"].ReadOnly || !byTool["gitlab_update_repository_submodule"].Idempotent {
+		t.Error("update submodule action should be mutating and idempotent")
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies that RegisterTools handles the call through m c p scenario correctly.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_UpdateRoute verifies that the update route can be called directly.
+func TestActionSpecs_UpdateRoute(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":"c1","short_id":"c1","title":"t","author_name":"A","author_email":"a@t.com","message":"m"}`)
@@ -182,30 +198,22 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
+	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_update_repository_submodule"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "submodule": "lib", "branch": "main", "commit_sha": "abc"})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	defer session.Close()
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
+	}
+}
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_update_repository_submodule",
-		Arguments: map[string]any{"project_id": "42", "submodule": "lib", "branch": "main", "commit_sha": "abc"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+func repositorySubmoduleSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true")
-	}
+	return byTool
 }

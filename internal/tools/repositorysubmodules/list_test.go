@@ -4,7 +4,6 @@
 package repositorysubmodules
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -309,45 +308,22 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// RegisterTools includes new tools.
+// ActionSpecs includes all repository submodule tools.
 
-// TestRegisterTools_IncludesNewTools verifies that RegisterTools handles the includes new tools scenario correctly.
-func TestRegisterTools_IncludesNewTools(t *testing.T) {
+// TestActionSpecs_IncludesTools verifies that ActionSpecs exposes all repository submodule tools.
+func TestActionSpecs_IncludesTools(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	defer session.Close()
-
-	tools, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatalf("ListTools error: %v", err)
-	}
-
-	toolNames := make(map[string]bool)
-	for _, tool := range tools.Tools {
-		toolNames[tool.Name] = true
-	}
+	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
 
 	for _, name := range []string{
 		"gitlab_list_repository_submodules",
 		"gitlab_read_repository_submodule_file",
 		"gitlab_update_repository_submodule",
 	} {
-		if !toolNames[name] {
-			t.Errorf("expected tool %q to be registered", name)
+		if _, ok := byTool[name]; !ok {
+			t.Errorf("expected tool %q in ActionSpecs", name)
 		}
 	}
 }
