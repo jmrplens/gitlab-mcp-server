@@ -12,7 +12,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -496,25 +495,31 @@ func TestFormatMarkAllDoneMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration tests
+// ActionSpec route tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies todo action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "todos" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllTodoTools validates m c p round trip all todo tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallRoutes validates all todo routes across multiple scenarios using table-driven subtests.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == pathTodos && r.Method == http.MethodGet:
@@ -528,18 +533,11 @@ func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	defer session.Close()
 
 	tools := []struct {
 		name string
@@ -552,16 +550,16 @@ func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			result, err := spec.Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
