@@ -13,7 +13,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -1019,11 +1018,23 @@ func TestDeleteProtectionRule_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for container registry actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := registrySpecsByTool(t, specs)
+
+	if len(specs) != 12 {
+		t.Fatalf("len(ActionSpecs) = %d, want 12", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete"} {
+		if !byTool[toolName].Route.Destructive {
+			t.Fatalf("%s should be destructive", toolName)
+		}
+	}
 }
 
 // newRegistryMCPTestMux creates a ServeMux that handles all registry API endpoints
@@ -1120,24 +1131,12 @@ func covProtectionRuleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — exercises all 12 individual tool handlers via RegisterTools
+// ActionSpecs route coverage for all 12 individual tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	client := testutil.NewTestClient(t, newRegistryMCPTestMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+// TestActionSpecs_CallAllRoutes validates container registry routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := registrySpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, newRegistryMCPTestMux())))
 
 	tools := []struct {
 		name string
@@ -1159,16 +1158,31 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
+				t.Fatalf("Route.Handler(%s): nil result", tc.name)
 			}
 		})
 	}
+}
+
+func registrySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }
 
 // ---------------------------------------------------------------------------
