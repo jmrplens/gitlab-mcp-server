@@ -3,14 +3,12 @@
 package markdown
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestRender_Success verifies that Render handles the success scenario correctly.
@@ -101,17 +99,30 @@ func TestRender_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools handles the no panic scenario correctly.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for markdown rendering.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	spec := specs[0]
+	if spec.OwnerPackage != "markdown" {
+		t.Errorf("OwnerPackage = %q, want markdown", spec.OwnerPackage)
+	}
+	if spec.IndividualTool.Name != "gitlab_render_markdown" {
+		t.Errorf("IndividualTool.Name = %q, want gitlab_render_markdown", spec.IndividualTool.Name)
+	}
+	if !spec.ReadOnly || !spec.Idempotent {
+		t.Error("markdown render action should be read-only and idempotent")
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies that RegisterTools handles the call through m c p scenario correctly.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoute verifies markdown rendering through the canonical route.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/markdown" {
 			testutil.RespondJSON(w, http.StatusOK, `{"html":"<p>rendered</p>"}`)
@@ -119,30 +130,22 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
+	byTool := markdownSpecsByTool(t, ActionSpecs(client))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_render_markdown"].Route.Handler(t.Context(), map[string]any{"text": "Hello **world**"})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	defer session.Close()
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
+	}
+}
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_render_markdown",
-		Arguments: map[string]any{"text": "Hello **world**"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+func markdownSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true")
-	}
+	return byTool
 }
