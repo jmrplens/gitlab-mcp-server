@@ -4381,9 +4381,20 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "assistant_message", Role: "assistant", Blocks: response.Content, Usage: &usage, Provider: response.ProviderTrace})
 		if len(toolUses) == 0 {
 			result.Notes = append(result.Notes, "model returned no tool_use block")
-			return result
+			if firstFinalAttempt {
+				result.FirstPass = false
+				firstFinalAttempt = false
+			}
+			if repairCount >= repairLimit {
+				return result
+			}
+			result.RepairAttempted = true
+			repairCount++
+			repairMessage := noToolUseRepairMessage(stepIndex, steps)
+			messages = append(messages, modelMessage{Role: "user", Content: []modelContentBlock{{Type: "text", Text: repairMessage}}})
+			result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "repair_prompt", Role: "user", Content: repairMessage})
+			continue
 		}
-
 		var followups []modelContentBlock
 		repairAlreadySent := repairCount >= repairLimit
 		for _, toolUse := range toolUses {
@@ -4480,6 +4491,9 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 						result.CompletedSteps = stepIndex
 						if stepIndex == len(steps) {
 							result.FinalSuccess = simulation.Err == nil
+							if result.FinalSuccess && (repairCount > 0 || simulatedErrorSeen) {
+								result.RepairSuccess = true
+							}
 							return result
 						}
 					}
@@ -4542,6 +4556,17 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
+}
+
+func noToolUseRepairMessage(stepIndex int, steps []evalStep) string {
+	if stepIndex < 0 || stepIndex >= len(steps) {
+		return "The previous response did not call an MCP tool. Continue by calling the next required tool now; do not answer in prose."
+	}
+	step := steps[stepIndex]
+	if step.ExpectedAction == "" {
+		return fmt.Sprintf("The previous response did not call an MCP tool. Continue by calling %s now; do not answer in prose.", step.ExpectedTool)
+	}
+	return fmt.Sprintf("The previous response did not call an MCP tool. Continue by calling %s with action %s now; do not answer in prose.", step.ExpectedTool, step.ExpectedAction)
 }
 
 // canExecuteInvalidToolCall reports whether the *modelRunner satisfies the can execute invalid tool call condition.

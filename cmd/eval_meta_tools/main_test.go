@@ -4605,6 +4605,29 @@ func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_RepairsNoToolUseResponse verifies the evaluator prompts for
+// a tool call when a provider returns prose without a tool_use block.
+func TestEvaluateTask_RepairsNoToolUseResponse(t *testing.T) {
+	runner := newScriptedRunner(t,
+		modelResponse{Content: []modelContentBlock{{Type: "text", Text: "I can do that."}}},
+		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	task := evalTask{ID: "MT-002", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.RepairAttempted || !result.RepairSuccess || !result.FinalSuccess {
+		t.Fatalf("result = %+v, want successful repair after no tool_use response", result)
+	}
+	if result.FirstPass {
+		t.Fatalf("FirstPass = true, want first no-tool response to remain a first-pass miss")
+	}
+	if !traceHasKind(result.Trace, "repair_prompt") {
+		t.Fatalf("trace events = %+v, want repair_prompt event", result.Trace.Events)
+	}
+}
+
 // TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting verifies that EvaluateTask handles the invalid matching call uses m c p error when executing scenario correctly.
 func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T) {
 	runner := newScriptedRunner(t,
