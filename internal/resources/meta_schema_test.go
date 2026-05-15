@@ -11,6 +11,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -106,6 +108,24 @@ func TestMetaSchemaTemplate_ReturnsInputSchema(t *testing.T) {
 	}
 	if !strings.Contains(result.Contents[0].Text, `"project_id"`) {
 		t.Errorf("schema missing project_id: %s", result.Contents[0].Text)
+	}
+}
+
+// TestMetaSchemaTemplate_ResolvesSpecFirstCatalogRoute verifies schema
+// resources can consume the catalog built from ActionSpecs directly.
+func TestMetaSchemaTemplate_ResolvesSpecFirstCatalogRoute(t *testing.T) {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	session := metaSchemaSession(t, actioncatalog.ToActionMaps(catalog))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("read spec-first schema: %v", err)
+	}
+	if !strings.Contains(result.Contents[0].Text, `"project_id"`) {
+		t.Fatalf("schema missing project_id: %s", result.Contents[0].Text)
 	}
 }
 

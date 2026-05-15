@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
@@ -21,6 +23,18 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 	if report.Summary.DomainCount == 0 {
 		t.Fatal("expected discovered domains")
+	}
+	if report.Architecture.CatalogSource == "" || report.Architecture.MetaRegistrationSource == "" || report.Architecture.IndividualRegistrationSource == "" {
+		t.Fatalf("architecture report missing source fields: %+v", report.Architecture)
+	}
+	if report.Architecture.SurfaceSpecCount != report.Summary.SurfaceSpecCount {
+		t.Fatalf("architecture surface specs = %d, summary = %d", report.Architecture.SurfaceSpecCount, report.Summary.SurfaceSpecCount)
+	}
+	if report.Architecture.LegacyBridgeCount != 0 || len(report.Architecture.LegacyBridges) != 0 {
+		t.Fatalf("architecture legacy bridges = %+v, want zero", report.Architecture.LegacyBridges)
+	}
+	if report.Architecture.DynamicActionAliasCount == 0 || report.Architecture.DynamicParameterAliasCount == 0 {
+		t.Fatalf("architecture dynamic alias counts missing: %+v", report.Architecture)
 	}
 
 	projects := requireDomain(t, report, "projects")
@@ -74,6 +88,39 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 
 	if err := assertActionSpecManifestCurrent(root); err == nil {
 		t.Fatal("assertActionSpecManifestCurrent() error = nil, want stale manifest error")
+	}
+}
+
+func TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences(t *testing.T) {
+	findings := legacyBridgeFindingsInContent("runtime.go", "package tools\nfunc f(){ registerAllLegacy() }", []string{"registerAllLegacy"})
+	if len(findings) != 1 || findings[0] != "runtime.go contains \"registerAllLegacy\"" {
+		t.Fatalf("legacyBridgeFindingsInContent() = %+v, want registerAllLegacy finding", findings)
+	}
+}
+
+func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
+	err := assertCoverageInvariants([]domainCoverage{{
+		Package:               "example",
+		HasIndividualTools:    true,
+		HasMetaSpecs:          false,
+		SurfaceClassification: "individual-only",
+	}})
+	if err == nil {
+		t.Fatal("assertCoverageInvariants() error = nil, want missing ActionSpec error")
+	}
+}
+
+func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_example"})
+	group.SetAction(actioncatalog.Action{ID: "example.get", Name: "get"})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
+	if len(missing) != 1 || missing[0] != "example.get" {
+		t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %+v, want example.get", missing)
 	}
 }
 

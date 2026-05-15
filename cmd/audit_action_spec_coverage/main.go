@@ -28,6 +28,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/surfaces"
 )
@@ -37,10 +38,29 @@ const (
 	schemaVersion     = 1
 )
 
+var metaOnlyProjectionActions = map[string]string{
+	"server.health_check": "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status",
+}
+
 type coverageReport struct {
-	SchemaVersion int              `json:"schema_version"`
-	Summary       coverageSummary  `json:"summary"`
-	Domains       []domainCoverage `json:"domains"`
+	SchemaVersion int                `json:"schema_version"`
+	Architecture  architectureReport `json:"architecture"`
+	Summary       coverageSummary    `json:"summary"`
+	Domains       []domainCoverage   `json:"domains"`
+}
+
+type architectureReport struct {
+	CatalogSource                          string   `json:"catalog_source"`
+	ManifestSource                         string   `json:"manifest_source"`
+	MetaRegistrationSource                 string   `json:"meta_registration_source"`
+	IndividualRegistrationSource           string   `json:"individual_registration_source"`
+	DynamicAliasSource                     string   `json:"dynamic_alias_source"`
+	SurfaceSpecCount                       int      `json:"surface_spec_count"`
+	LegacyBridgeCount                      int      `json:"legacy_bridge_count"`
+	LegacyBridges                          []string `json:"legacy_bridges,omitempty"`
+	DynamicActionAliasCount                int      `json:"dynamic_action_alias_count"`
+	DynamicParameterAliasCount             int      `json:"dynamic_parameter_alias_count"`
+	DynamicSpecMetadataParameterAliasCount int      `json:"dynamic_spec_metadata_parameter_alias_count"`
 }
 
 type coverageSummary struct {
@@ -185,12 +205,88 @@ func buildCoverageReport(root string) (coverageReport, error) {
 	sort.Slice(domains, func(first, second int) bool {
 		return domains[first].Package < domains[second].Package
 	})
+	if invariantErr := assertCoverageInvariants(domains); invariantErr != nil {
+		return coverageReport{}, invariantErr
+	}
+	client, err := clientForAudit()
+	if err != nil {
+		return coverageReport{}, err
+	}
+	if projectionErr := assertCatalogActionsHaveIndividualProjectionPolicy(client); projectionErr != nil {
+		return coverageReport{}, projectionErr
+	}
+
+	summary := summarizeCoverage(domains)
+	architecture, err := buildArchitectureReport(root, summary)
+	if err != nil {
+		return coverageReport{}, err
+	}
 
 	return coverageReport{
 		SchemaVersion: schemaVersion,
-		Summary:       summarizeCoverage(domains),
+		Architecture:  architecture,
+		Summary:       summary,
 		Domains:       domains,
 	}, nil
+}
+
+func assertCoverageInvariants(domains []domainCoverage) error {
+	var gaps []string
+	for _, domain := range domains {
+		if domain.HasRegisterMeta {
+			gaps = append(gaps, fmt.Sprintf("%s still defines package-level RegisterMeta", domain.Package))
+		}
+		if domain.HasIndividualTools && !domain.HasMetaSpecs {
+			gaps = append(gaps, fmt.Sprintf("%s has GitLab-client RegisterTools without canonical ActionSpecs", domain.Package))
+		}
+		if domain.SurfaceClassification == "individual-only" {
+			gaps = append(gaps, fmt.Sprintf("%s is individual-only; ordinary GitLab actions must be catalog-backed", domain.Package))
+		}
+	}
+	if len(gaps) > 0 {
+		sort.Strings(gaps)
+		return fmt.Errorf("action spec coverage invariants failed: %s", strings.Join(gaps, "; "))
+	}
+	return nil
+}
+
+func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Client) error {
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		return fmt.Errorf("build action catalog: %w", err)
+	}
+	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return fmt.Errorf("add standalone dynamic catalog actions: %w", err)
+	}
+	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
+	if len(missing) > 0 {
+		return fmt.Errorf("catalog actions missing individual projection policy: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func catalogActionsMissingIndividualProjectionPolicy(catalog *actioncatalog.Catalog) []string {
+	if catalog == nil {
+		return nil
+	}
+	var missing []string
+	for _, group := range catalog.Groups() {
+		for _, action := range group.ActionsInOrder() {
+			if strings.TrimSpace(action.IndividualTool.Name) == "" {
+				actionID := string(action.ID)
+				if actionID == "" {
+					actionID = group.ToolName + "." + action.Name
+				}
+				if _, ok := metaOnlyProjectionActions[actionID]; ok {
+					continue
+				}
+				missing = append(missing, actionID)
+			}
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func auditCatalogFirstSource(root string) error {
@@ -200,7 +296,115 @@ func auditCatalogFirstSource(root string) error {
 	if err := assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go")); err != nil {
 		return err
 	}
+	if err := assertNoLegacyRuntimeBridges(root); err != nil {
+		return err
+	}
+	if err := assertDynamicCompatibilityPolicyOwnedByActionCompat(root); err != nil {
+		return err
+	}
 	return assertActionSpecManifestCurrent(root)
+}
+
+func buildArchitectureReport(root string, summary coverageSummary) (architectureReport, error) {
+	bridges, err := legacyRuntimeBridgeFindings(root)
+	if err != nil {
+		return architectureReport{}, err
+	}
+	parameterAliases := actioncompat.ParameterAliases()
+	specMetadataParameterAliasCount := 0
+	for _, alias := range parameterAliases {
+		if alias.SpecMetadata {
+			specMetadataParameterAliasCount++
+		}
+	}
+	return architectureReport{
+		CatalogSource:                          "ActionSpec groups collected from action_specs_manifest_gen.go",
+		ManifestSource:                         "internal/tools/action_specs_manifest_gen.go",
+		MetaRegistrationSource:                 "catalog projection via RegisterMetaCatalog",
+		IndividualRegistrationSource:           "catalog projection via RegisterIndividualCatalogTools",
+		DynamicAliasSource:                     "actioncompat compatibility policy projected into ActionSpec metadata and Dynamic normalization",
+		SurfaceSpecCount:                       summary.SurfaceSpecCount,
+		LegacyBridgeCount:                      len(bridges),
+		LegacyBridges:                          bridges,
+		DynamicActionAliasCount:                len(actioncompat.ActionAliases()),
+		DynamicParameterAliasCount:             len(parameterAliases),
+		DynamicSpecMetadataParameterAliasCount: specMetadataParameterAliasCount,
+	}, nil
+}
+
+func assertNoLegacyRuntimeBridges(root string) error {
+	bridges, err := legacyRuntimeBridgeFindings(root)
+	if err != nil {
+		return err
+	}
+	if len(bridges) > 0 {
+		return fmt.Errorf("production legacy bridge count = %d: %s", len(bridges), strings.Join(bridges, "; "))
+	}
+	return nil
+}
+
+func legacyRuntimeBridgeFindings(root string) ([]string, error) {
+	checks := map[string][]string{
+		filepath.Join(root, "internal", "tools", "action_catalog.go"): {
+			"CaptureMetaToolDefinitions",
+			"registerAllMetaGroups(",
+			"groupFromMetaToolDefinition",
+			".RegisterMeta(",
+		},
+		filepath.Join(root, "internal", "tools", "register_meta.go"): {
+			"registerAllMetaGroups(",
+			".RegisterMeta(",
+		},
+		filepath.Join(root, "internal", "tools", "register.go"): {
+			".RegisterTools(",
+			"registerAllLegacy",
+			"legacyIndividualToolDescriptions",
+			"listToolsForDescriptionCapture",
+		},
+		filepath.Join(root, "internal", "toolutil", "metatool.go"): {
+			"CaptureMetaToolDefinitions",
+			"MetaToolDefinition",
+		},
+	}
+	findings := make([]string, 0)
+	for path, forbidden := range checks {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		findings = append(findings, legacyBridgeFindingsInContent(path, string(content), forbidden)...)
+	}
+	sort.Strings(findings)
+	return findings, nil
+}
+
+func legacyBridgeFindingsInContent(path, content string, forbidden []string) []string {
+	findings := make([]string, 0)
+	for _, needle := range forbidden {
+		if strings.Contains(content, needle) {
+			findings = append(findings, fmt.Sprintf("%s contains %q", path, needle))
+		}
+	}
+	return findings
+}
+
+func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
+	path := filepath.Join(root, "internal", "tools", "dynamic", "register.go")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	for _, forbidden := range []string{
+		"return annotateCompatibilityAliases([]actionAlias{",
+		"func buildSnippetCreateFilesFromSingleFileParams(",
+		"func gitlabAccessLevelValue(",
+		"func boolStringValue(",
+	} {
+		if strings.Contains(string(content), forbidden) {
+			return fmt.Errorf("%s owns compatibility policy %q; move policy to actioncompat or ActionSpec metadata", path, forbidden)
+		}
+	}
+	return nil
 }
 
 func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
@@ -494,12 +698,9 @@ func referencedPackages(path, selectorName string) (map[string]bool, error) {
 }
 
 func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
-	client, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- audit-only dummy token.
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "audit-token",
-	})
+	client, err := clientForAudit()
 	if err != nil {
-		return nil, fmt.Errorf("create audit GitLab client: %w", err)
+		return nil, err
 	}
 
 	coverage := make(map[string]packageActionCoverage)
@@ -541,6 +742,17 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	}
 
 	return coverage, nil
+}
+
+func clientForAudit() (*gitlabclient.Client, error) {
+	client, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- audit-only dummy token.
+		GitLabURL:   config.DefaultGitLabURL,
+		GitLabToken: "audit-token",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create audit GitLab client: %w", err)
+	}
+	return client, nil
 }
 
 func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToolSpec {
