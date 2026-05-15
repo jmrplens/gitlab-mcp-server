@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -45,6 +46,13 @@ func RegisterSurfaceToolFromSpec(server *mcp.Server, spec ActionSpec, opts Surfa
 func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatResultFunc) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		start := time.Now()
+		if route.Destructive {
+			message := fmt.Sprintf("Confirm destructive action %q?", toolName)
+			if result := ConfirmDestructiveAction(ctx, req, input, message); result != nil {
+				LogToolCallAll(ctx, req, toolName, start, nil)
+				return result, nil, nil
+			}
+		}
 		result, err := route.Handler(ContextWithRequest(ctx, req), input)
 		LogToolCallAll(ctx, req, toolName, start, err)
 		if err != nil {

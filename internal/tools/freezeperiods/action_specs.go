@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		freezePeriodReadSpec("freeze_get", toolutil.RouteAction(client, Get), "gitlab_get_freeze_period"),
 		freezePeriodCreateSpec("freeze_create", toolutil.RouteAction(client, Create), "gitlab_create_freeze_period"),
 		freezePeriodUpdateSpec("freeze_update", toolutil.RouteAction(client, Update), "gitlab_update_freeze_period"),
-		freezePeriodDeleteSpec("freeze_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_freeze_period"),
+		freezePeriodDeleteSpec("freeze_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_freeze_period"),
 	}
 }
 

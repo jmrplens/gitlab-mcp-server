@@ -176,6 +176,13 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted freeze period."}, nil
+}
+
 // Converters.
 
 // toOutput converts the GitLab API response to the tool output format.

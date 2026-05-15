@@ -66,6 +66,7 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 		return nil, fmt.Errorf("individual tool %q output schema is required", name)
 	}
 	applyIndividualRequiredFields(route)
+	route.InputSchema = enrichDestructiveSchema(route.InputSchema, route.Destructive)
 	normalizeSchemaDescriptions(route.InputSchema)
 	lockdownSchemaNode(route.InputSchema)
 	title := strings.TrimSpace(spec.IndividualTool.Title)

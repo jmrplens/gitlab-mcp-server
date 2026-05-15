@@ -195,8 +195,9 @@ func buildCoverageReport(root string) (coverageReport, error) {
 			coverage.SurfaceKinds = surfaceKinds(packageCoverage.SurfaceKindCounts)
 			coverage.SurfaceKindCounts = cloneStringIntMap(packageCoverage.SurfaceKindCounts)
 		}
-		coverage.HasIndividualTools = source.HasRegisterTools && isGitLabClientType(source.ClientType)
-		coverage.HasStandaloneOnlyTools = source.HasRegisterTools && !coverage.HasIndividualTools
+		legacyGitLabClientTools := source.HasRegisterTools && isGitLabClientType(source.ClientType)
+		coverage.HasIndividualTools = legacyGitLabClientTools || coverage.OrdinaryGitLabActionCount > 0 || source.HasActionSpecsFunction
+		coverage.HasStandaloneOnlyTools = (source.HasRegisterTools && !legacyGitLabClientTools) || (coverage.UtilitySurfaceActionCount > 0 && coverage.OrdinaryGitLabActionCount == 0 && !source.HasDynamicCatalogRegistration)
 		coverage.SurfaceClassification = classifySurface(source, coverage)
 		coverage.Notes = coverageNotes(source, coverage)
 		domains = append(domains, coverage)

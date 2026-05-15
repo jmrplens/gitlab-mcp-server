@@ -38,7 +38,7 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 
 	projects := requireDomain(t, report, "projects")
-	if !projects.HasRegisterTools || !projects.HasIndividualTools || !projects.HasMetaSpecs || !projects.HasDynamicCatalogEntries {
+	if !projects.HasIndividualTools || !projects.HasMetaSpecs || !projects.HasDynamicCatalogEntries {
 		t.Fatalf("projects coverage missing expected surfaces: %+v", projects)
 	}
 	if projects.SurfaceClassification != "spec-backed" {

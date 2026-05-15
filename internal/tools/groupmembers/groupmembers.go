@@ -237,6 +237,13 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 	return nil
 }
 
+func removeMemberOutput(ctx context.Context, client *gitlabclient.Client, input RemoveInput) (toolutil.DeleteOutput, error) {
+	if err := RemoveMember(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group member."}, nil
+}
+
 // ShareGroup shares a group with another group.
 func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInput) (ShareOutput, error) {
 	if input.GroupID == "" {
@@ -295,6 +302,13 @@ func UnshareGroup(ctx context.Context, client *gitlabclient.Client, input Unshar
 			"the share does not exist \u2014 use gitlab_group_get to inspect shared_with_groups for the current shares")
 	}
 	return nil
+}
+
+func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input UnshareInput) (toolutil.DeleteOutput, error) {
+	if err := UnshareGroup(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group share."}, nil
 }
 
 // ──────────────────────────────────────────────

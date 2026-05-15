@@ -1843,8 +1843,10 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
 	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
 	"unshare": {}, "disable_project": {}, "import_from_file": {},
-	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
+	"group_member_unshare": {},
+	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
+	"transfer": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the

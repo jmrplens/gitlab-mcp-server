@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -471,73 +469,4 @@ func containsStr(s, sub string) bool {
 		}
 	}
 	return false
-}
-
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallThroughMCP verifies that all registered tools can be
-// called through MCP in-memory transport, covering the handler closures of
-// RegisterTools. Each tool is called with valid inputs and a mock handler
-// that returns appropriate JSON responses.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}]`)
-		case http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}`)
-		case http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"freeze_start":"0 0 * * 1","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}`)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := t.Context()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_freeze_periods", map[string]any{"project_id": "1"}},
-		{"gitlab_get_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1}},
-		{"gitlab_create_freeze_period", map[string]any{"project_id": "1", "freeze_start": "0 23 * * 5", "freeze_end": "0 7 * * 1"}},
-		{"gitlab_update_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1, "freeze_start": "0 0 * * 1"}},
-		{"gitlab_delete_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil result", tt.name)
-			}
-		})
-	}
 }

@@ -207,6 +207,13 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 	return nil
 }
 
+func deleteUserListOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteUserList(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted feature flag user list."}, nil
+}
+
 // ──────────────────────────────────────────────
 // Converter
 // ──────────────────────────────────────────────.

@@ -11,8 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -409,96 +407,4 @@ func TestFormatUserListMarkdown_WithDates(t *testing.T) {
 	if !strings.Contains(md, "2 Jun 2026 12:00 UTC") {
 		t.Error("expected UpdatedAt in markdown")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_ff_user_list_list", map[string]any{"project_id": "42"}},
-		{"get", "gitlab_ff_user_list_get", map[string]any{"project_id": "42", "user_list_iid": float64(10)}},
-		{"create", "gitlab_ff_user_list_create", map[string]any{"project_id": "42", "name": "test", "user_xids": "u1"}},
-		{"update", "gitlab_ff_user_list_update", map[string]any{"project_id": "42", "user_list_iid": float64(10), "name": "updated"}},
-		{"delete", "gitlab_ff_user_list_delete", map[string]any{"project_id": "42", "user_list_iid": float64(10)}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// covNewMCPSession is an internal helper for the ffuserlists package.
-func covNewMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+covUserListJSON+`]`)
-	})
-	handler.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covUserListJSON)
-	})
-	handler.HandleFunc("POST /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, covUserListJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covUserListJSON)
-	})
-	handler.HandleFunc("DELETE /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

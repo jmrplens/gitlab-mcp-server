@@ -167,4 +167,11 @@ func DeleteClientKey(ctx context.Context, client *gitlabclient.Client, input Del
 	return nil
 }
 
+func deleteClientKeyOutput(ctx context.Context, client *gitlabclient.Client, input DeleteClientKeyInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteClientKey(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted error tracking client key."}, nil
+}
+
 // formatters.

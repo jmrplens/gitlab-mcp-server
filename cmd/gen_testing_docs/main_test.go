@@ -117,6 +117,43 @@ func RegisterTools() {
 	}
 }
 
+// TestCountLocalActionSpecTools_CountsPackageOwnedSpecs verifies catalog-backed
+// tool counts can be derived from domain-local ActionSpecs without executing handlers.
+func TestCountLocalActionSpecTools_CountsPackageOwnedSpecs(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "action_specs.go", `package sample
+
+func ActionSpecs(client *Client, enterprise bool) []toolutil.ActionSpec {
+	specs := []toolutil.ActionSpec{
+		sampleSpec("list"),
+		sampleSpec("get"),
+	}
+	if enterprise {
+		specs = append(specs,
+			sampleSpec("create"),
+			sampleSpec("delete"),
+		)
+	}
+	specs = append(specs, external.ActionSpecs(client)...)
+	return specs
+}
+
+func GroupActionSpecs(client *Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		sampleSpec("group_list"),
+	}
+}
+`)
+
+	got, err := countLocalActionSpecTools(dir)
+	if err != nil {
+		t.Fatalf("countLocalActionSpecTools() error = %v", err)
+	}
+	if got != 5 {
+		t.Fatalf("countLocalActionSpecTools() = %d, want 5", got)
+	}
+}
+
 // TestParseCoverageProfileTotal_FiltersMatchingFiles verifies internal-only
 // coverage totals can be derived from one combined coverage profile.
 func TestParseCoverageProfileTotal_FiltersMatchingFiles(t *testing.T) {

@@ -1,6 +1,9 @@
 package epics
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,8 +16,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		epicReadSpec("epic_get_links", toolutil.RouteAction(client, GetLinks), "gitlab_epic_get_links"),
 		epicCreateSpec("epic_create", toolutil.RouteAction(client, Create), "gitlab_epic_create"),
 		epicUpdateSpec("epic_update", toolutil.RouteAction(client, Update), "gitlab_epic_update"),
-		epicDeleteSpec("epic_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_epic_delete"),
+		epicDeleteSpec("epic_delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_epic_delete"),
 	}
+}
+
+// DeleteOutput deletes an epic and returns the canonical success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{
+		Status:  "success",
+		Message: fmt.Sprintf("Successfully deleted epic &%d from group %s.", input.IID, input.FullPath),
+	}, nil
 }
 
 func epicReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

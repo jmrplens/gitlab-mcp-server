@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupVariableReadSpec("group_get", toolutil.RouteAction(client, Get), "gitlab_group_variable_get"),
 		groupVariableCreateSpec("group_create", toolutil.RouteAction(client, Create), "gitlab_group_variable_create"),
 		groupVariableUpdateSpec("group_update", toolutil.RouteAction(client, Update), "gitlab_group_variable_update"),
-		groupVariableDeleteSpec("group_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_variable_delete"),
+		groupVariableDeleteSpec("group_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_group_variable_delete"),
 	}
 }
 

@@ -153,6 +153,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or path",
           "type": "string"
@@ -166,7 +170,8 @@
         "group_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -205,6 +210,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -218,7 +227,8 @@
         "project_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -2591,6 +2601,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user",
           "type": "integer"
@@ -2599,7 +2613,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -2633,6 +2648,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user",
           "type": "integer"
@@ -2641,7 +2660,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -2826,6 +2846,10 @@
           "description": "Board ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -2835,7 +2859,8 @@
         "project_id",
         "board_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -3331,6 +3356,10 @@
           "description": "Board ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "list_id": {
           "description": "Board list ID",
           "type": "integer"
@@ -3345,7 +3374,8 @@
         "board_id",
         "list_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -3968,6 +3998,10 @@
           "description": "Branch name to delete",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -3977,7 +4011,8 @@
         "project_id",
         "branch_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -4016,6 +4051,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -4024,7 +4063,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -4390,6 +4430,10 @@
           "description": "Name of the protected branch to remove",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -4399,7 +4443,8 @@
         "project_id",
         "branch_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -5051,6 +5096,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment_scope": {
           "description": "Filter by environment scope",
           "type": "string"
@@ -5069,7 +5118,8 @@
         "key",
         "environment_scope"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -10903,6 +10953,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user",
           "type": "integer"
@@ -10911,7 +10965,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -10949,6 +11004,10 @@
           "description": "Alert IID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "image_id": {
           "description": "Metric image ID",
           "type": "integer"
@@ -10963,7 +11022,8 @@
         "alert_iid",
         "image_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11002,6 +11062,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Application ID to delete",
           "type": "integer"
@@ -11010,7 +11074,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11049,6 +11114,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Broadcast message ID",
           "type": "integer"
@@ -11057,7 +11126,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11100,6 +11170,10 @@
           "description": "Agent ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -11109,7 +11183,8 @@
         "project_id",
         "agent_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11152,6 +11227,10 @@
           "description": "Commit SHA",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "discussion_id": {
           "description": "Discussion ID",
           "type": "string"
@@ -11171,7 +11250,8 @@
         "discussion_id",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11210,6 +11290,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key": {
           "description": "Attribute key to delete",
           "type": "string"
@@ -11228,7 +11312,8 @@
         "resource_id",
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11267,6 +11352,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "required,Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1)",
           "type": "string"
@@ -11275,7 +11364,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11314,6 +11404,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "email_id": {
           "description": "Email ID to delete",
           "type": "integer"
@@ -11322,7 +11416,8 @@
       "required": [
         "email_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11352,6 +11447,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "email_id": {
           "description": "Email ID to delete",
           "type": "integer"
@@ -11365,7 +11464,8 @@
         "user_id",
         "email_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11395,6 +11495,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -11415,7 +11519,8 @@
         "group_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11454,6 +11559,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -11472,7 +11581,8 @@
         "epic_iid",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11511,6 +11621,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key_id": {
           "description": "Client key ID",
           "type": "integer"
@@ -11524,7 +11638,8 @@
         "project_id",
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11563,6 +11678,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "Feature flag name to delete",
           "type": "string"
@@ -11571,7 +11690,8 @@
       "required": [
         "name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11610,6 +11730,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "freeze_period_id": {
           "description": "Freeze period ID",
           "type": "integer"
@@ -11623,7 +11747,8 @@
         "project_id",
         "freeze_period_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11662,6 +11787,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Numeric ID of the Geo site",
           "type": "integer"
@@ -11670,7 +11799,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11709,6 +11839,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key_id": {
           "description": "The ID of the GPG key to delete",
           "type": "integer"
@@ -11717,7 +11851,8 @@
       "required": [
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11747,6 +11882,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key_id": {
           "description": "The ID of the GPG key to delete",
           "type": "integer"
@@ -11760,7 +11899,8 @@
         "user_id",
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11794,6 +11934,10 @@
           "description": "Badge ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -11803,7 +11947,8 @@
         "group_id",
         "badge_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11842,6 +11987,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "The ID or URL-encoded path of the group",
           "type": "string"
@@ -11855,7 +12004,8 @@
         "group_id",
         "upload_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11894,6 +12044,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "filename": {
           "description": "The filename of the upload",
           "type": "string"
@@ -11912,7 +12066,8 @@
         "secret",
         "filename"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -11951,6 +12106,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -11964,7 +12123,8 @@
         "group_id",
         "member_role_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12003,6 +12163,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -12016,7 +12180,8 @@
         "group_id",
         "uid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12059,6 +12224,10 @@
           "description": "SSH certificate ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -12068,7 +12237,8 @@
         "group_id",
         "certificate_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12107,6 +12277,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -12120,7 +12294,8 @@
         "group_id",
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12159,6 +12334,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "member_role_id": {
           "description": "Member role ID to delete",
           "type": "integer"
@@ -12167,7 +12346,8 @@
       "required": [
         "member_role_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12206,6 +12386,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -12219,7 +12403,8 @@
         "project_id",
         "slug"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12258,6 +12443,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "discussion_id": {
           "description": "Discussion ID",
           "type": "string"
@@ -12281,7 +12470,8 @@
         "discussion_id",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12320,6 +12510,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "License ID to delete",
           "type": "integer"
@@ -12328,7 +12522,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12377,6 +12572,10 @@
             "array"
           ]
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID",
           "type": "integer"
@@ -12391,7 +12590,8 @@
         "merge_request_iid",
         "commits"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12430,6 +12630,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -12443,7 +12647,8 @@
         "project_id",
         "rule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12482,6 +12687,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "The alias name to delete",
           "type": "string"
@@ -12490,7 +12699,8 @@
       "required": [
         "name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12533,6 +12743,10 @@
           "description": "Badge ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -12542,7 +12756,8 @@
         "project_id",
         "badge_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12585,6 +12800,10 @@
           "description": "External status check ID to delete",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -12594,7 +12813,8 @@
         "project_id",
         "check_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12633,6 +12853,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "mirror_id": {
           "description": "Remote mirror ID",
           "type": "integer"
@@ -12646,7 +12870,8 @@
         "project_id",
         "mirror_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12685,6 +12910,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "discussion_id": {
           "description": "Discussion ID",
           "type": "string"
@@ -12708,7 +12937,8 @@
         "discussion_id",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12747,6 +12977,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key_id": {
           "description": "The ID of the SSH key to delete",
           "type": "integer"
@@ -12755,7 +12989,8 @@
       "required": [
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12785,6 +13020,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key_id": {
           "description": "The ID of the SSH key to delete",
           "type": "integer"
@@ -12798,7 +13037,8 @@
         "user_id",
         "key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12828,6 +13068,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "System hook ID to delete",
           "type": "integer"
@@ -12836,7 +13080,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12875,6 +13120,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "Terraform state name",
           "type": "string"
@@ -12888,7 +13137,8 @@
         "project_id",
         "name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12927,6 +13177,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "Terraform state name",
           "type": "string"
@@ -12946,7 +13200,8 @@
         "name",
         "serial"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -12985,6 +13240,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "topic_id": {
           "description": "Topic ID",
           "type": "integer"
@@ -12993,7 +13252,8 @@
       "required": [
         "topic_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -13032,6 +13292,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user to delete",
           "type": "integer"
@@ -13040,7 +13304,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -13070,6 +13335,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "provider": {
           "description": "The external provider name (e.g. ldap or saml)",
           "type": "string"
@@ -13083,7 +13352,8 @@
         "user_id",
         "provider"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -13117,6 +13387,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "full_path": {
           "description": "Full path of the project or group (e.g. my-group/my-project)",
           "type": "string"
@@ -13130,7 +13404,8 @@
         "full_path",
         "work_item_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -13385,6 +13660,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "deploy_key_id": {
           "description": "Deploy key ID",
           "type": "integer"
@@ -13398,7 +13677,8 @@
         "project_id",
         "deploy_key_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -14326,6 +14606,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "deploy_token_id": {
           "description": "Deploy token ID",
           "type": "integer"
@@ -14339,7 +14623,8 @@
         "group_id",
         "deploy_token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -14378,6 +14663,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "deploy_token_id": {
           "description": "Deploy token ID",
           "type": "integer"
@@ -14391,7 +14680,8 @@
         "project_id",
         "deploy_token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -15164,6 +15454,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "deployment_id": {
           "description": "Deployment ID",
           "type": "integer"
@@ -15177,7 +15471,8 @@
         "project_id",
         "deployment_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -15531,6 +15826,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -15544,7 +15843,8 @@
         "group_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -15583,6 +15883,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user",
           "type": "integer"
@@ -15591,7 +15895,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -16955,6 +17260,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment_id": {
           "description": "Environment ID",
           "type": "integer"
@@ -16968,7 +17277,8 @@
         "project_id",
         "environment_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -17241,6 +17551,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment_id": {
           "description": "Environment ID",
           "type": "integer"
@@ -17261,7 +17575,8 @@
         "project_id",
         "environment_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -17628,6 +17943,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -17641,7 +17960,8 @@
         "full_path",
         "epic_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -18144,6 +18464,10 @@
           "description": "Full project path of the issue to remove",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -18159,7 +18483,8 @@
         "child_project_path",
         "child_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -18634,6 +18959,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -18652,7 +18981,8 @@
         "epic_iid",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -19361,6 +19691,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "Feature flag name",
           "type": "string"
@@ -19374,7 +19708,8 @@
         "project_id",
         "name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -19978,6 +20313,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -19991,7 +20330,8 @@
         "project_id",
         "user_list_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -20546,6 +20886,10 @@
           "description": "Commit message",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "file_path": {
           "description": "URL-encoded full path of the file to delete",
           "type": "string"
@@ -20569,7 +20913,8 @@
         "branch",
         "commit_message"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -21105,6 +21450,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "mirror_id": {
           "description": "Remote mirror ID",
           "type": "integer"
@@ -21118,7 +21467,8 @@
         "project_id",
         "mirror_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -29126,6 +29476,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -29139,7 +29493,8 @@
         "group_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -29537,6 +29892,10 @@
           "description": "Board ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or path",
           "type": "string"
@@ -29546,7 +29905,8 @@
         "group_id",
         "board_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -29991,6 +30351,10 @@
           "description": "Board ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or path",
           "type": "string"
@@ -30005,7 +30369,8 @@
         "board_id",
         "list_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -30640,6 +31005,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "full_path": {
           "description": "Full path (required when permanently_remove=true)",
           "type": "string"
@@ -30656,7 +31025,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -31309,6 +31679,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -31322,7 +31696,8 @@
         "group_id",
         "hook_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -32292,6 +32667,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -32305,7 +32684,8 @@
         "group_id",
         "label_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -32935,6 +33315,10 @@
           "description": "LDAP Common Name to delete",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "filter": {
           "description": "LDAP filter to delete",
           "type": "string"
@@ -32951,7 +33335,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -32994,6 +33379,10 @@
           "description": "LDAP Common Name",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -33008,7 +33397,8 @@
         "provider",
         "cn"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -33720,6 +34110,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -33741,7 +34135,8 @@
         "group_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -34149,6 +34544,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -34162,7 +34561,8 @@
         "group_id",
         "milestone_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -35828,6 +36228,10 @@
           "description": "Branch name or wildcard to unprotect",
           "type": "string"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -35837,7 +36241,8 @@
         "group_id",
         "branch"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -36772,6 +37177,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment": {
           "description": "Environment name to unprotect",
           "type": "string"
@@ -36785,7 +37194,8 @@
         "group_id",
         "environment"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -37385,6 +37795,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -37398,7 +37812,8 @@
         "group_id",
         "saml_group_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -37803,6 +38218,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path (top-level only)",
           "type": "string"
@@ -37820,7 +38239,8 @@
         "group_id",
         "service_account_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -38257,6 +38677,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -38275,7 +38699,8 @@
         "service_account_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -38610,6 +39035,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -38623,7 +39052,8 @@
         "group_id",
         "share_group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -38921,6 +39351,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment_scope": {
           "description": "Filter by environment scope",
           "type": "string"
@@ -38938,7 +39372,8 @@
         "group_id",
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -39394,6 +39829,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -39407,7 +39846,8 @@
         "group_id",
         "slug"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -40219,6 +40659,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key": {
           "description": "Variable key name",
           "type": "string"
@@ -40227,7 +40671,8 @@
       "required": [
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -41737,6 +42182,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue IID (project-scoped internal ID, not 'issue_id')",
           "type": "integer"
@@ -41750,7 +42199,8 @@
         "project_id",
         "issue_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -41871,6 +42321,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue IID (project-scoped internal ID)",
           "type": "integer"
@@ -41885,7 +42339,8 @@
         "issue_iid",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -43155,6 +43610,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue IID",
           "type": "integer"
@@ -43173,7 +43632,8 @@
         "issue_iid",
         "issue_link_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -45060,6 +45520,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue internal ID",
           "type": "integer"
@@ -45078,7 +45542,8 @@
         "issue_iid",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -45204,6 +45669,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue IID (project-scoped internal ID)",
           "type": "integer"
@@ -45223,7 +45692,8 @@
         "note_id",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -47611,6 +48081,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "job_id": {
           "description": "Job ID to delete artifacts from",
           "type": "integer"
@@ -47624,7 +48098,8 @@
         "project_id",
         "job_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -47663,6 +48138,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -47671,7 +48150,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -47918,6 +48398,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "job_id": {
           "description": "Job ID to act on",
           "type": "integer"
@@ -47931,7 +48415,8 @@
         "project_id",
         "job_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -49519,6 +50004,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "label_id": {
           "description": "Label ID or name",
           "type": "string"
@@ -49532,7 +50021,8 @@
         "project_id",
         "label_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -60755,6 +61245,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "database": {
           "description": "Database name (optional, e.g. main or ci)",
           "type": "string"
@@ -60767,7 +61261,8 @@
       "required": [
         "version"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -60912,6 +61407,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "milestone_iid": {
           "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
           "type": "integer"
@@ -60925,7 +61424,8 @@
         "project_id",
         "milestone_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -62047,6 +62547,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
@@ -62060,7 +62564,8 @@
         "project_id",
         "merge_request_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -62248,6 +62753,10 @@
           "description": "Approval rule ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
@@ -62262,7 +62771,8 @@
         "merge_request_iid",
         "approval_rule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -63876,6 +64386,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID to delete (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -63889,7 +64403,8 @@
         "project_id",
         "merge_request_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -64121,6 +64636,10 @@
           "description": "ID of the blocking merge request to remove",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -64135,7 +64654,8 @@
         "merge_request_iid",
         "blocking_merge_request_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -65060,6 +65580,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "discussion_id": {
           "description": "ID of the discussion containing the note",
           "type": "string"
@@ -65083,7 +65607,8 @@
         "discussion_id",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -65644,6 +66169,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
@@ -65662,7 +66191,8 @@
         "merge_request_iid",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -66344,6 +66874,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -66358,7 +66892,8 @@
         "merge_request_iid",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -68681,6 +69216,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_commit_message": {
           "description": "Custom merge commit message",
           "type": "string"
@@ -68720,7 +69259,8 @@
         "project_id",
         "merge_request_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -69342,6 +69882,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -69360,7 +69904,8 @@
         "merge_request_iid",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -69486,6 +70031,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -69505,7 +70054,8 @@
         "note_id",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -71592,6 +72142,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -71605,7 +72159,8 @@
         "project_id",
         "merge_request_iid"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -73889,6 +74444,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "package_id": {
           "description": "Package ID to delete",
           "type": "string"
@@ -73902,7 +74461,8 @@
         "project_id",
         "package_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -74013,6 +74573,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "package_file_id": {
           "description": "Package file ID to delete",
           "type": "string"
@@ -74031,7 +74595,8 @@
         "package_id",
         "package_file_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -75010,6 +75575,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "domain": {
           "description": "The Pages domain name to delete",
           "type": "string"
@@ -75023,7 +75592,8 @@
         "project_id",
         "domain"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -75641,6 +76211,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -75649,7 +76223,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -76089,6 +76664,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "token_id": {
           "description": "Access token ID to revoke",
           "type": "integer"
@@ -76097,7 +76676,8 @@
       "required": [
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -76135,8 +76715,14 @@
     "description": "Revoke the personal access token used for the current request. This action cannot be undone.\n\nSee also: gitlab_personal_access_token_revoke, gitlab_personal_access_token_list\n\nReturns: confirmation message.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
-      "type": "object"
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -76696,6 +77282,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "pipeline_id": {
           "description": "Pipeline ID to delete",
           "type": "integer"
@@ -76709,7 +77299,8 @@
         "project_id",
         "pipeline_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -77613,6 +78204,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -77626,7 +78221,8 @@
         "project_id",
         "schedule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -77665,6 +78261,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key": {
           "description": "Variable key to delete",
           "type": "string"
@@ -77683,7 +78283,8 @@
         "schedule_id",
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -78947,6 +79548,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -78960,7 +79565,8 @@
         "project_id",
         "trigger_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -80340,6 +80946,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -80353,7 +80963,8 @@
         "project_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -81081,6 +81692,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -81094,7 +81709,8 @@
         "project_id",
         "rule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -82597,6 +83213,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "full_path": {
           "description": "Full path of the project to confirm permanent removal (required when permanently_remove is true)",
           "type": "string"
@@ -82613,7 +83233,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -82659,6 +83280,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -82667,7 +83292,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -82706,6 +83332,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -82714,7 +83344,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -82753,6 +83384,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID to remove from project sharing",
           "type": "integer"
@@ -82766,7 +83401,8 @@
         "project_id",
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -84133,6 +84769,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "hook_id": {
           "description": "Webhook ID to delete",
           "type": "integer"
@@ -84146,7 +84786,8 @@
         "project_id",
         "hook_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -84185,6 +84826,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "hook_id": {
           "description": "Webhook ID",
           "type": "integer"
@@ -84203,7 +84848,8 @@
         "hook_id",
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -84242,6 +84888,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "hook_id": {
           "description": "Webhook ID",
           "type": "integer"
@@ -84260,7 +84910,8 @@
         "hook_id",
         "key"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -87844,6 +88495,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -87857,7 +88512,8 @@
         "project_id",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -89160,6 +89816,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -89173,7 +89833,8 @@
         "project_id",
         "snippet_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -90088,6 +90749,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "namespace": {
           "description": "Target namespace ID or path",
           "type": "string"
@@ -90101,7 +90766,8 @@
         "project_id",
         "namespace"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -90332,7 +90998,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true
     }
@@ -91619,6 +92285,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -91632,7 +92302,8 @@
         "project_id",
         "upload_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -92582,6 +93253,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "environment": {
           "description": "Environment name to unprotect",
           "type": "string"
@@ -92595,7 +93270,8 @@
         "project_id",
         "environment"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -92890,6 +93566,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -92898,7 +93578,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -93077,6 +93758,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -93090,7 +93775,8 @@
         "project_id",
         "repository_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -93129,6 +93815,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -93147,7 +93837,8 @@
         "repository_id",
         "tag_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -93186,6 +93877,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "keep_n": {
           "description": "Number of latest tags to keep",
           "type": "integer"
@@ -93215,7 +93910,8 @@
         "project_id",
         "repository_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -93918,6 +94614,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or path",
           "type": "string"
@@ -93931,7 +94631,8 @@
         "project_id",
         "rule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -94167,6 +94868,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "user_id": {
           "description": "The ID of the user",
           "type": "integer"
@@ -94175,7 +94880,8 @@
       "required": [
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -94428,6 +95134,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -94441,7 +95151,8 @@
         "project_id",
         "tag_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -95204,6 +95915,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "link_id": {
           "description": "ID of the release link to delete",
           "type": "integer"
@@ -95222,7 +95937,8 @@
         "tag_name",
         "link_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -96053,6 +96769,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -96066,7 +96786,8 @@
         "project_id",
         "target_group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -96105,6 +96826,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -96118,7 +96843,8 @@
         "project_id",
         "target_project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -96157,6 +96883,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "file_id": {
           "description": "Secure file ID",
           "type": "integer"
@@ -96170,7 +96900,8 @@
         "project_id",
         "file_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -98769,6 +99500,10 @@
           "description": "Agent ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -98783,7 +99518,8 @@
         "agent_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -98822,6 +99558,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -98835,7 +99575,8 @@
         "group_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -98874,6 +99615,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "token_id": {
           "description": "Impersonation token ID to revoke",
           "type": "integer"
@@ -98887,7 +99632,8 @@
         "user_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -98987,6 +99733,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -98995,7 +99745,8 @@
       "required": [
         "controller_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -99395,6 +100146,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -99403,7 +100158,8 @@
       "required": [
         "controller_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -99442,6 +100198,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -99455,7 +100215,8 @@
         "controller_id",
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -99762,6 +100523,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -99775,7 +100540,8 @@
         "controller_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -99947,6 +100713,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "token": {
           "description": "Runner authentication token",
           "type": "string"
@@ -99955,7 +100725,8 @@
       "required": [
         "token"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -99994,6 +100765,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "runner_id": {
           "description": "Runner ID to delete",
           "type": "integer"
@@ -100002,7 +100777,8 @@
       "required": [
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -100041,6 +100817,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -100054,7 +100834,8 @@
         "project_id",
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -101306,6 +102087,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "runner_id": {
           "description": "Runner ID to remove",
           "type": "integer"
@@ -101314,7 +102099,8 @@
       "required": [
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -105237,6 +106023,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "snippet_id": {
           "description": "Snippet ID",
           "type": "integer"
@@ -105245,7 +106035,8 @@
       "required": [
         "snippet_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -105366,6 +106157,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -105380,7 +106175,8 @@
         "snippet_id",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -106516,6 +107312,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "note_id": {
           "description": "ID of the note to delete",
           "type": "integer"
@@ -106534,7 +107334,8 @@
         "snippet_id",
         "note_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -106660,6 +107461,10 @@
           "description": "Award emoji ID",
           "type": "integer"
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "note_id": {
           "description": "Note ID",
           "type": "integer"
@@ -106679,7 +107484,8 @@
         "note_id",
         "award_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -107978,6 +108784,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -107991,7 +108801,8 @@
         "project_id",
         "tag_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -108706,6 +109517,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -108719,7 +109534,8 @@
         "project_id",
         "tag_name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -109296,6 +110112,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "name": {
           "description": "Terraform state name",
           "type": "string"
@@ -109309,7 +110129,8 @@
         "project_id",
         "name"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -111984,6 +112805,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
@@ -111997,7 +112822,8 @@
         "project_id",
         "slug"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
