@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ---------------------------------------------------------------------------
@@ -952,29 +950,40 @@ func TestFormatInstanceListMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for deploy key actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := deployKeySpecsByTool(t, specs)
+
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "deploykeys" {
+			t.Fatalf("OwnerPackage for %s = %q, want deploykeys", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 9 tools
+// ActionSpecs route coverage for all 9 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newDeployKeysMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates deploy key routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newDeployKeySpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -994,20 +1003,12 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
@@ -1149,11 +1150,10 @@ func TestListUserProject_WithPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newDeployKeysMCPSession is an internal helper for the deploykeys package.
-func newDeployKeysMCPSession(t *testing.T) *mcp.ClientSession {
+func newDeployKeySpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	keyJSON := `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","fingerprint":"ab:cd","can_push":false}`
@@ -1207,30 +1207,11 @@ func newDeployKeysMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return deployKeySpecsByTool(t, ActionSpecs(client))
 }
 
-// TestDeployKeyGet_EmbedsCanonicalResource asserts gitlab_deploy_key_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/deploy_key/{key_id}.
-func TestDeployKeyGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_DeployKeyGetRoute verifies the canonical deploy key get route output.
+func TestActionSpecs_DeployKeyGetRoute(t *testing.T) {
 	const respJSON = `{"id":12,"title":"deploy","key":"ssh-rsa AAAA","fingerprint":""}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deploy_keys/12") {
@@ -1239,7 +1220,27 @@ func TestDeployKeyGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "deploy_key_id": 12}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_deploy_key_get", args, "gitlab://project/42/deploy_key/12", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := deployKeySpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_deploy_key_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "deploy_key_id": 12})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 12 || out.Title != "deploy" {
+		t.Fatalf("deploy key output = %#v, want ID 12 title deploy", out)
+	}
+}
+
+func deployKeySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
