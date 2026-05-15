@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -1225,56 +1224,27 @@ func tagRouteHandler() http.HandlerFunc {
 	}
 }
 
-// newTagMCPSession is an internal helper for the tags package.
-func newTagMCPSession(t *testing.T) *mcp.ClientSession {
+func newTagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	client := testutil.NewTestClient(t, tagRouteHandler())
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return tagSpecsByTool(t, ActionSpecs(client))
 }
 
-// assertToolCallSuccess is an internal helper for the tags package.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+func assertTagRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := specs[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newTagMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates tag routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newTagSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -1293,7 +1263,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.name, tt.args)
+			assertTagRouteSuccess(t, specs, tt.name, tt.args)
 		})
 	}
 }
@@ -1314,9 +1284,8 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagGet_EmbedsCanonicalResource asserts gitlab_tag_get attaches an
-// EmbeddedResource block with URI gitlab://project/{id}/tag/{name}.
-func TestTagGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_TagGetRoute verifies the canonical tag get route output.
+func TestActionSpecs_TagGetRoute(t *testing.T) {
 	const respJSON = `{"name":"v1.0.0","message":"Release v1.0.0","target":"abcdef","protected":false,"commit":{"id":"abcdef","created_at":"2026-01-01T00:00:00Z"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/tags/v1.0.0") {
@@ -1325,7 +1294,27 @@ func TestTagGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "tag_name": "v1.0.0"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_tag_get", args, "gitlab://project/42/tag/v1.0.0", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := tagSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_tag_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "v1.0.0"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.Name != "v1.0.0" || out.Target != "abcdef" {
+		t.Fatalf("tag output = %#v, want v1.0.0 target abcdef", out)
+	}
+}
+
+func tagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

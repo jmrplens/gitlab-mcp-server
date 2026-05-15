@@ -9,6 +9,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+type tagNotFoundOutput struct {
+	Identifier string
+}
+
+func formatTagNotFound(out tagNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Tag", out.Identifier,
+		"Use gitlab_tag_list with project_id to list tags",
+		"Verify the tag name is spelled correctly (case-sensitive)",
+	)
+}
+
 // FormatOutputMarkdownString renders a single tag as a Markdown summary.
 func FormatOutputMarkdownString(t Output) string {
 	var b strings.Builder
@@ -158,6 +169,7 @@ func FormatListProtectedTagsMarkdown(out ListProtectedTagsOutput) *mcp.CallToolR
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatTagNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdownString)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatSignatureMarkdownString)
