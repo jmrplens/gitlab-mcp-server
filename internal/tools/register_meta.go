@@ -12,9 +12,9 @@ import (
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
-// Base: 32 tools = 28 meta-tools (24 inline + 3 delegated + 1 standalone) +
+// Base: 33 tools = 29 meta-tools (25 inline + 3 delegated + 1 standalone) +
 // 4 standalone interactive elicitation tools (gitlab_interactive_*).
-// Enterprise: +15 inline meta-tools = 47 tools total; GitLab.com Enterprise also adds gitlab_orbit.
+// Enterprise: +14 inline meta-tools = 47 tools total; GitLab.com Enterprise also adds gitlab_orbit.
 // Each meta-tool dispatches to the underlying handler based on the "action"
 // parameter. This reduces token usage for LLMs while preserving full
 // functionality. Interactive tools cannot be consolidated because they

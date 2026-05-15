@@ -69,7 +69,7 @@ graph TD
         GL[gitlab<br/>API client wrapper]
         TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
-        META[metatool<br/>32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
+        META[metatool<br/>33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
         DYN[dynamic<br/>3 visible tools over canonical action catalog]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
@@ -259,7 +259,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base tools total. The Enterprise/Premium catalog adds 14 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -581,7 +581,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (32/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (33/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 14 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |

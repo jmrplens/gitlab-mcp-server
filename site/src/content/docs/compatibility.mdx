@@ -7,7 +7,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## GitLab edition compatibility
 
-GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks 15 additional enterprise-only meta-tools: use `GITLAB_ENTERPRISE=true` in stdio mode, or `--enterprise`/HTTP edition auto-detection in HTTP mode.
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks 14 additional enterprise-only meta-tools: use `GITLAB_ENTERPRISE=true` in stdio mode, or `--enterprise`/HTTP edition auto-detection in HTTP mode.
 
 | Feature                                 | Community (CE) | Enterprise (EE) |
 | --------------------------------------- | :------------: | :-------------: |
@@ -15,7 +15,7 @@ GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition 
 | Wikis, Labels, Milestones, Releases     |       ✅       |       ✅        |
 | Users, Groups, Members, Search          |       ✅       |       ✅        |
 | Deployments, Environments, Packages     |       ✅       |       ✅        |
-| 32 base meta-tools                      |       ✅       |       ✅        |
+| 33 base meta-tools                      |       ✅       |       ✅        |
 | 46 resources, 38 prompts                |       ✅       |       ✅        |
 | Merge Trains                            |       ❌       |       ✅        |
 | DORA Metrics                            |       ❌       |       ✅        |
@@ -59,7 +59,7 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 | Capability  |                                 Supported                                 |
 | ----------- | :-----------------------------------------------------------------------: |
-| Tools       | ✅ (up to 1011 individual / 32 base, 47 self-managed, 48 GitLab.com meta) |
+| Tools       | ✅ (up to 1011 individual / 33 base, 47 self-managed, 48 GitLab.com meta) |
 | Resources   |                                  ✅ (46)                                  |
 | Prompts     |                                  ✅ (38)                                  |
 | Completions |                          ✅ (17 argument types)                           |
@@ -69,4 +69,4 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 | Logging     |                                    ✅                                     |
 | Progress    |                                    ✅                                     |
 
-The 1011 individual figure is the expanded set of distinct tool instances. The 32 base, 47 self-managed, and 48 GitLab.com counts are meta-tool catalog sizes whose actions expand to that larger individual tool surface.
+The 1011 individual figure is the expanded set of distinct tool instances. The 33 base, 47 self-managed, and 48 GitLab.com counts are meta-tool catalog sizes whose actions expand to that larger individual tool surface.

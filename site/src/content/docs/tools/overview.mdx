@@ -15,7 +15,7 @@ In individual mode, the server registers one tool per GitLab operation: **863 to
 
 ### Meta-tool mode (default)
 
-In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools**, **47 on self-managed Enterprise/Premium**, or **48 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
+In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **33 base meta-tools**, **47 on self-managed Enterprise/Premium**, or **48 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
 
 ```json
 {
@@ -51,7 +51,7 @@ All tools follow a consistent naming pattern:
 - **Meta-tools**: `gitlab_{domain}` (e.g., `gitlab_issue`, `gitlab_project`)
 - **Dynamic actions**: canonical `domain.action` IDs executed through `gitlab_execute_tool` (e.g., `issue.create`, `merge_request.list`)
 
-## Base meta-tools (32)
+## Base meta-tools (33)
 
 ### Project management
 
@@ -127,9 +127,9 @@ Two additional standalone tools (`gitlab_server_check_update`, `gitlab_server_ap
 
 ## Enterprise-only tools
 
-When the Enterprise/Premium catalog is enabled, the server registers 15 additional self-managed meta-tools for GitLab Premium and Ultimate features:
+When the Enterprise/Premium catalog is enabled, the server registers 14 additional self-managed meta-tools for GitLab Premium and Ultimate features:
 
-`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
+`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_finding`
 
 On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with five read-only Knowledge Graph actions: `status`, `schema`, `tools`, `query`, and `graph_status`.
 

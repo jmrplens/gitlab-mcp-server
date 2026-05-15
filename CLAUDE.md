@@ -21,7 +21,7 @@
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1006 self-managed Enterprise/Premium; 1011 on GitLab.com Enterprise/Premium with Orbit                     |
-| Meta-mode tools           | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
+| Meta-mode tools           | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 3 dynamic tools (`gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
 | MCP Resources             | 46                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
@@ -483,9 +483,9 @@ Search combines canonical `domain.action` IDs, domain/action names, aliases, nat
 
 - projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
-**Meta-tool mode** (`META_TOOLS=true`, default) — gates 15 dedicated meta-tools in `register_meta.go`:
+**Meta-tool mode** (`META_TOOLS=true`, default) — gates 14 dedicated meta-tools in `register_meta.go`:
 
-- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_storage_move, gitlab_vulnerability, gitlab_security_finding
+- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_finding
 
 Plus enterprise-only routes injected into 3 base meta-tools:
 

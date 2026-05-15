@@ -45,6 +45,9 @@ type Action struct {
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
 	SpecBacked             bool
+	Destructive            bool
+	Idempotent             bool
+	OpenWorld              bool
 }
 
 // GroupOptions contains metadata for creating a catalog group.

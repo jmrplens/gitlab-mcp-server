@@ -228,8 +228,8 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 32 base, 47 with enterprise.
-// Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
+// the expected number of meta-tools: 33 base, 47 with enterprise.
+// Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
 // tools that cannot be folded into action+params meta-tools (they require
 // multi-round MCP elicitation/create exchanges with the client).
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
@@ -243,7 +243,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 32
+		const expectedTools = 33
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

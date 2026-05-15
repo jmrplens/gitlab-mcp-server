@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	expectedBaseDynamicCatalogActions         = 855
+	expectedBaseDynamicCatalogActions         = 867
 	expectedEnterpriseDynamicCatalogActions   = 1010
 	expectedGitLabComEnterpriseCatalogActions = 1015
 )

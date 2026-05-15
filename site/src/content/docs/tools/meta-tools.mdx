@@ -16,13 +16,13 @@ LLMs have limited context windows. When an MCP server registers hundreds of indi
 | Mode              | Tool Count        | Token Overhead | Functionality           |
 | ----------------- | ----------------- | -------------- | ----------------------- |
 | Individual        | 863 / 1006 / 1011 | Very high      | Full                    |
-| Meta (base)       | 32                | Low            | Full                    |
+| Meta (base)       | 33                | Low            | Full                    |
 | Meta (enterprise) | 47 / 48           | Low            | Full + Premium/Ultimate |
 
 Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
 :::note[Client compatibility]
-Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
+Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (33 base tools, 47 self-managed enterprise tools, or 48 GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
 :::
 
 ## How meta-tools work
@@ -259,7 +259,7 @@ Personal todo/task list.
 
 ## Enterprise mode
 
-The Enterprise/Premium catalog enables 15 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, 6 enterprise-only action routes are added to existing base meta-tools:
+The Enterprise/Premium catalog enables 14 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, enterprise-only action routes are added to existing base meta-tools:
 
 - **Iterations** → routed through `gitlab_issue`
 - **Project mirrors** → routed through `gitlab_project`

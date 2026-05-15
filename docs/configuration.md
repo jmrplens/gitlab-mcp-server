@@ -198,7 +198,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
-| **Meta-tools** (default) | `TOOL_SURFACE=meta` | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
+| **Meta-tools** (default) | `TOOL_SURFACE=meta` | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
 | **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
 | **Dynamic-2 variant** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental two-tool surface that combines discovery and schema lookup |
 | **Individual tools** | `TOOL_SURFACE=individual` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |

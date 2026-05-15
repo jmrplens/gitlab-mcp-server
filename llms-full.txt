@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.6.1 | up to 1011 tools | 32 base meta-tools; 47 self-managed enterprise meta-tools; 48 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
+> Version 1.6.1 | up to 1011 tools | 33 base meta-tools; 47 self-managed enterprise meta-tools; 48 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
@@ -2216,94 +2216,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"archive","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group/<action>.
 
-Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
-When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
-
-Behavior:
-- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / release_list (Premium+ adds wiki_list / epic_list / protected_*_list / ldap_link_list / saml_link_list / service_account_*_list).
-- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add are NON-idempotent (re-invocation creates a duplicate or returns 409).
-- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
-- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_* are irreversible. Premium+ adds destructive: epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete, service_account_pat_revoke. archive is reversible via unarchive.
-
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
-Errors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).
-
-Param conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.
-
-Group CRUD:
-- list: search, owned, top_level_only (no group_id needed)
-- get: group_id*
-- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch
-- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch
-- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)
-- restore: group_id*
-- archive / unarchive: group_id* (requires Owner role)
-- search: query* (no group_id needed)
-- transfer_project: group_id*, project_id*
-
-Group queries:
-- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared
-- members: group_id*, query (filter name/username)
-- subgroups: group_id*, search
-- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username
-
-Webhooks (hook_*):
-- hook_list: group_id*
-- hook_get / hook_delete: group_id*, hook_id*
-- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter
-- hook_edit: group_id*, hook_id*, same params as hook_add
-
-Badges (badge_*):
-- badge_list: group_id*, name
-- badge_get / badge_delete: group_id*, badge_id*
-- badge_add / badge_preview: group_id*, link_url*, image_url*, name
-- badge_edit: group_id*, badge_id*, link_url, image_url, name
-
-Members (group_member_*):
-- group_member_get: group_id*, user_id*
-- group_member_get_inherited: group_id*, user_id* (includes inherited)
-- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at
-- group_member_remove: group_id*, user_id*
-- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at
-- group_member_unshare: group_id*, shared_with_group_id*
-
-Labels (group_label_*):
-- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups
-- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*
-- group_label_create: group_id*, name*, color*, description
-- group_label_update: group_id*, label_id*, new_name, color, description
-
-Group milestones (group_milestone_* — group scope only; use gitlab_project milestone_* for project milestones):
-- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
-- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
-- group_milestone_create: group_id*, title*, description, start_date, due_date
-- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event
-- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*
-
-Boards (group_board_*):
-- group_board_list: group_id*
-- group_board_get / group_board_delete: group_id*, board_id*
-- group_board_create: group_id*, name*
-- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight
-- group_board_list_lists: group_id*, board_id*
-- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*
-- group_board_create_list: group_id*, board_id*, label_id
-- group_board_update_list: group_id*, board_id*, list_id*, position
-
-Uploads:
-- group_upload_list: group_id*
-- group_upload_delete_by_id: group_id*, upload_id*
-- group_upload_delete_by_secret: group_id*, secret*, filename*
-
-Import/Export:
-- group_relations_schedule / group_relations_list_status: group_id*
-- group_export_schedule / group_export_download: group_id*
-- group_import_file: name*, path*, file*, parent_id (no group_id)
-
-Releases:
-- release_list: group_id*, simple
-
-See also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)
+GitLab group actions.
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -3550,6 +3463,10 @@ Resource events (event_issue_*): project_id*, issue_iid* for all.
 - event_issue_state_list / event_issue_state_get (+ state_event_id*)
 - event_issue_iteration_list / event_issue_iteration_get (+ iteration_event_id*)
 - event_issue_weight_list
+
+Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
+- iteration_list_project: project_id*, state (1=opened, 2=upcoming, 3=current, 4=closed), search, include_ancestors
+- iteration_list_group: group_id*, state, search, include_ancestors
 
 See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD).
 
@@ -5861,6 +5778,14 @@ Admin:
 - create_for_user: user_id*, name*, path, namespace_id, description, visibility, initialize_with_readme, default_branch, topics
 
 See also: gitlab_repository (files/commits), gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request, gitlab_discover_project (find project ID)
+
+Push Rules (Premium+ — GITLAB_ENTERPRISE=true):
+- push_rule_get / push_rule_delete: project_id*
+- push_rule_add / push_rule_edit: project_id*, commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size, deny_delete_tag, member_check, prevent_secrets, commit_committer_check, reject_unsigned_commits, reject_non_dco_commits
+
+Security Settings (Ultimate — GITLAB_ENTERPRISE=true):
+- security_settings_get: project_id*
+- security_settings_update: project_id*, secret_push_protection_enabled*
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -8191,6 +8116,163 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+### gitlab_storage_move
+
+**Storage Move**
+
+Use {"action":"get_project","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
+
+GitLab storage move actions.
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>get_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_group_for_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_project_for_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_snippet_for_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
 ### gitlab_tag
 
 **Tag**
@@ -8519,6 +8601,10 @@ Keys and namespaces:
 Misc:
 - create_runner: runner_type*, group_id, project_id, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
 - delete_identity: user_id*, provider*
+
+Service Accounts (Premium+ — GITLAB_ENTERPRISE=true):
+- create_service_account: name, username, email
+- list_service_accounts: order_by, sort
 
 See also: gitlab_access (deploy/access tokens), gitlab_admin (instance administration)
 
@@ -9201,7 +9287,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 16 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 15 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
@@ -9859,20 +9945,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 Use {"action":"graph_status","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_orbit/<action>.
 
-Experimental GitLab.com-only Orbit Knowledge Graph operations. Read-only.
-When to use: inspect Orbit availability and graph indexing, discover the Orbit MCP tool/query schema, or execute a Knowledge Graph query on GitLab.com.
-NOT for: GitLab self-managed instances (Orbit is GitLab.com-only), standard project/group/issue/MR CRUD (use gitlab_project, gitlab_group, gitlab_issue, gitlab_merge_request), or full-text search (use gitlab_search).
-
-This meta-tool is registered only when the MCP server is connected to https://gitlab.com and the Enterprise/Premium catalog is enabled. Orbit itself is experimental and also depends on GitLab's knowledge_graph feature flag and namespace/project access.
-
-Actions:
-- status: response_format (raw/llm) — cluster health and component status.
-- schema: expand, format (raw/llm) — graph ontology domains, nodes, and edges.
-- tools: no params — Orbit MCP tool manifest and parameter schemas.
-- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. First call gitlab_orbit with action "tools" (or use gitlab_orbit_tools) to inspect the live query schema.
-- graph_status: exactly one of namespace_id, project_id, full_path; response_format (raw/llm) — graph indexing state.
-
-Errors: 404 means Orbit is not enabled or not available; 403 means the token lacks access to a Knowledge Graph-enabled namespace/project; 503 means Orbit is temporarily unavailable.
+GitLab orbit actions.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -9992,192 +10065,6 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"findings":{"items":{"additionalProperties":false,"properties":{"confidence":{"type":"string"},"description":{"type":"string"},"evidence":{"additionalProperties":false,"properties":{"data":{"type":"string"},"source":{"type":"string"}},"type":["null","object"]},"identifiers":{"items":{"additionalProperties":false,"properties":{"external_id":{"type":"string"},"external_type":{"type":"string"},"name":{"type":"string"},"url":{"type":"string"}},"required":["name"],"type":"object"},"type":["null","array"]},"location":{"additionalProperties":false,"properties":{"blob_path":{"type":"string"},"end_line":{"type":"integer"},"file":{"type":"string"},"start_line":{"type":"integer"}},"type":["null","object"]},"name":{"type":"string"},"report_type":{"type":"string"},"scanner":{"additionalProperties":false,"properties":{"external_id":{"type":"string"},"name":{"type":"string"},"vendor":{"type":"string"}},"required":["name"],"type":["null","object"]},"severity":{"type":"string"},"solution":{"type":"string"},"state":{"type":"string"},"title":{"type":"string"},"uuid":{"type":"string"},"vulnerability_id":{"type":"string"},"vulnerability_state":{"type":"string"}},"required":["uuid","name","severity","report_type","state"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"}},"required":["findings","pagination"],"type":"object"}
-```
-
-</details>
-
-### gitlab_storage_move
-
-**Storage Move**
-
-Use {"action":"get_group","params":{...}}; only top-level keys are action and params.
-Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
-
-Manage repository storage moves for projects, groups, and snippets (admin only).
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
-
-Param conventions: * = required. retrieve_all/list actions accept page, per_page. Each resource type (project/group/snippet) has the same action pattern.
-
-Project storage moves:
-- retrieve_all_project: page, per_page
-- retrieve_project: project_id*, page, per_page
-- get_project: id*
-- get_project_for_project: project_id*, id*
-- schedule_project: project_id*, destination_storage_name
-- schedule_all_project: source_storage_name, destination_storage_name
-
-Group storage moves:
-- retrieve_all_group: page, per_page
-- retrieve_group: group_id*, page, per_page
-- get_group: id*
-- get_group_for_group: group_id*, id*
-- schedule_group: group_id*, destination_storage_name
-- schedule_all_group: source_storage_name, destination_storage_name
-
-Snippet storage moves:
-- retrieve_all_snippet: page, per_page
-- retrieve_snippet: snippet_id*, page, per_page
-- get_snippet: id*
-- get_snippet_for_snippet: snippet_id*, id*
-- schedule_snippet: snippet_id*, destination_storage_name
-- schedule_all_snippet: source_storage_name, destination_storage_name
-
-See also: gitlab_admin
-
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
-
-**Action Output Schemas:**
-
-<details><summary>get_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_group_for_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_project_for_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_snippet_for_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
 ```
 
 </details>

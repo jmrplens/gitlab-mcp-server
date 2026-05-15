@@ -470,13 +470,12 @@ func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 }
 
 func buildStorageMoveActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
 	specs := make([]toolutil.ActionSpec, 0, 18)
 	specs = append(specs, projectstoragemoves.ActionSpecs(client)...)
-	specs = append(specs, groupstoragemoves.ActionSpecs(client)...)
 	specs = append(specs, snippetstoragemoves.ActionSpecs(client)...)
+	if enterprise {
+		specs = append(specs, groupstoragemoves.ActionSpecs(client)...)
+	}
 	return actionSpecGroup("gitlab_storage_move", specs)
 }
 

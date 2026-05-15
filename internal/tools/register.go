@@ -1,9 +1,13 @@
 package tools
 
 import (
+	"context"
+	"log/slog"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
@@ -173,6 +177,59 @@ import (
 // Tool closures capture the client to inject it into each handler.
 // When enterprise is false, Premium/Ultimate-only tool packages are not registered.
 func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+	if err != nil {
+		slog.Warn("failed to build individual action catalog; falling back to legacy registration", "error", err)
+		registerAllLegacy(server, client, enterprise)
+		return
+	}
+	descriptions := legacyIndividualToolDescriptions(client, enterprise)
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
+		IncludeStandaloneUtilities: true,
+		DescriptionForTool: func(action actioncatalog.Action) string {
+			return descriptions[action.IndividualTool.Name]
+		},
+	})
+	RegisterMetaStandaloneTools(server, client)
+}
+
+func legacyIndividualToolDescriptions(client *gitlabclient.Client, enterprise bool) map[string]string {
+	server := mcp.NewServer(&mcp.Implementation{Name: "individual-metadata-capture", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
+	registerAllLegacy(server, client, enterprise)
+	tools, err := listToolsForDescriptionCapture(server)
+	if err != nil {
+		slog.Warn("failed to capture legacy individual tool descriptions", "error", err)
+		return nil
+	}
+	descriptions := make(map[string]string, len(tools))
+	for _, tool := range tools {
+		descriptions[tool.Name] = tool.Description
+	}
+	return descriptions
+}
+
+func listToolsForDescriptionCapture(server *mcp.Server) ([]*mcp.Tool, error) {
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer serverSession.Close()
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "individual-metadata-capture", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return result.Tools, nil
+}
+
+func registerAllLegacy(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
 	projects.RegisterTools(server, client)
 	projectimportexport.RegisterTools(server, client)
 	uploads.RegisterTools(server, client)

@@ -46,6 +46,9 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			RichResultPolicy:       spec.RichResultPolicy,
 			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
 			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),
+			Destructive:            spec.Destructive,
+			Idempotent:             spec.Idempotent,
+			OpenWorld:              spec.OpenWorld,
 		})
 	}
 	return actions, errors.Join(errs...)

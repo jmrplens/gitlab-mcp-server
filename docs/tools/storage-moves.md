@@ -15,7 +15,7 @@ Repository storage moves allow GitLab administrators to migrate repositories bet
 
 All operations require **admin access**.
 
-With the default `TOOL_SURFACE=meta` catalog, all 18 tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, repository storage move tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter. Project and snippet storage move actions are available in the base catalog; group storage move actions require the Enterprise/Premium catalog.
 
 ### Common Questions
 
@@ -262,7 +262,7 @@ Schedule repository storage moves for all snippets (admin only). Migrates all sn
 
 ## Meta-tool: `gitlab_storage_move`
 
-With `TOOL_SURFACE=meta`, all 18 tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation.
+With `TOOL_SURFACE=meta`, storage move tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation. Project and snippet actions are available in the base catalog; group actions require the Enterprise/Premium catalog.
 
 ### Action Mapping
 
