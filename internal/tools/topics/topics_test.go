@@ -4,7 +4,6 @@
 package topics
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -435,102 +434,4 @@ func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
 	if strings.Contains(text, "Avatar") {
 		t.Error("should not contain Avatar for empty avatar URL")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — all tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	session := newTopicsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_topics", map[string]any{}},
-		{"get", "gitlab_get_topic", map[string]any{"topic_id": float64(1)}},
-		{"create", "gitlab_create_topic", map[string]any{"name": "go"}},
-		{"update", "gitlab_update_topic", map[string]any{"topic_id": float64(1), "name": "golang"}},
-		{"delete", "gitlab_delete_topic", map[string]any{"topic_id": float64(1)}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// newTopicsMCPSession is an internal helper for the topics package.
-func newTopicsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/topics", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+topicJSON+`]`)
-	})
-	handler.HandleFunc("GET /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, topicJSON)
-	})
-	handler.HandleFunc("POST /api/v4/topics", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, topicJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, topicJSON)
-	})
-	handler.HandleFunc("DELETE /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,714 |
-| Unit test functions | 9,467 |
+| Total test functions | 9,713 |
+| Unit test functions | 9,466 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 420 |
@@ -28,14 +28,14 @@
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 86.4% |
-| Overall coverage (`go test ./internal/...`) | 96.5% |
-| Average package coverage | 94.2% |
+| Overall coverage (`go test ./internal/...`) | 96.4% |
+| Average package coverage | 94.1% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,723 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,722 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 282 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,104 | 322 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,103 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,714** | **546** |  |
+| **Total** | **9,713** | **546** |  |
 
 ### Core Packages
 
@@ -226,7 +226,7 @@
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
 | packages | 98 | 4 | 96.7% | 8 |
-| pages | 54 | 2 | 99.2% | 9 |
+| pages | 53 | 2 | 97.9% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 80 | 2 | 97.5% | 11 |
 | pipelinetriggers | 48 | 2 | 99.4% | 6 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,104** | **322** |  | **1,018** |
+| **Total** | **7,103** | **322** |  | **1,018** |
 
 </details>
 
@@ -443,7 +443,7 @@
 | notifications | 100.0% |
 | orbit | 99.7% |
 | packages | 96.7% |
-| pages | 99.2% |
+| pages | 97.9% |
 | pipelines | 97.9% |
 | pipelineschedules | 97.5% |
 | pipelinetriggers | 99.4% |
