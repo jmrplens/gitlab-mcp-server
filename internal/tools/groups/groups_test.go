@@ -12,8 +12,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Test endpoint paths, format strings, and fixture names for group operation tests.
@@ -2052,26 +2050,37 @@ func TestEnabledEvents_None(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := groupSpecsByTool(t, specs)
+
+	if len(specs) != 18 {
+		t.Fatalf("len(ActionSpecs) = %d, want 18", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "groups" {
+			t.Fatalf("OwnerPackage for %s = %q, want groups", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 16 tools
+// ActionSpecsCallAllRoutes — route coverage for all 18 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates group routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newGroupsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -2098,31 +2107,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newGroupsMCPSession is an internal helper for the groups package.
-func newGroupsMCPSession(t *testing.T) *mcp.ClientSession {
+// newGroupsRouteSpecs is an internal helper for the groups package.
+func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	groupJSON := `{"id":99,"name":"infrastructure","path":"infra","full_path":"org/infra","full_name":"Org / Infrastructure","description":"Infra group","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra","parent_id":1,"created_at":"2026-01-15T10:00:00Z"}`
@@ -2175,6 +2176,16 @@ func newGroupsMCPSession(t *testing.T) *mcp.ClientSession {
 		testutil.RespondJSON(w, http.StatusOK, groupJSON)
 	})
 
+	// Archive group
+	handler.HandleFunc("POST /api/v4/groups/99/archive", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, groupJSON)
+	})
+
+	// Unarchive group
+	handler.HandleFunc("POST /api/v4/groups/99/unarchive", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, groupJSON)
+	})
+
 	// Transfer project into group
 	handler.HandleFunc("POST /api/v4/groups/99/projects/42", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, groupJSON)
@@ -2211,29 +2222,11 @@ func newGroupsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return groupSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestGroupGet_EmbedsCanonicalResource asserts gitlab_group_get attaches
-// an EmbeddedResource block with URI gitlab://group/{id}.
-func TestGroupGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_GroupGetRoute verifies the canonical group get route output.
+func TestActionSpecs_GroupGetRoute(t *testing.T) {
 	const respJSON = `{"id":10,"name":"G","path":"g","full_path":"g","web_url":"https://gitlab.example.com/groups/g","visibility":"private"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/10" {
@@ -2242,7 +2235,27 @@ func TestGroupGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"group_id": "10"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_group_get", args, "gitlab://group/10", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_group_get"].Route.Handler(t.Context(), map[string]any{"group_id": "10"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 10 || out.Name != "G" {
+		t.Fatalf("group output = %#v, want ID 10 name G", out)
+	}
+}
+
+func groupSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

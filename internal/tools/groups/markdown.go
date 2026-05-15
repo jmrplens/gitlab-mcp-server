@@ -4,8 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type groupNotFoundOutput struct {
+	Identifier string
+}
+
+func formatGroupNotFound(out groupNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Group", out.Identifier,
+		"Use gitlab_group_list to list accessible groups",
+		"If using a path, ensure it is URL-encoded (e.g. my%2Fgroup)",
+		"Verify your token has access to this group",
+	)
+}
 
 // FormatOutputMarkdown renders a single group as a Markdown summary.
 func FormatOutputMarkdown(g Output) string {
@@ -173,6 +187,7 @@ func FormatHookListMarkdown(out HookListOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatGroupNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatMemberListMarkdown)
