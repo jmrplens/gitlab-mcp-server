@@ -2724,8 +2724,8 @@ func defaultPgHdr() *testutil.PaginationHeaders {
 	return &testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
 }
 
-// newMRMCPSession is an internal helper for the mergerequests package.
-func newMRMCPSession(t *testing.T) *mcp.ClientSession {
+// newMRRouteSpecs is an internal helper for the mergerequests package.
+func newMRRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	mrListBody := `[` + mrJSONCoverage + `]`
@@ -2806,50 +2806,24 @@ func newMRMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return mergeRequestSpecsByTool(t, ActionSpecs(client))
 }
 
-// callToolAndVerify calls the named MCP tool and fails if it returns an error.
-func callToolAndVerify(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+// callRouteAndVerify calls the named route and fails if it returns an error.
+func callRouteAndVerify(t *testing.T, byTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := byTool[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates merge request routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newMRRouteSpecs(t)
 
 	pid := testProjectID
 	tools := []struct {
@@ -2890,18 +2864,30 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			callToolAndVerify(t, session, ctx, tt.name, tt.args)
+			callRouteAndVerify(t, byTool, tt.name, tt.args)
 		})
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for merge request actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := mergeRequestSpecsByTool(t, specs)
+
+	if len(specs) != 30 {
+		t.Fatalf("len(ActionSpecs) = %d, want 30", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "mergerequests" {
+			t.Fatalf("OwnerPackage for %s = %q, want mergerequests", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -4187,9 +4173,8 @@ func TestRelatedIssues_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestMRGet_EmbedsCanonicalResource asserts gitlab_mr_get attaches an
-// EmbeddedResource block with URI gitlab://project/{id}/mr/{iid}.
-func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_MRGetRoute verifies the canonical MR get route output.
+func TestActionSpecs_MRGetRoute(t *testing.T) {
 	const respJSON = `{"id":100,"iid":5,"project_id":42,"title":"T","description":"","state":"opened","source_branch":"f","target_branch":"main","author":{"username":"a"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/merge_requests/5") {
@@ -4198,7 +4183,93 @@ func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "merge_request_iid": 5}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_mr_get", args, "gitlab://project/42/mr/5", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.IID != 5 || out.ProjectID != 42 {
+		t.Fatalf("MR output = %#v, want IID 5 project 42", out)
+	}
+}
+
+// TestActionSpecs_MRGetNotFound verifies the canonical get route preserves rich 404 output.
+func TestActionSpecs_MRGetNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if _, ok := result.(mergeRequestNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want mergeRequestNotFoundOutput", result)
+	}
+}
+
+// TestCatalogSurface_DestructiveConfirmDeclined verifies destructive MR tools return early when confirmation is declined.
+func TestCatalogSurface_DestructiveConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	for _, tt := range []struct {
+		toolName string
+		args     map[string]any
+	}{
+		{toolName: "gitlab_mr_merge", args: map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{toolName: "gitlab_mr_delete", args: map[string]any{"project_id": "42", "merge_request_iid": 1}},
+	} {
+		t.Run(tt.toolName, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.toolName], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test merge request destructive confirmation.",
+				Icons:       toolutil.IconMR,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, err := mcpClient.Connect(ctx, ct, nil)
+			if err != nil {
+				t.Fatalf("client connect: %v", err)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.toolName, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result for declined confirmation")
+			}
+		})
+	}
+}
+
+func mergeRequestSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

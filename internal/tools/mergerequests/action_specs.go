@@ -1,6 +1,10 @@
 package mergerequests
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -32,17 +36,17 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				OwnerPackage:   "mergerequests",
 				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_mr_create", Title: toolutil.TitleFromName("gitlab_mr_create")},
 			}),
-		mergeRequestReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_mr_get"),
+		mergeRequestReadSpec("get", mergeRequestGetRoute(client), "gitlab_mr_get"),
 		mergeRequestReadSpec("list", toolutil.RouteAction(client, List), "gitlab_mr_list"),
 		mergeRequestReadSpec("list_global", toolutil.RouteAction(client, ListGlobal), "gitlab_mr_list_global"),
 		mergeRequestReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_mr_list_group"),
 		mergeRequestUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_mr_update"),
 		mergeRequestDestructiveUpdateIndividualSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
 		mergeRequestUpdateSpec("approve", toolutil.RouteAction(client, Approve), "gitlab_mr_approve"),
-		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.DestructiveVoidAction(client, Unapprove), "gitlab_mr_unapprove"),
+		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.RouteAction(client, UnapproveOutput), "gitlab_mr_unapprove"),
 		mergeRequestReadSpec("commits", toolutil.RouteAction(client, Commits), "gitlab_mr_commits"),
 		mergeRequestReadSpec("pipelines", toolutil.RouteAction(client, Pipelines), "gitlab_mr_pipelines"),
-		mergeRequestDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_mr_delete"),
+		mergeRequestDeleteSpec("delete", toolutil.RouteAction(client, DeleteOutput), "gitlab_mr_delete"),
 		mergeRequestUpdateSpec("rebase", toolutil.RouteAction(client, Rebase), "gitlab_mr_rebase"),
 		mergeRequestReadSpec("participants", toolutil.RouteAction(client, Participants), "gitlab_mr_participants"),
 		mergeRequestReadSpec("reviewers", toolutil.RouteAction(client, Reviewers), "gitlab_mr_reviewers"),
@@ -59,9 +63,46 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mergeRequestReadSpec("related_issues", toolutil.RouteAction(client, RelatedIssues), "gitlab_mr_related_issues"),
 		mergeRequestCreateSpec("create_todo", toolutil.RouteAction(client, CreateTodo), "gitlab_mr_create_todo"),
 		mergeRequestCreateSpec("dependency_create", toolutil.RouteAction(client, CreateDependency), "gitlab_mr_dependency_create"),
-		mergeRequestDeleteSpec("dependency_delete", toolutil.DestructiveVoidAction(client, DeleteDependency), "gitlab_mr_dependency_delete"),
+		mergeRequestDeleteSpec("dependency_delete", toolutil.RouteAction(client, DeleteDependencyOutput), "gitlab_mr_dependency_delete"),
 		mergeRequestReadSpec("dependencies_list", toolutil.RouteAction(client, GetDependencies), "gitlab_mr_dependencies_list"),
 	}
+}
+
+func mergeRequestGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return mergeRequestNotFoundOutput{Identifier: fmt.Sprintf("!%v in project %v", input["merge_request_iid"], input["project_id"])}, nil
+		}
+		return result, err
+	}
+	return route
+}
+
+// UnapproveOutput removes approval from a merge request and returns the legacy success message shape.
+func UnapproveOutput(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (toolutil.DeleteOutput, error) {
+	if err := Unapprove(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted approval from MR !%d in project %s.", input.MRIID, input.ProjectID)}, nil
+}
+
+// DeleteOutput deletes a merge request and returns the legacy success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted MR !%d from project %s.", input.MRIID, input.ProjectID)}, nil
+}
+
+// DeleteDependencyOutput removes a merge request dependency and returns the legacy success message shape.
+func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, input DeleteDependencyInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteDependency(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted dependency on blocking MR %d from MR !%d in project %s.", input.BlockingMergeRequestID, input.MRIID, input.ProjectID)}, nil
 }
 
 func mergeRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
