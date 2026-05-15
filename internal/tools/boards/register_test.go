@@ -1,6 +1,5 @@
-// register_test.go contains integration tests for the project board tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains route and catalog-surface tests for behavior that
+// used to live in register.go: mutation error paths and destructive confirmation.
 package boards
 
 import (
@@ -8,15 +7,15 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_DeleteError verifies that the board and board-list delete
-// handlers return error results when the GitLab API fails, covering the
-// if-err branches in the registration closures.
-func TestRegisterTools_DeleteError(t *testing.T) {
+// TestActionSpecs_DeleteError verifies that the board and board-list delete
+// routes return errors when the GitLab API fails.
+func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -26,18 +25,7 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := boardSpecsByTool(t, ActionSpecs(client))
 
 	tests := []struct {
 		name string
@@ -48,27 +36,30 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s with failing backend", tt.name)
+			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("expected error from %s with failing backend", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branches in the board and board-list delete handlers when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
+// confirmation for board and board-list delete when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		switch spec.IndividualTool.Name {
+		case "gitlab_board_delete", "gitlab_board_list_delete":
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test board destructive confirmation.", Icons: toolutil.IconBoard})
+		}
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -80,7 +71,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	tools := []struct {
 		name string
