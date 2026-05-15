@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,714 |
-| Unit test functions | 9,467 |
+| Total test functions | 9,715 |
+| Unit test functions | 9,468 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 420 |
@@ -35,9 +35,9 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,723 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,725 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 282 | 2.9% |
+| `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,104 | 322 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,105 | 322 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,714** | **546** |  |
+| **Total** | **9,715** | **546** |  |
 
 ### Core Packages
 
@@ -220,8 +220,8 @@
 | mrchanges | 32 | 1 | 100.0% | 4 |
 | mrcontextcommits | 22 | 1 | 100.0% | 3 |
 | mrdiscussions | 46 | 1 | 98.9% | 7 |
-| mrdraftnotes | 61 | 2 | 98.7% | 7 |
-| mrnotes | 36 | 2 | 99.4% | 5 |
+| mrdraftnotes | 61 | 2 | 98.5% | 7 |
+| mrnotes | 37 | 2 | 99.2% | 5 |
 | namespaces | 34 | 1 | 97.8% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,104** | **322** |  | **1,018** |
+| **Total** | **7,105** | **322** |  | **1,018** |
 
 </details>
 
@@ -437,8 +437,8 @@
 | mrchanges | 100.0% |
 | mrcontextcommits | 100.0% |
 | mrdiscussions | 98.9% |
-| mrdraftnotes | 98.7% |
-| mrnotes | 99.4% |
+| mrdraftnotes | 98.5% |
+| mrnotes | 99.2% |
 | namespaces | 97.8% |
 | notifications | 100.0% |
 | orbit | 99.7% |

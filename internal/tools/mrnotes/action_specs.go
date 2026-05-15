@@ -1,6 +1,9 @@
 package mrnotes
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,8 +15,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mrNoteReadSpec("note_list", toolutil.RouteAction(client, List), "gitlab_mr_notes_list"),
 		mrNoteReadSpec("note_get", toolutil.RouteAction(client, GetNote), "gitlab_mr_note_get"),
 		mrNoteUpdateSpec("note_update", toolutil.RouteAction(client, Update), "gitlab_mr_note_update"),
-		mrNoteDeleteSpec("note_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_mr_note_delete"),
+		mrNoteDeleteSpec("note_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_mr_note_delete"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("note %d from MR !%d in project %s", input.NoteID, input.MRIID, input.ProjectID))
+	return out, nil
 }
 
 func mrNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
