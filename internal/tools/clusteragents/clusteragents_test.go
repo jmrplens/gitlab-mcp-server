@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -493,29 +494,40 @@ func TestFormatTokenMarkdown_WithoutToken(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for cluster agent actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := clusterAgentSpecsByTool(t, specs)
+
+	if len(specs) != 8 {
+		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, toolName := range []string{"gitlab_delete_cluster_agent", "gitlab_revoke_cluster_agent_token"} {
+		if !byTool[toolName].Route.Destructive {
+			t.Fatalf("%s should be destructive", toolName)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// MCP round-trip for all tools
+// ActionSpecs route coverage for all tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newClusterAgentsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates cluster agent routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newClusterAgentRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -534,45 +546,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_ErrorPaths verifies that API errors in RegisterTools
-// handlers are returned as IsError results via MCP. Uses 403 responses
-// to avoid GitLab client retry logic on 5xx.
-func TestRegisterTools_ErrorPaths(t *testing.T) {
+// TestActionSpecs_ErrorPaths verifies API errors through canonical routes.
+func TestActionSpecs_ErrorPaths(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := clusterAgentSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -591,21 +581,78 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
-			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true for 403", tt.tool)
+			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error for 403", tt.tool)
 			}
 		})
 	}
 }
 
-func newClusterAgentsMCPSession(t *testing.T) *mcp.ClientSession {
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	byTool := clusterAgentSpecsByTool(t, ActionSpecs(client))
+
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_delete_cluster_agent", map[string]any{"project_id": "1", "agent_id": float64(5)}},
+		{"gitlab_revoke_cluster_agent_token", map[string]any{"project_id": "1", "agent_id": float64(5), "token_id": float64(1)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.name], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test cluster agent destructive confirmation.",
+				Icons:       toolutil.IconRunner,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, connectErr := mcpClient.Connect(ctx, ct, nil)
+			if connectErr != nil {
+				t.Fatalf("client connect: %v", connectErr)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("expected non-nil result for %s declined confirmation", tt.name)
+			}
+			found := false
+			for _, c := range result.Content {
+				if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("expected non-empty text content in %s cancellation result", tt.name)
+			}
+		})
+	}
+}
+
+func newClusterAgentRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	agentJSON := `{"id":5,"name":"test-agent","created_by_user_id":10}`
@@ -645,23 +692,21 @@ func newClusterAgentsMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return clusterAgentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
