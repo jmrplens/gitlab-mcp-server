@@ -4,14 +4,12 @@
 package terraformstates
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const errExpectedErr = "expected error"
@@ -242,27 +240,17 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpec route execution — all 6 individual tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — all 6 individual tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newTerraformMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates canonical routes across multiple scenarios using table-driven subtests.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	client := testutil.NewTestClient(t, terraformHandler())
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -279,57 +267,20 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — meta-tool
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory (individual tools)
-// ---------------------------------------------------------------------------.
-
-// newTerraformMCPSession is an internal helper for the terraformstates package.
-func newTerraformMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := terraformHandler()
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory (meta-tool)
-// ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
 // Shared mock handler
