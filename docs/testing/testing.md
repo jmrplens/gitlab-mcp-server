@@ -18,11 +18,11 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,715 |
-| Unit test functions | 9,468 |
+| Total test functions | 9,716 |
+| Unit test functions | 9,469 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 422 |
+| Test files (internal/) | 423 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,726 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,727 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,105 | 324 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,106 | 325 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,715** | **548** |  |
+| **Total** | **9,716** | **549** |  |
 
 ### Core Packages
 
@@ -249,7 +249,7 @@
 | resourceevents | 98 | 3 | 100.0% | 15 |
 | resourcegroups | 16 | 1 | 100.0% | 4 |
 | runnercontrollers | 28 | 1 | 98.0% | 5 |
-| runnercontrollerscopes | 29 | 1 | 97.6% | 5 |
+| runnercontrollerscopes | 30 | 2 | 97.1% | 5 |
 | runnercontrollertokens | 32 | 1 | 97.2% | 5 |
 | runners | 99 | 1 | 96.0% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,105** | **324** |  | **1,018** |
+| **Total** | **7,106** | **325** |  | **1,018** |
 
 </details>
 
@@ -466,7 +466,7 @@
 | resourceevents | 100.0% |
 | resourcegroups | 100.0% |
 | runnercontrollers | 98.0% |
-| runnercontrollerscopes | 97.6% |
+| runnercontrollerscopes | 97.1% |
 | runnercontrollertokens | 97.2% |
 | runners | 96.0% |
 | samplingtools | 100.0% |
