@@ -492,22 +492,6 @@ func NormalizeActionScopedParams(actionID string, params, schema map[string]any)
 	return normalized
 }
 
-type actionScopedParamAlias struct {
-	ActionID  string
-	Alias     string
-	Canonical string
-	Notes     string
-}
-
-func actionScopedParamAliases() []actionScopedParamAlias {
-	aliases := actioncompat.ParameterAliases()
-	out := make([]actionScopedParamAlias, 0, len(aliases))
-	for _, alias := range aliases {
-		out = append(out, actionScopedParamAlias{ActionID: alias.ActionID, Alias: alias.Alias, Canonical: alias.Target, Notes: alias.Reason})
-	}
-	return out
-}
-
 // NormalizeActionScopedParamsWithExplanation returns normalized params plus
 // name-only metadata for action-scoped compatibility aliases and coercions.
 func NormalizeActionScopedParamsWithExplanation(actionID string, params, schema map[string]any) (map[string]any, []toolutil.ParamAliasExplanation) {
@@ -1406,10 +1390,6 @@ func termMatchesResourceSignal(term string, document searchDocument) bool {
 		return true
 	}
 	return false
-}
-
-func (r *Registry) segmentedSearchMatches(terms []searchTerm) []scoredActionEntry {
-	return r.segmentedSearchMatchesWithScorer(terms, defaultLimit, scoreEntryWithoutExplanation)
 }
 
 func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit int, scorer searchScorer) []scoredActionEntry {

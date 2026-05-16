@@ -159,7 +159,7 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 	for _, build := range actionSpecGroupBuilders() {
 		groups = append(groups, build(client, enterprise)...)
 	}
-	return cloneSortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups))
+	return sortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups))
 }
 
 func buildAdminActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
@@ -546,7 +546,7 @@ func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.Act
 			errs = append(errs, errors.New("action spec group tool name is required"))
 			continue
 		}
-		byTool[toolName] = append(byTool[toolName], cloneActionSpecs(group.Actions)...)
+		byTool[toolName] = append(byTool[toolName], toolutil.CloneActionSpecs(group.Actions)...)
 	}
 	for toolName, specs := range byTool {
 		seen := make(map[string]struct{}, len(specs))
@@ -570,48 +570,13 @@ func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.Act
 	return byTool, errors.Join(errs...)
 }
 
-func cloneSortedActionSpecGroups(groups []ActionSpecGroup) []ActionSpecGroup {
+func sortedActionSpecGroups(groups []ActionSpecGroup) []ActionSpecGroup {
 	if len(groups) == 0 {
 		return nil
 	}
-	out := make([]ActionSpecGroup, 0, len(groups))
-	for _, group := range groups {
-		out = append(out, actioncatalog.CloneCatalogGroupSpec(group))
-	}
+	out := append([]ActionSpecGroup(nil), groups...)
 	sort.SliceStable(out, func(left, right int) bool {
 		return out[left].ToolName < out[right].ToolName
 	})
-	return out
-}
-
-func cloneActionSpecs(specs []toolutil.ActionSpec) []toolutil.ActionSpec {
-	if len(specs) == 0 {
-		return nil
-	}
-	out := make([]toolutil.ActionSpec, 0, len(specs))
-	for _, spec := range specs {
-		out = append(out, toolutil.NewActionSpec(spec.Name, spec.Route, toolutil.ActionSpecOptions{
-			Aliases:                spec.Aliases,
-			Tags:                   spec.Tags,
-			Usage:                  spec.Usage,
-			RelatedActions:         spec.RelatedActions,
-			Compatibility:          spec.Compatibility,
-			ParameterGuidance:      spec.ParameterGuidance,
-			ReadOnly:               spec.ReadOnly,
-			Destructive:            spec.Destructive,
-			Idempotent:             spec.Idempotent,
-			OpenWorld:              spec.OpenWorld,
-			Edition:                spec.Edition,
-			GitLabDotComOnly:       spec.GitLabDotComOnly,
-			OwnerPackage:           spec.OwnerPackage,
-			IndividualTool:         spec.IndividualTool,
-			ContentKind:            spec.ContentKind,
-			NotFoundPolicy:         spec.NotFoundPolicy,
-			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
-			RichResultPolicy:       spec.RichResultPolicy,
-			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
-			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),
-		}))
-	}
 	return out
 }

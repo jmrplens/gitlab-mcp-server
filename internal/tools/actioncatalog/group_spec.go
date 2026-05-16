@@ -56,7 +56,7 @@ func CloneCatalogGroupSpec(spec CatalogGroupSpec) CatalogGroupSpec {
 	spec.OwnerPackage = strings.TrimSpace(spec.OwnerPackage)
 	spec.Icons = append([]mcp.Icon(nil), spec.Icons...)
 	spec.CapabilityRequirements = cloneNormalizedStrings(spec.CapabilityRequirements)
-	spec.Actions = cloneActionSpecs(spec.Actions)
+	spec.Actions = toolutil.CloneActionSpecs(spec.Actions)
 	if spec.SurfaceKind == "" {
 		spec.SurfaceKind = SurfaceKindMetaGroup
 	}
@@ -177,38 +177,6 @@ func validateCatalogGroupAliases(spec CatalogGroupSpec) error {
 		}
 	}
 	return nil
-}
-
-func cloneActionSpecs(specs []toolutil.ActionSpec) []toolutil.ActionSpec {
-	if len(specs) == 0 {
-		return nil
-	}
-	out := make([]toolutil.ActionSpec, 0, len(specs))
-	for _, spec := range specs {
-		out = append(out, toolutil.NewActionSpec(spec.Name, spec.Route, toolutil.ActionSpecOptions{
-			Aliases:                spec.Aliases,
-			Tags:                   spec.Tags,
-			Usage:                  spec.Usage,
-			RelatedActions:         spec.RelatedActions,
-			Compatibility:          spec.Compatibility,
-			ParameterGuidance:      spec.ParameterGuidance,
-			ReadOnly:               spec.ReadOnly,
-			Destructive:            spec.Destructive,
-			Idempotent:             spec.Idempotent,
-			OpenWorld:              spec.OpenWorld,
-			Edition:                spec.Edition,
-			GitLabDotComOnly:       spec.GitLabDotComOnly,
-			OwnerPackage:           spec.OwnerPackage,
-			IndividualTool:         spec.IndividualTool,
-			ContentKind:            spec.ContentKind,
-			NotFoundPolicy:         spec.NotFoundPolicy,
-			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
-			RichResultPolicy:       spec.RichResultPolicy,
-			SchemaValidationNotes:  spec.SchemaValidationNotes,
-			RuntimeValidationNotes: spec.RuntimeValidationNotes,
-		}))
-	}
-	return out
 }
 
 func cloneNormalizedStrings(values []string) []string {

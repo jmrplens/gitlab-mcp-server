@@ -158,6 +158,48 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 	}
 }
 
+// CloneActionSpec returns a defensive copy of spec and all mutable metadata it owns.
+func CloneActionSpec(spec ActionSpec) ActionSpec {
+	return NewActionSpec(spec.Name, spec.Route, actionSpecOptionsFromSpec(spec))
+}
+
+// CloneActionSpecs returns defensive copies of specs in their original order.
+func CloneActionSpecs(specs []ActionSpec) []ActionSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]ActionSpec, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, CloneActionSpec(spec))
+	}
+	return out
+}
+
+func actionSpecOptionsFromSpec(spec ActionSpec) ActionSpecOptions {
+	return ActionSpecOptions{
+		Aliases:                spec.Aliases,
+		Tags:                   spec.Tags,
+		Usage:                  spec.Usage,
+		RelatedActions:         spec.RelatedActions,
+		Compatibility:          spec.Compatibility,
+		ParameterGuidance:      spec.ParameterGuidance,
+		ReadOnly:               spec.ReadOnly,
+		Destructive:            spec.Destructive,
+		Idempotent:             spec.Idempotent,
+		OpenWorld:              spec.OpenWorld,
+		Edition:                spec.Edition,
+		GitLabDotComOnly:       spec.GitLabDotComOnly,
+		OwnerPackage:           spec.OwnerPackage,
+		IndividualTool:         spec.IndividualTool,
+		ContentKind:            spec.ContentKind,
+		NotFoundPolicy:         spec.NotFoundPolicy,
+		EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
+		RichResultPolicy:       spec.RichResultPolicy,
+		SchemaValidationNotes:  spec.SchemaValidationNotes,
+		RuntimeValidationNotes: spec.RuntimeValidationNotes,
+	}
+}
+
 // CloneCompatibilityPolicy returns a defensive copy of compatibility metadata.
 func CloneCompatibilityPolicy(policy CompatibilityPolicy) CompatibilityPolicy {
 	policy.ActionAliases = cloneActionAliasSpecs(policy.ActionAliases)

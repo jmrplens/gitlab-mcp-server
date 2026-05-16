@@ -1799,7 +1799,7 @@ func TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParam
 // TestActionScopedParamAliases_CoversDocumentedActions verifies the declarative
 // metadata includes every action currently normalized by dynamic execute.
 func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
-	aliases := actionScopedParamAliases()
+	aliases := actioncompat.ParameterAliases()
 	wantActions := []string{
 		"job.list",
 		"repository.file_get",
@@ -1822,8 +1822,8 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"snippet.project_create",
 	}
 	for _, actionID := range wantActions {
-		if !slices.ContainsFunc(aliases, func(alias actionScopedParamAlias) bool { return alias.ActionID == actionID }) {
-			t.Fatalf("actionScopedParamAliases() = %+v, want action %s", aliases, actionID)
+		if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
+			t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
 		}
 	}
 }
@@ -3434,8 +3434,8 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 
 	t.Run("segmented search ignores short queries", func(t *testing.T) {
 		registry := NewRegistry(testRoutes(t))
-		if got := registry.segmentedSearchMatches(normalizeSearchTerms("project get")); got != nil {
-			t.Fatalf("segmentedSearchMatches(short query) = %v, want nil", got)
+		if got := registry.segmentedSearchMatchesWithScorer(normalizeSearchTerms("project get"), defaultLimit, scoreEntryWithoutExplanation); got != nil {
+			t.Fatalf("segmentedSearchMatchesWithScorer(short query) = %v, want nil", got)
 		}
 	})
 }

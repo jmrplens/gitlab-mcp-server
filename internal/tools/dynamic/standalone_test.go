@@ -9,16 +9,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestStandalone_ExcludedToolName verifies Standalone when excluded tool name.
-func TestStandalone_ExcludedToolName(t *testing.T) {
-	if !standaloneExcluded([]string{"gitlab_search_tools"}, "gitlab_search_tools") {
-		t.Fatal("standaloneExcluded() = false, want true for configured tool")
-	}
-	if standaloneExcluded([]string{"gitlab_search_tools"}, "gitlab_describe_tools") {
-		t.Fatal("standaloneExcluded() = true, want false for different tool")
-	}
-}
-
 // TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies Standalone when add standalone routes respects read only and exclusions.
 func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{

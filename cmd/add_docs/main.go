@@ -154,9 +154,6 @@ func processFile(path string) {
 			continue
 		}
 		indentIdx := startIdx
-		if startIdx == endIdx && startIdx < len(lines) {
-			indentIdx = startIdx
-		}
 		indent := getIndent(lines[indentIdx])
 		commentLines := formatComment(ins.comment, indent)
 		newLines := make([]string, 0, len(lines)+len(commentLines))

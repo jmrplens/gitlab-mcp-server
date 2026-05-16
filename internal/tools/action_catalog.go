@@ -83,6 +83,7 @@ func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup)
 
 func mergeActionSpecGroup(base, override ActionSpecGroup) ActionSpecGroup {
 	merged := actioncatalog.CloneCatalogGroupSpec(base)
+	override = actioncatalog.CloneCatalogGroupSpec(override)
 	if merged.ToolName == "" {
 		merged.ToolName = strings.TrimSpace(override.ToolName)
 	}
@@ -125,7 +126,7 @@ func mergeActionSpecGroup(base, override ActionSpecGroup) ActionSpecGroup {
 
 func mergeActionSpecOverrides(baseSpecs, overrideSpecs []toolutil.ActionSpec) []toolutil.ActionSpec {
 	if len(overrideSpecs) == 0 {
-		return cloneActionSpecs(baseSpecs)
+		return baseSpecs
 	}
 	overrideNames := make(map[string]struct{}, len(overrideSpecs))
 	for _, spec := range overrideSpecs {
@@ -142,7 +143,7 @@ func mergeActionSpecOverrides(baseSpecs, overrideSpecs []toolutil.ActionSpec) []
 		merged = append(merged, spec)
 	}
 	merged = append(merged, overrideSpecs...)
-	return cloneActionSpecs(merged)
+	return merged
 }
 
 func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, error) {
@@ -180,7 +181,7 @@ func ensureActionSpecOwners(specs []toolutil.ActionSpec, ownerPackage string) []
 	if len(specs) == 0 {
 		return nil
 	}
-	out := cloneActionSpecs(specs)
+	out := toolutil.CloneActionSpecs(specs)
 	for index := range out {
 		if out[index].OwnerPackage == "" {
 			out[index].OwnerPackage = ownerPackage

@@ -1,8 +1,6 @@
 package dynamic
 
 import (
-	"slices"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/surfaces"
@@ -40,8 +38,4 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		ReadOnlyOnly:     opts.ReadOnly,
 		ExcludeToolNames: opts.ExcludeTools,
 	})
-}
-
-func standaloneExcluded(excludeTools []string, name string) bool {
-	return slices.Contains(excludeTools, name)
 }
