@@ -18,16 +18,16 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,723 |
-| Unit test functions | 9,476 |
+| Total test functions | 9,724 |
+| Unit test functions | 9,477 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 430 |
+| Test files (internal/) | 431 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.1% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.0% |
 | Overall coverage (`go test ./internal/...`) | 96.3% |
 | Average package coverage | 94.1% |
 
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,734 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,735 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,113 | 332 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,114 | 333 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,723** | **556** |  |
+| **Total** | **9,724** | **557** |  |
 
 ### Core Packages
 
@@ -161,7 +161,7 @@
 | events | 41 | 1 | 100.0% | 2 |
 | externalstatuschecks | 47 | 3 | 100.0% | 8 |
 | featureflags | 36 | 2 | 97.8% | 5 |
-| features | 19 | 1 | 96.3% | 4 |
+| features | 20 | 2 | 96.2% | 4 |
 | ffuserlists | 26 | 2 | 96.2% | 5 |
 | files | 75 | 2 | 93.6% | 8 |
 | freezeperiods | 32 | 2 | 98.1% | 5 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,113** | **332** |  | **1,018** |
+| **Total** | **7,114** | **333** |  | **1,018** |
 
 </details>
 
@@ -378,7 +378,7 @@
 | events | 100.0% |
 | externalstatuschecks | 100.0% |
 | featureflags | 97.8% |
-| features | 96.3% |
+| features | 96.2% |
 | ffuserlists | 96.2% |
 | files | 93.6% |
 | freezeperiods | 98.1% |
