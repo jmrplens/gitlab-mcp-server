@@ -7,13 +7,16 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -147,6 +150,76 @@ func TestPackagePublishFilePath_Success(t *testing.T) {
 	}
 	if out.SHA256 != "abc123hash" {
 		t.Errorf("SHA256 = %q, want %q", out.SHA256, "abc123hash")
+	}
+}
+
+// TestPackagePublish_WithProgressToken verifies Publish wraps the upload body
+// when the MCP request includes a progress token.
+func TestPackagePublish_WithProgressToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != pathPackagePublish {
+			http.NotFound(w, r)
+			return
+		}
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Fatalf("read upload body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, publishResponseJSON)
+	}))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "package-publish-test", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "package_publish_with_progress"}, func(ctx context.Context, req *mcp.CallToolRequest, input PublishInput) (*mcp.CallToolResult, PublishOutput, error) {
+		out, err := Publish(ctx, req, client, input)
+		if err != nil {
+			return nil, PublishOutput{}, err
+		}
+		return &mcp.CallToolResult{}, out, nil
+	})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	progressSeen := make(chan struct{}, 1)
+	var once sync.Once
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "package-publish-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, _ *mcp.ProgressNotificationClientRequest) {
+			once.Do(func() { progressSeen <- struct{}{} })
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "package_publish_with_progress",
+		Arguments: map[string]any{
+			"project_id":      "42",
+			"package_name":    testPackageName,
+			"package_version": "1.0.0",
+			"file_name":       testFileName,
+			"content_base64":  base64.StdEncoding.EncodeToString([]byte("progress package payload")),
+		},
+		Meta: mcp.Meta{"progressToken": "package-publish-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+
+	select {
+	case <-progressSeen:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress notification")
 	}
 }
 
