@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,790 |
-| Unit test functions | 9,541 |
+| Total test functions | 9,821 |
+| Unit test functions | 9,572 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,17 +27,17 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.2% |
-| Overall coverage (`go test ./internal/...`) | 97.3% |
-| Average package coverage | 94.3% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.4% |
+| Overall coverage (`go test ./internal/...`) | 97.6% |
+| Average package coverage | 94.6% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,798 | 89.9% |
-| `TestFunc` (no underscore) | 713 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 279 | 2.8% |
+| `TestFunc_Scenario` (2-part) | 8,824 | 89.8% |
+| `TestFunc` (no underscore) | 717 | 7.3% |
+| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,133 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,164 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,790** | **567** |  |
+| **Total** | **9,821** | **567** |  |
 
 ### Core Packages
 
@@ -95,14 +95,14 @@
 | commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
 | accesstokens | 85 | 98.6% | 18 |
-| branches | 80 | 97.7% | 10 |
+| branches | 83 | 100.0% | 10 |
 | pipelineschedules | 80 | 97.0% | 11 |
-| files | 77 | 94.8% | 8 |
-| tags | 75 | 97.6% | 9 |
+| files | 78 | 100.0% | 8 |
+| tags | 77 | 100.0% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
 | snippets | 73 | 97.8% | 15 |
+| repository | 66 | 100.0% | 9 |
 | workitems | 66 | 100.0% | 5 |
-| deploykeys | 65 | 100.0% | 9 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -124,18 +124,18 @@
 | auditevents | 42 | 3 | 100.0% | 6 |
 | avatar | 9 | 1 | 100.0% | 1 |
 | awardemoji | 106 | 1 | 96.7% | 24 |
-| badges | 46 | 1 | 92.4% | 12 |
+| badges | 51 | 1 | 100.0% | 12 |
 | boards | 63 | 2 | 99.6% | 10 |
-| branches | 80 | 1 | 97.7% | 10 |
+| branches | 83 | 1 | 100.0% | 10 |
 | branchrules | 15 | 1 | 100.0% | 1 |
-| broadcastmessages | 27 | 2 | 98.0% | 5 |
+| broadcastmessages | 28 | 2 | 100.0% | 5 |
 | bulkimports | 34 | 2 | 99.4% | 7 |
 | cicatalog | 19 | 1 | 100.0% | 2 |
 | cilint | 26 | 1 | 100.0% | 2 |
 | civariables | 39 | 2 | 98.1% | 5 |
 | ciyamltemplates | 21 | 1 | 100.0% | 2 |
 | clusteragents | 38 | 1 | 100.0% | 8 |
-| commitdiscussions | 31 | 2 | 97.0% | 6 |
+| commitdiscussions | 32 | 2 | 100.0% | 6 |
 | commits | 97 | 1 | 96.0% | 13 |
 | compliancepolicy | 5 | 1 | 100.0% | 2 |
 | containerregistry | 74 | 3 | 100.0% | 12 |
@@ -154,9 +154,9 @@
 | elicitationtools | 57 | 2 | 96.7% | 4 |
 | enterpriseusers | 32 | 3 | 100.0% | 4 |
 | environments | 47 | 2 | 99.4% | 6 |
-| epicdiscussions | 12 | 2 | 92.4% | 6 |
+| epicdiscussions | 14 | 2 | 100.0% | 6 |
 | epicissues | 14 | 2 | 96.3% | 4 |
-| epicnotes | 10 | 2 | 93.3% | 5 |
+| epicnotes | 11 | 2 | 100.0% | 5 |
 | epics | 46 | 2 | 100.0% | 6 |
 | errortracking | 23 | 2 | 100.0% | 5 |
 | events | 41 | 1 | 100.0% | 2 |
@@ -164,7 +164,7 @@
 | featureflags | 36 | 2 | 97.8% | 5 |
 | features | 20 | 2 | 96.2% | 4 |
 | ffuserlists | 26 | 2 | 96.2% | 5 |
-| files | 77 | 3 | 94.8% | 8 |
+| files | 78 | 3 | 100.0% | 8 |
 | freezeperiods | 32 | 2 | 98.1% | 5 |
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
@@ -234,9 +234,9 @@
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
-| projectimportexport | 30 | 1 | 94.0% | 5 |
+| projectimportexport | 33 | 1 | 100.0% | 5 |
 | projectiterations | 18 | 1 | 100.0% | 1 |
-| projectmirrors | 55 | 2 | 93.7% | 7 |
+| projectmirrors | 62 | 2 | 100.0% | 7 |
 | projects | 328 | 3 | 95.3% | 54 |
 | projectstatistics | 8 | 2 | 100.0% | 1 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
@@ -245,7 +245,7 @@
 | protectedpackages | 32 | 2 | 100.0% | 4 |
 | releaselinks | 53 | 2 | 100.0% | 6 |
 | releases | 60 | 1 | 99.5% | 6 |
-| repository | 64 | 1 | 95.2% | 9 |
+| repository | 66 | 1 | 100.0% | 9 |
 | repositorysubmodules | 48 | 3 | 100.0% | 3 |
 | resourceevents | 98 | 3 | 100.0% | 15 |
 | resourcegroups | 16 | 1 | 100.0% | 4 |
@@ -258,8 +258,8 @@
 | securefiles | 24 | 2 | 98.8% | 4 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
-| serverupdate | 22 | 1 | 90.1% | 2 |
-| settings | 12 | 1 | 92.2% | 2 |
+| serverupdate | 23 | 1 | 93.8% | 2 |
+| settings | 14 | 1 | 93.8% | 2 |
 | sidekiq | 18 | 2 | 100.0% | 4 |
 | snippetdiscussions | 29 | 2 | 100.0% | 6 |
 | snippetnotes | 42 | 2 | 100.0% | 5 |
@@ -267,7 +267,7 @@
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
 | surfaces | 8 | 1 | 95.9% | 0 |
 | systemhooks | 23 | 2 | 99.2% | 5 |
-| tags | 75 | 2 | 97.6% | 9 |
+| tags | 77 | 2 | 100.0% | 9 |
 | terraformstates | 17 | 1 | 100.0% | 6 |
 | todos | 29 | 1 | 100.0% | 3 |
 | topics | 26 | 2 | 100.0% | 5 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,133** | **337** |  | **1,106** |
+| **Total** | **7,164** | **337** |  | **1,106** |
 
 </details>
 
@@ -347,18 +347,18 @@
 | auditevents | 100.0% |
 | avatar | 100.0% |
 | awardemoji | 96.7% |
-| badges | 92.4% |
+| badges | 100.0% |
 | boards | 99.6% |
-| branches | 97.7% |
+| branches | 100.0% |
 | branchrules | 100.0% |
-| broadcastmessages | 98.0% |
+| broadcastmessages | 100.0% |
 | bulkimports | 99.4% |
 | cicatalog | 100.0% |
 | cilint | 100.0% |
 | civariables | 98.1% |
 | ciyamltemplates | 100.0% |
 | clusteragents | 100.0% |
-| commitdiscussions | 97.0% |
+| commitdiscussions | 100.0% |
 | commits | 96.0% |
 | compliancepolicy | 100.0% |
 | containerregistry | 100.0% |
@@ -377,9 +377,9 @@
 | elicitationtools | 96.7% |
 | enterpriseusers | 100.0% |
 | environments | 99.4% |
-| epicdiscussions | 92.4% |
+| epicdiscussions | 100.0% |
 | epicissues | 96.3% |
-| epicnotes | 93.3% |
+| epicnotes | 100.0% |
 | epics | 100.0% |
 | errortracking | 100.0% |
 | events | 100.0% |
@@ -387,7 +387,7 @@
 | featureflags | 97.8% |
 | features | 96.2% |
 | ffuserlists | 96.2% |
-| files | 94.8% |
+| files | 100.0% |
 | freezeperiods | 98.1% |
 | geo | 100.0% |
 | gitignoretemplates | 100.0% |
@@ -457,9 +457,9 @@
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
 | projectdiscovery | 100.0% |
-| projectimportexport | 94.0% |
+| projectimportexport | 100.0% |
 | projectiterations | 100.0% |
-| projectmirrors | 93.7% |
+| projectmirrors | 100.0% |
 | projects | 95.3% |
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
@@ -468,7 +468,7 @@
 | protectedpackages | 100.0% |
 | releaselinks | 100.0% |
 | releases | 99.5% |
-| repository | 95.2% |
+| repository | 100.0% |
 | repositorysubmodules | 100.0% |
 | resourceevents | 100.0% |
 | resourcegroups | 100.0% |
@@ -481,8 +481,8 @@
 | securefiles | 98.8% |
 | securityfindings | 100.0% |
 | securitysettings | 100.0% |
-| serverupdate | 90.1% |
-| settings | 92.2% |
+| serverupdate | 93.8% |
+| settings | 93.8% |
 | sidekiq | 100.0% |
 | snippetdiscussions | 100.0% |
 | snippetnotes | 100.0% |
@@ -490,7 +490,7 @@
 | snippetstoragemoves | 100.0% |
 | surfaces | 95.9% |
 | systemhooks | 99.2% |
-| tags | 97.6% |
+| tags | 100.0% |
 | terraformstates | 100.0% |
 | todos | 100.0% |
 | topics | 100.0% |

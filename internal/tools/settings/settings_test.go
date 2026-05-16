@@ -182,6 +182,22 @@ func TestUpdate_MarshalInputError(t *testing.T) {
 	}
 }
 
+// TestUpdate_UnmarshalOptionsError verifies Update rejects values that marshal
+// to JSON but cannot be decoded into GitLab update option field types.
+func TestUpdate_UnmarshalOptionsError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		Settings: map[string]any{"signup_enabled": "not-a-bool"},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid option field type")
+	}
+	if !strings.Contains(err.Error(), "unmarshal to options") {
+		t.Errorf("expected 'unmarshal to options' in error, got: %v", err)
+	}
+}
+
 // TestActionSpecs_CallRoutes verifies that both settings canonical routes
 // execute successfully through ActionSpecs.
 func TestActionSpecs_CallRoutes(t *testing.T) {
@@ -262,5 +278,20 @@ func TestUpdate_APIError(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
 	if err == nil {
 		t.Fatal("expected error for 403")
+	}
+}
+
+// TestUpdate_BadRequest verifies Update includes the settings-key guidance for
+// GitLab validation errors.
+func TestUpdate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"unknown setting"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{Settings: map[string]any{"unknown_setting": true}})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+	if !strings.Contains(err.Error(), "snake_case") {
+		t.Fatalf("error missing settings guidance: %v", err)
 	}
 }

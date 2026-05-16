@@ -1232,19 +1232,38 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 // TestFormatFileInfoMarkdown verifies FormatFileInfoMarkdown.
 func TestFormatFileInfoMarkdown(t *testing.T) {
-	got := FormatFileInfoMarkdown(FileInfoOutput{
-		FilePath: "new_file.txt",
-		Branch:   "feature",
-	})
-	for _, want := range []string{
-		"## File Operation Result",
-		"**File**: new_file.txt",
-		"**Branch**: feature",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+	t.Run("without commit IDs", func(t *testing.T) {
+		got := FormatFileInfoMarkdown(FileInfoOutput{
+			FilePath: "new_file.txt",
+			Branch:   "feature",
+		})
+		for _, want := range []string{
+			"## File Operation Result",
+			"**File**: new_file.txt",
+			"**Branch**: feature",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+			}
 		}
-	}
+		if strings.Contains(got, "Commit ID") {
+			t.Errorf("FormatFileInfoMarkdown should omit empty commit IDs:\n%s", got)
+		}
+	})
+
+	t.Run("with commit IDs", func(t *testing.T) {
+		got := FormatFileInfoMarkdown(FileInfoOutput{
+			FilePath:     "new_file.txt",
+			Branch:       "feature",
+			CommitID:     "commit123",
+			LastCommitID: "last456",
+		})
+		for _, want := range []string{"**Commit ID**: commit123", "**Last commit ID**: last456"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+			}
+		}
+	})
 }
 
 // TestFormatBlameMarkdown verifies FormatBlameMarkdown.

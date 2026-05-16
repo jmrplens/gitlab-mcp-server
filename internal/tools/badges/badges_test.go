@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -46,6 +48,21 @@ const testBadgeName = "coverage"
 
 // testLinkURL identifies the test link URL constant used by this package.
 const testLinkURL = "https://example.com"
+
+func badgeMarkdownText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil {
+		t.Fatal("expected non-nil markdown result")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("expected one content item, got %d", len(result.Content))
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	return text.Text
+}
 
 // Project Badges.
 
@@ -449,6 +466,45 @@ func TestAddProject_APIError400(t *testing.T) {
 	}
 }
 
+// TestAddProject_APIErrorBranches verifies AddProject returns actionable
+// errors for permission failures and preserves fallback API error details.
+func TestAddProject_APIErrorBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		want       string
+	}{
+		{
+			name:       "forbidden",
+			statusCode: http.StatusForbidden,
+			body:       `{"message":"403 Forbidden"}`,
+			want:       "Maintainer+",
+		},
+		{
+			name:       "unprocessable fallback",
+			statusCode: http.StatusUnprocessableEntity,
+			body:       `{"message":"link_url has already been taken"}`,
+			want:       "link_url has already been taken",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.statusCode, tt.body)
+			}))
+			_, err := AddProject(t.Context(), client, AddProjectInput{ProjectID: "1", LinkURL: "u", ImageURL: "i"})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error missing %q: %v", tt.want, err)
+			}
+		})
+	}
+}
+
 // TestEditProject_APIError400 verifies EditProject when API error 400.
 func TestEditProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -457,6 +513,21 @@ func TestEditProject_APIError400(t *testing.T) {
 	_, err := EditProject(t.Context(), client, EditProjectInput{ProjectID: "1", BadgeID: 1, LinkURL: "u"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestEditProject_APIError403 verifies EditProject includes the project badge
+// permission hint when GitLab rejects the update.
+func TestEditProject_APIError403(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := EditProject(t.Context(), client, EditProjectInput{ProjectID: "1", BadgeID: 1, LinkURL: "u"})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "Maintainer+ role") {
+		t.Fatalf("error missing project badge permission hint: %v", err)
 	}
 }
 
@@ -582,6 +653,45 @@ func TestAddGroup_APIError400(t *testing.T) {
 	}
 }
 
+// TestAddGroup_APIErrorBranches verifies AddGroup returns actionable errors
+// for permission failures and preserves fallback API error details.
+func TestAddGroup_APIErrorBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		want       string
+	}{
+		{
+			name:       "forbidden",
+			statusCode: http.StatusForbidden,
+			body:       `{"message":"403 Forbidden"}`,
+			want:       "Owner role",
+		},
+		{
+			name:       "unprocessable fallback",
+			statusCode: http.StatusUnprocessableEntity,
+			body:       `{"message":"group badge name is invalid"}`,
+			want:       "group badge name is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.statusCode, tt.body)
+			}))
+			_, err := AddGroup(t.Context(), client, AddGroupInput{GroupID: "1", LinkURL: "u", ImageURL: "i"})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error missing %q: %v", tt.want, err)
+			}
+		})
+	}
+}
+
 // TestEditGroup_APIError400 verifies EditGroup when API error 400.
 func TestEditGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -590,6 +700,21 @@ func TestEditGroup_APIError400(t *testing.T) {
 	_, err := EditGroup(t.Context(), client, EditGroupInput{GroupID: "1", BadgeID: 1})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestEditGroup_APIError403 verifies EditGroup includes the group badge
+// permission hint when GitLab rejects the update.
+func TestEditGroup_APIError403(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := EditGroup(t.Context(), client, EditGroupInput{GroupID: "1", BadgeID: 1})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "Owner role") {
+		t.Fatalf("error missing group badge permission hint: %v", err)
 	}
 }
 
@@ -722,6 +847,82 @@ func TestFormatBadgeListMarkdown_Pagination(t *testing.T) {
 	)
 	if result == nil {
 		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestMarkdownRegistry_BadgeOutputTypes verifies every badge output type is
+// registered with the Markdown registry and routes to the expected formatter.
+func TestMarkdownRegistry_BadgeOutputTypes(t *testing.T) {
+	badge := BadgeItem{ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io", Kind: "project"}
+	tests := []struct {
+		name       string
+		output     any
+		want       string
+		wantAbsent string
+	}{
+		{
+			name:   "list project output",
+			output: ListProjectOutput{Badges: []BadgeItem{badge}},
+			want:   "## Project Badges (1)",
+		},
+		{
+			name:   "get project output",
+			output: GetProjectOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "add project output",
+			output: AddProjectOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "edit project output",
+			output: EditProjectOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "preview project output",
+			output: PreviewProjectOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "list group output",
+			output: ListGroupOutput{Badges: []BadgeItem{badge}},
+			want:   "## Group Badges (1)",
+		},
+		{
+			name:   "get group output",
+			output: GetGroupOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "add group output",
+			output: AddGroupOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:   "edit group output",
+			output: EditGroupOutput{Badge: badge},
+			want:   "## Badge: coverage (ID: 1)",
+		},
+		{
+			name:       "preview group output",
+			output:     PreviewGroupOutput{Badge: BadgeItem{ID: 2, Name: "preview", LinkURL: "u", ImageURL: "i"}},
+			want:       "## Badge: preview (ID: 2)",
+			wantAbsent: "**Kind**",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text := badgeMarkdownText(t, toolutil.MarkdownForResult(tt.output))
+			if !strings.Contains(text, tt.want) {
+				t.Fatalf("markdown missing %q:\n%s", tt.want, text)
+			}
+			if tt.wantAbsent != "" && strings.Contains(text, tt.wantAbsent) {
+				t.Fatalf("markdown contains %q:\n%s", tt.wantAbsent, text)
+			}
+		})
 	}
 }
 

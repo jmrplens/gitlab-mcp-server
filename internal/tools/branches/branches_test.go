@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -881,6 +882,22 @@ func TestProtectedBranchUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestProtectedBranchUpdate_NotFound verifies ProtectedUpdate returns the
+// protection-specific hint when GitLab reports the branch is not protected.
+func TestProtectedBranchUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Protected Branch Not Found"}`)
+	}))
+	fp := true
+	_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", AllowForcePush: &fp})
+	if err == nil {
+		t.Fatal(errExpAPIFailure)
+	}
+	if !strings.Contains(err.Error(), "gitlab_branch_protect") {
+		t.Fatalf("error missing protect hint: %v", err)
+	}
+}
+
 // TestBranchUnprotect_APIError verifies BranchUnprotect when API error.
 func TestBranchUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1112,6 +1129,27 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{})
 	if !strings.Contains(md, "No protected branches found") {
 		t.Error("expected 'No protected branches found' message")
+	}
+}
+
+// TestMarkdownRegistry_BranchNotFound verifies the canonical not-found output
+// renders as an MCP error result with actionable branch hints.
+func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
+	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !result.IsError {
+		t.Fatal("expected not-found markdown to be marked as an error")
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want TextContent", result.Content[0])
+	}
+	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, "gitlab_branch_list"} {
+		if !strings.Contains(content.Text, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, content.Text)
+		}
 	}
 }
 
@@ -1522,6 +1560,27 @@ func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	}
 	if out.Name != "main" || out.CommitID != "abc" {
 		t.Fatalf("branch output = %#v, want name main and commit abc", out)
+	}
+}
+
+// TestActionSpecs_BranchGetRouteNotFound verifies the canonical branch get
+// route converts GitLab 404s into the package not-found output type.
+func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
+	}))
+	byTool := branchSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "missing"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	notFound, ok := result.(branchNotFoundOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want branchNotFoundOutput", result)
+	}
+	if !strings.Contains(notFound.Identifier, "missing") || !strings.Contains(notFound.Identifier, "42") {
+		t.Fatalf("identifier = %q, want branch and project context", notFound.Identifier)
 	}
 }
 

@@ -6,8 +6,11 @@ package projectimportexport
 import (
 	"encoding/base64"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -170,6 +173,45 @@ func TestImportFromFile_Base64_Success(t *testing.T) {
 	}
 }
 
+// TestImportFromFile_FilePath_Success verifies that ImportFromFile accepts a
+// canonical local archive path and forwards the overwrite option.
+func TestImportFromFile_FilePath_Success(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id": 43,
+				"name": "from-file",
+				"path": "from-file",
+				"path_with_namespace": "group/from-file",
+				"created_at": "2026-02-01T00:00:00Z",
+				"import_status": "scheduled"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	archivePath := t.TempDir() + "/project.tar.gz"
+	if err := os.WriteFile(archivePath, []byte("fake archive"), 0o600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	overwrite := true
+	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		FilePath:  archivePath,
+		Namespace: "group",
+		Name:      "from-file",
+		Path:      "from-file",
+		Overwrite: &overwrite,
+	})
+	if err != nil {
+		t.Fatalf("ImportFromFile() error: %v", err)
+	}
+	if out.ID != 43 {
+		t.Errorf("ID = %d, want 43", out.ID)
+	}
+}
+
 // TestImportFromFile_BothParams_Error verifies that providing both file_path
 // and content_base64 returns an error.
 func TestImportFromFile_BothParams_Error(t *testing.T) {
@@ -329,6 +371,34 @@ func TestImportFromFile_FilePath_NonExistent_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent file")
+	}
+}
+
+// TestImportFromFile_FilePathOpenError verifies that ImportFromFile reports an
+// open error after a file path passes canonical archive validation.
+func TestImportFromFile_FilePathOpenError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod-based unreadable file test is Unix-specific")
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+
+	archivePath := t.TempDir() + "/unreadable.tar.gz"
+	if err := os.WriteFile(archivePath, []byte("fake archive"), 0o600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	if err := os.Chmod(archivePath, 0o000); err != nil {
+		t.Fatalf("chmod archive: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(archivePath, 0o600) })
+
+	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{FilePath: archivePath})
+	if err == nil {
+		t.Fatal("expected error for unreadable file")
+	}
+	if !strings.Contains(err.Error(), "open archive") {
+		t.Fatalf("error = %v, want open archive", err)
 	}
 }
 
@@ -588,6 +658,20 @@ func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
 	}
 	if out.CreatedAt != "" {
 		t.Errorf("CreatedAt = %q, want empty", out.CreatedAt)
+	}
+}
+
+// TestImportStatusToOutput_CreatedAt verifies importStatusToOutput formats a
+// present CreateAt timestamp.
+func TestImportStatusToOutput_CreatedAt(t *testing.T) {
+	createdAt := time.Date(2026, 2, 1, 12, 30, 0, 0, time.UTC)
+	out := importStatusToOutput(&gl.ImportStatus{
+		ID:           42,
+		ImportStatus: "finished",
+		CreateAt:     &createdAt,
+	})
+	if out.CreatedAt != "2026-02-01T12:30:00Z" {
+		t.Errorf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
 	}
 }
 
