@@ -230,6 +230,17 @@ func TestGetVersionFromBinary_Scenarios(t *testing.T) {
 	}
 }
 
+// TestGetInstalledVersionImpl_DefaultPathMissing verifies the default installed
+// binary lookup returns empty when the install directory has no binary.
+func TestGetInstalledVersionImpl_DefaultPathMissing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+
+	if got := getInstalledVersionImpl(); got != "" {
+		t.Fatalf("getInstalledVersionImpl() = %q, want empty", got)
+	}
+}
+
 // writeFakeVersionBinary creates a shell script in a temp directory that
 // prints the given output to stdout, simulating -version output.
 func writeFakeVersionBinary(t *testing.T, output string) string {

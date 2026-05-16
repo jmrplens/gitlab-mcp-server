@@ -35,6 +35,33 @@ func TestStepInstall_WithBinaryNameSuffix(t *testing.T) {
 	}
 }
 
+// TestStepInstall_BinaryNameOnlyUsesCurrentDirectory verifies a bare binary
+// filename is normalized to the current directory before installation.
+func TestStepInstall_BinaryNameOnlyUsesCurrentDirectory(t *testing.T) {
+	orig := installBinaryFn
+	var gotDest string
+	installBinaryFn = func(destDir string) (string, error) {
+		gotDest = destDir
+		return filepath.Join(destDir, DefaultBinaryName()), nil
+	}
+	t.Cleanup(func() { installBinaryFn = orig })
+
+	r := strings.NewReader(DefaultBinaryName() + "\n")
+	var w bytes.Buffer
+	p := NewPrompter(r, &w)
+
+	path, err := stepInstall(p, &w)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotDest != "." {
+		t.Fatalf("install destination = %q, want current directory", gotDest)
+	}
+	if path != filepath.Join(".", DefaultBinaryName()) {
+		t.Fatalf("installed path = %q, want current directory binary", path)
+	}
+}
+
 // TestStepInstall_DefaultPath verifies stepInstall works when the user
 // accepts the default path by pressing Enter.
 func TestStepInstall_DefaultPath(t *testing.T) {

@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,002 |
-| Unit test functions | 9,753 |
+| Total test functions | 10,006 |
+| Unit test functions | 9,757 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,979 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,983 | 89.8% |
 | `TestFunc` (no underscore) | 742 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,672 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,676 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (168) | 7,313 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,002** | **567** |  |
+| **Total** | **10,006** | **567** |  |
 
 ### Core Packages
 
@@ -71,8 +71,8 @@
 | serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 25 | 91.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 421 | 94.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
-| wizard | 246 | 90.3% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,672** |  |  |
+| wizard | 250 | 90.5% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
+| **Subtotal** | **1,676** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -327,7 +327,7 @@
 | serverpool | 99.6% |
 | testutil | 91.9% |
 | toolutil | 94.9% |
-| wizard | 90.3% |
+| wizard | 90.5% |
 
 ### Tool Sub-Packages
 
