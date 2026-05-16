@@ -22,7 +22,7 @@
 | Unit test functions | 9,472 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 426 |
+| Test files (internal/) | 427 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,109 | 328 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,109 | 329 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,719** | **552** |  |
+| **Total** | **9,719** | **553** |  |
 
 ### Core Packages
 
@@ -265,7 +265,7 @@
 | snippets | 73 | 2 | 97.8% | 15 |
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
 | surfaces | 3 | 1 | 75.3% | 0 |
-| systemhooks | 23 | 1 | 97.4% | 5 |
+| systemhooks | 23 | 2 | 99.2% | 5 |
 | tags | 75 | 2 | 97.6% | 9 |
 | terraformstates | 17 | 1 | 100.0% | 6 |
 | todos | 29 | 1 | 100.0% | 3 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,109** | **328** |  | **1,018** |
+| **Total** | **7,109** | **329** |  | **1,018** |
 
 </details>
 
@@ -482,7 +482,7 @@
 | snippets | 97.8% |
 | snippetstoragemoves | 100.0% |
 | surfaces | 75.3% |
-| systemhooks | 97.4% |
+| systemhooks | 99.2% |
 | tags | 97.6% |
 | terraformstates | 100.0% |
 | todos | 100.0% |
