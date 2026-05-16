@@ -1557,6 +1557,107 @@ func stepHandlerCancelOnConfirm(accepts []map[string]any) func(context.Context, 
 	}
 }
 
+func stepHandlerErrorOnConfirm(accepts []map[string]any, confirmErr error) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	idx := 0
+	return func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if idx >= len(accepts) {
+			return nil, confirmErr
+		}
+		content := accepts[idx]
+		idx++
+		return &mcp.ElicitResult{Action: actionAccept, Content: content}, nil
+	}
+}
+
+func TestInteractiveCreate_FinalConfirmUnexpectedError(t *testing.T) {
+	confirmErr := errors.New("elicitation transport failed")
+	tests := []struct {
+		name    string
+		accepts []map[string]any
+		call    func(context.Context, *mcp.CallToolRequest) error
+		want    string
+	}{
+		{
+			name: "issue",
+			accepts: []map[string]any{
+				{"title": testIssueTitle},
+				{"description": "desc"},
+				{"labels": ""},
+				{keyConfirmed: false},
+			},
+			call: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := IssueCreate(ctx, req, nil, IssueInput{ProjectID: "42"})
+				return err
+			},
+			want: "issue creation confirmation failed",
+		},
+		{
+			name: "merge request",
+			accepts: []map[string]any{
+				{"source_branch": "feature/x"},
+				{"target_branch": "main"},
+				{"title": testMRFeatureTitle},
+				{"description": "desc"},
+				{"labels": ""},
+				{keyConfirmed: true},
+				{keyConfirmed: false},
+			},
+			call: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := MRCreate(ctx, req, nil, MRInput{ProjectID: "42"})
+				return err
+			},
+			want: "merge request creation confirmation failed",
+		},
+		{
+			name: "release",
+			accepts: []map[string]any{
+				{"tag_name": testTagV100},
+				{"name": testRelease10Name},
+				{"description": "notes"},
+			},
+			call: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ReleaseCreate(ctx, req, nil, ReleaseInput{ProjectID: "42"})
+				return err
+			},
+			want: "release creation confirmation failed",
+		},
+		{
+			name: "project",
+			accepts: []map[string]any{
+				{"name": testNewProjectName},
+				{"description": ""},
+				{"selection": "private"},
+				{keyConfirmed: false},
+				{"default_branch": ""},
+			},
+			call: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ProjectCreate(ctx, req, nil, ProjectInput{})
+				return err
+			},
+			want: "project creation confirmation failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerErrorOnConfirm(tt.accepts, confirmErr))
+			defer cleanup()
+
+			err := tt.call(ctx, &mcp.CallToolRequest{Session: ss})
+			if err == nil {
+				t.Fatal("expected confirmation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want %q", err, tt.want)
+			}
+			if !strings.Contains(err.Error(), confirmErr.Error()) {
+				t.Fatalf("error = %q, want transport error text", err)
+			}
+		})
+	}
+}
+
 // TestIssueCreate_FinalConfirmCancel verifies that IssueCreate returns a
 // cancellation error wrapping ErrCancelled when the user cancels the final
 // confirm prompt (action="cancel"), exercising the err != nil branch after

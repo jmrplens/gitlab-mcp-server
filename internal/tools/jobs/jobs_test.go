@@ -207,6 +207,30 @@ func TestJobTrace_Success(t *testing.T) {
 	}
 }
 
+func TestJobTrace_Truncated(t *testing.T) {
+	traceContent := strings.Repeat("x", maxTraceBytes+10)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathJobTrace {
+			w.Header().Set(testHeaderContentType, "text/plain")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(traceContent))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Trace(context.Background(), client, TraceInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Trace() unexpected error: %v", err)
+	}
+	if !out.Truncated {
+		t.Fatal("out.Truncated = false, want true")
+	}
+	if len(out.Trace) != maxTraceBytes {
+		t.Fatalf("len(out.Trace) = %d, want %d", len(out.Trace), maxTraceBytes)
+	}
+}
+
 // TestJobTrace_EmptyProjectID verifies JobTrace when empty project ID.
 func TestJobTrace_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

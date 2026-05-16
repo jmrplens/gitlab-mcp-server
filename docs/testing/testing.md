@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,035 |
-| Unit test functions | 9,786 |
+| Total test functions | 10,040 |
+| Unit test functions | 9,791 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 411 |
@@ -29,13 +29,13 @@
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 88.5% |
 | Overall coverage (`go test ./internal/...`) | 98.9% |
-| Average package coverage | 95.2% |
+| Average package coverage | 95.3% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 9,010 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 9,015 | 89.8% |
 | `TestFunc` (no underscore) | 744 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,680 | 75 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 271 | 10 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,328 | 326 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,333 | 326 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,035** | **542** |  |
+| **Total** | **10,040** | **542** |  |
 
 ### Core Packages
 
@@ -83,7 +83,7 @@
 | issues | 206 | 100.0% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
-| jobs | 128 | 99.8% | 17 |
+| jobs | 129 | 99.8% | 17 |
 | groups | 125 | 100.0% | 18 |
 | dynamic | 123 | 99.9% | 4 |
 | search | 115 | 100.0% | 10 |
@@ -151,7 +151,7 @@
 | dockerfiletemplates | 14 | 1 | 100.0% | 2 |
 | dorametrics | 8 | 2 | 100.0% | 2 |
 | dynamic | 123 | 8 | 99.9% | 4 |
-| elicitationtools | 57 | 2 | 96.7% | 4 |
+| elicitationtools | 61 | 2 | 100.0% | 4 |
 | enterpriseusers | 32 | 3 | 100.0% | 4 |
 | environments | 48 | 2 | 100.0% | 6 |
 | epicdiscussions | 14 | 2 | 100.0% | 6 |
@@ -202,7 +202,7 @@
 | issuenotes | 38 | 2 | 100.0% | 5 |
 | issues | 206 | 2 | 100.0% | 21 |
 | issuestatistics | 40 | 1 | 100.0% | 3 |
-| jobs | 128 | 3 | 99.8% | 17 |
+| jobs | 129 | 3 | 99.8% | 17 |
 | jobtokenscope | 48 | 2 | 100.0% | 8 |
 | keys | 20 | 1 | 100.0% | 2 |
 | labels | 55 | 1 | 100.0% | 8 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,328** | **326** |  | **1,106** |
+| **Total** | **7,333** | **326** |  | **1,106** |
 
 </details>
 
@@ -374,7 +374,7 @@
 | dockerfiletemplates | 100.0% |
 | dorametrics | 100.0% |
 | dynamic | 99.9% |
-| elicitationtools | 96.7% |
+| elicitationtools | 100.0% |
 | enterpriseusers | 100.0% |
 | environments | 100.0% |
 | epicdiscussions | 100.0% |
