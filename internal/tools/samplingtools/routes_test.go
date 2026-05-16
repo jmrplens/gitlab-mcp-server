@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestWrapSamplingAction_Success verifies that wrapSamplingAction invokes the wrapped handler and returns its typed output when no error occurs.

@@ -115,7 +115,7 @@ func TestRedactMirrorError_EdgeCases(t *testing.T) {
 		t.Fatal("redactMirrorError(nil) should return nil")
 	}
 	err := errors.New("plain mirror error")
-	if got := redactMirrorError(err); got != err {
+	if got := redactMirrorError(err); !errors.Is(got, err) || got.Error() != err.Error() {
 		t.Fatalf("redactMirrorError(safe) = %v, want original error", got)
 	}
 }

@@ -28,7 +28,7 @@ func main() {
 	}
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer) int {
+func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "usage: go run ./cmd/find_dupes/ <dir|file>...")
 		return 1
@@ -68,7 +68,7 @@ type entry struct {
 
 // findDupes parses a single Go source file, counts string literal
 // occurrences, and prints those that appear three or more times.
-func findDupes(filename string, stdout io.Writer, stderr io.Writer) {
+func findDupes(filename string, stdout, stderr io.Writer) {
 	fset := token.NewFileSet()
 	src, err := os.ReadFile(filename) // #nosec G304,G703 -- CLI tool: user provides paths intentionally
 	if err != nil {

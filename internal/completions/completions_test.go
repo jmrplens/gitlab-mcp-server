@@ -10,10 +10,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Shared test assertion messages and endpoint paths.

@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestActionSpecs_RevokeErrors verifies revoke routes return errors when the GitLab API rejects them.

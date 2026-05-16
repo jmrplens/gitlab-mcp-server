@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestActionSpecs_DeleteError verifies that the delete route returns an error when the GitLab API fails.
