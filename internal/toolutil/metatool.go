@@ -108,7 +108,7 @@ func (route ActionRoute) WithRelatedActions(actions ...string) ActionRoute {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-//nolint:gosec // Alias keys and values are MCP action route names, not credentials.
+// #nosec G101 -- Alias keys and values are MCP action route names, not credentials.
 var commonActionAliases = map[string]string{
 	"badge.add":                "project.badge_add",
 	"hook.add":                 "project.hook_add",

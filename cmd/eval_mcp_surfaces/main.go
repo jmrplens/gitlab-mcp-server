@@ -2102,7 +2102,7 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect external MCP server: %w", err)
 	}
-	return session, func() { session.Close() }, nil
+	return session, func() { _ = session.Close() }, nil
 }
 
 // ensureLiveAttemptResources handles ensure live attempt resources and returns [evalTask].
@@ -4160,10 +4160,10 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	}
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		session.Close()
+		_ = session.Close()
 		return nil, nil, nil, nil, fmt.Errorf("list tools: %w", err)
 	}
-	return session, func() { session.Close() }, result.Tools, routes, nil
+	return session, func() { _ = session.Close() }, result.Tools, routes, nil
 }
 
 // dynamicValidationRoutes converts action routes into the single

@@ -173,7 +173,7 @@ func newSession(setupServer func(*mcp.Server) error) (session *mcp.ClientSession
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-llms-client", Version: "0.0.1"}, nil)
 	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		serverSession.Close()
+		_ = serverSession.Close()
 		_ = serverSession.Wait()
 		return nil, nil, fmt.Errorf("client connect: %w", err)
 	}

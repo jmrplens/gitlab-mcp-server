@@ -968,7 +968,7 @@ func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
 	if replacement == "" {
 		return
 	}
-	slog.Warn("META_TOOLS is deprecated; use TOOL_SURFACE instead",
+	slog.Warn("META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
 		"legacy_selector", "META_TOOLS",
 		"replacement", "TOOL_SURFACE="+replacement,
 	)
