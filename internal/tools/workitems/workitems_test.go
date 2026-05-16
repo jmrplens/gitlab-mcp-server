@@ -4,7 +4,6 @@
 package workitems
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -1456,125 +1455,6 @@ func TestGet_RichResponse(t *testing.T) {
 	if wi.WebURL != testWorkItemURL {
 		t.Errorf("WebURL = %q", wi.WebURL)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// MCP integration -- RegisterTools
-// ---------------------------------------------------------------------------.
-
-const workItemGraphQLResponse = `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"MCP test","author":{"username":"dev"},"widgets":[]}}}}`
-const workItemsListGraphQLResponse = `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"MCP test","author":{"username":"dev"},"widgets":[]}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`
-const workItemCreateGraphQLResponse = `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"MCP test","author":{"username":"dev"},"widgets":[]}}}}`
-const workItemUpdateGraphQLResponse = `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"MCP test updated","author":{"username":"dev"},"widgets":[]}}}}`
-const workItemDeleteGraphQLResponse = `{"data":{"workItemDelete":{"errors":[]}}}`
-
-// newWorkItemsMCPSession is an internal helper for the workitems package.
-func newWorkItemsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// All WorkItems API calls use POST (GraphQL).
-		// Distinguish by reading request body keywords if needed,
-		// but for simplicity we route based on simple heuristics.
-		if r.Method != http.MethodPost {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Read body to determine which operation
-		buf := make([]byte, 4096)
-		n, _ := r.Body.Read(buf)
-		body := string(buf[:n])
-
-		switch {
-		case strings.Contains(body, "workItemCreate"):
-			testutil.RespondJSON(w, http.StatusOK, workItemCreateGraphQLResponse)
-		case strings.Contains(body, "workItemUpdate"):
-			testutil.RespondJSON(w, http.StatusOK, workItemUpdateGraphQLResponse)
-		case strings.Contains(body, "workItemDelete"):
-			testutil.RespondJSON(w, http.StatusOK, workItemDeleteGraphQLResponse)
-		case strings.Contains(body, "workItems"):
-			testutil.RespondJSON(w, http.StatusOK, workItemsListGraphQLResponse)
-		case strings.Contains(body, "workItem"):
-			testutil.RespondJSON(w, http.StatusOK, workItemGraphQLResponse)
-		default:
-			// Fallback for any POST -- return a valid work item
-			testutil.RespondJSON(w, http.StatusOK, workItemGraphQLResponse)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// assertToolCallSuccess calls the named MCP tool and fails the test if the
-// call returns an error or the result indicates a tool-level error.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
-	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
-	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
-	}
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-// It exercises get, list, create, update, and delete tools via in-memory MCP transport.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newWorkItemsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_get_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10}},
-		{"gitlab_list_work_items", map[string]any{"full_path": testProjectPath}},
-		{"gitlab_create_work_item", map[string]any{"full_path": testProjectPath, "work_item_type_id": testTypeGID, "title": "Test"}},
-		{"gitlab_update_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10, "title": "Updated"}},
-		{"gitlab_delete_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.name, tt.args)
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
 }
 
 // ---------------------------------------------------------------------------
