@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -224,6 +226,18 @@ func TestGet_NotFound(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 9999})
 	if err == nil {
 		t.Fatal("Get() expected error for non-existent issue, got nil")
+	}
+}
+
+// TestGet_APIError verifies that non-404 Get errors use the generic wrapper.
+func TestGet_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+
+	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err == nil {
+		t.Fatal("Get() expected API error, got nil")
 	}
 }
 
@@ -1525,6 +1539,14 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown_LinkedMRCount verifies linked merge request counts are rendered.
+func TestFormatMarkdown_LinkedMRCount(t *testing.T) {
+	md := FormatMarkdown(Output{IID: 10, Title: "Linked", MergeRequestCount: 2})
+	if !strings.Contains(md, "Linked MRs") || !strings.Contains(md, "2") {
+		t.Fatalf("FormatMarkdown() = %q, want linked MR count", md)
+	}
+}
+
 // TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(Output{})
@@ -1728,6 +1750,23 @@ func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatRelatedMRsMarkdown missing %q", want)
 		}
+	}
+}
+
+// TestRelatedMRsMarkdownRegistry verifies RelatedMRsOutput uses the registered default heading.
+func TestRelatedMRsMarkdownRegistry(t *testing.T) {
+	result := toolutil.MarkdownForResult(RelatedMRsOutput{
+		MergeRequests: []RelatedMROutput{{IID: 7, Title: "Fix", State: "opened"}},
+	})
+	if result == nil {
+		t.Fatal("MarkdownForResult(RelatedMRsOutput) returned nil")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	if !strings.Contains(text.Text, "Related MRs") {
+		t.Fatalf("markdown = %q, want Related MRs heading", text.Text)
 	}
 }
 
@@ -3307,6 +3346,98 @@ func TestAddSpentTime_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestIssueNotFoundHintErrors covers 404-specific hints for issue actions.
+func TestIssueNotFoundHintErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	tests := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{name: "Create", call: func(ctx context.Context) error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, Title: "New issue"})
+			return err
+		}},
+		{name: "Get", call: func(ctx context.Context) error {
+			_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{name: "List", call: func(ctx context.Context) error {
+			_, err := List(ctx, client, ListInput{ProjectID: testProjectID})
+			return err
+		}},
+		{name: "Update", call: func(ctx context.Context) error {
+			_, err := Update(ctx, client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Title: "Updated"})
+			return err
+		}},
+		{name: "Subscribe", call: func(ctx context.Context) error {
+			_, err := Subscribe(ctx, client, SubscribeInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{name: "Unsubscribe", call: func(ctx context.Context) error {
+			_, err := Unsubscribe(ctx, client, UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{name: "CreateTodo", call: func(ctx context.Context) error {
+			_, err := CreateTodo(ctx, client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(t.Context()); err == nil {
+				t.Fatal("expected not-found error")
+			}
+		})
+	}
+}
+
+// TestIssueValidationStatusHintErrors covers 400/422-specific validation hints.
+func TestIssueValidationStatusHintErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		call   func(context.Context, *gitlabclient.Client) error
+		want   string
+	}{
+		{name: "CreateUnprocessable", status: http.StatusUnprocessableEntity, want: "referenced labels", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, Title: "New issue"})
+			return err
+		}},
+		{name: "ReorderBadRequest", status: http.StatusBadRequest, want: "exactly one", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			afterID := int64(1)
+			_, err := Reorder(ctx, client, ReorderInput{ProjectID: testProjectID, IssueIID: 10, MoveAfterID: &afterID})
+			return err
+		}},
+		{name: "SetTimeEstimateBadRequest", status: http.StatusBadRequest, want: "human-readable", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := SetTimeEstimate(ctx, client, SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1"})
+			return err
+		}},
+		{name: "AddSpentTimeBadRequest", status: http.StatusBadRequest, want: "human-readable", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := AddSpentTime(ctx, client, AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1"})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"bad input"}`)
+			}))
+			err := tt.call(t.Context(), client)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want hint containing %q", err.Error(), tt.want)
+			}
+		})
 	}
 }
 
