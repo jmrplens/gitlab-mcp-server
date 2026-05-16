@@ -662,7 +662,7 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 	mr, resp, err := client.GL().MergeRequests.AcceptMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusMethodNotAllowed && fetchErr == nil {
-			return Output{}, diagnoseMergeBlocker("mrMerge", input.MRIID, prefetched, err)
+			return Output{}, diagnoseMergeBlocker(input.MRIID, prefetched, err)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrMerge", err)
 	}
@@ -1589,9 +1589,10 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	if input.MRIID <= 0 {
 		return CreateTodoOutput{}, toolutil.ErrRequiredInt64("mrCreateTodo", "merge_request_iid")
 	}
-	todo, _, err := client.GL().MergeRequests.CreateTodo(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	todo, resp, err := client.GL().MergeRequests.CreateTodo(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusNotModified) {
+		if resp != nil && resp.Response != nil && resp.Response.StatusCode == http.StatusNotModified {
+			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this MR already exists"}
 			return CreateTodoOutput{}, toolutil.WrapErrWithHint("mrCreateTodo", err,
 				"a pending todo for this MR already exists for the authenticated user \u2014 use gitlab_todo_list to inspect it")
 		}
@@ -1779,7 +1780,9 @@ var mergeStatusHints = map[string]string{ // #nosec G101 -- not credentials, the
 // diagnoseMergeBlocker builds a rich error message when a merge request cannot
 // be merged (HTTP 405). It inspects the pre-fetched MR state to identify the
 // exact blocker and suggests actionable next steps.
-func diagnoseMergeBlocker(op string, mrIID int64, mr *gl.MergeRequest, originalErr error) error {
+func diagnoseMergeBlocker(mrIID int64, mr *gl.MergeRequest, originalErr error) error {
+	const op = "mrMerge"
+
 	if mr == nil {
 		return toolutil.WrapErrWithMessage(op, originalErr)
 	}

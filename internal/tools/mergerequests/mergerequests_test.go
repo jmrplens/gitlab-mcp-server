@@ -1443,6 +1443,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 		fn   func(*testing.T)
 	}{
 		{"get", func(t *testing.T) {
+			t.Helper()
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
 			}))
@@ -1450,6 +1451,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 			assertContains(t, err, "forbidden")
 		}},
 		{"list", func(t *testing.T) {
+			t.Helper()
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"project not found"}`)
 			}))
@@ -1457,6 +1459,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 			assertContains(t, err, "gitlab_project_get")
 		}},
 		{"delete", func(t *testing.T) {
+			t.Helper()
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 			}))
@@ -1464,6 +1467,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 			assertContains(t, err, "404")
 		}},
 		{"rebase", func(t *testing.T) {
+			t.Helper()
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 			}))
@@ -1544,7 +1548,6 @@ func TestMRStatusHintBranches(t *testing.T) {
 		_, err := CancelAutoMerge(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
 		assertContains(t, err, "gitlab_mr_get")
 	})
-
 }
 
 // TestMRPaginationBranches verifies list-like MR helpers forward pagination.
@@ -1647,8 +1650,8 @@ func TestMRRebase_WithSkipCI(t *testing.T) {
 // TestDiagnoseMergeBlocker_Branches verifies merge blocker diagnostics for nil,
 // field-derived, and generic merge request states.
 func TestDiagnoseMergeBlocker_Branches(t *testing.T) {
-	assertContains(t, diagnoseMergeBlocker("mrMerge", 1, nil, io.EOF), "mrMerge")
-	assertContains(t, diagnoseMergeBlocker("mrMerge", 1, &gl.MergeRequest{
+	assertContains(t, diagnoseMergeBlocker(1, nil, io.EOF), "mrMerge")
+	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
 		BasicMergeRequest: gl.BasicMergeRequest{
 			Draft:                       true,
 			HasConflicts:                true,
@@ -1657,7 +1660,7 @@ func TestDiagnoseMergeBlocker_Branches(t *testing.T) {
 		},
 		MergeError: "pipeline failed",
 	}, io.EOF), "pipeline failed")
-	assertContains(t, diagnoseMergeBlocker("mrMerge", 1, &gl.MergeRequest{
+	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
 		BasicMergeRequest: gl.BasicMergeRequest{
 			DetailedMergeStatus:         "mergeable",
 			BlockingDiscussionsResolved: true,
@@ -2313,6 +2316,30 @@ func TestCreateTodo_APIError(t *testing.T) {
 	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("CreateTodo() expected error for API failure, got nil")
+	}
+}
+
+// TestCreateTodo_AlreadyExists verifies CreateTodo when GitLab returns 304 for an existing todo.
+func TestCreateTodo_AlreadyExists(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != pathMR1+"/todo" {
+			t.Fatalf("path = %s, want %s", r.URL.Path, pathMR1+"/todo")
+		}
+		w.WriteHeader(http.StatusNotModified)
+	}))
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("CreateTodo() expected error for existing todo, got nil")
+	}
+	if !strings.Contains(err.Error(), "pending todo") {
+		t.Fatalf("CreateTodo() error = %v, want pending todo hint", err)
+	}
+	if !strings.Contains(err.Error(), "HTTP 304") {
+		t.Fatalf("CreateTodo() error = %v, want HTTP 304 context", err)
 	}
 }
 

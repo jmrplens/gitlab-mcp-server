@@ -18,25 +18,25 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,020 |
-| Unit test functions | 9,771 |
+| Total test functions | 10,035 |
+| Unit test functions | 9,786 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
-| Test files (internal/) | 410 |
+| Test files (internal/) | 411 |
 | Test files (cmd/) | 22 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.3% |
-| Overall coverage (`go test ./internal/...`) | 98.7% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.5% |
+| Overall coverage (`go test ./internal/...`) | 98.9% |
 | Average package coverage | 95.2% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,997 | 89.8% |
-| `TestFunc` (no underscore) | 742 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 9,010 | 89.8% |
+| `TestFunc` (no underscore) | 744 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,680 | 75 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 271 | 10 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,313 | 325 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,328 | 326 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,020** | **541** |  |
+| **Total** | **10,035** | **542** |  |
 
 ### Core Packages
 
@@ -78,8 +78,8 @@
 
 | Sub-package | Tests | Coverage | Tools |
 | --- | ---: | ---: | ---: |
-| projects | 328 | 95.3% | 54 |
-| mergerequests | 222 | 99.9% | 30 |
+| projects | 338 | 99.9% | 54 |
+| mergerequests | 223 | 100.0% | 30 |
 | issues | 206 | 100.0% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
@@ -155,7 +155,7 @@
 | enterpriseusers | 32 | 3 | 100.0% | 4 |
 | environments | 48 | 2 | 100.0% | 6 |
 | epicdiscussions | 14 | 2 | 100.0% | 6 |
-| epicissues | 14 | 2 | 96.3% | 4 |
+| epicissues | 18 | 2 | 100.0% | 4 |
 | epicnotes | 11 | 2 | 100.0% | 5 |
 | epics | 46 | 2 | 100.0% | 6 |
 | errortracking | 23 | 2 | 100.0% | 5 |
@@ -211,7 +211,7 @@
 | markdown | 8 | 1 | 100.0% | 1 |
 | memberroles | 40 | 3 | 100.0% | 6 |
 | members | 59 | 2 | 100.0% | 6 |
-| mergerequests | 222 | 1 | 99.9% | 30 |
+| mergerequests | 223 | 1 | 100.0% | 30 |
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
 | milestones | 69 | 1 | 100.0% | 7 |
@@ -237,7 +237,7 @@
 | projectimportexport | 33 | 1 | 100.0% | 5 |
 | projectiterations | 18 | 1 | 100.0% | 1 |
 | projectmirrors | 62 | 2 | 100.0% | 7 |
-| projects | 328 | 3 | 95.3% | 54 |
+| projects | 338 | 4 | 99.9% | 54 |
 | projectstatistics | 8 | 2 | 100.0% | 1 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
 | projecttemplates | 18 | 1 | 100.0% | 2 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,313** | **325** |  | **1,106** |
+| **Total** | **7,328** | **326** |  | **1,106** |
 
 </details>
 
@@ -378,7 +378,7 @@
 | enterpriseusers | 100.0% |
 | environments | 100.0% |
 | epicdiscussions | 100.0% |
-| epicissues | 96.3% |
+| epicissues | 100.0% |
 | epicnotes | 100.0% |
 | epics | 100.0% |
 | errortracking | 100.0% |
@@ -434,7 +434,7 @@
 | markdown | 100.0% |
 | memberroles | 100.0% |
 | members | 100.0% |
-| mergerequests | 99.9% |
+| mergerequests | 100.0% |
 | mergetrains | 100.0% |
 | metadata | 100.0% |
 | milestones | 100.0% |
@@ -460,7 +460,7 @@
 | projectimportexport | 100.0% |
 | projectiterations | 100.0% |
 | projectmirrors | 100.0% |
-| projects | 95.3% |
+| projects | 99.9% |
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
 | projecttemplates | 100.0% |

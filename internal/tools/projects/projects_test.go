@@ -17,6 +17,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -453,6 +454,36 @@ func TestProjectDelete_PermanentlyRemove(t *testing.T) {
 	}
 }
 
+func TestProjectDelete_PermanentlyRemoveTwoStep(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != pathProject42 {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		switch calls {
+		case 1:
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"project must be marked for deletion first"}`)
+		case 2, 3:
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			t.Fatalf("unexpected delete call %d", calls)
+		}
+	}))
+
+	out, err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", PermanentlyRemove: true, FullPath: testPathNS})
+	if err != nil {
+		t.Fatalf(fmtDeleteUnexpErr, err)
+	}
+	if calls != 3 {
+		t.Fatalf("delete calls = %d, want 3", calls)
+	}
+	if !out.PermanentlyRemoved {
+		t.Fatal("Delete() permanently_removed = false, want true")
+	}
+}
+
 // TestProjectDelete_NotFound verifies that Delete returns an error
 // when the target project does not exist. The mock returns HTTP 404.
 func TestProjectDelete_NotFound(t *testing.T) {
@@ -591,6 +622,314 @@ func TestProjectCreate_ContextCancelled(t *testing.T) {
 	_, err := Create(ctx, client, CreateInput{Name: "ignored"})
 	if err == nil {
 		t.Fatal("Create() expected error for canceled context, got nil")
+	}
+}
+
+func TestProjectHandlers_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("API should not be called with canceled context: %s %s", r.Method, r.URL.Path)
+	}))
+	ctx := testutil.CancelledCtx(t)
+	content := base64.StdEncoding.EncodeToString([]byte("avatar-data"))
+
+	tests := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{name: "get", call: func(ctx context.Context) error { _, err := Get(ctx, client, GetInput{ProjectID: "42"}); return err }},
+		{name: "list", call: func(ctx context.Context) error { _, err := List(ctx, client, ListInput{}); return err }},
+		{name: "delete", call: func(ctx context.Context) error {
+			_, err := Delete(ctx, client, DeleteInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "restore", call: func(ctx context.Context) error {
+			_, err := Restore(ctx, client, RestoreInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "update", call: func(ctx context.Context) error {
+			_, err := Update(ctx, client, UpdateInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "fork", call: func(ctx context.Context) error { _, err := Fork(ctx, client, ForkInput{ProjectID: "42"}); return err }},
+		{name: "archive", call: func(ctx context.Context) error {
+			_, err := Archive(ctx, client, ArchiveInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "unarchive", call: func(ctx context.Context) error {
+			_, err := Unarchive(ctx, client, UnarchiveInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "transfer", call: func(ctx context.Context) error {
+			_, err := Transfer(ctx, client, TransferInput{ProjectID: "42", Namespace: "target"})
+			return err
+		}},
+		{name: "list forks", call: func(ctx context.Context) error {
+			_, err := ListForks(ctx, client, ListForksInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "get languages", call: func(ctx context.Context) error {
+			_, err := GetLanguages(ctx, client, GetLanguagesInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "list hooks", call: func(ctx context.Context) error {
+			_, err := ListHooks(ctx, client, ListHooksInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "get hook", call: func(ctx context.Context) error {
+			_, err := GetHook(ctx, client, GetHookInput{ProjectID: "42", HookID: 1})
+			return err
+		}},
+		{name: "add hook", call: func(ctx context.Context) error {
+			_, err := AddHook(ctx, client, AddHookInput{ProjectID: "42", URL: testHookURL})
+			return err
+		}},
+		{name: "edit hook", call: func(ctx context.Context) error {
+			_, err := EditHook(ctx, client, EditHookInput{ProjectID: "42", HookID: 1, URL: testHookURL})
+			return err
+		}},
+		{name: "delete hook", call: func(ctx context.Context) error {
+			return DeleteHook(ctx, client, DeleteHookInput{ProjectID: "42", HookID: 1})
+		}},
+		{name: "trigger test hook", call: func(ctx context.Context) error {
+			_, err := TriggerTestHook(ctx, client, TriggerTestHookInput{ProjectID: "42", HookID: 1, Event: "push_events"})
+			return err
+		}},
+		{name: "list approval rules", call: func(ctx context.Context) error {
+			_, err := ListApprovalRules(ctx, client, ListApprovalRulesInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "get approval rule", call: func(ctx context.Context) error {
+			_, err := GetApprovalRule(ctx, client, GetApprovalRuleInput{ProjectID: "42", RuleID: 1})
+			return err
+		}},
+		{name: "create approval rule", call: func(ctx context.Context) error {
+			_, err := CreateApprovalRule(ctx, client, CreateApprovalRuleInput{ProjectID: "42", Name: "rule"})
+			return err
+		}},
+		{name: "update approval rule", call: func(ctx context.Context) error {
+			_, err := UpdateApprovalRule(ctx, client, UpdateApprovalRuleInput{ProjectID: "42", RuleID: 1})
+			return err
+		}},
+		{name: "delete approval rule", call: func(ctx context.Context) error {
+			return DeleteApprovalRule(ctx, client, DeleteApprovalRuleInput{ProjectID: "42", RuleID: 1})
+		}},
+		{name: "create fork relation", call: func(ctx context.Context) error {
+			_, err := CreateForkRelation(ctx, client, CreateForkRelationInput{ProjectID: "42", ForkedFromID: 24})
+			return err
+		}},
+		{name: "upload avatar", call: func(ctx context.Context) error {
+			_, err := UploadAvatar(ctx, client, UploadAvatarInput{ProjectID: "42", Filename: "avatar.png", ContentBase64: content})
+			return err
+		}},
+		{name: "download avatar", call: func(ctx context.Context) error {
+			_, err := DownloadAvatar(ctx, client, DownloadAvatarInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "start housekeeping", call: func(ctx context.Context) error {
+			return StartHousekeeping(ctx, client, StartHousekeepingInput{ProjectID: "42"})
+		}},
+		{name: "create for user", call: func(ctx context.Context) error {
+			_, err := CreateForUser(ctx, client, CreateForUserInput{UserID: 1, Name: "project"})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(ctx); err == nil {
+				t.Fatal(errExpectedCtxErr)
+			}
+		})
+	}
+}
+
+func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		call   func(*gitlabclient.Client) error
+	}{
+		{name: "create forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{Name: "project"})
+			return err
+		}},
+		{name: "get forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "list forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{name: "restore unprocessable", status: http.StatusUnprocessableEntity, call: func(client *gitlabclient.Client) error {
+			_, err := Restore(context.Background(), client, RestoreInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "fork forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Fork(context.Background(), client, ForkInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "archive forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Archive(context.Background(), client, ArchiveInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "unarchive forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Unarchive(context.Background(), client, UnarchiveInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "transfer forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
+			return err
+		}},
+		{name: "transfer not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
+			return err
+		}},
+		{name: "transfer bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
+			return err
+		}},
+		{name: "transfer unprocessable", status: http.StatusUnprocessableEntity, call: func(client *gitlabclient.Client) error {
+			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
+			return err
+		}},
+		{name: "list forks not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := ListForks(context.Background(), client, ListForksInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "list hooks forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := ListHooks(context.Background(), client, ListHooksInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "list user projects not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := ListUserProjects(context.Background(), client, ListUserProjectsInput{UserID: "alice"})
+			return err
+		}},
+		{name: "list user contributed projects not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := ListUserContributedProjects(context.Background(), client, ListUserContributedProjectsInput{UserID: "alice"})
+			return err
+		}},
+		{name: "list user starred projects not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := ListUserStarredProjects(context.Background(), client, ListUserStarredProjectsInput{UserID: "alice"})
+			return err
+		}},
+		{name: "add hook bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := AddHook(context.Background(), client, AddHookInput{ProjectID: "42", URL: testHookURL})
+			return err
+		}},
+		{name: "edit hook bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := EditHook(context.Background(), client, EditHookInput{ProjectID: "42", HookID: 1, URL: testHookURL})
+			return err
+		}},
+		{name: "trigger test hook bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := TriggerTestHook(context.Background(), client, TriggerTestHookInput{ProjectID: "42", HookID: 1, Event: "push_events"})
+			return err
+		}},
+		{name: "trigger test hook not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := TriggerTestHook(context.Background(), client, TriggerTestHookInput{ProjectID: "42", HookID: 1, Event: "push_events"})
+			return err
+		}},
+		{name: "share group bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := ShareProjectWithGroup(context.Background(), client, ShareProjectInput{ProjectID: "42", GroupID: 1, GroupAccess: 30, ExpiresAt: testDate20260101})
+			return err
+		}},
+		{name: "get push rules forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := GetPushRules(context.Background(), client, GetPushRulesInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "add push rule bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := AddPushRule(context.Background(), client, AddPushRuleInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "add push rule forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := AddPushRule(context.Background(), client, AddPushRuleInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "edit push rule bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := EditPushRule(context.Background(), client, EditPushRuleInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "edit push rule not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
+			_, err := EditPushRule(context.Background(), client, EditPushRuleInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "create fork relation conflict", status: http.StatusConflict, call: func(client *gitlabclient.Client) error {
+			_, err := CreateForkRelation(context.Background(), client, CreateForkRelationInput{ProjectID: "42", ForkedFromID: 24})
+			return err
+		}},
+		{name: "upload avatar bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
+			_, err := UploadAvatar(context.Background(), client, UploadAvatarInput{ProjectID: "42", Filename: "avatar.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("avatar"))})
+			return err
+		}},
+		{name: "upload avatar forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := UploadAvatar(context.Background(), client, UploadAvatarInput{ProjectID: "42", Filename: "avatar.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("avatar"))})
+			return err
+		}},
+		{name: "start housekeeping conflict", status: http.StatusConflict, call: func(client *gitlabclient.Client) error {
+			return StartHousekeeping(context.Background(), client, StartHousekeepingInput{ProjectID: "42"})
+		}},
+		{name: "create for user forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
+			_, err := CreateForUser(context.Background(), client, CreateForUserInput{UserID: 1, Name: "project"})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"boom"}`)
+			}))
+			if err := tt.call(client); err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+		})
+	}
+}
+
+func TestProjectHandlers_ValidationErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("API should not be called for validation errors: %s %s", r.Method, r.URL.Path)
+	}))
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "get missing project", call: func() error {
+			_, err := Get(context.Background(), client, GetInput{})
+			return err
+		}},
+		{name: "update missing project", call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{})
+			return err
+		}},
+		{name: "delete custom header missing key", call: func() error {
+			return DeleteCustomHeader(context.Background(), client, DeleteCustomHeaderInput{ProjectID: "42", HookID: 1})
+		}},
+		{name: "delete webhook URL variable missing key", call: func() error {
+			return DeleteWebhookURLVariable(context.Background(), client, DeleteWebhookURLVariableInput{ProjectID: "42", HookID: 1})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Fatal(errExpectedValidation)
+			}
+		})
+	}
+}
+
+func TestBuildUpdateOpts_MergeRequestTitleRegexOptions(t *testing.T) {
+	opts := buildUpdateOpts(UpdateInput{
+		MergeRequestTitleRegex:            testCommitRegex,
+		MergeRequestTitleRegexDescription: "Conventional commits",
+	})
+	if opts.MergeRequestTitleRegex == nil || *opts.MergeRequestTitleRegex != testCommitRegex {
+		t.Fatalf("MergeRequestTitleRegex = %v, want %q", opts.MergeRequestTitleRegex, testCommitRegex)
+	}
+	if opts.MergeRequestTitleRegexDescription == nil || *opts.MergeRequestTitleRegexDescription != "Conventional commits" {
+		t.Fatalf("MergeRequestTitleRegexDescription = %v", opts.MergeRequestTitleRegexDescription)
 	}
 }
 
@@ -2219,28 +2558,55 @@ func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 // TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
-		ID:                1,
-		Name:              "test-project",
-		PathWithNamespace: "group/test-project",
-		Visibility:        testPrivate,
-		DefaultBranch:     "main",
-		Description:       testDescProject,
-		Namespace:         "group",
-		Archived:          true,
-		ForksCount:        5,
-		StarCount:         10,
-		OpenIssuesCount:   3,
-		Topics:            []string{"go", "mcp"},
-		CreatedAt:         "2026-01-01T00:00:00Z",
-		WebURL:            "https://gitlab.example.com/group/test-project",
-		HTTPURLToRepo:     "https://gitlab.example.com/group/test-project.git",
-		SSHURLToRepo:      "git@gitlab.example.com:group/test-project.git",
+		ID:                                1,
+		Name:                              "test-project",
+		PathWithNamespace:                 "group/test-project",
+		Visibility:                        testPrivate,
+		DefaultBranch:                     "main",
+		Description:                       testDescProject,
+		Namespace:                         "group",
+		Archived:                          true,
+		ForksCount:                        5,
+		StarCount:                         10,
+		OpenIssuesCount:                   3,
+		Topics:                            []string{"go", "mcp"},
+		CreatedAt:                         "2026-01-01T00:00:00Z",
+		WebURL:                            "https://gitlab.example.com/group/test-project",
+		HTTPURLToRepo:                     "https://gitlab.example.com/group/test-project.git",
+		SSHURLToRepo:                      "git@gitlab.example.com:group/test-project.git",
+		MergeRequestTitleRegex:            `^(feat|fix):`,
+		MergeRequestTitleRegexDescription: "Conventional MR titles",
 	}
 	md := FormatMarkdown(out)
-	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone} {
+	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatMarkdown missing %q", want)
 		}
+	}
+}
+
+// TestFormatProjectNotFound verifies the rich Markdown result for project 404s.
+func TestFormatProjectNotFound(t *testing.T) {
+	result := formatProjectNotFound(projectNotFoundOutput{Identifier: "group%2Fmissing"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatProjectNotFound() = %#v, want error result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected not-found result content")
+	}
+	content := result.Content[0].(*mcp.TextContent).Text
+	for _, want := range []string{"Project", "Not Found", "group%2Fmissing", "gitlab_project_list"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("not-found markdown missing %q", want)
+		}
+	}
+}
+
+// TestFormatTriggerTestHookMarkdown verifies webhook test trigger Markdown.
+func TestFormatTriggerTestHookMarkdown(t *testing.T) {
+	md := FormatTriggerTestHookMarkdown(TriggerTestHookOutput{Message: "Hook executed"})
+	if !strings.Contains(md, "Hook executed") {
+		t.Fatalf("FormatTriggerTestHookMarkdown() = %q, want message", md)
 	}
 }
 
@@ -6242,6 +6608,14 @@ func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
 	}
 	if !strings.Contains(md, "—") {
 		t.Error("missing dash for empty RuleType/Users/Groups")
+	}
+}
+
+// TestFormatListApprovalRulesMarkdown_Empty verifies empty approval rule lists.
+func TestFormatListApprovalRulesMarkdown_Empty(t *testing.T) {
+	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{})
+	if !strings.Contains(md, "No approval rules found") {
+		t.Fatalf("FormatListApprovalRulesMarkdown() = %q, want empty-list message", md)
 	}
 }
 

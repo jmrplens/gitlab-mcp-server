@@ -353,6 +353,29 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+func TestList_SkipsWidgetsWithoutChildren(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, `{
+  "namespace": {
+    "workItem": {
+      "widgets": [
+        {"type": "OTHER"},
+        {"children": {"pageInfo": {"hasNextPage": false, "hasPreviousPage": false}, "nodes": []}}
+      ]
+    }
+  }
+}`)
+	}}))
+
+	out, err := List(context.Background(), client, ListInput{FullPath: testFullPath, IID: 1})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Issues) != 0 {
+		t.Fatalf("len(Issues) = %d, want 0", len(out.Issues))
+	}
+}
+
 // --------------------------------------------------------------------------
 // Assign
 // --------------------------------------------------------------------------
@@ -476,6 +499,45 @@ func TestAssign_CancelledContext(t *testing.T) {
 	}
 }
 
+func TestAssign_ChildResolutionAndMutationErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.Handler
+		wantErr string
+	}{
+		{
+			name: "child GID resolution fails",
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, r *http.Request) {
+				vars, _ := testutil.ParseGraphQLVariables(r)
+				if fp, ok := vars["fullPath"].(string); ok && fp == testChildProject {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+					return
+				}
+				testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+			}}),
+			wantErr: "child issue GID",
+		},
+		{
+			name: "mutation API fails",
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid":    resolveHandler(testChildProject),
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "bad", http.StatusForbidden) },
+			}),
+			wantErr: "epicIssueAssign",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			_, err := Assign(context.Background(), client, AssignInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Assign() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // Remove
 // --------------------------------------------------------------------------
@@ -593,6 +655,40 @@ func TestRemove_CancelledContext(t *testing.T) {
 	_, err := Remove(ctx, client, RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
 	if err == nil {
 		t.Fatal("Remove() expected context error, got nil")
+	}
+}
+
+func TestRemove_EpicResolutionAndMutationErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.Handler
+		wantErr string
+	}{
+		{
+			name: "epic GID resolution fails",
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "work item not found",
+		},
+		{
+			name: "mutation API fails",
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid":    resolveHandler(testChildProject),
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "bad", http.StatusForbidden) },
+			}),
+			wantErr: "epicIssueRemove",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			_, err := Remove(context.Background(), client, RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Remove() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -779,6 +875,24 @@ func TestUpdateOrder_CancelledContext(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("UpdateOrder() expected context error, got nil")
+	}
+}
+
+func TestUpdateOrder_MutationAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "bad", http.StatusForbidden) },
+	}))
+
+	_, err := UpdateOrder(context.Background(), client, UpdateInput{
+		FullPath: testFullPath, IID: 1,
+		ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",
+		RelativePosition: "BEFORE",
+	})
+	if err == nil || !strings.Contains(err.Error(), "epicIssueUpdate") {
+		t.Fatalf("UpdateOrder() error = %v, want epicIssueUpdate", err)
 	}
 }
 
