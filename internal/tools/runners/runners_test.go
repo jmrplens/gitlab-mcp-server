@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -16,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 const (
@@ -900,6 +902,52 @@ func TestResetProjectRegToken_APIError(t *testing.T) {
 	_, err := ResetProjectRegToken(context.Background(), client, ResetProjectRegTokenInput{ProjectID: "99"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestRunnerStatusSpecificAPIErrors covers status-specific hints not exercised by generic API-error tests.
+func TestRunnerStatusSpecificAPIErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		call   func(context.Context, *gitlabclient.Client) error
+		want   string
+	}{
+		{name: "UpdateForbidden", status: http.StatusForbidden, want: "admin token", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Update(ctx, client, UpdateInput{RunnerID: 1})
+			return err
+		}},
+		{name: "EnableProjectForbidden", status: http.StatusForbidden, want: "locked", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := EnableProject(ctx, client, EnableProjectInput{ProjectID: "42", RunnerID: 1})
+			return err
+		}},
+		{name: "RegisterForbidden", status: http.StatusForbidden, want: "registration token", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Register(ctx, client, RegisterInput{Token: "reg-token"})
+			return err
+		}},
+		{name: "ResetGroupNotFound", status: http.StatusNotFound, want: "gitlab_group_get", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := ResetGroupRegToken(ctx, client, ResetGroupRegTokenInput{GroupID: "42"})
+			return err
+		}},
+		{name: "ResetProjectNotFound", status: http.StatusNotFound, want: "gitlab_project_get", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := ResetProjectRegToken(ctx, client, ResetProjectRegTokenInput{ProjectID: "99"})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"runner error"}`)
+			}))
+			err := tt.call(t.Context(), client)
+			if err == nil {
+				t.Fatal("expected API error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want hint containing %q", err.Error(), tt.want)
+			}
+		})
 	}
 }
 
@@ -1885,6 +1933,17 @@ func TestListManagers_ZeroRunnerID(t *testing.T) {
 	}
 }
 
+// TestListManagers_CancelledContext verifies cancellation before the API request.
+func TestListManagers_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := ListManagers(testutil.CancelledCtx(t), client, ListManagersInput{RunnerID: 1})
+	if err == nil {
+		t.Fatal("expected error for canceled context")
+	}
+}
+
 // TestListManagers_APIError verifies that ListManagers wraps API errors.
 func TestListManagers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1919,5 +1978,22 @@ func TestFormatManagerListMarkdown_Empty(t *testing.T) {
 	md := FormatManagerListMarkdown(ManagerListOutput{})
 	if !strings.Contains(md, "No runner managers found") {
 		t.Error("expected empty message")
+	}
+}
+
+// TestToManagerOutput_Timestamps verifies timestamp fields are formatted when present.
+func TestToManagerOutput_Timestamps(t *testing.T) {
+	createdAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	contactedAt := time.Date(2026, 1, 15, 11, 30, 0, 0, time.UTC)
+	out := toManagerOutput(&gl.RunnerManager{
+		ID:          10,
+		CreatedAt:   &createdAt,
+		ContactedAt: &contactedAt,
+	})
+	if out.CreatedAt != "2026-01-15T10:00:00Z" {
+		t.Fatalf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
+	}
+	if out.ContactedAt != "2026-01-15T11:30:00Z" {
+		t.Fatalf("ContactedAt = %q, want RFC3339 timestamp", out.ContactedAt)
 	}
 }

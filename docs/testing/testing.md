@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,919 |
-| Unit test functions | 9,670 |
+| Total test functions | 9,922 |
+| Unit test functions | 9,673 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
 | Overall coverage (`go test ./internal/...`) | 98.1% |
 | Average package coverage | 95.0% |
 
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,903 | 89.8% |
-| `TestFunc` (no underscore) | 735 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,905 | 89.8% |
+| `TestFunc` (no underscore) | 736 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,262 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,265 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,919** | **567** |  |
+| **Total** | **9,922** | **567** |  |
 
 ### Core Packages
 
@@ -88,8 +88,8 @@
 | jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
 | awardemoji | 108 | 100.0% | 24 |
+| runners | 105 | 100.0% | 19 |
 | packages | 103 | 97.3% | 8 |
-| runners | 102 | 98.2% | 19 |
 | pipelines | 101 | 99.2% | 12 |
 | resourceevents | 98 | 100.0% | 15 |
 | commits | 97 | 96.0% | 13 |
@@ -252,7 +252,7 @@
 | runnercontrollers | 32 | 2 | 100.0% | 5 |
 | runnercontrollerscopes | 34 | 2 | 100.0% | 5 |
 | runnercontrollertokens | 37 | 2 | 100.0% | 5 |
-| runners | 102 | 2 | 98.2% | 19 |
+| runners | 105 | 2 | 100.0% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
 | securefiles | 24 | 2 | 98.8% | 4 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,262** | **337** |  | **1,106** |
+| **Total** | **7,265** | **337** |  | **1,106** |
 
 </details>
 
@@ -475,7 +475,7 @@
 | runnercontrollers | 100.0% |
 | runnercontrollerscopes | 100.0% |
 | runnercontrollertokens | 100.0% |
-| runners | 98.2% |
+| runners | 100.0% |
 | samplingtools | 100.0% |
 | search | 100.0% |
 | securefiles | 98.8% |
