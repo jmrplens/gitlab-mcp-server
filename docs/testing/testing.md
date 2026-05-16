@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,922 |
-| Unit test functions | 9,673 |
+| Total test functions | 9,928 |
+| Unit test functions | 9,679 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,905 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,911 | 89.8% |
 | `TestFunc` (no underscore) | 736 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,265 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,271 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,922** | **567** |  |
+| **Total** | **9,928** | **567** |  |
 
 ### Core Packages
 
@@ -271,15 +271,15 @@
 | terraformstates | 17 | 1 | 100.0% | 6 |
 | todos | 29 | 1 | 100.0% | 3 |
 | topics | 26 | 2 | 100.0% | 5 |
-| uploads | 32 | 2 | 97.8% | 3 |
+| uploads | 33 | 2 | 98.9% | 3 |
 | usagedata | 27 | 1 | 100.0% | 6 |
 | useremails | 24 | 2 | 100.0% | 6 |
 | usergpgkeys | 44 | 2 | 100.0% | 8 |
 | users | 185 | 12 | 100.0% | 36 |
-| vulnerabilities | 52 | 3 | 98.4% | 8 |
+| vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,265** | **337** |  | **1,106** |
+| **Total** | **7,271** | **337** |  | **1,106** |
 
 </details>
 
@@ -494,12 +494,12 @@
 | terraformstates | 100.0% |
 | todos | 100.0% |
 | topics | 100.0% |
-| uploads | 97.8% |
+| uploads | 98.9% |
 | usagedata | 100.0% |
 | useremails | 100.0% |
 | usergpgkeys | 100.0% |
 | users | 100.0% |
-| vulnerabilities | 98.4% |
+| vulnerabilities | 100.0% |
 | wikis | 99.4% |
 | workitems | 100.0% |
 

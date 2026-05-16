@@ -387,6 +387,25 @@ func TestDismiss_ServerError(t *testing.T) {
 	}
 }
 
+// TestDismiss_APIError verifies that Dismiss returns a wrapped error when the
+// GraphQL API call itself fails.
+func TestDismiss_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityDismiss": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Dismiss(context.Background(), client, DismissInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+	if !contains(err.Error(), "dismissable state") {
+		t.Fatalf("error = %q, want dismiss hint", err.Error())
+	}
+}
+
 // Confirm tests.
 
 // TestConfirm_Success verifies that confirming a vulnerability via the
@@ -646,6 +665,27 @@ func TestFormatGetMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatGetMarkdown_IdentifierLink verifies identifiers with URLs render
+// their names as Markdown links in the identifiers table.
+func TestFormatGetMarkdown_IdentifierLink(t *testing.T) {
+	out := GetOutput{
+		Vulnerability: Item{
+			ID:       "gid://gitlab/Vulnerability/42",
+			Title:    "Linked identifier",
+			Severity: "LOW",
+			State:    "DETECTED",
+			Identifiers: []IdentifierItem{
+				{Name: "CWE-79", ExternalType: "cwe", ExternalID: "79", URL: "https://cwe.mitre.org/data/definitions/79.html"},
+			},
+		},
+	}
+
+	md := FormatGetMarkdown(out)
+	if !contains(md, "[CWE-79](https://cwe.mitre.org/data/definitions/79.html)") {
+		t.Fatalf("markdown missing linked identifier: %s", md)
+	}
+}
+
 // TestFormatMutationMarkdown verifies that formatting a vulnerability
 // mutation result produces the expected state-change confirmation Markdown.
 func TestFormatMutationMarkdown(t *testing.T) {
@@ -811,6 +851,25 @@ func TestList_APIError(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{ProjectPath: "g/p"})
 	if err == nil {
 		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestList_ProjectNotFound verifies that List reports a clear error when the
+// GraphQL response does not include a project node.
+func TestList_ProjectNotFound(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := List(context.Background(), client, ListInput{ProjectPath: "g/missing"})
+	if err == nil {
+		t.Fatal("expected project not found error")
+	}
+	if !contains(err.Error(), "project \"g/missing\" not found") {
+		t.Fatalf("error = %q, want project not found message", err.Error())
 	}
 }
 
