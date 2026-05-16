@@ -10,16 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
+	// pathProtectedEnvs identifies the path protected envs constant used by this package.
 	pathProtectedEnvs = "/api/v4/projects/42/protected_environments"
+	// pathProtectedEnv1 identifies the path protected env 1 constant used by this package.
 	pathProtectedEnv1 = "/api/v4/projects/42/protected_environments/production"
-	envJSON           = `{
+	// envJSON identifies the env JSON constant used by this package.
+	envJSON = `{
 		"name": "production",
 		"deploy_access_levels": [
 			{"id": 1, "access_level": 40, "access_level_description": "Maintainers", "user_id": 0, "group_id": 0}
@@ -33,7 +34,7 @@ const (
 
 // ---------- List ----------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedEnvs {
@@ -59,7 +60,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -73,7 +74,7 @@ func TestList_MissingProjectID(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedEnv1 {
@@ -104,7 +105,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -116,7 +117,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_MissingEnvironment verifies the behavior of get missing environment.
+// TestGet_MissingEnvironment verifies Get when missing environment.
 func TestGet_MissingEnvironment(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -130,7 +131,7 @@ func TestGet_MissingEnvironment(t *testing.T) {
 
 // ---------- Protect ----------.
 
-// TestProtect_Success verifies the behavior of protect success.
+// TestProtect_Success verifies Protect when success.
 func TestProtect_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
@@ -152,7 +153,7 @@ func TestProtect_Success(t *testing.T) {
 	}
 }
 
-// TestProtect_WithAccessLevels verifies the behavior of protect with access levels.
+// TestProtect_WithAccessLevels verifies Protect when with access levels.
 func TestProtect_WithAccessLevels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
@@ -266,60 +267,7 @@ func TestUnprotect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_ErrorAndNotFound validates register.go error and NotFound
-// paths via MCP round-trip.
-func TestMCPRoundTrip_ErrorAndNotFound(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	t.Run("get_404", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_protected_environment_get",
-			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true for get 404")
-		}
-	})
-
-	t.Run("unprotect_404", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_protected_environment_unprotect",
-			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true for unprotect 404")
-		}
-	})
-}
-
-// TestProtect_MissingName verifies the behavior of protect missing name.
+// TestProtect_MissingName verifies Protect when missing name.
 func TestProtect_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -333,7 +281,7 @@ func TestProtect_MissingName(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProtectedEnv1 {
@@ -355,7 +303,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -367,7 +315,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingEnvironment verifies the behavior of update missing environment.
+// TestUpdate_MissingEnvironment verifies Update when missing environment.
 func TestUpdate_MissingEnvironment(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -381,7 +329,7 @@ func TestUpdate_MissingEnvironment(t *testing.T) {
 
 // ---------- Unprotect ----------.
 
-// TestUnprotect_Success verifies the behavior of unprotect success.
+// TestUnprotect_Success verifies Unprotect when success.
 func TestUnprotect_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProtectedEnv1 {
@@ -397,7 +345,7 @@ func TestUnprotect_Success(t *testing.T) {
 	}
 }
 
-// TestUnprotect_MissingProjectID verifies the behavior of unprotect missing project i d.
+// TestUnprotect_MissingProjectID verifies Unprotect when missing project ID.
 func TestUnprotect_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -409,7 +357,7 @@ func TestUnprotect_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUnprotect_MissingEnvironment verifies the behavior of unprotect missing environment.
+// TestUnprotect_MissingEnvironment verifies Unprotect when missing environment.
 func TestUnprotect_MissingEnvironment(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -423,7 +371,7 @@ func TestUnprotect_MissingEnvironment(t *testing.T) {
 
 // ---------- Formatters ----------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	pe := Output{
 		Name:                  "production",
@@ -450,7 +398,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -458,7 +406,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Environments: []Output{
@@ -479,7 +427,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No protected environments found") {
@@ -638,74 +586,6 @@ func TestUnprotect_APIError(t *testing.T) {
 	err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42", Environment: "production"})
 	if err == nil {
 		t.Fatal("expected error for API failure")
-	}
-}
-
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallThroughMCP verifies all registered tools can be called
-// through MCP in-memory transport, covering the handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			testutil.RespondJSON(w, http.StatusOK,
-				`[{"name":"production","deploy_access_levels":[{"access_level":40}],"approval_rules":[]}]`)
-		case http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, envJSON)
-		case http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, envJSON)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_protected_environment_list", map[string]any{"project_id": "42"}},
-		{"gitlab_protected_environment_get", map[string]any{"project_id": "42", "environment": "production"}},
-		{"gitlab_protected_environment_protect", map[string]any{"project_id": "42", "name": "staging"}},
-		{"gitlab_protected_environment_update", map[string]any{"project_id": "42", "environment": "production"}},
-		{"gitlab_protected_environment_unprotect", map[string]any{"project_id": "42", "environment": "production"}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
-			}
-		})
 	}
 }
 

@@ -1,4 +1,3 @@
-// Package groupiterations implements MCP tool handlers for GitLab group iterations.
 package groupiterations
 
 import (

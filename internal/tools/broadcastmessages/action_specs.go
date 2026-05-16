@@ -1,6 +1,8 @@
 package broadcastmessages
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		broadcastMessageReadSpec("broadcast_message_get", toolutil.RouteAction(client, Get), "gitlab_get_broadcast_message"),
 		broadcastMessageCreateSpec("broadcast_message_create", toolutil.RouteAction(client, Create), "gitlab_create_broadcast_message"),
 		broadcastMessageUpdateSpec("broadcast_message_update", toolutil.RouteAction(client, Update), "gitlab_update_broadcast_message"),
-		broadcastMessageDeleteSpec("broadcast_message_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_broadcast_message"),
+		broadcastMessageDeleteSpec("broadcast_message_delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_delete_broadcast_message"),
 	}
 }
 
@@ -47,4 +49,12 @@ func broadcastMessageOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "broadcastmessages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+}
+
+// DeleteOutput deletes a broadcast message and returns the legacy success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted broadcast_message."}, nil
 }

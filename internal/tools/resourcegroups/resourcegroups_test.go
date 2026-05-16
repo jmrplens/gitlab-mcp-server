@@ -4,21 +4,21 @@
 package resourcegroups
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestListAll verifies the behavior of list all.
+// TestListAll verifies ListAll.
 func TestListAll(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups" || r.Method != http.MethodGet {
@@ -36,7 +36,7 @@ func TestListAll(t *testing.T) {
 	}
 }
 
-// TestListAll_Error verifies that ListAll handles the error scenario correctly.
+// TestListAll_Error verifies ListAll when error.
 func TestListAll_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -47,7 +47,7 @@ func TestListAll_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodGet {
@@ -65,7 +65,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -76,7 +76,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestEdit verifies the behavior of edit.
+// TestEdit verifies Edit.
 func TestEdit(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodPut {
@@ -94,7 +94,7 @@ func TestEdit(t *testing.T) {
 	}
 }
 
-// TestEdit_Error verifies that Edit handles the error scenario correctly.
+// TestEdit_Error verifies Edit when error.
 func TestEdit_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -105,7 +105,7 @@ func TestEdit_Error(t *testing.T) {
 	}
 }
 
-// TestListUpcomingJobs verifies the behavior of list upcoming jobs.
+// TestListUpcomingJobs verifies ListUpcomingJobs.
 func TestListUpcomingJobs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production/upcoming_jobs" || r.Method != http.MethodGet {
@@ -123,7 +123,7 @@ func TestListUpcomingJobs(t *testing.T) {
 	}
 }
 
-// TestListUpcomingJobs_Error verifies that ListUpcomingJobs handles the error scenario correctly.
+// TestListUpcomingJobs_Error verifies ListUpcomingJobs when error.
 func TestListUpcomingJobs_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -134,7 +134,7 @@ func TestListUpcomingJobs_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Groups: []ResourceGroupItem{{ID: 1, Key: "prod", ProcessMode: "unordered"}}})
 	if md == "" {
@@ -148,7 +148,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // FormatListMarkdown — empty groups
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Groups: nil})
 	if !strings.Contains(md, "No resource groups found") {
@@ -163,7 +163,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatGroupMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupMarkdown verifies the behavior of cov format group markdown.
+// TestFormatGroupMarkdown verifies FormatGroupMarkdown.
 func TestFormatGroupMarkdown(t *testing.T) {
 	md := FormatGroupMarkdown(ResourceGroupItem{ID: 42, Key: "staging", ProcessMode: "oldest_first"})
 	for _, want := range []string{
@@ -182,7 +182,7 @@ func TestFormatGroupMarkdown(t *testing.T) {
 // FormatJobsMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatJobsMarkdown_WithData verifies the behavior of cov format jobs markdown with data.
+// TestFormatJobsMarkdown_WithData verifies FormatJobsMarkdown when with data.
 func TestFormatJobsMarkdown_WithData(t *testing.T) {
 	md := FormatJobsMarkdown(ListUpcomingJobsOutput{
 		Jobs: []JobItem{
@@ -206,7 +206,7 @@ func TestFormatJobsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatJobsMarkdown_Empty verifies the behavior of cov format jobs markdown empty.
+// TestFormatJobsMarkdown_Empty verifies FormatJobsMarkdown when empty.
 func TestFormatJobsMarkdown_Empty(t *testing.T) {
 	md := FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: nil})
 	if !strings.Contains(md, "No upcoming jobs") {
@@ -218,29 +218,35 @@ func TestFormatJobsMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies resource group action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "resourcegroups" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// MCP round-trip for all 4 individual tools
+// ActionSpec route execution for all 4 individual tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewResourceGroupsToolsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates resource group canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := covNewResourceGroupsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -255,20 +261,16 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
@@ -279,32 +281,15 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — API error paths through RegisterTools
+// ActionSpec route execution — API error paths
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_APIErrors validates cov register tools a p i errors across multiple scenarios using table-driven subtests.
-func TestRegisterTools_APIErrors(t *testing.T) {
+// TestActionSpecs_CallRouteErrors validates resource group route API errors.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := resourceGroupSpecsByTool(ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -319,16 +304,12 @@ func TestRegisterTools_APIErrors(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) unexpected transport error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if !result.IsError {
-				t.Errorf("CallTool(%s) expected IsError=true", tt.tool)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
 			}
 		})
 	}
@@ -338,7 +319,8 @@ func TestRegisterTools_APIErrors(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
-func covNewResourceGroupsToolsMCPSession(t *testing.T) *mcp.ClientSession {
+// covNewResourceGroupsRouteSpecs supports cov new resource groups route specs assertions in resourcegroups tests.
+func covNewResourceGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	covGroupJSON := `{"id":1,"key":"production","process_mode":"unordered"}`
@@ -362,22 +344,14 @@ func covNewResourceGroupsToolsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return resourceGroupSpecsByTool(ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// resourceGroupSpecsByTool supports resource group specs by tool assertions in resourcegroups tests.
+func resourceGroupSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }

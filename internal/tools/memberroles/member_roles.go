@@ -1,5 +1,3 @@
-// Package memberroles implements GitLab member role operations at instance and
-// group level including list, create, and delete.
 package memberroles
 
 import (

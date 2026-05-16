@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Context
 
-GitLab maintains two API surfaces: REST API v4 and GraphQL API. The project currently uses REST for ~155 domains and GraphQL for 7 domains (ADR-0006). GitLab has begun deprecating certain REST endpoints in favor of GraphQL equivalents:
+GitLab maintains two API surfaces: REST API v4 and GraphQL API. The project currently exposes GitLab operations through 163 internal tool sub-packages; most actions are REST-backed, while GraphQL is used for domains where REST is deprecated, unavailable, or significantly less efficient (ADR-0006). GitLab has begun deprecating certain REST endpoints in favor of GraphQL equivalents:
 
 - **Epics REST API**: deprecated since GitLab 17.0, removal planned for 19.0
 - **Security Findings REST**: deprecated in favor of GraphQL `Pipeline.securityReportFindings`
@@ -28,7 +28,7 @@ The question is whether to proactively migrate all domains to GraphQL, migrate r
 #### Option 1: Proactive full migration to GraphQL (rejected)
 
 - **POS-001**: Unified API strategy, single query language
-- **NEG-001**: Massive effort (~155 domains) with no functional benefit for stable REST endpoints
+- **NEG-001**: Massive effort across the REST-backed action catalog with no functional benefit for stable REST endpoints
 - **NEG-002**: `client-go` typed wrappers exist for REST but not for most GraphQL domains — migration would reduce type safety
 - **NEG-003**: `CI_JOB_TOKEN` cannot authenticate GraphQL, breaking CI pipeline use cases
 - **NEG-004**: GraphQL responses require manual struct maintenance without compile-time schema validation

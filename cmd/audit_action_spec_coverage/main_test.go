@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
+// TestBuildCoverageReport_ClassifiesKeyDomains verifies BuildCoverageReport classifies key domains.
 func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -22,9 +25,21 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	if report.Summary.DomainCount == 0 {
 		t.Fatal("expected discovered domains")
 	}
+	if report.Architecture.CatalogSource == "" || report.Architecture.MetaRegistrationSource == "" || report.Architecture.IndividualRegistrationSource == "" {
+		t.Fatalf("architecture report missing source fields: %+v", report.Architecture)
+	}
+	if report.Architecture.SurfaceSpecCount != report.Summary.SurfaceSpecCount {
+		t.Fatalf("architecture surface specs = %d, summary = %d", report.Architecture.SurfaceSpecCount, report.Summary.SurfaceSpecCount)
+	}
+	if report.Architecture.LegacyBridgeCount != 0 || len(report.Architecture.LegacyBridges) != 0 {
+		t.Fatalf("architecture legacy bridges = %+v, want zero", report.Architecture.LegacyBridges)
+	}
+	if report.Architecture.DynamicActionAliasCount == 0 || report.Architecture.DynamicParameterAliasCount == 0 {
+		t.Fatalf("architecture dynamic alias counts missing: %+v", report.Architecture)
+	}
 
 	projects := requireDomain(t, report, "projects")
-	if !projects.HasRegisterTools || !projects.HasIndividualTools || !projects.HasMetaSpecs || !projects.HasDynamicCatalogEntries {
+	if !projects.HasIndividualTools || !projects.HasMetaSpecs || !projects.HasDynamicCatalogEntries {
 		t.Fatalf("projects coverage missing expected surfaces: %+v", projects)
 	}
 	if projects.SurfaceClassification != "spec-backed" {
@@ -32,16 +47,125 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 
 	dynamic := requireDomain(t, report, "dynamic")
-	if dynamic.SurfaceClassification != "dynamic-catalog-surface" {
-		t.Fatalf("dynamic classification = %q, want dynamic-catalog-surface", dynamic.SurfaceClassification)
+	if dynamic.SurfaceClassification != "dynamic-controller-surface" || !dynamic.HasSurfaceSpecs || dynamic.SurfaceSpecCount != 4 {
+		t.Fatalf("dynamic coverage missing controller surface specs: %+v", dynamic)
 	}
 
 	serverUpdate := requireDomain(t, report, "serverupdate")
-	if !serverUpdate.HasStandaloneOnlyTools || serverUpdate.SurfaceClassification != "standalone-only" {
-		t.Fatalf("serverupdate coverage missing standalone classification: %+v", serverUpdate)
+	if !serverUpdate.HasStandaloneOnlyTools || serverUpdate.SurfaceClassification != "surface-backed" || serverUpdate.SurfaceSpecCount != 2 {
+		t.Fatalf("serverupdate coverage missing server maintenance surface specs: %+v", serverUpdate)
 	}
 }
 
+// TestAuditCatalogFirstSource_CurrentProductionCodePasses verifies AuditCatalogFirstSource when current production code passes.
+func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
+	root, err := repositoryRoot("../..")
+	if err != nil {
+		t.Fatalf("repositoryRoot() error = %v", err)
+	}
+	if auditErr := auditCatalogFirstSource(root); auditErr != nil {
+		t.Fatalf("auditCatalogFirstSource() error = %v", auditErr)
+	}
+}
+
+// TestAssertActionSpecManifestCurrent_DetectsStaleManifest verifies AssertActionSpecManifestCurrent detects stale manifest.
+func TestAssertActionSpecManifestCurrent_DetectsStaleManifest(t *testing.T) {
+	root := t.TempDir()
+	toolsDir := filepath.Join(root, "internal", "tools")
+	if err := os.MkdirAll(toolsDir, 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs.go"), `package tools
+
+func buildAlphaActionSpecs() {}
+func buildBetaActionSpecs() {}
+`)
+	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs_manifest_gen.go"), `package tools
+
+func actionSpecGroupBuilders() []actionSpecGroupBuilder {
+	return []actionSpecGroupBuilder{
+		buildAlphaActionSpecs,
+	}
+}
+`)
+
+	if err := assertActionSpecManifestCurrent(root); err == nil {
+		t.Fatal("assertActionSpecManifestCurrent() error = nil, want stale manifest error")
+	}
+}
+
+// TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences verifies LegacyBridgeFindingsInContent detects forbidden references.
+func TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences(t *testing.T) {
+	findings := legacyBridgeFindingsInContent("runtime.go", "package tools\nfunc f(){ registerAllLegacy() }", []string{"registerAllLegacy"})
+	if len(findings) != 1 || findings[0] != "runtime.go contains \"registerAllLegacy\"" {
+		t.Fatalf("legacyBridgeFindingsInContent() = %+v, want registerAllLegacy finding", findings)
+	}
+}
+
+// TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance covers StaleAIContextLine with table-driven subtests for classifies legacy registration guidance.
+func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{name: "legacy create register tools", line: "4. Create `register.go` with `RegisterTools(server, client)`", want: true},
+		{name: "legacy compatibility register tools", line: "Existing package-local `RegisterTools` files may remain for compatibility.", want: true},
+		{name: "legacy subpackage delegation", line: "register.go # RegisterAll() — delegates to sub-package RegisterTools()", want: true},
+		{name: "legacy register meta function", line: "func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {", want: true},
+		{name: "negative guidance allowed", line: "Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions.", want: false},
+		{name: "catalog guidance allowed", line: "Add or update domain-local `ActionSpecs` and the audited catalog aggregation path.", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := staleAIContextLine(tt.line); got != tt.want {
+				t.Fatalf("staleAIContextLine(%q) = %t, want %t", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools verifies AssertCoverageInvariants detects package local register tools.
+func TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools(t *testing.T) {
+	err := assertCoverageInvariants([]domainCoverage{{
+		Package:          "example",
+		HasRegisterTools: true,
+		HasMetaSpecs:     true,
+	}})
+	if err == nil {
+		t.Fatal("assertCoverageInvariants() error = nil, want package-local RegisterTools error")
+	}
+}
+
+// TestAssertCoverageInvariants_DetectsIndividualOnlyPackage verifies AssertCoverageInvariants detects individual only package.
+func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
+	err := assertCoverageInvariants([]domainCoverage{{
+		Package:               "example",
+		HasIndividualTools:    true,
+		HasMetaSpecs:          false,
+		SurfaceClassification: "individual-only",
+	}})
+	if err == nil {
+		t.Fatal("assertCoverageInvariants() error = nil, want missing ActionSpec error")
+	}
+}
+
+// TestCatalogActionsMissingIndividualProjectionPolicy verifies CatalogActionsMissingIndividualProjectionPolicy.
+func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_example"})
+	group.SetAction(actioncatalog.Action{ID: "example.get", Name: "get"})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
+	if len(missing) != 1 || missing[0] != "example.get" {
+		t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %+v, want example.get", missing)
+	}
+}
+
+// TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked verifies BuildCoverageReport when core source domains are spec backed.
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -68,6 +192,7 @@ func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_CICDDomainsAreSpecBacked verifies BuildCoverageReport when cicd domains are spec backed.
 func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -96,6 +221,7 @@ func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_CollaborationDomainsAreSpecBacked verifies BuildCoverageReport when collaboration domains are spec backed.
 func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -123,6 +249,7 @@ func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked verifies BuildCoverageReport when note and discussion domains are spec backed.
 func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -151,6 +278,7 @@ func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T)
 	})
 }
 
+// TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked verifies BuildCoverageReport when access and security domains are spec backed.
 func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -180,6 +308,7 @@ func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T)
 	})
 }
 
+// TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked verifies BuildCoverageReport when admin platform domains are spec backed.
 func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -213,6 +342,7 @@ func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked verifies BuildCoverageReport when package deployment storage domains are spec backed.
 func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -247,6 +377,7 @@ func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *tes
 	})
 }
 
+// TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked verifies BuildCoverageReport when group project enterprise domains are spec backed.
 func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -278,6 +409,7 @@ func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testi
 	})
 }
 
+// TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked verifies BuildCoverageReport when utility template domains are spec backed.
 func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -298,15 +430,14 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 		"licensetemplates",
 		"markdown",
 		"modelregistry",
-		"samplingtools",
 	})
-	assertSourceSpecBackedDomains(t, report, []string{
-		"elicitationtools",
-		"projectdiscovery",
-	})
-	assertStandaloneOnlyDomain(t, report, "serverupdate")
+	assertSurfaceBackedDomain(t, report, "samplingtools", "sampling-utility", 11)
+	assertSurfaceBackedDomain(t, report, "elicitationtools", "interactive-utility", 4)
+	assertSurfaceBackedDomain(t, report, "projectdiscovery", "runtime-utility", 1)
+	assertSurfaceBackedDomain(t, report, "serverupdate", "server-maintenance", 2)
 }
 
+// TestWriteReport_WritesJSONFile verifies WriteReport writes JSON file.
 func TestWriteReport_WritesJSONFile(t *testing.T) {
 	report := coverageReport{SchemaVersion: schemaVersion, Summary: coverageSummary{DomainCount: 1}, Domains: []domainCoverage{{Package: "example"}}}
 	content, err := marshalReport(report)
@@ -334,6 +465,7 @@ func TestWriteReport_WritesJSONFile(t *testing.T) {
 	}
 }
 
+// requireDomain returns domain test data or fails the test.
 func requireDomain(t *testing.T, report coverageReport, packageName string) domainCoverage {
 	t.Helper()
 	for _, domain := range report.Domains {
@@ -345,6 +477,7 @@ func requireDomain(t *testing.T, report coverageReport, packageName string) doma
 	return domainCoverage{}
 }
 
+// assertSpecBackedDomains checks spec backed domains invariants for tests.
 func assertSpecBackedDomains(t *testing.T, report coverageReport, packageNames []string) {
 	t.Helper()
 	for _, packageName := range packageNames {
@@ -361,6 +494,7 @@ func assertSpecBackedDomains(t *testing.T, report coverageReport, packageNames [
 	}
 }
 
+// assertSourceSpecBackedDomains checks source spec backed domains invariants for tests.
 func assertSourceSpecBackedDomains(t *testing.T, report coverageReport, packageNames []string) {
 	t.Helper()
 	for _, packageName := range packageNames {
@@ -374,13 +508,25 @@ func assertSourceSpecBackedDomains(t *testing.T, report coverageReport, packageN
 	}
 }
 
-func assertStandaloneOnlyDomain(t *testing.T, report coverageReport, packageName string) {
+// assertSurfaceBackedDomain checks surface backed domain invariants for tests.
+func assertSurfaceBackedDomain(t *testing.T, report coverageReport, packageName, surfaceKind string, expectedUtilityActions int) {
 	t.Helper()
 	domain := requireDomain(t, report, packageName)
-	if domain.SurfaceClassification != "standalone-only" {
-		t.Fatalf("%s classification = %q, want standalone-only", packageName, domain.SurfaceClassification)
+	if domain.SurfaceClassification != "surface-backed" {
+		t.Fatalf("%s classification = %q, want surface-backed", packageName, domain.SurfaceClassification)
 	}
-	if domain.HasIndividualTools || domain.HasMetaSpecs || domain.HasDynamicCatalogEntries {
-		t.Fatalf("%s coverage should remain outside GitLab action specs/catalog: %+v", packageName, domain)
+	if domain.UtilitySurfaceActionCount != expectedUtilityActions {
+		t.Fatalf("%s utility action count = %d, want %d: %+v", packageName, domain.UtilitySurfaceActionCount, expectedUtilityActions, domain)
+	}
+	if domain.SurfaceKindCounts[surfaceKind] != expectedUtilityActions {
+		t.Fatalf("%s surface kind %q count = %d, want %d: %+v", packageName, surfaceKind, domain.SurfaceKindCounts[surfaceKind], expectedUtilityActions, domain)
+	}
+}
+
+// writeAuditTestFile writes audit test file fixture data for tests.
+func writeAuditTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s) error = %v", path, err)
 	}
 }

@@ -1,6 +1,3 @@
-// Package accesstokens implements GitLab Access Token operations as MCP tools.
-// It supports project access tokens, group access tokens, and personal access tokens,
-// including listing, getting, creating, rotating, and revoking tokens.
 package accesstokens
 
 import (
@@ -17,7 +14,9 @@ import (
 )
 
 const (
-	errTokenIDInvalid      = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
+	// errTokenIDInvalid identifies the err token ID invalid constant used by this package.
+	errTokenIDInvalid = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
+	// errInvalidExpiresAtFmt identifies the err invalid expires at fmt constant used by this package.
 	errInvalidExpiresAtFmt = "invalid expires_at format (expected YYYY-MM-DD): %w"
 	// hintTokenAlreadyRevoked is returned when revoking a token that the API
 	// reports as not found.
@@ -56,7 +55,7 @@ type ListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// fromProjectToken is an internal helper for the accesstokens package.
+// fromProjectToken maps from project token between API and evaluator models.
 func fromProjectToken(t *gl.ProjectAccessToken) Output {
 	out := Output{
 		ID:          t.ID,
@@ -81,7 +80,7 @@ func fromProjectToken(t *gl.ProjectAccessToken) Output {
 	return out
 }
 
-// fromGroupToken is an internal helper for the accesstokens package.
+// fromGroupToken maps from group token between API and evaluator models.
 func fromGroupToken(t *gl.GroupAccessToken) Output {
 	out := Output{
 		ID:          t.ID,
@@ -106,7 +105,7 @@ func fromGroupToken(t *gl.GroupAccessToken) Output {
 	return out
 }
 
-// fromPersonalToken is an internal helper for the accesstokens package.
+// fromPersonalToken maps from personal token between API and evaluator models.
 func fromPersonalToken(t *gl.PersonalAccessToken) Output {
 	out := Output{
 		ID:          t.ID,

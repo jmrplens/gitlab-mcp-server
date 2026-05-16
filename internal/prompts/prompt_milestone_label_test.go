@@ -14,7 +14,7 @@ import (
 
 // milestone_progress.
 
-// TestMilestoneProgress_WithMilestones verifies that MilestoneProgress handles the with milestones scenario correctly.
+// TestMilestoneProgress_WithMilestones verifies MilestoneProgress when with milestones.
 func TestMilestoneProgress_WithMilestones(t *testing.T) {
 	dueDate := gl.ISOTime(time.Now().Add(10 * 24 * time.Hour))
 	mux := http.NewServeMux()
@@ -80,7 +80,7 @@ func TestMilestoneProgress_WithMilestones(t *testing.T) {
 	}
 }
 
-// TestMilestoneProgress_SpecificMilestone verifies that MilestoneProgress handles the specific milestone scenario correctly.
+// TestMilestoneProgress_SpecificMilestone verifies MilestoneProgress when specific milestone.
 func TestMilestoneProgress_SpecificMilestone(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -114,7 +114,7 @@ func TestMilestoneProgress_SpecificMilestone(t *testing.T) {
 	}
 }
 
-// TestMilestoneProgress_EmptyMilestones verifies that MilestoneProgress handles the empty milestones scenario correctly.
+// TestMilestoneProgress_EmptyMilestones verifies MilestoneProgress when empty milestones.
 func TestMilestoneProgress_EmptyMilestones(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/milestones", func(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func TestMilestoneProgress_EmptyMilestones(t *testing.T) {
 	}
 }
 
-// TestMilestoneProgress_RequiresProjectID verifies that MilestoneProgress handles the requires project i d scenario correctly.
+// TestMilestoneProgress_RequiresProjectID verifies MilestoneProgress requires project ID.
 func TestMilestoneProgress_RequiresProjectID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)
@@ -151,7 +151,7 @@ func TestMilestoneProgress_RequiresProjectID(t *testing.T) {
 
 // label_distribution.
 
-// TestLabelDistribution_WithLabels verifies that LabelDistribution handles the with labels scenario correctly.
+// TestLabelDistribution_WithLabels verifies LabelDistribution when with labels.
 func TestLabelDistribution_WithLabels(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -193,7 +193,7 @@ func TestLabelDistribution_WithLabels(t *testing.T) {
 	}
 }
 
-// TestLabelDistribution_EmptyLabels verifies that LabelDistribution handles the empty labels scenario correctly.
+// TestLabelDistribution_EmptyLabels verifies LabelDistribution when empty labels.
 func TestLabelDistribution_EmptyLabels(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +215,7 @@ func TestLabelDistribution_EmptyLabels(t *testing.T) {
 	}
 }
 
-// TestLabelDistribution_RequiresProjectID verifies that LabelDistribution handles the requires project i d scenario correctly.
+// TestLabelDistribution_RequiresProjectID verifies LabelDistribution requires project ID.
 func TestLabelDistribution_RequiresProjectID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)
@@ -230,7 +230,7 @@ func TestLabelDistribution_RequiresProjectID(t *testing.T) {
 
 // group_milestone_progress.
 
-// TestGroupMilestoneProgress_WithMilestones verifies that GroupMilestoneProgress handles the with milestones scenario correctly.
+// TestGroupMilestoneProgress_WithMilestones verifies GroupMilestoneProgress when with milestones.
 func TestGroupMilestoneProgress_WithMilestones(t *testing.T) {
 	dueDate := gl.ISOTime(time.Now().Add(-5 * 24 * time.Hour))
 	mux := http.NewServeMux()
@@ -287,7 +287,7 @@ func TestGroupMilestoneProgress_WithMilestones(t *testing.T) {
 	}
 }
 
-// TestGroupMilestoneProgress_EmptyMilestones verifies that GroupMilestoneProgress handles the empty milestones scenario correctly.
+// TestGroupMilestoneProgress_EmptyMilestones verifies GroupMilestoneProgress when empty milestones.
 func TestGroupMilestoneProgress_EmptyMilestones(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/{group}/milestones", func(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +309,7 @@ func TestGroupMilestoneProgress_EmptyMilestones(t *testing.T) {
 	}
 }
 
-// TestGroupMilestoneProgress_RequiresGroupID verifies that GroupMilestoneProgress handles the requires group i d scenario correctly.
+// TestGroupMilestoneProgress_RequiresGroupID verifies GroupMilestoneProgress requires group ID.
 func TestGroupMilestoneProgress_RequiresGroupID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)
@@ -324,7 +324,7 @@ func TestGroupMilestoneProgress_RequiresGroupID(t *testing.T) {
 
 // project_contributors.
 
-// TestProjectContributors_WithContributors verifies that ProjectContributors handles the with contributors scenario correctly.
+// TestProjectContributors_WithContributors verifies ProjectContributors when with contributors.
 func TestProjectContributors_WithContributors(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -369,7 +369,7 @@ func TestProjectContributors_WithContributors(t *testing.T) {
 	}
 }
 
-// TestProjectContributors_EmptyContributors verifies that ProjectContributors handles the empty contributors scenario correctly.
+// TestProjectContributors_EmptyContributors verifies ProjectContributors when empty contributors.
 func TestProjectContributors_EmptyContributors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/repository/contributors", func(w http.ResponseWriter, r *http.Request) {
@@ -391,7 +391,7 @@ func TestProjectContributors_EmptyContributors(t *testing.T) {
 	}
 }
 
-// TestProjectContributors_RequiresProjectID verifies that ProjectContributors handles the requires project i d scenario correctly.
+// TestProjectContributors_RequiresProjectID verifies ProjectContributors requires project ID.
 func TestProjectContributors_RequiresProjectID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)

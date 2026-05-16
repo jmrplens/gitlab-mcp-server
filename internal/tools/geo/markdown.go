@@ -11,7 +11,7 @@ import (
 func FormatOutputMarkdown(o Output) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Geo Site: %s\n\n", o.Name)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, "| ID | %d |\n", o.ID)
 	fmt.Fprintf(&sb, "| Name | %s |\n", o.Name)
 	fmt.Fprintf(&sb, "| URL | %s |\n", o.URL)
@@ -39,7 +39,7 @@ func FormatListMarkdown(o ListOutput) string {
 	var sb strings.Builder
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
 	sb.WriteString("## Geo Sites\n\n")
-	sb.WriteString("| ID | Name | URL | Primary | Enabled |\n|---|---|---|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "URL", "Primary", "Enabled"))
 	for _, s := range o.Sites {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %t | %t |\n",
 			s.ID, s.Name, s.URL, s.Primary, s.Enabled)
@@ -54,7 +54,7 @@ func FormatListMarkdown(o ListOutput) string {
 func FormatStatusMarkdown(o StatusOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Geo Site Status (Node ID: %d)\n\n", o.GeoNodeID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, "| Healthy | %t |\n", o.Healthy)
 	fmt.Fprintf(&sb, "| Health Status | %s |\n", o.HealthStatus)
 	if o.Health != "" {
@@ -80,7 +80,7 @@ func FormatListStatusMarkdown(o ListStatusOutput) string {
 	var sb strings.Builder
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
 	sb.WriteString("## Geo Site Statuses\n\n")
-	sb.WriteString("| Node ID | Healthy | Health Status | DB Lag (s) | Projects | Version |\n|---|---|---|---|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Node ID", "Healthy", "Health Status", "DB Lag (s)", "Projects", "Version"))
 	for _, s := range o.Statuses {
 		fmt.Fprintf(&sb, "| %d | %t | %s | %d | %d | %s |\n",
 			s.GeoNodeID, s.Healthy, s.HealthStatus, s.DBReplicationLagSeconds, s.ProjectsCount, s.Version)

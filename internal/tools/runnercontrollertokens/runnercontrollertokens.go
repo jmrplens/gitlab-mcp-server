@@ -1,5 +1,3 @@
-// Package runnercontrollertokens implements MCP tool handlers for GitLab Runner Controller Tokens.
-// This is an admin-only API. Experimental: may change or be removed in future versions.
 package runnercontrollertokens
 
 import (

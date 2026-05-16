@@ -4,17 +4,14 @@
 package grouprelationsexport
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestScheduleExport verifies the behavior of schedule export.
+// TestScheduleExport verifies ScheduleExport.
 func TestScheduleExport(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/api/v4/groups/") {
@@ -29,7 +26,7 @@ func TestScheduleExport(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_Error verifies that ScheduleExport handles the error scenario correctly.
+// TestScheduleExport_Error verifies ScheduleExport when error.
 func TestScheduleExport_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -40,7 +37,7 @@ func TestScheduleExport_Error(t *testing.T) {
 	}
 }
 
-// TestListExportStatus verifies the behavior of list export status.
+// TestListExportStatus verifies ListExportStatus.
 func TestListExportStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -61,7 +58,7 @@ func TestListExportStatus(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_Error verifies that ListExportStatus handles the error scenario correctly.
+// TestListExportStatus_Error verifies ListExportStatus when error.
 func TestListExportStatus_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -72,7 +69,7 @@ func TestListExportStatus_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus verifies the behavior of format list export status.
+// TestFormatListExportStatus verifies FormatListExportStatus.
 func TestFormatListExportStatus(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -85,7 +82,7 @@ func TestFormatListExportStatus(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_Empty verifies that FormatListExportStatus handles the empty scenario correctly.
+// TestFormatListExportStatus_Empty verifies FormatListExportStatus when empty.
 func TestFormatListExportStatus_Empty(t *testing.T) {
 	out := &ListExportStatusOutput{Statuses: []ExportStatusItem{}}
 	md := FormatListExportStatus(out)
@@ -96,13 +93,14 @@ func TestFormatListExportStatus_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ScheduleExport — canceled context, with batched option
 // ---------------------------------------------------------------------------.
 
-// TestScheduleExport_CancelledContext verifies the behavior of schedule export cancelled context.
+// TestScheduleExport_CancelledContext verifies ScheduleExport when cancelled context.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -112,7 +110,7 @@ func TestScheduleExport_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_WithBatched verifies the behavior of schedule export with batched.
+// TestScheduleExport_WithBatched verifies ScheduleExport when with batched.
 func TestScheduleExport_WithBatched(t *testing.T) {
 	batched := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +126,7 @@ func TestScheduleExport_WithBatched(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_EmptyGroupID verifies the behavior of schedule export empty group i d.
+// TestScheduleExport_EmptyGroupID verifies ScheduleExport when empty group ID.
 func TestScheduleExport_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -143,7 +141,7 @@ func TestScheduleExport_EmptyGroupID(t *testing.T) {
 // ListExportStatus — canceled context, with relation filter, empty group_id, pagination
 // ---------------------------------------------------------------------------.
 
-// TestListExportStatus_CancelledContext verifies the behavior of list export status cancelled context.
+// TestListExportStatus_CancelledContext verifies ListExportStatus when cancelled context.
 func TestListExportStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -153,7 +151,7 @@ func TestListExportStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyGroupID verifies the behavior of list export status empty group i d.
+// TestListExportStatus_EmptyGroupID verifies ListExportStatus when empty group ID.
 func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -164,7 +162,7 @@ func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithRelationFilter verifies the behavior of list export status with relation filter.
+// TestListExportStatus_WithRelationFilter verifies ListExportStatus when with relation filter.
 func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -194,7 +192,7 @@ func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithPagination verifies the behavior of list export status with pagination.
+// TestListExportStatus_WithPagination verifies ListExportStatus when with pagination.
 func TestListExportStatus_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -231,7 +229,7 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyResponse verifies the behavior of list export status empty response.
+// TestListExportStatus_EmptyResponse verifies ListExportStatus when empty response.
 func TestListExportStatus_EmptyResponse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -245,7 +243,7 @@ func TestListExportStatus_EmptyResponse(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithErrorField verifies the behavior of list export status with error field.
+// TestListExportStatus_WithErrorField verifies ListExportStatus when with error field.
 func TestListExportStatus_WithErrorField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":-1,"error":"export failed","batched":false,"batches_count":0,"updated_at":"2026-06-15T10:00:00Z"}]`)
@@ -263,7 +261,7 @@ func TestListExportStatus_WithErrorField(t *testing.T) {
 // FormatScheduleExport
 // ---------------------------------------------------------------------------.
 
-// TestFormatScheduleExport_Message verifies the behavior of format schedule export message.
+// TestFormatScheduleExport_Message verifies FormatScheduleExport when message.
 func TestFormatScheduleExport_Message(t *testing.T) {
 	md := FormatScheduleExport()
 	if !strings.Contains(md, "scheduled successfully") {
@@ -275,7 +273,7 @@ func TestFormatScheduleExport_Message(t *testing.T) {
 // FormatListExportStatus — multiple items, with error field, markdown escaping
 // ---------------------------------------------------------------------------.
 
-// TestFormatListExportStatus_MultipleItems verifies the behavior of format list export status multiple items.
+// TestFormatListExportStatus_MultipleItems verifies FormatListExportStatus when multiple items.
 func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -299,7 +297,7 @@ func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_WithPipeInRelation verifies the behavior of format list export status with pipe in relation.
+// TestFormatListExportStatus_WithPipeInRelation verifies FormatListExportStatus when with pipe in relation.
 func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -314,29 +312,16 @@ func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for both tools
+// ActionSpecs route execution for both tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupRelationsExportMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates both group relations export routes.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	client := testutil.NewTestClient(t, groupRelationsExportHandler())
+	byTool := groupRelationsSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -349,31 +334,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP roundtrip — schedule export returns error from API
+// ActionSpecs route — schedule export returns error from API
 // ---------------------------------------------------------------------------.
 
-// TestMCPScheduleExport_APIError verifies the behavior of m c p schedule export a p i error.
-func TestMCPScheduleExport_APIError(t *testing.T) {
+// TestActionSpecs_ScheduleExportAPIError verifies schedule export route API errors.
+func TestActionSpecs_ScheduleExportAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/groups/10/export_relations", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -382,27 +359,21 @@ func TestMCPScheduleExport_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 
-	session := newMCPSessionWithHandler(t, handler)
-	ctx := context.Background()
+	client := testutil.NewTestClient(t, handler)
+	spec := groupRelationsSpecsByTool(t, ActionSpecs(client))["gitlab_schedule_group_relations_export"]
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_schedule_group_relations_export",
-		Arguments: map[string]any{"group_id": "10"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected IsError=true for API server error")
+	_, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "10"})
+	if err == nil {
+		t.Fatal("Route.Handler expected error, got nil")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP roundtrip — list export status returns error from API
+// ActionSpecs route — list export status returns error from API
 // ---------------------------------------------------------------------------.
 
-// TestMCPListExportStatus_APIError verifies the behavior of m c p list export status a p i error.
-func TestMCPListExportStatus_APIError(t *testing.T) {
+// TestActionSpecs_ListExportStatusAPIError verifies list status route API errors.
+func TestActionSpecs_ListExportStatusAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/groups/10/export_relations", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -411,18 +382,12 @@ func TestMCPListExportStatus_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 
-	session := newMCPSessionWithHandler(t, handler)
-	ctx := context.Background()
+	client := testutil.NewTestClient(t, handler)
+	spec := groupRelationsSpecsByTool(t, ActionSpecs(client))["gitlab_list_group_relations_export_status"]
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_group_relations_export_status",
-		Arguments: map[string]any{"group_id": "10"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected IsError=true for API server error")
+	_, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "10"})
+	if err == nil {
+		t.Fatal("Route.Handler expected error, got nil")
 	}
 }
 
@@ -430,46 +395,17 @@ func TestMCPListExportStatus_APIError(t *testing.T) {
 // Helper: MCP session factory (default happy-path)
 // ---------------------------------------------------------------------------.
 
-// newGroupRelationsExportMCPSession is an internal helper for the grouprelationsexport package.
-func newGroupRelationsExportMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
+// groupRelationsExportHandler returns a default happy-path GitLab API mock.
+func groupRelationsExportHandler() *http.ServeMux {
 	handler := http.NewServeMux()
 
-	// Schedule export
 	handler.HandleFunc("POST /api/v4/groups/10/export_relations", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	// List export status
 	handler.HandleFunc("GET /api/v4/groups/10/export_relations/status", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2026-01-01T00:00:00Z"}]`)
 	})
 
-	return newMCPSessionWithHandler(t, handler)
-}
-
-// newMCPSessionWithHandler creates an MCP client session with a custom HTTP handler.
-func newMCPSessionWithHandler(t *testing.T, handler http.Handler) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return handler
 }

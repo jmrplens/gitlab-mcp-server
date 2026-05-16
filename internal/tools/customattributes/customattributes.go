@@ -1,4 +1,3 @@
-// Package customattributes implements MCP tools for GitLab Custom Attributes API.
 package customattributes
 
 import (

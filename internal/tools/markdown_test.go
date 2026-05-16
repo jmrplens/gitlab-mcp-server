@@ -1822,7 +1822,7 @@ func TestMarkdownAudit_NoEmptySections(t *testing.T) {
 
 // ---------- Validator unit tests ----------.
 
-// TestIsTable_Separator validates is table separator across multiple scenarios using table-driven subtests.
+// TestIsTable_Separator covers IsTable with table-driven subtests for separator.
 func TestIsTable_Separator(t *testing.T) {
 	tests := []struct {
 		line string
@@ -1844,7 +1844,7 @@ func TestIsTable_Separator(t *testing.T) {
 	}
 }
 
-// TestValidateMarkdown_Tables verifies the behavior of validate markdown tables.
+// TestValidateMarkdown_Tables verifies ValidateMarkdown when tables.
 func TestValidateMarkdown_Tables(t *testing.T) {
 	t.Run("consistent table passes", func(t *testing.T) {
 		md := "| A | B | C |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n"

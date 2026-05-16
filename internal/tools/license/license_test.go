@@ -4,7 +4,6 @@
 package license
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,8 +15,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// licenseJSON identifies the license JSON constant used by this package.
 const licenseJSON = `{
 	"id": 1,
 	"plan": "premium",
@@ -34,7 +35,7 @@ const licenseJSON = `{
 	"add_ons": {"GitLab_Auditor_User":1,"GitLab_DeployBoard":0,"GitLab_FileLocks":1,"GitLab_Geo":0,"GitLab_ServiceDesk":1}
 }`
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/license" {
@@ -61,7 +62,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies the behavior of get error.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -73,7 +74,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestAdd_Success verifies the behavior of add success.
+// TestAdd_Success verifies Add when success.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -91,7 +92,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -109,7 +110,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidID verifies the behavior of delete invalid i d.
+// TestDelete_InvalidID verifies Delete when invalid ID.
 func TestDelete_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -123,7 +124,7 @@ func TestDelete_InvalidID(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -135,7 +136,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatLicenseMarkdown verifies the behavior of format license markdown.
+// TestFormatLicenseMarkdown verifies FormatLicenseMarkdown.
 func TestFormatLicenseMarkdown(t *testing.T) {
 	result := FormatLicenseMarkdown(Item{
 		ID:          1,
@@ -160,7 +161,7 @@ func TestFormatLicenseMarkdown(t *testing.T) {
 // Add — API error
 // ---------------------------------------------------------------------------.
 
-// TestAdd_Error verifies the behavior of add error.
+// TestAdd_Error verifies Add when error.
 func TestAdd_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid license"}`)
@@ -175,7 +176,7 @@ func TestAdd_Error(t *testing.T) {
 // FormatLicenseMarkdown — with dates
 // ---------------------------------------------------------------------------.
 
-// TestFormatLicenseMarkdown_WithDates verifies the behavior of format license markdown with dates.
+// TestFormatLicenseMarkdown_WithDates verifies FormatLicenseMarkdown when with dates.
 func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	item := Item{
 		ID:               2,
@@ -204,7 +205,7 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 // FormatGetMarkdown / FormatAddMarkdown — wrappers
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Coverage verifies the behavior of format get markdown coverage.
+// TestFormatGetMarkdown_Coverage verifies FormatGetMarkdown when coverage.
 func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	out := GetOutput{License: Item{ID: 1, Plan: "premium", Licensee: LicenseeItem{Name: "A", Company: "B", Email: "c@d.com"}}}
 	result := FormatGetMarkdown(out)
@@ -214,7 +215,7 @@ func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatAddMarkdown_Coverage verifies the behavior of format add markdown coverage.
+// TestFormatAddMarkdown_Coverage verifies FormatAddMarkdown when coverage.
 func TestFormatAddMarkdown_Coverage(t *testing.T) {
 	out := AddOutput{License: Item{ID: 3, Plan: "gold", Licensee: LicenseeItem{Name: "X", Company: "Y", Email: "x@y.com"}}}
 	result := FormatAddMarkdown(out)
@@ -222,88 +223,6 @@ func TestFormatAddMarkdown_Coverage(t *testing.T) {
 	if !strings.Contains(text, "gold") {
 		t.Error("missing plan in output")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip
-// ---------------------------------------------------------------------------.
-
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newLicenseMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get", "gitlab_get_license", map[string]any{}},
-		{"add", "gitlab_add_license", map[string]any{"license": "base64data"}},
-		{"delete", "gitlab_delete_license", map[string]any{"id": float64(1)}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// newLicenseMCPSession is an internal helper for the license package.
-func newLicenseMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-	handler.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, licenseJSON)
-	})
-	handler.HandleFunc("POST /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, licenseJSON)
-	})
-	handler.HandleFunc("DELETE /api/v4/license/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // TestToItem_NilDates verifies that toItem produces empty date strings when the
@@ -361,107 +280,5 @@ func TestToItem_WithDates(t *testing.T) {
 	}
 	if item.ExpiresAt == "" {
 		t.Error("expected non-empty ExpiresAt")
-	}
-}
-
-// TestMCPRoundTrip_Errors validates register.go error paths for get, add,
-// and delete license tools via MCP round-trip against a 500 backend.
-func TestMCPRoundTrip_Errors(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	t.Run("get_error", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: "gitlab_get_license", Arguments: map[string]any{},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true")
-		}
-	})
-
-	t.Run("add_error", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: "gitlab_add_license", Arguments: map[string]any{"license": "abc"},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if !res.IsError {
-			t.Error("expected IsError=true")
-		}
-	})
-
-	t.Run("delete_decline", func(t *testing.T) {
-		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: "gitlab_delete_license", Arguments: map[string]any{"id": 1},
-		})
-		if callErr != nil {
-			t.Fatalf("CallTool: %v", callErr)
-		}
-		if res == nil {
-			t.Fatal("nil result")
-		}
-	})
-}
-
-// TestMCPRoundTrip_DeleteError validates the register.go delete error path
-// (after ConfirmAction accept) via MCP round-trip.
-func TestMCPRoundTrip_DeleteError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "accept"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_delete_license", Arguments: map[string]any{"id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true for delete API error")
 	}
 }

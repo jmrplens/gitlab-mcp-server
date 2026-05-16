@@ -1,6 +1,11 @@
 package packages
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,11 +17,27 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		packageReadSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
 		packageReadSpec("list", toolutil.RouteAction(client, List), "gitlab_package_list"),
 		packageReadSpec("file_list", toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
-		packageDeleteSpec("delete", toolutil.DestructiveVoidActionWithRequest(client, Delete), "gitlab_package_delete"),
-		packageDeleteSpec("file_delete", toolutil.DestructiveVoidActionWithRequest(client, FileDelete), "gitlab_package_file_delete"),
+		packageDeleteSpec("delete", toolutil.DestructiveActionWithRequest(client, deleteOutput), "gitlab_package_delete"),
+		packageDeleteSpec("file_delete", toolutil.DestructiveActionWithRequest(client, fileDeleteOutput), "gitlab_package_file_delete"),
 		packageCreateSpec("publish_and_link", toolutil.RouteActionWithRequest(client, PublishAndLink), "gitlab_package_publish_and_link"),
 		packageCreateSpec("publish_directory", toolutil.RouteActionWithRequest(client, PublishDirectory), "gitlab_package_publish_directory"),
 	}
+}
+
+func deleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, req, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("package %s from project %s", input.PackageID, input.ProjectID))
+	return out, nil
+}
+
+func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input FileDeleteInput) (toolutil.DeleteOutput, error) {
+	if err := FileDelete(ctx, req, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("file %s from package %s in project %s", input.PackageFileID, input.PackageID, input.ProjectID))
+	return out, nil
 }
 
 func packageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

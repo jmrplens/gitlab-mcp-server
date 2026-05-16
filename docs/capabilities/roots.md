@@ -143,16 +143,26 @@ The **project discovery workflow** chains these components: LLM fetches `gitlab:
 
 Roots is a **client-side capability** — unlike sampling and elicitation (where the server initiates requests to the client), roots works in the opposite direction: the client provides data and the server consumes it.
 
-```text
-Client capabilities (client provides → server consumes):
-  ├─ Roots        → workspace directory information
-  ├─ Sampling     → LLM access for analysis
-  └─ Elicitation  → user input forms
+```mermaid
+flowchart LR
+    subgraph clientToServer[Client provides, server consumes]
+        roots[Roots<br/>workspace directory information]
+        sampling[Sampling<br/>LLM access for analysis]
+        elicitation[Elicitation<br/>user input forms]
+    end
 
-Server capabilities (server provides → client consumes):
-  ├─ Logging      → structured log messages
-  ├─ Progress     → step-by-step status updates
-  └─ Completions  → argument autocomplete suggestions
+    subgraph serverToClient[Server provides, client consumes]
+        logging[Logging<br/>structured log messages]
+        progress[Progress<br/>step-by-step status updates]
+        completions[Completions<br/>argument autocomplete suggestions]
+    end
+
+    client[MCP client] --> roots
+    client --> sampling
+    client --> elicitation
+    logging --> client
+    progress --> client
+    completions --> client
 ```
 
 Roots is the simplest client capability — it provides static data (directory paths) rather than interactive features. But it unlocks some of the most impactful UX improvements: automatic project detection eliminates the single most common parameter in every tool call.

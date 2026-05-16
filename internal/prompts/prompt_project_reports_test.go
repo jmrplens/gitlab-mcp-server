@@ -14,7 +14,7 @@ import (
 
 // branch_mr_summary.
 
-// TestBranchMRSummary_ListsMRsByBranch verifies that BranchMRSummary handles the lists m rs by branch scenario correctly.
+// TestBranchMRSummary_ListsMRsByBranch verifies BranchMRSummary lists MRs by branch.
 func TestBranchMRSummary_ListsMRsByBranch(t *testing.T) {
 	created := time.Now().Add(-2 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -62,7 +62,7 @@ func TestBranchMRSummary_ListsMRsByBranch(t *testing.T) {
 	}
 }
 
-// TestBranchMRSummary_MissingProjectID verifies that BranchMRSummary handles the missing project i d scenario correctly.
+// TestBranchMRSummary_MissingProjectID verifies BranchMRSummary when missing project ID.
 func TestBranchMRSummary_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -74,7 +74,7 @@ func TestBranchMRSummary_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchMRSummary_MissingTargetBranch verifies that BranchMRSummary handles the missing target branch scenario correctly.
+// TestBranchMRSummary_MissingTargetBranch verifies BranchMRSummary when missing target branch.
 func TestBranchMRSummary_MissingTargetBranch(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -86,7 +86,7 @@ func TestBranchMRSummary_MissingTargetBranch(t *testing.T) {
 	}
 }
 
-// TestBranchMRSummary_EmptyResult verifies that BranchMRSummary handles the empty result scenario correctly.
+// TestBranchMRSummary_EmptyResult verifies BranchMRSummary when empty result.
 func TestBranchMRSummary_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func TestBranchMRSummary_EmptyResult(t *testing.T) {
 
 // project_activity_report.
 
-// TestProjectActivityReport_EventBreakdown verifies that ProjectActivityReport handles the event breakdown scenario correctly.
+// TestProjectActivityReport_EventBreakdown verifies ProjectActivityReport when event breakdown.
 func TestProjectActivityReport_EventBreakdown(t *testing.T) {
 	now := time.Now().Format(time.RFC3339)
 	mux := http.NewServeMux()
@@ -156,7 +156,7 @@ func TestProjectActivityReport_EventBreakdown(t *testing.T) {
 	}
 }
 
-// TestProjectActivityReport_MissingProjectID verifies that ProjectActivityReport handles the missing project i d scenario correctly.
+// TestProjectActivityReport_MissingProjectID verifies ProjectActivityReport when missing project ID.
 func TestProjectActivityReport_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -169,7 +169,7 @@ func TestProjectActivityReport_MissingProjectID(t *testing.T) {
 
 // mr_review_status.
 
-// TestMRReviewStatus_UnresolvedThreads verifies that MRReviewStatus handles the unresolved threads scenario correctly.
+// TestMRReviewStatus_UnresolvedThreads verifies MRReviewStatus when unresolved threads.
 func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
 	created := time.Now().Add(-24 * time.Hour)
 	mux := http.NewServeMux()
@@ -227,7 +227,7 @@ func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
 	}
 }
 
-// TestMRReviewStatus_NoOpenMRs verifies that MRReviewStatus handles the no open m rs scenario correctly.
+// TestMRReviewStatus_NoOpenMRs verifies MRReviewStatus when no open MRs.
 func TestMRReviewStatus_NoOpenMRs(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -249,7 +249,7 @@ func TestMRReviewStatus_NoOpenMRs(t *testing.T) {
 	}
 }
 
-// TestMRReviewStatus_MissingProjectID verifies that MRReviewStatus handles the missing project i d scenario correctly.
+// TestMRReviewStatus_MissingProjectID verifies MRReviewStatus when missing project ID.
 func TestMRReviewStatus_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -262,7 +262,7 @@ func TestMRReviewStatus_MissingProjectID(t *testing.T) {
 
 // unassigned_items.
 
-// TestUnassignedItems_FindsUnownedItems verifies that UnassignedItems handles the finds unowned items scenario correctly.
+// TestUnassignedItems_FindsUnownedItems verifies UnassignedItems when finds unowned items.
 func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 	created := time.Now().Add(-48 * time.Hour)
 	mux := http.NewServeMux()
@@ -302,7 +302,7 @@ func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 	}
 }
 
-// TestUnassignedItems_AllAssigned verifies that UnassignedItems handles the all assigned scenario correctly.
+// TestUnassignedItems_AllAssigned verifies UnassignedItems when all assigned.
 func TestUnassignedItems_AllAssigned(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -327,7 +327,7 @@ func TestUnassignedItems_AllAssigned(t *testing.T) {
 	}
 }
 
-// TestUnassignedItems_MissingProjectID verifies that UnassignedItems handles the missing project i d scenario correctly.
+// TestUnassignedItems_MissingProjectID verifies UnassignedItems when missing project ID.
 func TestUnassignedItems_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -340,7 +340,7 @@ func TestUnassignedItems_MissingProjectID(t *testing.T) {
 
 // stale_items_report.
 
-// TestStaleItemsReport_FindsStaleItems verifies that StaleItemsReport handles the finds stale items scenario correctly.
+// TestStaleItemsReport_FindsStaleItems verifies StaleItemsReport when finds stale items.
 func TestStaleItemsReport_FindsStaleItems(t *testing.T) {
 	staleDate := time.Now().Add(-30 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -382,7 +382,7 @@ func TestStaleItemsReport_FindsStaleItems(t *testing.T) {
 	}
 }
 
-// TestStaleItemsReport_NoStaleItems verifies that StaleItemsReport handles the no stale items scenario correctly.
+// TestStaleItemsReport_NoStaleItems verifies StaleItemsReport when no stale items.
 func TestStaleItemsReport_NoStaleItems(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +407,7 @@ func TestStaleItemsReport_NoStaleItems(t *testing.T) {
 	}
 }
 
-// TestStaleItemsReport_MissingProjectID verifies that StaleItemsReport handles the missing project i d scenario correctly.
+// TestStaleItemsReport_MissingProjectID verifies StaleItemsReport when missing project ID.
 func TestStaleItemsReport_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{

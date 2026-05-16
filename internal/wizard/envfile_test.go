@@ -114,7 +114,6 @@ func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
 		"GITLAB_URL=https://gitlab.example.com",
 		"GITLAB_TOKEN=test-token-abc123",
 		"GITLAB_SKIP_TLS_VERIFY=true",
-		"META_TOOLS=true",
 		"TOOL_SURFACE=dynamic",
 		"CAPABILITY_SURFACE=minimal",
 		"META_PARAM_SCHEMA=compact",
@@ -137,6 +136,9 @@ func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
 		if !strings.Contains(content, line+"\n") {
 			t.Errorf("env file missing line %q\ncontent:\n%s", line, content)
 		}
+	}
+	if strings.Contains(content, "META_TOOLS=") {
+		t.Fatalf("env file should not write deprecated META_TOOLS\ncontent:\n%s", content)
 	}
 }
 
@@ -210,6 +212,28 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	}
 	if cfg.AutoUpdateMode != "check" || cfg.AutoUpdateRepo != "example/repo" || cfg.RateLimitRPS != "3.5" {
 		t.Errorf("mode advanced options not parsed: %#v", cfg)
+	}
+}
+
+// TestLoadExistingConfigFromPath_LegacyMetaToolsDynamic verifies legacy
+// META_TOOLS dynamic values are read for compatibility when TOOL_SURFACE is absent.
+func TestLoadExistingConfigFromPath_LegacyMetaToolsDynamic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	content := "GITLAB_URL=https://gitlab.example.com\n" +
+		"GITLAB_TOKEN=test-token-abc123def456\n" +
+		"META_TOOLS=dynamic\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg, found := loadExistingConfigFromPath(path)
+	if !found {
+		t.Fatal("expected found=true")
+	}
+	if cfg.ToolSurface != "dynamic" || !cfg.MetaTools {
+		t.Fatalf("legacy META_TOOLS dynamic parsed as ToolSurface=%q MetaTools=%v", cfg.ToolSurface, cfg.MetaTools)
 	}
 }
 

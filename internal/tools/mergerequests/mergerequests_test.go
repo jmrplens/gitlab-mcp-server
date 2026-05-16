@@ -490,7 +490,7 @@ func mrGetEnrichedSetup(t *testing.T) Output {
 	return out
 }
 
-// TestMRGetEnrichedDraftAnd_Conflicts verifies the behavior of m r get enriched draft and conflicts.
+// TestMRGetEnrichedDraftAnd_Conflicts verifies MRGetEnrichedDraftAnd when conflicts.
 func TestMRGetEnrichedDraftAnd_Conflicts(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
 	if !out.Draft {
@@ -504,7 +504,7 @@ func TestMRGetEnrichedDraftAnd_Conflicts(t *testing.T) {
 	}
 }
 
-// TestMRGet_EnrichedPeople verifies the behavior of m r get enriched people.
+// TestMRGet_EnrichedPeople verifies MRGet when enriched people.
 func TestMRGet_EnrichedPeople(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
 	if out.Author != "alice" {
@@ -521,7 +521,7 @@ func TestMRGet_EnrichedPeople(t *testing.T) {
 	}
 }
 
-// TestMRGet_EnrichedLabels verifies the behavior of m r get enriched labels.
+// TestMRGet_EnrichedLabels verifies MRGet when enriched labels.
 func TestMRGet_EnrichedLabels(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
 	if len(out.Labels) != 2 {
@@ -532,7 +532,7 @@ func TestMRGet_EnrichedLabels(t *testing.T) {
 	}
 }
 
-// TestMRGet_EnrichedTimestamps verifies the behavior of m r get enriched timestamps.
+// TestMRGet_EnrichedTimestamps verifies MRGet when enriched timestamps.
 func TestMRGet_EnrichedTimestamps(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
 	if out.CreatedAt == "" {
@@ -546,7 +546,7 @@ func TestMRGet_EnrichedTimestamps(t *testing.T) {
 	}
 }
 
-// TestMRGet_EnrichedNotesCount verifies the behavior of m r get enriched notes count.
+// TestMRGet_EnrichedNotesCount verifies MRGet when enriched notes count.
 func TestMRGet_EnrichedNotesCount(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
 	if out.UserNotesCount != 5 {
@@ -769,9 +769,10 @@ func TestPrefixAt(t *testing.T) {
 // ListGlobal tests
 // ---------------------------------------------------------------------------.
 
+// pathGlobalMRs identifies the path global MRs constant used by this package.
 const pathGlobalMRs = "/api/v4/merge_requests"
 
-// TestMRListGlobal_Success verifies the behavior of m r list global success.
+// TestMRListGlobal_Success verifies MRListGlobal when success.
 func TestMRListGlobal_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGlobalMRs {
@@ -793,7 +794,7 @@ func TestMRListGlobal_Success(t *testing.T) {
 	}
 }
 
-// TestMRListGlobal_Error verifies the behavior of m r list global error.
+// TestMRListGlobal_Error verifies MRListGlobal when error.
 func TestMRListGlobal_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"server error"}`)
@@ -809,9 +810,10 @@ func TestMRListGlobal_Error(t *testing.T) {
 // ListGroup tests
 // ---------------------------------------------------------------------------.
 
+// pathGroupMRs identifies the path group MRs constant used by this package.
 const pathGroupMRs = "/api/v4/groups/99/merge_requests"
 
-// TestMRListGroup_Success verifies the behavior of m r list group success.
+// TestMRListGroup_Success verifies MRListGroup when success.
 func TestMRListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMRs {
@@ -833,7 +835,7 @@ func TestMRListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestMRListGroup_MissingGroupID verifies the behavior of m r list group missing group i d.
+// TestMRListGroup_MissingGroupID verifies MRListGroup when missing group ID.
 func TestMRListGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -849,7 +851,7 @@ func TestMRListGroup_MissingGroupID(t *testing.T) {
 // Participants tests
 // ---------------------------------------------------------------------------.
 
-// TestMRParticipants_Success verifies the behavior of m r participants success.
+// TestMRParticipants_Success verifies MRParticipants when success.
 func TestMRParticipants_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/participants" {
@@ -871,7 +873,7 @@ func TestMRParticipants_Success(t *testing.T) {
 	}
 }
 
-// TestMRParticipants_MissingProject verifies the behavior of m r participants missing project.
+// TestMRParticipants_MissingProject verifies MRParticipants when missing project.
 func TestMRParticipants_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -887,7 +889,7 @@ func TestMRParticipants_MissingProject(t *testing.T) {
 // Reviewers tests
 // ---------------------------------------------------------------------------.
 
-// TestMRReviewers_Success verifies the behavior of m r reviewers success.
+// TestMRReviewers_Success verifies MRReviewers when success.
 func TestMRReviewers_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/reviewers" {
@@ -912,7 +914,7 @@ func TestMRReviewers_Success(t *testing.T) {
 	}
 }
 
-// TestMRReviewers_Error verifies the behavior of m r reviewers error.
+// TestMRReviewers_Error verifies MRReviewers when error.
 func TestMRReviewers_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"forbidden"}`)
@@ -928,7 +930,7 @@ func TestMRReviewers_Error(t *testing.T) {
 // CreatePipeline tests
 // ---------------------------------------------------------------------------.
 
-// TestMRCreatePipeline_Success verifies the behavior of m r create pipeline success.
+// TestMRCreatePipeline_Success verifies MRCreatePipeline when success.
 func TestMRCreatePipeline_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/pipelines" {
@@ -950,7 +952,7 @@ func TestMRCreatePipeline_Success(t *testing.T) {
 	}
 }
 
-// TestMRCreatePipeline_MissingProject verifies the behavior of m r create pipeline missing project.
+// TestMRCreatePipeline_MissingProject verifies MRCreatePipeline when missing project.
 func TestMRCreatePipeline_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -966,7 +968,7 @@ func TestMRCreatePipeline_MissingProject(t *testing.T) {
 // IssuesClosed tests
 // ---------------------------------------------------------------------------.
 
-// TestMRIssuesClosed_Success verifies the behavior of m r issues closed success.
+// TestMRIssuesClosed_Success verifies MRIssuesClosed when success.
 func TestMRIssuesClosed_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/closes_issues" {
@@ -991,7 +993,7 @@ func TestMRIssuesClosed_Success(t *testing.T) {
 	}
 }
 
-// TestMRIssuesClosed_Error verifies the behavior of m r issues closed error.
+// TestMRIssuesClosed_Error verifies MRIssuesClosed when error.
 func TestMRIssuesClosed_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"error":"not found"}`)
@@ -1007,7 +1009,7 @@ func TestMRIssuesClosed_Error(t *testing.T) {
 // CancelAutoMerge tests
 // ---------------------------------------------------------------------------.
 
-// TestMRCancelAutoMerge_Success verifies the behavior of m r cancel auto merge success.
+// TestMRCancelAutoMerge_Success verifies MRCancelAutoMerge when success.
 func TestMRCancelAutoMerge_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/cancel_merge_when_pipeline_succeeds" {
@@ -1029,7 +1031,7 @@ func TestMRCancelAutoMerge_Success(t *testing.T) {
 	}
 }
 
-// TestMR_CancelAutoMergeNotAutoMerging verifies the behavior of m r cancel auto merge not auto merging.
+// TestMR_CancelAutoMergeNotAutoMerging verifies MR when cancel auto merge not auto merging.
 func TestMR_CancelAutoMergeNotAutoMerging(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"Method Not Allowed"}`)
@@ -1041,7 +1043,7 @@ func TestMR_CancelAutoMergeNotAutoMerging(t *testing.T) {
 	}
 }
 
-// TestMRCancelAutoMerge_MissingProject verifies the behavior of m r cancel auto merge missing project.
+// TestMRCancelAutoMerge_MissingProject verifies MRCancelAutoMerge when missing project.
 func TestMRCancelAutoMerge_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1057,7 +1059,7 @@ func TestMRCancelAutoMerge_MissingProject(t *testing.T) {
 // Subscribe / Unsubscribe tests
 // ---------------------------------------------------------------------------.
 
-// TestMRSubscribe_Success verifies the behavior of m r subscribe success.
+// TestMRSubscribe_Success verifies MRSubscribe when success.
 func TestMRSubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/subscribe" {
@@ -1076,7 +1078,7 @@ func TestMRSubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestMRSubscribe_MissingProject verifies the behavior of m r subscribe missing project.
+// TestMRSubscribe_MissingProject verifies MRSubscribe when missing project.
 func TestMRSubscribe_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1087,7 +1089,7 @@ func TestMRSubscribe_MissingProject(t *testing.T) {
 	}
 }
 
-// TestMRUnsubscribe_Success verifies the behavior of m r unsubscribe success.
+// TestMRUnsubscribe_Success verifies MRUnsubscribe when success.
 func TestMRUnsubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/unsubscribe" {
@@ -1106,7 +1108,7 @@ func TestMRUnsubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestMRUnsubscribe_MissingProject verifies the behavior of m r unsubscribe missing project.
+// TestMRUnsubscribe_MissingProject verifies MRUnsubscribe when missing project.
 func TestMRUnsubscribe_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1121,9 +1123,10 @@ func TestMRUnsubscribe_MissingProject(t *testing.T) {
 // Time Tracking tests
 // ---------------------------------------------------------------------------.
 
+// timeStatsResponse identifies the time stats response constant used by this package.
 const timeStatsResponse = `{"human_time_estimate":"3h","human_total_time_spent":"1h30m","time_estimate":10800,"total_time_spent":5400}`
 
-// TestMRSetTimeEstimate_Success verifies the behavior of m r set time estimate success.
+// TestMRSetTimeEstimate_Success verifies MRSetTimeEstimate when success.
 func TestMRSetTimeEstimate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/time_estimate" {
@@ -1145,7 +1148,7 @@ func TestMRSetTimeEstimate_Success(t *testing.T) {
 	}
 }
 
-// TestMRSetTimeEstimate_MissingDuration verifies the behavior of m r set time estimate missing duration.
+// TestMRSetTimeEstimate_MissingDuration verifies MRSetTimeEstimate when missing duration.
 func TestMRSetTimeEstimate_MissingDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1156,7 +1159,7 @@ func TestMRSetTimeEstimate_MissingDuration(t *testing.T) {
 	}
 }
 
-// TestMRResetTimeEstimate_Success verifies the behavior of m r reset time estimate success.
+// TestMRResetTimeEstimate_Success verifies MRResetTimeEstimate when success.
 func TestMRResetTimeEstimate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/reset_time_estimate" {
@@ -1175,7 +1178,7 @@ func TestMRResetTimeEstimate_Success(t *testing.T) {
 	}
 }
 
-// TestMRAddSpentTime_Success verifies the behavior of m r add spent time success.
+// TestMRAddSpentTime_Success verifies MRAddSpentTime when success.
 func TestMRAddSpentTime_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/add_spent_time" {
@@ -1194,7 +1197,7 @@ func TestMRAddSpentTime_Success(t *testing.T) {
 	}
 }
 
-// TestMRAddSpentTime_MissingDuration verifies the behavior of m r add spent time missing duration.
+// TestMRAddSpentTime_MissingDuration verifies MRAddSpentTime when missing duration.
 func TestMRAddSpentTime_MissingDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1205,7 +1208,7 @@ func TestMRAddSpentTime_MissingDuration(t *testing.T) {
 	}
 }
 
-// TestMRResetSpentTime_Success verifies the behavior of m r reset spent time success.
+// TestMRResetSpentTime_Success verifies MRResetSpentTime when success.
 func TestMRResetSpentTime_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/reset_spent_time" {
@@ -1224,7 +1227,7 @@ func TestMRResetSpentTime_Success(t *testing.T) {
 	}
 }
 
-// TestMRGetTimeStats_Success verifies the behavior of m r get time stats success.
+// TestMRGetTimeStats_Success verifies MRGetTimeStats when success.
 func TestMRGetTimeStats_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/time_stats" {
@@ -1246,7 +1249,7 @@ func TestMRGetTimeStats_Success(t *testing.T) {
 	}
 }
 
-// TestMRGetTimeStats_MissingProject verifies the behavior of m r get time stats missing project.
+// TestMRGetTimeStats_MissingProject verifies MRGetTimeStats when missing project.
 func TestMRGetTimeStats_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1440,42 +1443,71 @@ func TestOutput_ProjectPathFromReferences(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	testProjectID     = "42"
+	// testProjectID identifies the test project ID constant used by this package.
+	testProjectID = "42"
+	// testFeatureBranch identifies the test feature branch constant used by this package.
 	testFeatureBranch = "feature/login"
-	testCreatedAt     = "2026-01-01T00:00:00Z"
-	testMRWebURL      = "https://gitlab.example.com/mr/1"
-	testMRTitle       = "feat: login"
-	testBlockerTitle  = "Blocker MR"
-	testLabels        = "bug,critical"
+	// testCreatedAt identifies the test created at constant used by this package.
+	testCreatedAt = "2026-01-01T00:00:00Z"
+	// testMRWebURL identifies the test MR web URL constant used by this package.
+	testMRWebURL = "https://gitlab.example.com/mr/1"
+	// testMRTitle identifies the test MR title constant used by this package.
+	testMRTitle = "feat: login"
+	// testBlockerTitle identifies the test blocker title constant used by this package.
+	testBlockerTitle = "Blocker MR"
+	// testLabels identifies the test labels constant used by this package.
+	testLabels = "bug,critical"
+	// testCreatedBefore identifies the test created before constant used by this package.
 	testCreatedBefore = "2026-12-31T23:59:59Z"
-	testStateOpened   = "opened"
-	testStateMerged   = "merged"
-	testStatePending  = "pending"
-	testStateActive   = "active"
-	testLabelBug      = "bug"
-	testLabelWontfix  = "wontfix"
-	testBranchMain    = "main"
-	testBranchFeat    = "feat"
-	testBranchFeatA   = "feat/a"
-	testAuthorAlice   = "alice"
-	testAuthorBob     = "bob"
-	testAuthorCarol   = "carol"
-	testActionMarked  = "marked"
-	testTargetTypeMR  = "MergeRequest"
-	testDepTitleA     = "Dep A"
-	testMilestoneV1   = "v1.0"
-	testVersion       = "0.0.1"
-	testSHAAbc        = "abc123"
-	pathSuffixBlocks  = "/blocks"
-	fmtIIDWant        = "IID = %d, want 1"
-	testDate20260101  = "2026-01-01"
+	// testStateOpened identifies the test state opened constant used by this package.
+	testStateOpened = "opened"
+	// testStateMerged identifies the test state merged constant used by this package.
+	testStateMerged = "merged"
+	// testStatePending identifies the test state pending constant used by this package.
+	testStatePending = "pending"
+	// testStateActive identifies the test state active constant used by this package.
+	testStateActive = "active"
+	// testLabelBug identifies the test label bug constant used by this package.
+	testLabelBug = "bug"
+	// testLabelWontfix identifies the test label wontfix constant used by this package.
+	testLabelWontfix = "wontfix"
+	// testBranchMain identifies the test branch main constant used by this package.
+	testBranchMain = "main"
+	// testBranchFeat identifies the test branch feat constant used by this package.
+	testBranchFeat = "feat"
+	// testBranchFeatA identifies the test branch feat a constant used by this package.
+	testBranchFeatA = "feat/a"
+	// testAuthorAlice identifies the test author alice constant used by this package.
+	testAuthorAlice = "alice"
+	// testAuthorBob identifies the test author bob constant used by this package.
+	testAuthorBob = "bob"
+	// testAuthorCarol identifies the test author carol constant used by this package.
+	testAuthorCarol = "carol"
+	// testActionMarked identifies the test action marked constant used by this package.
+	testActionMarked = "marked"
+	// testTargetTypeMR identifies the test target type MR constant used by this package.
+	testTargetTypeMR = "MergeRequest"
+	// testDepTitleA identifies the test dep title a constant used by this package.
+	testDepTitleA = "Dep A"
+	// testMilestoneV1 identifies the test milestone v 1 constant used by this package.
+	testMilestoneV1 = "v1.0"
+	// testVersion identifies the test version constant used by this package.
+	testVersion = "0.0.1"
+	// testSHAAbc identifies the test SHA abc constant used by this package.
+	testSHAAbc = "abc123"
+	// pathSuffixBlocks identifies the path suffix blocks constant used by this package.
+	pathSuffixBlocks = "/blocks"
+	// fmtIIDWant identifies the fmt IID want constant used by this package.
+	fmtIIDWant = "IID = %d, want 1"
+	// testDate20260101 identifies the test date 20260101 constant used by this package.
+	testDate20260101 = "2026-01-01"
 )
 
 // ---------------------------------------------------------------------------
 // Format*Markdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated verifies the behavior of format markdown populated.
+// TestFormatMarkdown_Populated verifies FormatMarkdown when populated.
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 1, Title: "feat: new login", State: testStateOpened,
@@ -1498,7 +1530,7 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Empty verifies the behavior of format markdown empty.
+// TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(Output{})
 	if md == "" {
@@ -1506,7 +1538,7 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Populated verifies the behavior of format list markdown populated.
+// TestFormatListMarkdown_Populated verifies FormatListMarkdown when populated.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
@@ -1522,7 +1554,7 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No merge requests found") {
@@ -1530,7 +1562,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatApproveMarkdown_Populated verifies the behavior of format approve markdown populated.
+// TestFormatApproveMarkdown_Populated verifies FormatApproveMarkdown when populated.
 func TestFormatApproveMarkdown_Populated(t *testing.T) {
 	md := FormatApproveMarkdown(ApproveOutput{Approved: true, ApprovalsRequired: 2, ApprovedBy: 1})
 	for _, want := range []string{"Approved", "true", "2", "1"} {
@@ -1540,7 +1572,7 @@ func TestFormatApproveMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatApproveMarkdown_Empty verifies the behavior of format approve markdown empty.
+// TestFormatApproveMarkdown_Empty verifies FormatApproveMarkdown when empty.
 func TestFormatApproveMarkdown_Empty(t *testing.T) {
 	md := FormatApproveMarkdown(ApproveOutput{})
 	if md == "" {
@@ -1548,7 +1580,7 @@ func TestFormatApproveMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommitsMarkdown_Populated verifies the behavior of format commits markdown populated.
+// TestFormatCommitsMarkdown_Populated verifies FormatCommitsMarkdown when populated.
 func TestFormatCommitsMarkdown_Populated(t *testing.T) {
 	md := FormatCommitsMarkdown(CommitsOutput{
 		Commits: []commits.Output{
@@ -1563,7 +1595,7 @@ func TestFormatCommitsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatCommitsMarkdown_Empty verifies the behavior of format commits markdown empty.
+// TestFormatCommitsMarkdown_Empty verifies FormatCommitsMarkdown when empty.
 func TestFormatCommitsMarkdown_Empty(t *testing.T) {
 	md := FormatCommitsMarkdown(CommitsOutput{})
 	if !strings.Contains(md, "No commits found") {
@@ -1571,7 +1603,7 @@ func TestFormatCommitsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatPipelinesMarkdown_Populated verifies the behavior of format pipelines markdown populated.
+// TestFormatPipelinesMarkdown_Populated verifies FormatPipelinesMarkdown when populated.
 func TestFormatPipelinesMarkdown_Populated(t *testing.T) {
 	md := FormatPipelinesMarkdown(PipelinesOutput{
 		Pipelines: []pipelines.Output{
@@ -1585,7 +1617,7 @@ func TestFormatPipelinesMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatPipelinesMarkdown_Empty verifies the behavior of format pipelines markdown empty.
+// TestFormatPipelinesMarkdown_Empty verifies FormatPipelinesMarkdown when empty.
 func TestFormatPipelinesMarkdown_Empty(t *testing.T) {
 	md := FormatPipelinesMarkdown(PipelinesOutput{})
 	if !strings.Contains(md, "No pipelines found") {
@@ -1593,7 +1625,7 @@ func TestFormatPipelinesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRebaseMarkdown_InProgress verifies the behavior of format rebase markdown in progress.
+// TestFormatRebaseMarkdown_InProgress verifies FormatRebaseMarkdown when in progress.
 func TestFormatRebaseMarkdown_InProgress(t *testing.T) {
 	md := FormatRebaseMarkdown(RebaseOutput{RebaseInProgress: true})
 	if !strings.Contains(md, "in progress") {
@@ -1601,7 +1633,7 @@ func TestFormatRebaseMarkdown_InProgress(t *testing.T) {
 	}
 }
 
-// TestFormatRebaseMarkdown_Completed verifies the behavior of format rebase markdown completed.
+// TestFormatRebaseMarkdown_Completed verifies FormatRebaseMarkdown when completed.
 func TestFormatRebaseMarkdown_Completed(t *testing.T) {
 	md := FormatRebaseMarkdown(RebaseOutput{RebaseInProgress: false})
 	if !strings.Contains(md, "completed") {
@@ -1609,7 +1641,7 @@ func TestFormatRebaseMarkdown_Completed(t *testing.T) {
 	}
 }
 
-// TestFormatParticipantsMarkdown_Populated verifies the behavior of format participants markdown populated.
+// TestFormatParticipantsMarkdown_Populated verifies FormatParticipantsMarkdown when populated.
 func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
@@ -1624,7 +1656,7 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatParticipantsMarkdown_Empty verifies the behavior of format participants markdown empty.
+// TestFormatParticipantsMarkdown_Empty verifies FormatParticipantsMarkdown when empty.
 func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{})
 	if !strings.Contains(md, "No participants found") {
@@ -1632,7 +1664,7 @@ func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatReviewersMarkdown_Populated verifies the behavior of format reviewers markdown populated.
+// TestFormatReviewersMarkdown_Populated verifies FormatReviewersMarkdown when populated.
 func TestFormatReviewersMarkdown_Populated(t *testing.T) {
 	md := FormatReviewersMarkdown(ReviewersOutput{
 		Reviewers: []ReviewerOutput{
@@ -1646,7 +1678,7 @@ func TestFormatReviewersMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatReviewersMarkdown_Empty verifies the behavior of format reviewers markdown empty.
+// TestFormatReviewersMarkdown_Empty verifies FormatReviewersMarkdown when empty.
 func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 	md := FormatReviewersMarkdown(ReviewersOutput{})
 	if !strings.Contains(md, "No reviewers found") {
@@ -1654,7 +1686,7 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesClosedMarkdown_Populated verifies the behavior of format issues closed markdown populated.
+// TestFormatIssuesClosedMarkdown_Populated verifies FormatIssuesClosedMarkdown when populated.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
 		Issues: []issues.Output{
@@ -1669,7 +1701,7 @@ func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesClosedMarkdown_Empty verifies the behavior of format issues closed markdown empty.
+// TestFormatIssuesClosedMarkdown_Empty verifies FormatIssuesClosedMarkdown when empty.
 func TestFormatIssuesClosedMarkdown_Empty(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{})
 	if !strings.Contains(md, "No issues will be closed") {
@@ -1677,7 +1709,7 @@ func TestFormatIssuesClosedMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCreatePipelineMarkdown verifies the behavior of format create pipeline markdown.
+// TestFormatCreatePipelineMarkdown verifies FormatCreatePipelineMarkdown.
 func TestFormatCreatePipelineMarkdown(t *testing.T) {
 	md := FormatCreatePipelineMarkdown(pipelines.Output{
 		ID: 500, Status: testStatePending, Source: "merge_request_event", Ref: testFeatureBranch,
@@ -1690,7 +1722,7 @@ func TestFormatCreatePipelineMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCreatePipelineMarkdown_Minimal verifies the behavior of format create pipeline markdown minimal.
+// TestFormatCreatePipelineMarkdown_Minimal verifies FormatCreatePipelineMarkdown when minimal.
 func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
 	md := FormatCreatePipelineMarkdown(pipelines.Output{ID: 1, Status: "created"})
 	if md == "" {
@@ -1701,7 +1733,7 @@ func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Populated verifies the behavior of format time stats markdown populated.
+// TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
 		HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
@@ -1714,7 +1746,7 @@ func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Empty verifies the behavior of format time stats markdown empty.
+// TestFormatTimeStatsMarkdown_Empty verifies FormatTimeStatsMarkdown when empty.
 func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{})
 	if !strings.Contains(md, "not set") {
@@ -1725,7 +1757,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRelatedIssuesMarkdown_Populated verifies the behavior of format related issues markdown populated.
+// TestFormatRelatedIssuesMarkdown_Populated verifies FormatRelatedIssuesMarkdown when populated.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
 		Issues: []issues.Output{
@@ -1740,7 +1772,7 @@ func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatRelatedIssuesMarkdown_Empty verifies the behavior of format related issues markdown empty.
+// TestFormatRelatedIssuesMarkdown_Empty verifies FormatRelatedIssuesMarkdown when empty.
 func TestFormatRelatedIssuesMarkdown_Empty(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{})
 	if !strings.Contains(md, "No related issues found") {
@@ -1748,7 +1780,7 @@ func TestFormatRelatedIssuesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCreateTodoMarkdown_Populated verifies the behavior of format create todo markdown populated.
+// TestFormatCreateTodoMarkdown_Populated verifies FormatCreateTodoMarkdown when populated.
 func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
 	md := FormatCreateTodoMarkdown(CreateTodoOutput{
 		ID: 42, ActionName: testActionMarked, TargetType: testTargetTypeMR,
@@ -1762,7 +1794,7 @@ func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatCreateTodoMarkdown_Empty verifies the behavior of format create todo markdown empty.
+// TestFormatCreateTodoMarkdown_Empty verifies FormatCreateTodoMarkdown when empty.
 func TestFormatCreateTodoMarkdown_Empty(t *testing.T) {
 	md := FormatCreateTodoMarkdown(CreateTodoOutput{})
 	if md == "" {
@@ -1822,7 +1854,7 @@ func TestFormatCreateTodoMarkdown_ClickableURL(t *testing.T) {
 	}
 }
 
-// TestFormatDependencyMarkdown_Populated verifies the behavior of format dependency markdown populated.
+// TestFormatDependencyMarkdown_Populated verifies FormatDependencyMarkdown when populated.
 func TestFormatDependencyMarkdown_Populated(t *testing.T) {
 	md := FormatDependencyMarkdown(DependencyOutput{
 		ID: 1, BlockingMRID: 100, BlockingMRIID: 10, BlockingMRTitle: testBlockerTitle,
@@ -1835,7 +1867,7 @@ func TestFormatDependencyMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatDependencyMarkdown_Empty verifies the behavior of format dependency markdown empty.
+// TestFormatDependencyMarkdown_Empty verifies FormatDependencyMarkdown when empty.
 func TestFormatDependencyMarkdown_Empty(t *testing.T) {
 	md := FormatDependencyMarkdown(DependencyOutput{})
 	if md == "" {
@@ -1843,7 +1875,7 @@ func TestFormatDependencyMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatDependenciesMarkdown_Populated verifies the behavior of format dependencies markdown populated.
+// TestFormatDependenciesMarkdown_Populated verifies FormatDependenciesMarkdown when populated.
 func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
 	md := FormatDependenciesMarkdown(DependenciesOutput{
 		Dependencies: []DependencyOutput{
@@ -1858,7 +1890,7 @@ func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatDependenciesMarkdown_Empty verifies the behavior of format dependencies markdown empty.
+// TestFormatDependenciesMarkdown_Empty verifies FormatDependenciesMarkdown when empty.
 func TestFormatDependenciesMarkdown_Empty(t *testing.T) {
 	md := FormatDependenciesMarkdown(DependenciesOutput{})
 	if !strings.Contains(md, "No dependencies found") {
@@ -1870,7 +1902,7 @@ func TestFormatDependenciesMarkdown_Empty(t *testing.T) {
 // RelatedIssues handler tests
 // ---------------------------------------------------------------------------.
 
-// TestRelatedIssues_Success verifies the behavior of related issues success.
+// TestRelatedIssues_Success verifies RelatedIssues when success.
 func TestRelatedIssues_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/related_issues" {
@@ -1897,7 +1929,7 @@ func TestRelatedIssues_Success(t *testing.T) {
 	}
 }
 
-// TestRelatedIssues_MissingProject verifies the behavior of related issues missing project.
+// TestRelatedIssues_MissingProject verifies RelatedIssues when missing project.
 func TestRelatedIssues_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1908,7 +1940,7 @@ func TestRelatedIssues_MissingProject(t *testing.T) {
 	}
 }
 
-// TestRelatedIssues_CancelledContext verifies the behavior of related issues cancelled context.
+// TestRelatedIssues_CancelledContext verifies RelatedIssues when cancelled context.
 func TestRelatedIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1920,7 +1952,7 @@ func TestRelatedIssues_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRelatedIssues_APIError verifies the behavior of related issues a p i error.
+// TestRelatedIssues_APIError verifies RelatedIssues when API error.
 func TestRelatedIssues_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"server error"}`)
@@ -1935,7 +1967,7 @@ func TestRelatedIssues_APIError(t *testing.T) {
 // CreateTodo handler tests
 // ---------------------------------------------------------------------------.
 
-// TestCreateTodo_Success verifies the behavior of create todo success.
+// TestCreateTodo_Success verifies CreateTodo when success.
 func TestCreateTodo_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/todo" {
@@ -1979,7 +2011,7 @@ func TestCreateTodo_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_MissingProject verifies the behavior of create todo missing project.
+// TestCreateTodo_MissingProject verifies CreateTodo when missing project.
 func TestCreateTodo_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1990,7 +2022,7 @@ func TestCreateTodo_MissingProject(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_CancelledContext verifies the behavior of create todo cancelled context.
+// TestCreateTodo_CancelledContext verifies CreateTodo when cancelled context.
 func TestCreateTodo_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2002,7 +2034,7 @@ func TestCreateTodo_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_APIError verifies the behavior of create todo a p i error.
+// TestCreateTodo_APIError verifies CreateTodo when API error.
 func TestCreateTodo_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"forbidden"}`)
@@ -2017,7 +2049,7 @@ func TestCreateTodo_APIError(t *testing.T) {
 // CreateDependency handler tests
 // ---------------------------------------------------------------------------.
 
-// TestCreateDependency_Success verifies the behavior of create dependency success.
+// TestCreateDependency_Success verifies CreateDependency when success.
 func TestCreateDependency_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+pathSuffixBlocks {
@@ -2059,7 +2091,7 @@ func TestCreateDependency_Success(t *testing.T) {
 	}
 }
 
-// TestCreateDependency_MissingProject verifies the behavior of create dependency missing project.
+// TestCreateDependency_MissingProject verifies CreateDependency when missing project.
 func TestCreateDependency_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2070,7 +2102,7 @@ func TestCreateDependency_MissingProject(t *testing.T) {
 	}
 }
 
-// TestCreateDependency_CancelledContext verifies the behavior of create dependency cancelled context.
+// TestCreateDependency_CancelledContext verifies CreateDependency when cancelled context.
 func TestCreateDependency_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2082,7 +2114,7 @@ func TestCreateDependency_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateDependency_APIError verifies the behavior of create dependency a p i error.
+// TestCreateDependency_APIError verifies CreateDependency when API error.
 func TestCreateDependency_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"already exists"}`)
@@ -2097,7 +2129,7 @@ func TestCreateDependency_APIError(t *testing.T) {
 // DeleteDependency handler tests
 // ---------------------------------------------------------------------------.
 
-// TestDeleteDependency_Success verifies the behavior of delete dependency success.
+// TestDeleteDependency_Success verifies DeleteDependency when success.
 func TestDeleteDependency_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, pathMR1+pathSuffixBlocks) {
@@ -2115,7 +2147,7 @@ func TestDeleteDependency_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteDependency_MissingProject verifies the behavior of delete dependency missing project.
+// TestDeleteDependency_MissingProject verifies DeleteDependency when missing project.
 func TestDeleteDependency_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2126,7 +2158,7 @@ func TestDeleteDependency_MissingProject(t *testing.T) {
 	}
 }
 
-// TestDeleteDependency_CancelledContext verifies the behavior of delete dependency cancelled context.
+// TestDeleteDependency_CancelledContext verifies DeleteDependency when cancelled context.
 func TestDeleteDependency_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2138,7 +2170,7 @@ func TestDeleteDependency_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteDependency_APIError verifies the behavior of delete dependency a p i error.
+// TestDeleteDependency_APIError verifies DeleteDependency when API error.
 func TestDeleteDependency_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"error":"not found"}`)
@@ -2153,7 +2185,7 @@ func TestDeleteDependency_APIError(t *testing.T) {
 // GetDependencies handler tests
 // ---------------------------------------------------------------------------.
 
-// TestGetDependencies_Success verifies the behavior of get dependencies success.
+// TestGetDependencies_Success verifies GetDependencies when success.
 func TestGetDependencies_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1+pathSuffixBlocks {
@@ -2190,7 +2222,7 @@ func TestGetDependencies_Success(t *testing.T) {
 	}
 }
 
-// TestGetDependencies_MissingProject verifies the behavior of get dependencies missing project.
+// TestGetDependencies_MissingProject verifies GetDependencies when missing project.
 func TestGetDependencies_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2201,7 +2233,7 @@ func TestGetDependencies_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetDependencies_CancelledContext verifies the behavior of get dependencies cancelled context.
+// TestGetDependencies_CancelledContext verifies GetDependencies when cancelled context.
 func TestGetDependencies_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -2213,7 +2245,7 @@ func TestGetDependencies_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetDependencies_APIError verifies the behavior of get dependencies a p i error.
+// TestGetDependencies_APIError verifies GetDependencies when API error.
 func TestGetDependencies_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"forbidden"}`)
@@ -2228,7 +2260,7 @@ func TestGetDependencies_APIError(t *testing.T) {
 // Context-canceled tests for previously untested handlers
 // ---------------------------------------------------------------------------.
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2240,7 +2272,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2252,7 +2284,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2264,7 +2296,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2276,7 +2308,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestMerge_CancelledContext verifies the behavior of merge cancelled context.
+// TestMerge_CancelledContext verifies Merge when cancelled context.
 func TestMerge_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2288,7 +2320,7 @@ func TestMerge_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestApprove_CancelledContext verifies the behavior of approve cancelled context.
+// TestApprove_CancelledContext verifies Approve when cancelled context.
 func TestApprove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2300,7 +2332,7 @@ func TestApprove_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUnapprove_CancelledContext verifies the behavior of unapprove cancelled context.
+// TestUnapprove_CancelledContext verifies Unapprove when cancelled context.
 func TestUnapprove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2312,7 +2344,7 @@ func TestUnapprove_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommits_CancelledContext verifies the behavior of commits cancelled context.
+// TestCommits_CancelledContext verifies Commits when cancelled context.
 func TestCommits_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2324,7 +2356,7 @@ func TestCommits_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestPipelines_CancelledContext verifies the behavior of pipelines cancelled context.
+// TestPipelines_CancelledContext verifies Pipelines when cancelled context.
 func TestPipelines_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2336,7 +2368,7 @@ func TestPipelines_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2348,7 +2380,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRebase_CancelledContext verifies the behavior of rebase cancelled context.
+// TestRebase_CancelledContext verifies Rebase when cancelled context.
 func TestRebase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -2360,7 +2392,7 @@ func TestRebase_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListGlobal_CancelledContext verifies the behavior of list global cancelled context.
+// TestListGlobal_CancelledContext verifies ListGlobal when cancelled context.
 func TestListGlobal_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2372,7 +2404,7 @@ func TestListGlobal_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListGroup_CancelledContext verifies the behavior of list group cancelled context.
+// TestListGroup_CancelledContext verifies ListGroup when cancelled context.
 func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2384,7 +2416,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestParticipants_CancelledContext verifies the behavior of participants cancelled context.
+// TestParticipants_CancelledContext verifies Participants when cancelled context.
 func TestParticipants_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2396,7 +2428,7 @@ func TestParticipants_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestReviewers_CancelledContext verifies the behavior of reviewers cancelled context.
+// TestReviewers_CancelledContext verifies Reviewers when cancelled context.
 func TestReviewers_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2408,7 +2440,7 @@ func TestReviewers_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreatePipeline_CancelledContext verifies the behavior of create pipeline cancelled context.
+// TestCreatePipeline_CancelledContext verifies CreatePipeline when cancelled context.
 func TestCreatePipeline_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2420,7 +2452,7 @@ func TestCreatePipeline_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestIssuesClosed_CancelledContext verifies the behavior of issues closed cancelled context.
+// TestIssuesClosed_CancelledContext verifies IssuesClosed when cancelled context.
 func TestIssuesClosed_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -2432,7 +2464,7 @@ func TestIssuesClosed_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCancelAutoMerge_CancelledContext verifies the behavior of cancel auto merge cancelled context.
+// TestCancelAutoMerge_CancelledContext verifies CancelAutoMerge when cancelled context.
 func TestCancelAutoMerge_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2444,7 +2476,7 @@ func TestCancelAutoMerge_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSubscribe_CancelledContext verifies the behavior of subscribe cancelled context.
+// TestSubscribe_CancelledContext verifies Subscribe when cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2456,7 +2488,7 @@ func TestSubscribe_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_CancelledContext verifies the behavior of unsubscribe cancelled context.
+// TestUnsubscribe_CancelledContext verifies Unsubscribe when cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2468,7 +2500,7 @@ func TestUnsubscribe_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_CancelledContext verifies the behavior of set time estimate cancelled context.
+// TestSetTimeEstimate_CancelledContext verifies SetTimeEstimate when cancelled context.
 func TestSetTimeEstimate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2480,7 +2512,7 @@ func TestSetTimeEstimate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestResetTimeEstimate_CancelledContext verifies the behavior of reset time estimate cancelled context.
+// TestResetTimeEstimate_CancelledContext verifies ResetTimeEstimate when cancelled context.
 func TestResetTimeEstimate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2492,7 +2524,7 @@ func TestResetTimeEstimate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_CancelledContext verifies the behavior of add spent time cancelled context.
+// TestAddSpentTime_CancelledContext verifies AddSpentTime when cancelled context.
 func TestAddSpentTime_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -2504,7 +2536,7 @@ func TestAddSpentTime_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestResetSpentTime_CancelledContext verifies the behavior of reset spent time cancelled context.
+// TestResetSpentTime_CancelledContext verifies ResetSpentTime when cancelled context.
 func TestResetSpentTime_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2516,7 +2548,7 @@ func TestResetSpentTime_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetTimeStats_CancelledContext verifies the behavior of get time stats cancelled context.
+// TestGetTimeStats_CancelledContext verifies GetTimeStats when cancelled context.
 func TestGetTimeStats_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -2532,7 +2564,7 @@ func TestGetTimeStats_CancelledContext(t *testing.T) {
 // Missing project_id tests for handlers not already tested
 // ---------------------------------------------------------------------------.
 
-// TestCreate_MissingProject verifies the behavior of create missing project.
+// TestCreate_MissingProject verifies Create when missing project.
 func TestCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2543,7 +2575,7 @@ func TestCreate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProject verifies the behavior of get missing project.
+// TestGet_MissingProject verifies Get when missing project.
 func TestGet_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2554,7 +2586,7 @@ func TestGet_MissingProject(t *testing.T) {
 	}
 }
 
-// TestList_MissingProject verifies the behavior of list missing project.
+// TestList_MissingProject verifies List when missing project.
 func TestList_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2565,7 +2597,7 @@ func TestList_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProject verifies the behavior of update missing project.
+// TestUpdate_MissingProject verifies Update when missing project.
 func TestUpdate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2576,7 +2608,7 @@ func TestUpdate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestMerge_MissingProject verifies the behavior of merge missing project.
+// TestMerge_MissingProject verifies Merge when missing project.
 func TestMerge_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2587,7 +2619,7 @@ func TestMerge_MissingProject(t *testing.T) {
 	}
 }
 
-// TestApprove_MissingProject verifies the behavior of approve missing project.
+// TestApprove_MissingProject verifies Approve when missing project.
 func TestApprove_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2598,7 +2630,7 @@ func TestApprove_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUnapprove_MissingProject verifies the behavior of unapprove missing project.
+// TestUnapprove_MissingProject verifies Unapprove when missing project.
 func TestUnapprove_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2609,7 +2641,7 @@ func TestUnapprove_MissingProject(t *testing.T) {
 	}
 }
 
-// TestSubscribe_MissingProject verifies the behavior of subscribe missing project.
+// TestSubscribe_MissingProject verifies Subscribe when missing project.
 func TestSubscribe_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2620,7 +2652,7 @@ func TestSubscribe_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_MissingProject verifies the behavior of unsubscribe missing project.
+// TestUnsubscribe_MissingProject verifies Unsubscribe when missing project.
 func TestUnsubscribe_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2631,7 +2663,7 @@ func TestUnsubscribe_MissingProject(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_MissingProject verifies the behavior of set time estimate missing project.
+// TestSetTimeEstimate_MissingProject verifies SetTimeEstimate when missing project.
 func TestSetTimeEstimate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2642,7 +2674,7 @@ func TestSetTimeEstimate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestResetTimeEstimate_MissingProject verifies the behavior of reset time estimate missing project.
+// TestResetTimeEstimate_MissingProject verifies ResetTimeEstimate when missing project.
 func TestResetTimeEstimate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2653,7 +2685,7 @@ func TestResetTimeEstimate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_MissingProject verifies the behavior of add spent time missing project.
+// TestAddSpentTime_MissingProject verifies AddSpentTime when missing project.
 func TestAddSpentTime_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2664,7 +2696,7 @@ func TestAddSpentTime_MissingProject(t *testing.T) {
 	}
 }
 
-// TestResetSpentTime_MissingProject verifies the behavior of reset spent time missing project.
+// TestResetSpentTime_MissingProject verifies ResetSpentTime when missing project.
 func TestResetSpentTime_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2675,7 +2707,7 @@ func TestResetSpentTime_MissingProject(t *testing.T) {
 	}
 }
 
-// TestIssuesClosed_MissingProject verifies the behavior of issues closed missing project.
+// TestIssuesClosed_MissingProject verifies IssuesClosed when missing project.
 func TestIssuesClosed_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2686,7 +2718,7 @@ func TestIssuesClosed_MissingProject(t *testing.T) {
 	}
 }
 
-// TestCancelAutoMerge_MissingProject2 verifies the behavior of cancel auto merge missing project2.
+// TestCancelAutoMerge_MissingProject2 verifies CancelAutoMerge when missing project 2.
 func TestCancelAutoMerge_MissingProject2(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2702,13 +2734,16 @@ func TestCancelAutoMerge_MissingProject2(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
+	// mrJSONCoverage identifies the MR JSON coverage constant used by this package.
 	mrJSONCoverage = `{"id":100,"iid":1,"title":"Test MR","state":"opened","source_branch":"feat","target_branch":"main","web_url":"http://mr/1","detailed_merge_status":"can_be_merged"}`
 
+	// dependencyJSONCoverage identifies the dependency JSON coverage constant used by this package.
 	dependencyJSONCoverage = `{
 		"id":1,"project_id":42,
 		"blocking_merge_request":{"id":100,"iid":10,"title":"Dep","state":"opened","project_id":42,"source_branch":"a","target_branch":"b"}
 	}`
 
+	// todoJSONCoverage identifies the todo JSON coverage constant used by this package.
 	todoJSONCoverage = `{"id":1,"action_name":"marked","target_type":"MergeRequest","target":{"title":"Test"},"target_url":"http://mr/1","state":"pending","created_at":"2026-01-01T00:00:00Z"}`
 )
 
@@ -2724,8 +2759,8 @@ func defaultPgHdr() *testutil.PaginationHeaders {
 	return &testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
 }
 
-// newMRMCPSession is an internal helper for the mergerequests package.
-func newMRMCPSession(t *testing.T) *mcp.ClientSession {
+// newMRRouteSpecs constructs MR route specs test fixtures.
+func newMRRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	mrListBody := `[` + mrJSONCoverage + `]`
@@ -2806,50 +2841,24 @@ func newMRMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return mergeRequestSpecsByTool(t, ActionSpecs(client))
 }
 
-// callToolAndVerify calls the named MCP tool and fails if it returns an error.
-func callToolAndVerify(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
+// callRouteAndVerify calls the named route and fails if it returns an error.
+func callRouteAndVerify(t *testing.T, byTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := byTool[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates merge request routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newMRRouteSpecs(t)
 
 	pid := testProjectID
 	tools := []struct {
@@ -2890,24 +2899,37 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			callToolAndVerify(t, session, ctx, tt.name, tt.args)
+			callRouteAndVerify(t, byTool, tt.name, tt.args)
 		})
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for merge request actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := mergeRequestSpecsByTool(t, specs)
+
+	if len(specs) != 30 {
+		t.Fatalf("len(ActionSpecs) = %d, want 30", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "mergerequests" {
+			t.Fatalf("OwnerPackage for %s = %q, want mergerequests", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // Rich JSON responses to exercise ToOutput / populatePeople / populateTimestamps
 // ---------------------------------------------------------------------------.
 
+// mrJSONRichCoverage identifies the MR JSON rich coverage constant used by this package.
 const mrJSONRichCoverage = `{
 	"id":100,"iid":1,"project_id":42,"title":"Rich MR","state":"merged",
 	"source_branch":"feat","target_branch":"main","web_url":"http://mr/1",
@@ -2944,7 +2966,7 @@ const mrJSONRichCoverage = `{
 	"references":{"full":"group/project!1"}
 }`
 
-// TestGet_RichOutputFields verifies the behavior of get rich output fields.
+// TestGet_RichOutputFields verifies Get when rich output fields.
 func TestGet_RichOutputFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
@@ -2964,7 +2986,7 @@ func TestGet_RichOutputFields(t *testing.T) {
 	assertRichMRTimestamps(t, out)
 }
 
-// assertRichMRPipeline is an internal helper for the mergerequests package.
+// assertRichMRPipeline checks rich MR pipeline invariants for tests.
 func assertRichMRPipeline(t *testing.T, out Output) {
 	t.Helper()
 	if out.DiffRefs == nil {
@@ -2990,7 +3012,7 @@ func assertRichMRPipeline(t *testing.T, out Output) {
 	}
 }
 
-// assertRichMRPeople is an internal helper for the mergerequests package.
+// assertRichMRPeople checks rich MR people invariants for tests.
 func assertRichMRPeople(t *testing.T, out Output) {
 	t.Helper()
 	if out.MergedBy != testAuthorBob {
@@ -3016,7 +3038,7 @@ func assertRichMRPeople(t *testing.T, out Output) {
 	}
 }
 
-// assertRichMRTimestamps is an internal helper for the mergerequests package.
+// assertRichMRTimestamps checks rich MR timestamps invariants for tests.
 func assertRichMRTimestamps(t *testing.T, out Output) {
 	t.Helper()
 	if out.MergeAfter == "" {
@@ -3040,7 +3062,7 @@ func assertRichMRTimestamps(t *testing.T, out Output) {
 // Tests for Create with all optional fields to cover Create branches
 // ---------------------------------------------------------------------------.
 
-// TestCreate_AllOptionalFields verifies the behavior of create all optional fields.
+// TestCreate_AllOptionalFields verifies Create when all optional fields.
 func TestCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMRs {
@@ -3143,7 +3165,7 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 // Tests for Merge with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestMerge_AllOptionalFields verifies the behavior of merge all optional fields.
+// TestMerge_AllOptionalFields verifies Merge when all optional fields.
 func TestMerge_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge" {
@@ -3176,7 +3198,7 @@ func TestMerge_AllOptionalFields(t *testing.T) {
 // Tests for Update with all optional fields to cover buildUpdateOpts
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMR1 {
@@ -3216,7 +3238,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Tests for List with all optional filter fields to cover buildListOptions
 // ---------------------------------------------------------------------------.
 
-// TestList_AllFilterFields verifies the behavior of list all filter fields.
+// TestList_AllFilterFields verifies List when all filter fields.
 func TestList_AllFilterFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMRs {
@@ -3258,7 +3280,7 @@ func TestList_AllFilterFields(t *testing.T) {
 // Tests for ListGlobal with all optional filter fields
 // ---------------------------------------------------------------------------.
 
-// TestListGlobal_AllFilterFields verifies the behavior of list global all filter fields.
+// TestListGlobal_AllFilterFields verifies ListGlobal when all filter fields.
 func TestListGlobal_AllFilterFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/merge_requests" {
@@ -3299,7 +3321,7 @@ func TestListGlobal_AllFilterFields(t *testing.T) {
 // Tests for ListGroup with all optional filter fields
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_AllFilterFields verifies the behavior of list group all filter fields.
+// TestListGroup_AllFilterFields verifies ListGroup when all filter fields.
 func TestListGroup_AllFilterFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/99/merge_requests" {
@@ -3341,7 +3363,7 @@ func TestListGroup_AllFilterFields(t *testing.T) {
 // timeStatsToOutput nil case
 // ---------------------------------------------------------------------------.
 
-// TestTimeStatsToOutput_NilReturnsZero verifies the behavior of time stats to output nil returns zero.
+// TestTimeStatsToOutput_NilReturnsZero verifies TimeStatsToOutput returns zero for nil.
 func TestTimeStatsToOutput_NilReturnsZero(t *testing.T) {
 	out := timeStatsToOutput(nil)
 	if out.TimeEstimate != 0 || out.TotalTimeSpent != 0 {
@@ -3353,7 +3375,7 @@ func TestTimeStatsToOutput_NilReturnsZero(t *testing.T) {
 // Additional handler success tests (SetTimeEstimate, AddSpentTime with Summary)
 // ---------------------------------------------------------------------------.
 
-// TestSetTimeEstimate_EmptyDuration verifies the behavior of set time estimate empty duration.
+// TestSetTimeEstimate_EmptyDuration verifies SetTimeEstimate when empty duration.
 func TestSetTimeEstimate_EmptyDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -3364,7 +3386,7 @@ func TestSetTimeEstimate_EmptyDuration(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_WithSummary verifies the behavior of add spent time with summary.
+// TestAddSpentTime_WithSummary verifies AddSpentTime when with summary.
 func TestAddSpentTime_WithSummary(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/add_spent_time" {
@@ -3385,7 +3407,7 @@ func TestAddSpentTime_WithSummary(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_EmptyDuration verifies the behavior of add spent time empty duration.
+// TestAddSpentTime_EmptyDuration verifies AddSpentTime when empty duration.
 func TestAddSpentTime_EmptyDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -3396,7 +3418,7 @@ func TestAddSpentTime_EmptyDuration(t *testing.T) {
 	}
 }
 
-// TestGetTimeStats_MissingProject verifies the behavior of get time stats missing project.
+// TestGetTimeStats_MissingProject verifies GetTimeStats when missing project.
 func TestGetTimeStats_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4187,9 +4209,8 @@ func TestRelatedIssues_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestMRGet_EmbedsCanonicalResource asserts gitlab_mr_get attaches an
-// EmbeddedResource block with URI gitlab://project/{id}/mr/{iid}.
-func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_MRGetRoute verifies the canonical MR get route output.
+func TestActionSpecs_MRGetRoute(t *testing.T) {
 	const respJSON = `{"id":100,"iid":5,"project_id":42,"title":"T","description":"","state":"opened","source_branch":"f","target_branch":"main","author":{"username":"a"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/merge_requests/5") {
@@ -4198,7 +4219,94 @@ func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "merge_request_iid": 5}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_mr_get", args, "gitlab://project/42/mr/5", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.IID != 5 || out.ProjectID != 42 {
+		t.Fatalf("MR output = %#v, want IID 5 project 42", out)
+	}
+}
+
+// TestActionSpecs_MRGetNotFound verifies the canonical get route preserves rich 404 output.
+func TestActionSpecs_MRGetNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if _, ok := result.(mergeRequestNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want mergeRequestNotFoundOutput", result)
+	}
+}
+
+// TestCatalogSurface_DestructiveConfirmDeclined verifies destructive MR tools return early when confirmation is declined.
+func TestCatalogSurface_DestructiveConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	for _, tt := range []struct {
+		toolName string
+		args     map[string]any
+	}{
+		{toolName: "gitlab_mr_merge", args: map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{toolName: "gitlab_mr_delete", args: map[string]any{"project_id": "42", "merge_request_iid": 1}},
+	} {
+		t.Run(tt.toolName, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.toolName], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test merge request destructive confirmation.",
+				Icons:       toolutil.IconMR,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, err := mcpClient.Connect(ctx, ct, nil)
+			if err != nil {
+				t.Fatalf("client connect: %v", err)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.toolName, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result for declined confirmation")
+			}
+		})
+	}
+}
+
+// mergeRequestSpecsByTool supports merge request specs by tool assertions in mergerequests tests.
+func mergeRequestSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

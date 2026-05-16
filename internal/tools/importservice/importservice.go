@@ -1,4 +1,3 @@
-// Package importservice implements MCP tools for GitLab import operations.
 package importservice
 
 import (

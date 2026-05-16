@@ -4,16 +4,18 @@
 package appearance
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// appearanceJSON identifies the appearance JSON constant used by this package.
 const appearanceJSON = `{
 	"title": "GitLab CE",
 	"description": "Open source self-hosted Git management",
@@ -34,7 +36,7 @@ const appearanceJSON = `{
 	"email_header_and_footer_enabled": true
 }`
 
-// TestGet_Success verifies that Get handles the success scenario correctly.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodGet {
@@ -59,7 +61,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -71,7 +73,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies that Update handles the success scenario correctly.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodPut {
@@ -95,7 +97,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Error verifies that Update handles the error scenario correctly.
+// TestUpdate_Error verifies Update when error.
 func TestUpdate_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -107,7 +109,7 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -136,7 +138,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 // Update — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_AllFields verifies the behavior of update all fields.
+// TestUpdate_AllFields verifies Update when all fields.
 func TestUpdate_AllFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodPut {
@@ -174,7 +176,7 @@ func TestUpdate_AllFields(t *testing.T) {
 // FormatGetMarkdown — with PWA fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_WithPWA verifies the behavior of format get markdown with p w a.
+// TestFormatGetMarkdown_WithPWA verifies FormatGetMarkdown when with pwa.
 func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -201,7 +203,7 @@ func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 // FormatGetMarkdown — empty fields (no optional PWA/messages)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Minimal verifies the behavior of format get markdown minimal.
+// TestFormatGetMarkdown_Minimal verifies FormatGetMarkdown when minimal.
 func TestFormatGetMarkdown_Minimal(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -225,7 +227,7 @@ func TestFormatGetMarkdown_Minimal(t *testing.T) {
 // FormatUpdateMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatUpdateMarkdown_Coverage verifies the behavior of format update markdown coverage.
+// TestFormatUpdateMarkdown_Coverage verifies FormatUpdateMarkdown when coverage.
 func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 	out := UpdateOutput{
 		Appearance: Item{
@@ -241,24 +243,17 @@ func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip
-// ---------------------------------------------------------------------------.
-
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newAppearanceMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	client := newAppearanceRouteClient(t)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -273,22 +268,23 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// newAppearanceMCPSession is an internal helper for the appearance package.
-func newAppearanceMCPSession(t *testing.T) *mcp.ClientSession {
+// newAppearanceRouteClient returns a client backed by mock appearance endpoints.
+func newAppearanceRouteClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -299,23 +295,5 @@ func newAppearanceMCPSession(t *testing.T) *mcp.ClientSession {
 		testutil.RespondJSON(w, http.StatusOK, appearanceJSON)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return testutil.NewTestClient(t, handler)
 }

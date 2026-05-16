@@ -1,5 +1,3 @@
-// Package projectaliases implements MCP tools for GitLab project alias management.
-// Project aliases allow accessing projects via alternative names (admin-only feature).
 package projectaliases
 
 import (

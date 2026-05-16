@@ -4,17 +4,14 @@
 package metadata
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/metadata" {
@@ -54,7 +51,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -66,7 +63,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Version:    "16.8.0",
@@ -88,6 +85,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// covCovMetaJSON identifies the cov cov meta JSON constant used by this package.
 const covCovMetaJSON = `{"version":"17.0.0","revision":"abc123","kas":{"enabled":true,"external_url":"https://kas.example.com","external_k8s_proxy_url":"https://k8s.example.com","version":"17.0.0"},"enterprise":true}`
 
 // TestGet_APIError_Coverage verifies the API error path for metadata lookup.
@@ -134,7 +132,7 @@ func TestFormatGetMarkdown_Full_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_NoKAS_Coverage verifies the behavior of cov format get markdown no k a s.
+// TestFormatGetMarkdown_NoKAS_Coverage verifies FormatGetMarkdown when no kas coverage.
 func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Version: "17.0.0"})
 	if strings.Contains(md, "KAS Version") || strings.Contains(md, "KAS URL") {
@@ -142,44 +140,40 @@ func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic_Coverage verifies metadata tool registration.
-func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_MetadataGet_Coverage verifies metadata action spec metadata
+// and canonical route execution.
+func TestActionSpecs_MetadataGet_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covCovMetaJSON)
 	}))
-	RegisterTools(server, client)
-}
 
-// TestMCPRound_Trip_Coverage verifies metadata tool execution over in-memory
-// MCP transports.
-func TestMCPRound_Trip_Coverage(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covCovMetaJSON)
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	spec := specs[0]
+	if spec.Name != "metadata_get" {
+		t.Errorf("Name = %q, want metadata_get", spec.Name)
+	}
+	if spec.OwnerPackage != "metadata" {
+		t.Errorf("OwnerPackage = %q, want metadata", spec.OwnerPackage)
+	}
+	if spec.IndividualTool.Name != "gitlab_get_metadata" {
+		t.Errorf("IndividualTool.Name = %q, want gitlab_get_metadata", spec.IndividualTool.Name)
+	}
+	if !spec.ReadOnly || !spec.Idempotent || !spec.OpenWorld {
+		t.Errorf("unexpected action semantics: read_only=%v idempotent=%v open_world=%v", spec.ReadOnly, spec.Idempotent, spec.OpenWorld)
 	}
 
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_metadata",
-		Arguments: map[string]any{},
-	})
+	result, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
-	if res == nil {
-		t.Fatal("nil result")
+	out, ok := result.(GetOutput)
+	if !ok {
+		t.Fatalf("Route.Handler result = %T, want GetOutput", result)
+	}
+	if out.Version != "17.0.0" || !out.Enterprise || !out.KAS.Enabled {
+		t.Errorf("unexpected route output: %+v", out)
 	}
 }

@@ -10,18 +10,18 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
+	// pathGroupLabels identifies the path group labels constant used by this package.
 	pathGroupLabels = "/api/v4/groups/10/labels"
-	pathLabel1      = "/api/v4/groups/10/labels/1"
-	pathLabelBug    = "/api/v4/groups/10/labels/bug"
-	labelJSON       = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":false,"subscribed":false}`
+	// pathLabel1 identifies the path label 1 constant used by this package.
+	pathLabel1 = "/api/v4/groups/10/labels/1"
+	// labelJSON identifies the label JSON constant used by this package.
+	labelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":false,"subscribed":false}`
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupLabels {
@@ -47,7 +47,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithSearch verifies the behavior of list with search.
+// TestList_WithSearch verifies List when with search.
 func TestList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupLabels {
@@ -70,7 +70,7 @@ func TestList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestList_WithOptions verifies the behavior of list with options.
+// TestList_WithOptions verifies List when with options.
 func TestList_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupLabels {
@@ -105,7 +105,7 @@ func TestList_WithOptions(t *testing.T) {
 	}
 }
 
-// TestList_EmptyGroupID verifies the behavior of list empty group i d.
+// TestList_EmptyGroupID verifies List when empty group ID.
 func TestList_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -116,7 +116,7 @@ func TestList_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathLabel1 {
@@ -138,7 +138,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyGroupID verifies the behavior of get empty group i d.
+// TestGet_EmptyGroupID verifies Get when empty group ID.
 func TestGet_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -149,7 +149,7 @@ func TestGet_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupLabels {
@@ -172,7 +172,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_EmptyGroupID verifies the behavior of create empty group i d.
+// TestCreate_EmptyGroupID verifies Create when empty group ID.
 func TestCreate_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -183,7 +183,7 @@ func TestCreate_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathLabel1 {
@@ -207,7 +207,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyGroupID verifies the behavior of update empty group i d.
+// TestUpdate_EmptyGroupID verifies Update when empty group ID.
 func TestUpdate_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -218,7 +218,7 @@ func TestUpdate_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathLabel1 {
@@ -234,7 +234,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_EmptyGroupID verifies the behavior of delete empty group i d.
+// TestDelete_EmptyGroupID verifies Delete when empty group ID.
 func TestDelete_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -245,7 +245,7 @@ func TestDelete_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestSubscribe_Success verifies the behavior of subscribe success.
+// TestSubscribe_Success verifies Subscribe when success.
 func TestSubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathLabel1+"/subscribe" {
@@ -264,7 +264,7 @@ func TestSubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestSubscribe_EmptyGroupID verifies the behavior of subscribe empty group i d.
+// TestSubscribe_EmptyGroupID verifies Subscribe when empty group ID.
 func TestSubscribe_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -275,7 +275,7 @@ func TestSubscribe_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_Success verifies the behavior of unsubscribe success.
+// TestUnsubscribe_Success verifies Unsubscribe when success.
 func TestUnsubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathLabel1+"/unsubscribe" {
@@ -291,7 +291,7 @@ func TestUnsubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_EmptyGroupID verifies the behavior of unsubscribe empty group i d.
+// TestUnsubscribe_EmptyGroupID verifies Unsubscribe when empty group ID.
 func TestUnsubscribe_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -302,7 +302,7 @@ func TestUnsubscribe_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID:          1,
@@ -318,7 +318,7 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
@@ -335,15 +335,17 @@ func TestFormatListMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // List — API error, canceled context, pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -354,7 +356,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -364,7 +366,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPaginationParams verifies the behavior of list with pagination params.
+// TestList_WithPaginationParams verifies List when with pagination params.
 func TestList_WithPaginationParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/10/labels" {
@@ -398,7 +400,7 @@ func TestList_WithPaginationParams(t *testing.T) {
 // Get — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -409,7 +411,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -423,7 +425,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Create — API error, canceled context, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -436,7 +438,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -448,7 +450,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_WithOptionalFields verifies the behavior of create with optional fields.
+// TestCreate_WithOptionalFields verifies Create when with optional fields.
 func TestCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/10/labels" {
@@ -481,7 +483,7 @@ func TestCreate_WithOptionalFields(t *testing.T) {
 // Update — API error, canceled context, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -492,7 +494,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -502,7 +504,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/10/labels/1" {
@@ -536,7 +538,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -547,7 +549,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -561,7 +563,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // Subscribe — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestSubscribe_APIError verifies the behavior of subscribe a p i error.
+// TestSubscribe_APIError verifies Subscribe when API error.
 func TestSubscribe_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -572,7 +574,7 @@ func TestSubscribe_APIError(t *testing.T) {
 	}
 }
 
-// TestSubscribe_CancelledContext verifies the behavior of subscribe cancelled context.
+// TestSubscribe_CancelledContext verifies Subscribe when cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -586,7 +588,7 @@ func TestSubscribe_CancelledContext(t *testing.T) {
 // Unsubscribe — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUnsubscribe_APIError verifies the behavior of unsubscribe a p i error.
+// TestUnsubscribe_APIError verifies Unsubscribe when API error.
 func TestUnsubscribe_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -597,7 +599,7 @@ func TestUnsubscribe_APIError(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_CancelledContext verifies the behavior of unsubscribe cancelled context.
+// TestUnsubscribe_CancelledContext verifies Unsubscribe when cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -611,7 +613,7 @@ func TestUnsubscribe_CancelledContext(t *testing.T) {
 // FormatMarkdown — with all fields, minimal fields, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies the behavior of format markdown all fields.
+// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID:                     1,
@@ -643,7 +645,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_MinimalFields verifies the behavior of format markdown minimal fields.
+// TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID:    3,
@@ -669,7 +671,7 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Empty verifies the behavior of format markdown empty.
+// TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(Output{})
 	if md == "" {
@@ -684,7 +686,7 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 // FormatListMarkdownString — with data, empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithData verifies the behavior of format list markdown string with data.
+// TestFormatListMarkdownString_WithData verifies FormatListMarkdownString when with data.
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
@@ -710,7 +712,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No group labels found") {
@@ -725,7 +727,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 // FormatListMarkdown — returns non-nil result
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Result verifies the behavior of format list markdown result.
+// TestFormatListMarkdown_Result verifies FormatListMarkdown when result.
 func TestFormatListMarkdown_Result(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Labels:     []Output{{ID: 1, Name: "test", Color: "#000"}},
@@ -740,7 +742,7 @@ func TestFormatListMarkdown_Result(t *testing.T) {
 // priorityFromNullable — zero for unset
 // ---------------------------------------------------------------------------.
 
-// TestPriorityFromNullable_Zero verifies the behavior of priority from nullable zero.
+// TestPriorityFromNullable_Zero verifies PriorityFromNullable when zero.
 func TestPriorityFromNullable_Zero(t *testing.T) {
 	// toOutput is tested through the handlers, but verify edge case
 	out := Output{}
@@ -750,29 +752,40 @@ func TestPriorityFromNullable_Zero(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group label actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := groupLabelSpecsByTool(t, specs)
+
+	if len(specs) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "grouplabels" {
+			t.Fatalf("OwnerPackage for %s = %q, want grouplabels", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 7 tools
+// ActionSpecs route coverage for all 7 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupLabelsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates group label routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newGroupLabelsSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -790,31 +803,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newGroupLabelsMCPSession is an internal helper for the grouplabels package.
-func newGroupLabelsMCPSession(t *testing.T) *mcp.ClientSession {
+// newGroupLabelsSpecsByTool constructs group labels specs by tool test fixtures.
+func newGroupLabelsSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	labelJSON := `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":false,"subscribed":false}`
@@ -858,30 +863,11 @@ func newGroupLabelsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return groupLabelSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestGroupLabelGet_EmbedsCanonicalResource asserts
-// gitlab_group_label_get attaches an EmbeddedResource block with URI
-// gitlab://group/{id}/label/{label_id}.
-func TestGroupLabelGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_GroupLabelGetRoute verifies the canonical group label get route output.
+func TestActionSpecs_GroupLabelGetRoute(t *testing.T) {
 	const respJSON = `{"id":42,"name":"bug","color":"#ff0000","text_color":"#fff","description":"Bug"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/labels/42") {
@@ -890,7 +876,28 @@ func TestGroupLabelGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"group_id": "99", "label_id": "42"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_group_label_get", args, "gitlab://group/99/label/42", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := groupLabelSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_group_label_get"].Route.Handler(t.Context(), map[string]any{"group_id": "99", "label_id": "42"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 42 || out.Name != "bug" {
+		t.Fatalf("group label output = %#v, want ID 42 name bug", out)
+	}
+}
+
+// groupLabelSpecsByTool supports group label specs by tool assertions in grouplabels tests.
+func groupLabelSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

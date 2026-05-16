@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// TestReadTraceMetricSet_SyntheticTraces_ComputesSummaryMetrics verifies ReadTraceMetricSet computes summary metrics with synthetic traces.
 func TestReadTraceMetricSet_SyntheticTraces_ComputesSummaryMetrics(t *testing.T) {
 	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 1, traceSummary{FinalSuccess: true}),
@@ -39,6 +40,7 @@ func TestReadTraceMetricSet_SyntheticTraces_ComputesSummaryMetrics(t *testing.T)
 	}
 }
 
+// TestEfficiencyGateViolations_OverBudgetTrace_ReportsAndAllowsTask verifies EfficiencyGateViolations reports and allows task with over budget trace.
 func TestEfficiencyGateViolations_OverBudgetTrace_ReportsAndAllowsTask(t *testing.T) {
 	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-066", "model-a", 1, 1, 6, traceSummary{FinalSuccess: true}),
@@ -59,6 +61,7 @@ func TestEfficiencyGateViolations_OverBudgetTrace_ReportsAndAllowsTask(t *testin
 	}
 }
 
+// TestRunEfficiencyCheck_EmptyTraceFails verifies RunEfficiencyCheck when empty trace fails.
 func TestRunEfficiencyCheck_EmptyTraceFails(t *testing.T) {
 	tracePath := writeSyntheticTraceJSONL(t, nil)
 
@@ -68,6 +71,7 @@ func TestRunEfficiencyCheck_EmptyTraceFails(t *testing.T) {
 	}
 }
 
+// TestRunEfficiencyCheck_WritesPassingReport verifies RunEfficiencyCheck writes passing report.
 func TestRunEfficiencyCheck_WritesPassingReport(t *testing.T) {
 	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 1, traceSummary{FinalSuccess: true}),
@@ -89,6 +93,7 @@ func TestRunEfficiencyCheck_WritesPassingReport(t *testing.T) {
 	}
 }
 
+// TestRunEfficiencyCheck_WritesViolationReportAndFails verifies RunEfficiencyCheck writes violation report and fails.
 func TestRunEfficiencyCheck_WritesViolationReportAndFails(t *testing.T) {
 	tracePath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-066", "model-a", 1, 1, 6, traceSummary{FinalSuccess: true}),
@@ -111,6 +116,7 @@ func TestRunEfficiencyCheck_WritesViolationReportAndFails(t *testing.T) {
 	}
 }
 
+// TestTraceJSONLPath_DirectoryAndInvalidInputs verifies TraceJSONLPath when directory and invalid inputs.
 func TestTraceJSONLPath_DirectoryAndInvalidInputs(t *testing.T) {
 	dir := t.TempDir()
 	got, err := traceJSONLPath(dir)
@@ -135,6 +141,7 @@ func TestTraceJSONLPath_DirectoryAndInvalidInputs(t *testing.T) {
 	}
 }
 
+// TestCompareTraceMetricSets_OverlappingRows_ReportsComparableAndExclusiveRows verifies CompareTraceMetricSets reports comparable and exclusive rows with overlapping rows.
 func TestCompareTraceMetricSets_OverlappingRows_ReportsComparableAndExclusiveRows(t *testing.T) {
 	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 3, traceSummary{FinalSuccess: true}),
@@ -163,6 +170,7 @@ func TestCompareTraceMetricSets_OverlappingRows_ReportsComparableAndExclusiveRow
 	}
 }
 
+// TestCompareTraceMetricSets_ScalesCallsToComparableRows verifies CompareTraceMetricSets scales calls to comparable rows.
 func TestCompareTraceMetricSets_ScalesCallsToComparableRows(t *testing.T) {
 	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 4, traceSummary{FinalSuccess: true}),
@@ -182,6 +190,7 @@ func TestCompareTraceMetricSets_ScalesCallsToComparableRows(t *testing.T) {
 	}
 }
 
+// TestRunTraceComparison_WritesReport verifies RunTraceComparison writes report.
 func TestRunTraceComparison_WritesReport(t *testing.T) {
 	dynamicPath := writeSyntheticTraceJSONL(t, []taskTrace{
 		syntheticTrace("MT-001", "model-a", 1, 1, 2, traceSummary{FinalSuccess: true}),
@@ -205,6 +214,7 @@ func TestRunTraceComparison_WritesReport(t *testing.T) {
 	}
 }
 
+// TestRunTraceComparison_RequiresTwoPaths verifies RunTraceComparison requires two paths.
 func TestRunTraceComparison_RequiresTwoPaths(t *testing.T) {
 	err := runTraceComparison(options{CompareTraces: stringList{"one.jsonl"}})
 	if err == nil || !strings.Contains(err.Error(), "requires exactly two trace JSONL paths") {
@@ -212,6 +222,7 @@ func TestRunTraceComparison_RequiresTwoPaths(t *testing.T) {
 	}
 }
 
+// TestEfficiencyOrderingHelpers_SortByHighestRisk verifies EfficiencyOrderingHelpers when sort by highest risk.
 func TestEfficiencyOrderingHelpers_SortByHighestRisk(t *testing.T) {
 	tasks := map[string]traceAggregate{
 		"MT-A": {Attempts: 1, ExpectedOps: 1, ActualCalls: 4, MinCalls: 4, MaxCalls: 4},
@@ -232,6 +243,7 @@ func TestEfficiencyOrderingHelpers_SortByHighestRisk(t *testing.T) {
 	}
 }
 
+// TestEfficiencyScalarHelpers_HandleZeroValues verifies EfficiencyScalarHelpers when handle zero values.
 func TestEfficiencyScalarHelpers_HandleZeroValues(t *testing.T) {
 	if got := traceOverheadPercent(traceAggregate{}); got != 0 {
 		t.Fatalf("traceOverheadPercent(zero) = %.1f, want 0", got)
@@ -250,6 +262,7 @@ func TestEfficiencyScalarHelpers_HandleZeroValues(t *testing.T) {
 	}
 }
 
+// TestMetricFromTrace_FallsBackToEventCounts verifies MetricFromTrace falls back to event counts.
 func TestMetricFromTrace_FallsBackToEventCounts(t *testing.T) {
 	trace := taskTrace{
 		TaskID:   "MT-001",
@@ -269,6 +282,7 @@ func TestMetricFromTrace_FallsBackToEventCounts(t *testing.T) {
 	}
 }
 
+// TestWriteOptionalMarkdownReport_InvalidDirectory verifies WriteOptionalMarkdownReport when invalid directory.
 func TestWriteOptionalMarkdownReport_InvalidDirectory(t *testing.T) {
 	err := writeOptionalMarkdownReport(string([]byte{0}), "content", "test")
 	if err == nil || !strings.Contains(err.Error(), "invalid") {
@@ -276,6 +290,7 @@ func TestWriteOptionalMarkdownReport_InvalidDirectory(t *testing.T) {
 	}
 }
 
+// syntheticTrace supports synthetic trace assertions in main tests.
 func syntheticTrace(taskID, model string, run, expectedSteps, calls int, summary traceSummary) taskTrace {
 	expected := make([]traceExpectedStep, expectedSteps)
 	for stepIndex := range expected {
@@ -293,6 +308,7 @@ func syntheticTrace(taskID, model string, run, expectedSteps, calls int, summary
 	}
 }
 
+// writeSyntheticTraceJSONL writes synthetic trace jsonl fixture data for tests.
 func writeSyntheticTraceJSONL(t *testing.T, traces []taskTrace) string {
 	t.Helper()
 	tracePath := filepath.Join(t.TempDir(), "traces.jsonl")
@@ -313,6 +329,7 @@ func writeSyntheticTraceJSONL(t *testing.T, traces []taskTrace) string {
 	return tracePath
 }
 
+// hasEfficiencyGate reports whether has efficiency gate.
 func hasEfficiencyGate(violations []efficiencyGateViolation, gate string) bool {
 	return slices.ContainsFunc(violations, func(violation efficiencyGateViolation) bool {
 		return violation.Gate == gate

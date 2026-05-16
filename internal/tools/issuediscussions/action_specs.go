@@ -1,6 +1,8 @@
 package issuediscussions
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,8 +15,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueDiscussionCreateSpec("discussion_create", toolutil.RouteAction(client, Create), "gitlab_create_issue_discussion"),
 		issueDiscussionCreateSpec("discussion_add_note", toolutil.RouteAction(client, AddNote), "gitlab_add_issue_discussion_note"),
 		issueDiscussionUpdateSpec("discussion_update_note", toolutil.RouteAction(client, UpdateNote), "gitlab_update_issue_discussion_note"),
-		issueDiscussionDeleteSpec("discussion_delete_note", toolutil.DestructiveVoidAction(client, DeleteNote), "gitlab_delete_issue_discussion_note"),
+		issueDiscussionDeleteSpec("discussion_delete_note", toolutil.DestructiveAction(client, deleteNoteOutput), "gitlab_delete_issue_discussion_note"),
 	}
+}
+
+func deleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteNote(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("issue discussion note")
+	return out, nil
 }
 
 func issueDiscussionReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

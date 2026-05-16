@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences verifies AuditRegisterMetaDefinitions classifies central references.
 func TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "internal/tools/register_meta.go", `package tools
@@ -65,7 +66,8 @@ func RegisterMeta() {
 	}
 }
 
-func TestUnexpectedRegisterMetaDefinitions_FlagsLegacyDefinitions(t *testing.T) {
+// TestUnexpectedRegisterMetaDefinitions_FlagsPackageLevelDefinitions verifies UnexpectedRegisterMetaDefinitions flags package level definitions.
+func TestUnexpectedRegisterMetaDefinitions_FlagsPackageLevelDefinitions(t *testing.T) {
 	definitions := []registerMetaDefinition{
 		{Package: "search", File: "internal/tools/search/register.go", Referenced: true},
 		{Package: "legacy", File: "internal/tools/legacy/register.go", Referenced: false},
@@ -74,25 +76,26 @@ func TestUnexpectedRegisterMetaDefinitions_FlagsLegacyDefinitions(t *testing.T) 
 	}
 
 	unexpected := unexpectedRegisterMetaDefinitions(definitions)
-	if len(unexpected) != 3 {
-		t.Fatalf("len(unexpected) = %d, want 3", len(unexpected))
+	if len(unexpected) != 4 {
+		t.Fatalf("len(unexpected) = %d, want 4", len(unexpected))
 	}
 
 	byPackage := make(map[string]unexpectedRegisterMetaDefinition, len(unexpected))
 	for _, definition := range unexpected {
 		byPackage[definition.Package] = definition
 	}
-	if !strings.Contains(byPackage["legacy"].Reason, "not an approved delegated meta-tool") {
+	if !strings.Contains(byPackage["legacy"].Reason, "not an approved catalog-first runtime pattern") {
 		t.Fatalf("legacy reason = %q", byPackage["legacy"].Reason)
 	}
-	if !strings.Contains(byPackage["legacyreferenced"].Reason, "not an approved delegated meta-tool") {
+	if !strings.Contains(byPackage["legacyreferenced"].Reason, "not an approved catalog-first runtime pattern") {
 		t.Fatalf("legacyreferenced reason = %q", byPackage["legacyreferenced"].Reason)
 	}
-	if !strings.Contains(byPackage["runners"].Reason, "not referenced") {
+	if !strings.Contains(byPackage["runners"].Reason, "not an approved catalog-first runtime pattern") {
 		t.Fatalf("runners reason = %q", byPackage["runners"].Reason)
 	}
 }
 
+// TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions verifies AuditRegisterMetaDefinitionViolations converts unexpected definitions.
 func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *testing.T) {
 	violations := auditRegisterMetaDefinitionViolations([]registerMetaDefinition{
 		{Package: "legacy", File: "internal/tools/legacy/register.go", Referenced: false},
@@ -104,12 +107,13 @@ func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *
 	if violations[0].category != "register-meta" {
 		t.Fatalf("category = %q, want register-meta", violations[0].category)
 	}
-	if !strings.Contains(violations[0].detail, "not an approved delegated meta-tool") {
+	if !strings.Contains(violations[0].detail, "not an approved catalog-first runtime pattern") {
 		t.Fatalf("detail = %q", violations[0].detail)
 	}
 }
 
-func TestCurrentRegisterMetaDefinitions_OnlyDelegatedPackagesRemain(t *testing.T) {
+// TestCurrentRegisterMetaDefinitions_NoneRemain verifies CurrentRegisterMetaDefinitions when none remain.
+func TestCurrentRegisterMetaDefinitions_NoneRemain(t *testing.T) {
 	root, err := repositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repositoryRoot() error = %v", err)
@@ -118,15 +122,12 @@ func TestCurrentRegisterMetaDefinitions_OnlyDelegatedPackagesRemain(t *testing.T
 	if err != nil {
 		t.Fatalf("auditRegisterMetaDefinitions() error = %v", err)
 	}
-	unexpected := unexpectedRegisterMetaDefinitions(definitions)
-	if len(unexpected) != 0 {
-		t.Fatalf("unexpected RegisterMeta definitions = %#v", unexpected)
-	}
-	if len(definitions) != len(delegatedRegisterMetaPackages) {
-		t.Fatalf("len(definitions) = %d, want %d", len(definitions), len(delegatedRegisterMetaPackages))
+	if len(definitions) != 0 {
+		t.Fatalf("RegisterMeta definitions = %#v, want none", definitions)
 	}
 }
 
+// TestPrintRegisterMetaDefinitions_WritesInventorySummary verifies PrintRegisterMetaDefinitions writes inventory summary.
 func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 	output := captureStdout(t, func() {
 		printRegisterMetaDefinitions([]registerMetaDefinition{
@@ -155,9 +156,9 @@ func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 		"## RegisterMeta Definition Inventory",
 		"| Package-level RegisterMeta definitions | 3 |",
 		"| Referenced from central meta hub | 1 |",
-		"| Approved delegated definitions | 1 |",
-		"| Unexpected definitions | 2 |",
-		"| delegated | `search` | `internal/tools/search/register.go` | `-` |",
+		"| Approved delegated definitions | 0 |",
+		"| Unexpected definitions | 3 |",
+		"| unexpected | `search` | `internal/tools/search/register.go` | `-` |",
 		"| unexpected | `legacy` | `internal/tools/legacy/register.go` | `gitlab_legacy` |",
 		"| unexpected | `runners` | `internal/tools/runners/register.go` | `-` |",
 	}
@@ -168,6 +169,7 @@ func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 	}
 }
 
+// TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing verifies PrintRegisterMetaDefinitions when empty definitions writes nothing.
 func TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing(t *testing.T) {
 	output := captureStdout(t, func() {
 		printRegisterMetaDefinitions(nil)
@@ -177,6 +179,7 @@ func TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing(t *testing.T
 	}
 }
 
+// TestRepositoryRoot_FindsNearestGoMod verifies RepositoryRoot when finds nearest go mod.
 func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "go.mod", "module example.com/test\n")
@@ -194,6 +197,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	}
 }
 
+// TestRepositoryRoot_MissingGoModReturnsError verifies RepositoryRoot when missing go mod returns error.
 func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 	_, err := repositoryRoot(t.TempDir())
 	if err == nil {
@@ -204,6 +208,7 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 	}
 }
 
+// writeTestFile writes test file fixture data for tests.
 func writeTestFile(t *testing.T, root string, name string, content string) {
 	t.Helper()
 	path := filepath.Join(root, name)
@@ -215,6 +220,7 @@ func writeTestFile(t *testing.T, root string, name string, content string) {
 	}
 }
 
+// captureStdout supports capture stdout assertions in main tests.
 func captureStdout(t *testing.T, action func()) string {
 	t.Helper()
 	originalStdout := os.Stdout

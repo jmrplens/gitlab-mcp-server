@@ -14,15 +14,20 @@
 //
 //	cmd/server
 //	    |
-//	    +--> RegisterAll --> internal/tools/{domain}.RegisterTools
+//	    +--> RegisterAll --> BuildActionCatalog --> RegisterIndividualCatalogTools
 //	    |
 //	    +--> BuildActionCatalog --> RegisterMetaCatalog
 //	    |
 //	    +--> BuildActionCatalog --> dynamic.RegisterCatalogTools
 //
-// [RegisterAll] registers the individual tools directly. [BuildActionCatalog]
-// builds the canonical action catalog used by [RegisterMetaCatalog] and dynamic
-// mode. [RegisterAllMeta] preserves the legacy meta registration entry point by
-// building and registering that catalog. [SafeModePreview] describes the preview
-// payload returned when safe mode intercepts mutating calls.
+// [RegisterAll] registers the individual tools by projecting the canonical
+// action catalog. [BuildActionCatalog] builds the catalog used by
+// [RegisterIndividualCatalogTools], [RegisterMetaCatalog], and dynamic mode.
+// [RegisterAllMeta] preserves the meta registration entry point by building and
+// registering that catalog. [SafeModePreview] describes the preview payload
+// returned when safe mode intercepts mutating calls.
+//
+// Domain packages document the official GitLab API pages they wrap. Keeping
+// those references in package documentation preserves pkgsite discoverability
+// without adding fields to MCP tool schemas or dynamic discovery responses.
 package tools

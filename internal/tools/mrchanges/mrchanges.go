@@ -1,7 +1,3 @@
-// Package mrchanges implements retrieval of merge request file diffs, changes,
-// and diff versions from the GitLab API. It exposes typed input/output structs
-// and handler functions for listing changed files, diff versions, and
-// individual diff version details in a merge request.
 package mrchanges
 
 import (

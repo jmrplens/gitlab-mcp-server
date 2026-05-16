@@ -130,6 +130,55 @@ func WriteListSummary(b *strings.Builder, shown int, p PaginationOutput) {
 	fmt.Fprintf(b, "Showing %d of %d results (page %d of %d)\n\n", shown, p.TotalItems, p.Page, p.TotalPages)
 }
 
+// MarkdownTableHeader returns a Markdown table header followed by a standard
+// separator row for the supplied column labels.
+func MarkdownTableHeader(columns ...string) string {
+	if len(columns) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(markdownTableLine(columns))
+	b.WriteString(MarkdownTableSeparator(len(columns)))
+	return b.String()
+}
+
+// MarkdownTableSeparator returns a standard left-aligned Markdown separator row
+// for the requested number of columns.
+func MarkdownTableSeparator(columns int) string {
+	if columns <= 0 {
+		return ""
+	}
+
+	parts := make([]string, columns)
+	for i := range parts {
+		parts[i] = "---"
+	}
+	return markdownTableLine(parts)
+}
+
+// MarkdownTableRow returns a Markdown table row for the supplied cell values.
+func MarkdownTableRow(cells ...string) string {
+	if len(cells) == 0 {
+		return ""
+	}
+	return markdownTableLine(cells)
+}
+
+func markdownTableLine(cells []string) string {
+	var b strings.Builder
+	b.Grow(len(cells)*8 + 4)
+	b.WriteString("| ")
+	for i, cell := range cells {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		b.WriteString(cell)
+	}
+	b.WriteString(" |\n")
+	return b.String()
+}
+
 // ToolResultWithMarkdown wraps a Markdown string into a CallToolResult
 // with a single TextContent entry annotated for assistant-only audience.
 // This prevents MCP clients (e.g. VS Code) from displaying raw Markdown

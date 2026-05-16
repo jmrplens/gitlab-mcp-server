@@ -1,4 +1,3 @@
-// Package ciyamltemplates implements MCP tools for GitLab CI YAML Templates API.
 package ciyamltemplates
 
 import (

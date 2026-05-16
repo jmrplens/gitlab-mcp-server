@@ -1,4 +1,3 @@
-// Package securefiles implements MCP tools for GitLab CI/CD Secure Files.
 package securefiles
 
 import (

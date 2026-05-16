@@ -1,13 +1,9 @@
 package dynamic
 
 import (
-	"fmt"
-	"slices"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/surfaces"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -38,46 +34,8 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 	} else {
 		catalog = catalog.Clone()
 	}
-	if !standaloneExcluded(opts.ExcludeTools, "gitlab_discover_project") {
-		group, groupErr := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
-			ToolName:    "gitlab_discover_project",
-			Description: "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
-			Icons:       toolutil.IconProject,
-			ReadOnly:    true,
-		}, projectdiscovery.ActionSpecs(client))
-		if groupErr != nil {
-			return nil, fmt.Errorf("build standalone dynamic group gitlab_discover_project: %w", groupErr)
-		}
-		if err := catalog.AddGroup(group); err != nil {
-			return nil, fmt.Errorf("add standalone dynamic action gitlab_discover_project.resolve: %w", err)
-		}
-	}
-	if opts.ReadOnly || standaloneExcluded(opts.ExcludeTools, "gitlab_interactive") {
-		return catalog, nil
-	}
-
-	interactiveSpecs := slices.DeleteFunc(elicitationtools.ActionSpecs(client), func(spec toolutil.ActionSpec) bool {
-		return standaloneExcluded(opts.ExcludeTools, spec.IndividualTool.Name)
+	return surfaces.AddToolCatalog(catalog, surfaces.StandaloneToolSpecs(client), surfaces.CatalogOptions{
+		ReadOnlyOnly:     opts.ReadOnly,
+		ExcludeToolNames: opts.ExcludeTools,
 	})
-	if len(interactiveSpecs) == 0 {
-		return catalog, nil
-	}
-	interactive, groupErr := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
-		ToolName:    "gitlab_interactive",
-		Description: "Guided interactive creation flows for issues, merge requests, projects, and releases. Mutating; use only when the task explicitly asks for a guided flow.",
-		Icons:       toolutil.IconServer,
-	}, interactiveSpecs)
-	if groupErr != nil {
-		return nil, fmt.Errorf("build standalone dynamic group gitlab_interactive: %w", groupErr)
-	}
-	if len(interactive.Actions) > 0 {
-		if err := catalog.AddGroup(interactive); err != nil {
-			return nil, fmt.Errorf("add standalone dynamic group %q: %w", interactive.ToolName, err)
-		}
-	}
-	return catalog, nil
-}
-
-func standaloneExcluded(excludeTools []string, name string) bool {
-	return slices.Contains(excludeTools, name)
 }

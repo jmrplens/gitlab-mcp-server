@@ -50,27 +50,33 @@ type testAliasInput struct {
 	Variables    []string    `json:"variables,omitempty"`
 }
 
+// testProjectPathInput defines parameters for the test project path operation.
 type testProjectPathInput struct {
 	ProjectPath string `json:"project_path"`
 }
 
+// testGroupPathInput defines parameters for the test group path operation.
 type testGroupPathInput struct {
 	GroupPath string `json:"group_path"`
 }
 
+// testFullPathInput defines parameters for the test full path operation.
 type testFullPathInput struct {
 	FullPath string `json:"full_path"`
 }
 
+// testPausedInput defines parameters for the test paused operation.
 type testPausedInput struct {
 	Paused bool `json:"paused"`
 }
 
+// testPackageFilePathInput defines parameters for the test package file path operation.
 type testPackageFilePathInput struct {
 	Path     string `json:"path"`
 	Filename string `json:"filename"`
 }
 
+// testRequiredInput defines parameters for the test required operation.
 type testRequiredInput struct {
 	Name string `json:"name" jsonschema:"Resource name,required"`
 }
@@ -369,6 +375,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias verifies NormalizeParamAliasesForSchemaWithExplanation when ID alias.
 func TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
@@ -385,6 +392,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous verifies NormalizeParamAliasesForSchemaWithExplanation when ID alias ambiguous.
 func TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
@@ -398,6 +406,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous(t *testi
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_EmptyAndRejectedIDAlias verifies NormalizeParamAliasesForSchemaWithExplanation when empty and rejected ID alias.
 func TestNormalizeParamAliasesForSchemaWithExplanation_EmptyAndRejectedIDAlias(t *testing.T) {
 	if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(nil, map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "string"}}}); explanations != nil {
 		t.Fatalf("explanations = %+v, want nil for empty params", explanations)
@@ -1030,6 +1039,7 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 	}
 }
 
+// TestParamValidationError_Unwrap verifies ParamValidationError when unwrap.
 func TestParamValidationError_Unwrap(t *testing.T) {
 	if got := (*ParamValidationError)(nil).Unwrap(); got != nil {
 		t.Fatalf("nil ParamValidationError unwrap = %v, want nil", got)
@@ -1099,6 +1109,7 @@ func TestMakeMetaHandler_MissingRequiredParamsIsToolError(t *testing.T) {
 	}
 }
 
+// metaErrorText supports meta error text assertions in toolutil tests.
 func metaErrorText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
 	if result == nil || !result.IsError {
@@ -1868,80 +1879,9 @@ func TestReadOnlyMetaAnnotationsWithTitle(t *testing.T) {
 	}
 }
 
-// TestCaptureMetaToolDefinitions_CapturesMetadataWithoutServer verifies that
-// meta-tool registrations can be captured without constructing an MCP server.
-func TestCaptureMetaToolDefinitions_CapturesMetadataWithoutServer(t *testing.T) {
-	noop := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
-	routes := ActionMap{"list": Route(noop)}
-	formatResult := func(any) *mcp.CallToolResult { return nil }
-
-	defs := CaptureMetaToolDefinitions(func() {
-		AddReadOnlyMetaTool(nil, "gitlab_capture", "Capture description.", routes, IconSearch, formatResult)
-		routes["delete"] = DestructiveRoute(noop)
-	})
-
-	if len(defs) != 1 {
-		t.Fatalf("captured definitions = %d, want 1", len(defs))
-	}
-	def := defs[0]
-	if def.Name != "gitlab_capture" || def.Description != "Capture description." || !def.ReadOnly {
-		t.Fatalf("captured definition metadata = %+v", def)
-	}
-	if len(def.Icons) != len(IconSearch) {
-		t.Fatalf("captured icon count = %d, want %d", len(def.Icons), len(IconSearch))
-	}
-	if def.FormatResult == nil {
-		t.Fatal("captured definition missing formatter")
-	}
-	if _, ok := def.Routes["list"]; !ok {
-		t.Fatal("captured definition missing list route")
-	}
-	if _, ok := def.Routes["delete"]; ok {
-		t.Fatal("captured definition route map was not cloned")
-	}
-}
-
-// TestCaptureMetaToolDefinitions_InactiveAllowsServerRegistration verifies the
-// capture path does not interfere with normal MCP tool registration.
-func TestCaptureMetaToolDefinitions_InactiveAllowsServerRegistration(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	routes := ActionMap{
-		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
-	}
-
-	AddReadOnlyMetaTool(server, "gitlab_capture_normal", "Capture normal.", routes, nil, nil)
-
-	tool := findTool(t, listToolsViaClient(t, server), "gitlab_capture_normal")
-	if tool.Name != "gitlab_capture_normal" {
-		t.Fatalf("registered tool name = %q", tool.Name)
-	}
-}
-
-// TestCaptureMetaToolDefinitions_IgnoresNonNilServer verifies capture mode is
-// reserved for nil-server catalog registration and does not duplicate normal
-// MCP server registrations into the captured metadata slice.
-func TestCaptureMetaToolDefinitions_IgnoresNonNilServer(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	routes := ActionMap{
-		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
-	}
-
-	defs := CaptureMetaToolDefinitions(func() {
-		AddReadOnlyMetaTool(server, "gitlab_capture_normal_server", "Capture normal server.", routes, nil, nil)
-	})
-
-	if len(defs) != 0 {
-		t.Fatalf("captured definitions = %d, want 0 for non-nil server registration", len(defs))
-	}
-	tool := findTool(t, listToolsViaClient(t, server), "gitlab_capture_normal_server")
-	if tool.Name != "gitlab_capture_normal_server" {
-		t.Fatalf("registered tool name = %q", tool.Name)
-	}
-}
-
-// TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic verifies nil-server
-// registration remains a no-op when no capture session is active.
-func TestAddMetaTool_NilServerWithoutCaptureDoesNotPanic(t *testing.T) {
+// TestAddMetaTool_NilServerDoesNotPanic verifies nil-server registration is a
+// no-op for callers that build optional tool surfaces.
+func TestAddMetaTool_NilServerDoesNotPanic(t *testing.T) {
 	routes := ActionMap{
 		"list": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
 	}
@@ -2765,6 +2705,7 @@ func TestUnmarshalParams_DoubleFailureReturnsOriginalError(t *testing.T) {
 	}
 }
 
+// routeSchemaTestInput defines parameters for the route schema test operation.
 type routeSchemaTestInput struct {
 	ID int `json:"id"`
 }

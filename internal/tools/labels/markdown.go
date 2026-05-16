@@ -4,10 +4,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type labelNotFoundOutput struct {
+	Identifier string
+}
+
+func formatLabelNotFound(out labelNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Label", out.Identifier,
+		"Use gitlab_label_list with project_id to list labels",
+		"Labels can be referenced by ID or name - verify the value is correct",
+	)
+}
 
 // FormatMarkdown renders a single label as a Markdown summary.
 func FormatMarkdown(l Output) string {
@@ -63,6 +74,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatLabelNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 }

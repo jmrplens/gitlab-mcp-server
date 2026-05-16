@@ -30,7 +30,7 @@ type CatalogDiscoveryFinding struct {
 	Message  string
 }
 
-// AuditDefaultActionAliases returns governance findings for built-in dynamic
+// AuditDefaultActionAliases returns governance findings for catalog-projected
 // compatibility aliases. It reports duplicate alias/canonical pairs, aliases
 // that map to missing canonical actions when a catalog is provided, and
 // ambiguous aliases that resolve to multiple canonical IDs.

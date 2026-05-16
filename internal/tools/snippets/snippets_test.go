@@ -12,19 +12,19 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// snippetJSON identifies the snippet JSON constant used by this package.
 const snippetJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go","description":"A test","visibility":"private","author":{"id":1,"username":"admin","name":"Admin","email":"admin@example.com","state":"active"},"project_id":0,"web_url":"https://gitlab.example.com/snippets/42","raw_url":"https://gitlab.example.com/snippets/42/raw","files":[{"path":"test.go","raw_url":"https://gitlab.example.com/snippets/42/raw/main/test.go"}]}`
 
+// snippetListJSON identifies the snippet list JSON constant used by this package.
 const snippetListJSON = `[` + snippetJSON + `]`
 
 // ---------------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets", func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func TestList_Success(t *testing.T) {
 // ListAll
 // ---------------------------------------------------------------------------.
 
-// TestListAll_Success verifies the behavior of list all success.
+// TestListAll_Success verifies ListAll when success.
 func TestListAll_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/all", func(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +71,7 @@ func TestListAll_Success(t *testing.T) {
 // Get
 // ---------------------------------------------------------------------------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/42", func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +88,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingSnippetID verifies the behavior of get missing snippet i d.
+// TestGet_MissingSnippetID verifies Get when missing snippet ID.
 func TestGet_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Get(context.Background(), client, GetInput{})
@@ -101,7 +101,7 @@ func TestGet_MissingSnippetID(t *testing.T) {
 // Content
 // ---------------------------------------------------------------------------.
 
-// TestContent_Success verifies the behavior of content success.
+// TestContent_Success verifies Content when success.
 func TestContent_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/42/raw", func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func TestContent_Success(t *testing.T) {
 	}
 }
 
-// TestContent_MissingSnippetID verifies the behavior of content missing snippet i d.
+// TestContent_MissingSnippetID verifies Content when missing snippet ID.
 func TestContent_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Content(context.Background(), client, ContentInput{})
@@ -132,7 +132,7 @@ func TestContent_MissingSnippetID(t *testing.T) {
 // FileContent
 // ---------------------------------------------------------------------------.
 
-// TestFileContent_Success verifies the behavior of file content success.
+// TestFileContent_Success verifies FileContent when success.
 func TestFileContent_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/42/files/main/test.go/raw", func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func TestFileContent_Success(t *testing.T) {
 	}
 }
 
-// TestFileContent_MissingParams verifies the behavior of file content missing params.
+// TestFileContent_MissingParams verifies FileContent when missing params.
 func TestFileContent_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -176,7 +176,7 @@ func TestFileContent_MissingParams(t *testing.T) {
 // Create
 // ---------------------------------------------------------------------------.
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets", func(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +209,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingTitle verifies the behavior of create missing title.
+// TestCreate_MissingTitle verifies Create when missing title.
 func TestCreate_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Create(context.Background(), client, CreateInput{})
@@ -218,7 +218,7 @@ func TestCreate_MissingTitle(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingContent verifies the behavior of create missing content.
+// TestCreate_MissingContent verifies Create when missing content.
 func TestCreate_MissingContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Create(context.Background(), client, CreateInput{Title: "Test Snippet", FileName: "test.go"})
@@ -231,7 +231,7 @@ func TestCreate_MissingContent(t *testing.T) {
 // Update
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/42", func(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +255,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingSnippetID verifies the behavior of update missing snippet i d.
+// TestUpdate_MissingSnippetID verifies Update when missing snippet ID.
 func TestUpdate_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Update(context.Background(), client, UpdateInput{})
@@ -268,7 +268,7 @@ func TestUpdate_MissingSnippetID(t *testing.T) {
 // Delete
 // ---------------------------------------------------------------------------.
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/42", func(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +286,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingSnippetID verifies the behavior of delete missing snippet i d.
+// TestDelete_MissingSnippetID verifies Delete when missing snippet ID.
 func TestDelete_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := Delete(context.Background(), client, DeleteInput{})
@@ -299,7 +299,7 @@ func TestDelete_MissingSnippetID(t *testing.T) {
 // Explore
 // ---------------------------------------------------------------------------.
 
-// TestExplore_Success verifies the behavior of explore success.
+// TestExplore_Success verifies Explore when success.
 func TestExplore_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets/public", func(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +321,7 @@ func TestExplore_Success(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID: 42, Title: "Test", Visibility: "private",
@@ -334,7 +334,7 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Snippets: []Output{{ID: 1, Title: "S1", Visibility: "public", Author: AuthorOutput{Username: "u1"}}},
@@ -345,7 +345,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatContentMarkdown verifies the behavior of format content markdown.
+// TestFormatContentMarkdown verifies FormatContentMarkdown.
 func TestFormatContentMarkdown(t *testing.T) {
 	out := ContentOutput{SnippetID: 42, Content: "hello world"}
 	md := FormatContentMarkdown(out)
@@ -354,7 +354,7 @@ func TestFormatContentMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatFileContentMarkdown verifies the behavior of format file content markdown.
+// TestFormatFileContentMarkdown verifies FormatFileContentMarkdown.
 func TestFormatFileContentMarkdown(t *testing.T) {
 	out := FileContentOutput{SnippetID: 42, Ref: "main", FileName: "test.go", Content: "package main"}
 	md := FormatFileContentMarkdown(out)
@@ -373,47 +373,39 @@ func TestResolveProjectLabel_Fallback(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_Get404 validates that the snippet get tool returns NotFound
-// for 404 responses (register.go 404 paths).
-func TestMCPRoundTrip_Get404(t *testing.T) {
+// TestActionSpecs_Get404 validates not-found and error behavior for snippet get routes.
+func TestActionSpecs_Get404(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
-		name string
-		args map[string]any
+		name         string
+		args         map[string]any
+		expectResult bool
 	}{
-		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}},
-		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}},
+		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}, true},
+		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}, false},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name+"_404", func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool: %v", callErr)
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if tc.expectResult {
+				if err != nil {
+					t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
+				}
+				if _, ok := result.(snippetNotFoundOutput); !ok {
+					t.Fatalf("result type = %T, want snippetNotFoundOutput", result)
+				}
+				return
 			}
-			if !res.IsError {
-				t.Error("expected IsError=true for 404")
+			if err == nil {
+				t.Fatalf("expected error from %s", tc.name)
 			}
 		})
 	}
@@ -430,9 +422,8 @@ func TestResolveProjectLabel_ZeroProjectID(t *testing.T) {
 	}
 }
 
-// TestSnippetGet_EmbedsCanonicalResource asserts gitlab_snippet_get
-// attaches an EmbeddedResource block with URI gitlab://snippet/{id}.
-func TestSnippetGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_SnippetGetRoute verifies the canonical personal snippet get route output.
+func TestActionSpecs_SnippetGetRoute(t *testing.T) {
 	const respJSON = `{"id":33,"title":"hello","file_name":"hello.txt","description":"","visibility":"public","author":{"id":1,"username":"u","name":"u"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/snippets/33") {
@@ -441,7 +432,28 @@ func TestSnippetGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"snippet_id": 33}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_snippet_get", args, "gitlab://snippet/33", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := snippetSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_snippet_get"].Route.Handler(t.Context(), map[string]any{"snippet_id": 33})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 33 || out.Title != "hello" {
+		t.Fatalf("snippet output = %#v, want ID 33 title hello", out)
+	}
+}
+
+// snippetSpecsByTool supports snippet specs by tool assertions in snippets tests.
+func snippetSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

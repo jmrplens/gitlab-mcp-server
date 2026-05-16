@@ -1,6 +1,8 @@
 package jobtokenscope
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -15,8 +17,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		jobTokenScopeRemoveProjectSpec(client),
 		jobTokenScopeReadSpec("token_scope_list_groups", toolutil.RouteAction(client, ListGroupAllowlist), "gitlab_list_job_token_group_allowlist"),
 		jobTokenScopeCreateSpec("token_scope_add_group", toolutil.RouteAction(client, AddGroupAllowlist), "gitlab_add_group_job_token_allowlist"),
-		jobTokenScopeDeleteSpec("token_scope_remove_group", toolutil.DestructiveVoidAction(client, RemoveGroupAllowlist), "gitlab_remove_group_job_token_allowlist"),
+		jobTokenScopeDeleteSpec("token_scope_remove_group", toolutil.DestructiveAction(client, removeGroupAllowlistOutput), "gitlab_remove_group_job_token_allowlist"),
 	}
+}
+
+func removeProjectAllowlistOutput(ctx context.Context, client *gitlabclient.Client, input RemoveProjectAllowlistInput) (toolutil.DeleteOutput, error) {
+	if err := RemoveProjectAllowlist(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("project from job token allowlist")
+	return out, nil
+}
+
+func removeGroupAllowlistOutput(ctx context.Context, client *gitlabclient.Client, input RemoveGroupAllowlistInput) (toolutil.DeleteOutput, error) {
+	if err := RemoveGroupAllowlist(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("group from job token allowlist")
+	return out, nil
 }
 
 func jobTokenScopeRemoveProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -39,7 +57,7 @@ func jobTokenScopeRemoveProjectSpec(client *gitlabclient.Client) toolutil.Action
 	}
 	options.Destructive = true
 	options.Idempotent = true
-	return toolutil.NewActionSpec("token_scope_remove_project", toolutil.DestructiveVoidAction(client, RemoveProjectAllowlist), options)
+	return toolutil.NewActionSpec("token_scope_remove_project", toolutil.DestructiveAction(client, removeProjectAllowlistOutput), options)
 }
 
 func jobTokenScopeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

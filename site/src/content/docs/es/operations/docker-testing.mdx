@@ -1,0 +1,83 @@
+---
+title: Pruebas E2E con Docker
+description: Ejecuta la suite end-to-end contra una instancia efímera de GitLab CE
+---
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) en el repositorio.
+:::
+
+El modo E2E con Docker arranca un entorno desechable de GitLab CE, provisiona fixtures, registra un runner de CI y ejecuta la suite end-to-end de MCP contra esa instancia local. Úsalo cuando necesites validación de alta confianza sin depender de una instancia real configurada en `.env`.
+
+## Qué incluye
+
+| Componente | Propósito |
+| ---------- | --------- |
+| GitLab CE | Instancia efímera de GitLab para llamadas reales a REST y GraphQL |
+| GitLab Runner | Habilita flujos de pipelines y jobs que los tests unitarios no pueden ejercitar |
+| Servicio de fixtures | Proporciona endpoints deterministas para webhooks, emoji personalizados y mirrors |
+| Suite E2E | Ejecuta flujos de herramientas individuales, meta-herramientas y herramientas dinámicas mediante transporte MCP en memoria |
+
+El modo Docker cubre los mismos flujos de ciclo de vida que los E2E autoalojados, además de escenarios de pipelines y jobs que solo están disponibles en Docker. Crea datos temporales en GitLab y los elimina al desmontar el stack.
+
+## Ejecución rápida
+
+```bash
+make test-e2e-docker
+```
+
+Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de pruebas, ejecuta la suite E2E de Go con el build tag `e2e`, y escribe reportes JUnit y JSON.
+
+## Flujo manual
+
+Usa la secuencia manual cuando necesites inspeccionar la UI de GitLab o relanzar un test concreto sin recrear el stack cada vez.
+
+```bash
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh
+./test/e2e/scripts/setup-gitlab.sh
+./test/e2e/scripts/register-runner.sh
+
+set -a && source test/e2e/.env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+Para ejecutar solo el flujo de herramientas dinámicas después de preparar el entorno:
+
+```bash
+E2E_MODE=docker \
+  go test -v -tags e2e -timeout 600s \
+  -run '^TestDynamicToolSurface' \
+  ./test/e2e/suite/
+```
+
+## Cuándo usarlo
+
+| Situación | ¿Usar E2E Docker? |
+| --------- | ----------------- |
+| Cambios en registro de herramientas, proyección del catálogo o schemas | Sí |
+| Cambios en pipelines, jobs, webhooks, emoji personalizados o mirrors | Sí |
+| Verificar release candidates antes de publicar binarios | Sí |
+| Editar una página Markdown estrecha | Normalmente no |
+| Depurar un unit test fallando con respuestas mock de GitLab | Normalmente no |
+
+## Reportes y limpieza
+
+La suite escribe reportes legibles por máquinas para CI y diagnóstico local. Si una ejecución falla, mantén el stack Docker levantado mientras inspeccionas los datos de GitLab, los logs del runner y los reportes E2E generados. Cuando termines, elimina todos los datos de prueba con:
+
+```bash
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+## Solución de problemas
+
+| Síntoma | Qué comprobar |
+| ------- | ------------- |
+| GitLab nunca queda listo | Límites de memoria y CPU de Docker; GitLab CE necesita varios GB de RAM |
+| Tests de pipelines o jobs saltados/fallando | Salida de registro del runner y valores de `test/e2e/.env.docker` |
+| Fallos en webhooks o mirrors | Salud del contenedor de fixtures y URLs internas de la red Docker |
+| Una repetición ve datos antiguos | Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` y empieza de nuevo |
+
+Docker E2E es más lento que los tests unitarios, pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab, el transporte MCP y todas las superficies públicas de herramientas a la vez.

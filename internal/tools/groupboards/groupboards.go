@@ -1,7 +1,3 @@
-// Package groupboards implements MCP tools for GitLab group issue boards and board lists.
-//
-// It wraps the GroupIssueBoardsService from the GitLab client-go library, exposing
-// 10 operations: 5 for group board CRUD and 5 for group board list CRUD.
 package groupboards
 
 import (
@@ -66,7 +62,7 @@ type ListBoardListsOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// convertGroupBoard is an internal helper for the groupboards package.
+// convertGroupBoard maps a GitLab group issue board into MCP output.
 func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
 	out := GroupBoardOutput{
 		ID:   b.ID,
@@ -91,7 +87,7 @@ func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
 	return out
 }
 
-// convertBoardList is an internal helper for the groupboards package.
+// convertBoardList maps a GitLab board list into group board MCP output.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
 	out := BoardListOutput{
 		ID:             l.ID,

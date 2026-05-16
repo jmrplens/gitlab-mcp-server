@@ -1,6 +1,9 @@
 package projectmirrors
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,9 +16,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mirrorReadSpec("mirror_get_public_key", toolutil.RouteAction(client, GetPublicKey), "gitlab_get_project_mirror_public_key"),
 		mirrorCreateSpec("mirror_add", toolutil.RouteAction(client, Add), "gitlab_add_project_mirror"),
 		mirrorUpdateSpec("mirror_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_project_mirror"),
-		mirrorDeleteSpec("mirror_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_project_mirror"),
+		mirrorDeleteSpec("mirror_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_project_mirror"),
 		mirrorForcePushSpec(client),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("mirror %d from project %s", input.MirrorID, input.ProjectID))
+	return out, nil
+}
+
+func forcePushOutput(ctx context.Context, client *gitlabclient.Client, input ForcePushInput) (toolutil.DeleteOutput, error) {
+	if err := ForcePushUpdate(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Message: fmt.Sprintf("Force push update triggered for mirror %d in project %s", input.MirrorID, input.ProjectID)}, nil
 }
 
 func mirrorReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -48,7 +66,7 @@ func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Destructive = true
 	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("mirror_force_push", toolutil.DestructiveVoidAction(client, ForcePushUpdate), options)
+	return toolutil.NewActionSpec("mirror_force_push", toolutil.DestructiveAction(client, forcePushOutput), options)
 }
 
 func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {

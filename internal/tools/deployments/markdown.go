@@ -4,8 +4,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type deploymentNotFoundOutput struct {
+	Identifier string
+}
+
+func formatDeploymentNotFound(out deploymentNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Deployment", out.Identifier,
+		"Use gitlab_deployment_list with project_id to list deployments",
+		"Verify the deployment_id is correct for this project",
+	)
+}
 
 // FormatOutputMarkdown renders a single deployment as Markdown.
 func FormatOutputMarkdown(d Output) string {
@@ -70,6 +83,7 @@ func FormatApproveOrRejectMarkdown(o ApproveOrRejectOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatDeploymentNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatApproveOrRejectMarkdown)

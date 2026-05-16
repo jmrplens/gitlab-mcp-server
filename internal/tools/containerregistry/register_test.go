@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the container registry tool
-// closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
+// register_test.go contains canonical-route tests for container registry delete behavior.
 package containerregistry
 
 import (
@@ -11,11 +9,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_DeleteErrors verifies that all delete handler closures in register.go
-// return error results when the GitLab API responds with 500.
-func TestRegisterTools_DeleteErrors(t *testing.T) {
+// TestActionSpecs_DeleteErrors verifies that delete routes return errors when the GitLab API fails.
+func TestActionSpecs_DeleteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -25,18 +23,7 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := registrySpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -49,27 +36,31 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s with failing backend", tt.name)
+			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Errorf("expected error from %s with failing backend", tt.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branches in all delete handlers when the user declines the confirmation.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := registrySpecsByTool(t, ActionSpecs(client))
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete"} {
+		toolutil.RegisterSurfaceToolFromSpec(server, byTool[toolName], toolutil.SurfaceToolRegisterOptions{
+			Description: "Test container registry destructive confirmation.",
+			Icons:       toolutil.IconContainer,
+		})
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -81,7 +72,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	tools := []struct {
 		name string
@@ -94,12 +88,21 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if callErr != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, callErr)
 			}
 			if result == nil {
 				t.Fatalf("expected non-nil result for declined confirmation on %s", tt.name)
+			}
+			found := false
+			for _, c := range result.Content {
+				if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("expected non-empty text content in %s cancellation result", tt.name)
 			}
 		})
 	}

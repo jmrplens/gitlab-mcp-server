@@ -93,6 +93,47 @@ func TestWritePagination(t *testing.T) {
 	}
 }
 
+// TestMarkdownTableHeader verifies dynamic table header generation.
+func TestMarkdownTableHeader(t *testing.T) {
+	header := MarkdownTableHeader("ID", "Name", "Status")
+	want := "| ID | Name | Status |\n| --- | --- | --- |\n"
+	if header != want {
+		t.Errorf("MarkdownTableHeader() = %q, want %q", header, want)
+	}
+
+	emptyHeader := MarkdownTableHeader()
+	if emptyHeader != "" {
+		t.Errorf("MarkdownTableHeader() with no columns = %q, want empty", emptyHeader)
+	}
+}
+
+// TestMarkdownTableSeparator verifies separator generation for arbitrary widths.
+func TestMarkdownTableSeparator(t *testing.T) {
+	separator := MarkdownTableSeparator(4)
+	want := "| --- | --- | --- | --- |\n"
+	if separator != want {
+		t.Errorf("MarkdownTableSeparator(4) = %q, want %q", separator, want)
+	}
+	emptySeparator := MarkdownTableSeparator(0)
+	if emptySeparator != "" {
+		t.Errorf("MarkdownTableSeparator(0) = %q, want empty", emptySeparator)
+	}
+}
+
+// TestMarkdownTableRow verifies dynamic table row generation.
+func TestMarkdownTableRow(t *testing.T) {
+	row := MarkdownTableRow("1", "alice", "active")
+	want := "| 1 | alice | active |\n"
+	if row != want {
+		t.Errorf("MarkdownTableRow() = %q, want %q", row, want)
+	}
+
+	emptyRow := MarkdownTableRow()
+	if emptyRow != "" {
+		t.Errorf("MarkdownTableRow() with no cells = %q, want empty", emptyRow)
+	}
+}
+
 // TestMRStateEmoji verifies merge request state emoji mapping.
 func TestMRStateEmoji(t *testing.T) {
 	tests := []struct {

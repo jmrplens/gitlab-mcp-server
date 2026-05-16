@@ -1,6 +1,3 @@
-// Package resourceevents implements MCP tool handlers for GitLab resource
-// label events, milestone events, and state events. These track changes to
-// labels, milestones, and states on issues and merge requests.
 package resourceevents
 
 import (

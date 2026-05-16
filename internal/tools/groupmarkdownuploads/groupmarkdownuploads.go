@@ -1,4 +1,3 @@
-// Package groupmarkdownuploads implements MCP tools for GitLab group markdown upload operations.
 package groupmarkdownuploads
 
 import (
@@ -89,6 +88,13 @@ func DeleteByID(ctx context.Context, client *gitlabclient.Client, input DeleteBy
 	return nil
 }
 
+func deleteByIDOutput(ctx context.Context, client *gitlabclient.Client, input DeleteByIDInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteByID(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group markdown upload."}, nil
+}
+
 // Delete by Secret and Filename.
 
 // DeleteBySecretAndFilenameInput represents input for deleting a group markdown upload by secret and filename.
@@ -106,6 +112,13 @@ func DeleteBySecretAndFilename(ctx context.Context, client *gitlabclient.Client,
 			"verify secret (32-char hex) and filename match an existing upload; deleting requires Maintainer role or higher")
 	}
 	return nil
+}
+
+func deleteBySecretAndFilenameOutput(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretAndFilenameInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteBySecretAndFilename(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group markdown upload."}, nil
 }
 
 // Markdown Formatters.

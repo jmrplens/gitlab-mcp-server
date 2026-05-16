@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -452,12 +450,18 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools wires both DORA
-// metrics tools onto the MCP server without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies DORA metrics action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "dorametrics" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }

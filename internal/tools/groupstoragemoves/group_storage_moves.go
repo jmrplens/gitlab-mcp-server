@@ -1,5 +1,3 @@
-// Package groupstoragemoves implements MCP tools for GitLab group
-// repository storage move operations (admin only).
 package groupstoragemoves
 
 import (

@@ -190,7 +190,7 @@ func TestAnthropicProviderCallOnce_RequestFailureIsRetryable(t *testing.T) {
 	}
 }
 
-// TestParseOpenAIToolArguments_WrapsMissingOpeningBrace verifies that ParseOpenAIToolArguments handles the wraps missing opening brace scenario correctly.
+// TestParseOpenAIToolArguments_WrapsMissingOpeningBrace verifies ParseOpenAIToolArguments when wraps missing opening brace.
 func TestParseOpenAIToolArguments_WrapsMissingOpeningBrace(t *testing.T) {
 	input, err := parseOpenAIToolArguments(`"project_id":"42"}`)
 	if err != nil {
@@ -201,7 +201,7 @@ func TestParseOpenAIToolArguments_WrapsMissingOpeningBrace(t *testing.T) {
 	}
 }
 
-// TestGoogleProviderCallOnce_SendsAPIKeyHeader verifies that googleProvider.callOnce handles the sends api key header scenario correctly.
+// TestGoogleProviderCallOnce_SendsAPIKeyHeader verifies GoogleProviderCallOnce when sends API key header.
 func TestGoogleProviderCallOnce_SendsAPIKeyHeader(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.RawQuery != "" {
@@ -292,7 +292,7 @@ func TestGoogleProviderCallOnce_RequestFailureBranches(t *testing.T) {
 	}
 }
 
-// TestGoogleFunctionResponsePayload_PreservesErrorFlag verifies that googleFunctionResponsePayload handles the preserves error flag scenario correctly.
+// TestGoogleFunctionResponsePayload_PreservesErrorFlag verifies GoogleFunctionResponsePayload preserves error flag.
 func TestGoogleFunctionResponsePayload_PreservesErrorFlag(t *testing.T) {
 	payload := googleFunctionResponsePayload(modelContentBlock{Content: `{"is_error":false,"value":7}`, IsError: true})
 	if got := payload["is_error"]; got != true {
@@ -303,7 +303,7 @@ func TestGoogleFunctionResponsePayload_PreservesErrorFlag(t *testing.T) {
 	}
 }
 
-// TestDoModelRequest_ContextCancellationIsNotRetryable verifies that doModelRequest handles the context cancellation is not retryable scenario correctly.
+// TestDoModelRequest_ContextCancellationIsNotRetryable verifies DoModelRequest when context cancellation is not retryable.
 func TestDoModelRequest_ContextCancellationIsNotRetryable(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return nil, context.Canceled
@@ -549,6 +549,7 @@ func TestProviderCallOnce_DefaultTraceOmitsRawBodies(t *testing.T) {
 	}
 }
 
+// requiredStringSet returns d string set test data or fails the test.
 func requiredStringSet(raw any) map[string]bool {
 	out := map[string]bool{}
 	for _, name := range requiredNamesFromAny(raw) {
@@ -557,6 +558,7 @@ func requiredStringSet(raw any) map[string]bool {
 	return out
 }
 
+// requiredNamesFromAny returns d names from any test data or fails the test.
 func requiredNamesFromAny(raw any) []string {
 	var names []string
 	switch values := raw.(type) {
@@ -799,7 +801,11 @@ func TestDoModelRequest_ErrorBranches(t *testing.T) {
 	}
 }
 
+// errorReadCloser holds error read closer data for the main package.
 type errorReadCloser struct{}
 
+// Read streams data from errorReadCloser into p.
 func (errorReadCloser) Read([]byte) (int, error) { return 0, errors.New("read failed") }
-func (errorReadCloser) Close() error             { return nil }
+
+// Close handles close for errorReadCloser.
+func (errorReadCloser) Close() error { return nil }

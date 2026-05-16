@@ -1,6 +1,3 @@
-// Package grouplabels implements GitLab group label operations including list,
-// get, create, update, delete, subscribe, and unsubscribe. It exposes typed
-// input/output structs and handler functions registered as MCP tools.
 package grouplabels
 
 import (

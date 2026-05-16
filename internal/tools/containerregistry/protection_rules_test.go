@@ -17,7 +17,7 @@ import (
 // ListProtectionRules
 // ---------------------------------------------------------------------------.
 
-// TestListProtectionRules_Success verifies the behavior of list protection rules success.
+// TestListProtectionRules_Success verifies ListProtectionRules when success.
 func TestListProtectionRules_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func TestListProtectionRules_Success(t *testing.T) {
 	}
 }
 
-// TestListProtectionRules_MissingProjectID verifies the behavior of list protection rules missing project i d.
+// TestListProtectionRules_MissingProjectID verifies ListProtectionRules when missing project ID.
 func TestListProtectionRules_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProtectionRules(context.Background(), client, ListProtectionRulesInput{})
@@ -55,7 +55,7 @@ func TestListProtectionRules_MissingProjectID(t *testing.T) {
 // CreateProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestCreateProtectionRule_Success verifies the behavior of create protection rule success.
+// TestCreateProtectionRule_Success verifies CreateProtectionRule when success.
 func TestCreateProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func TestCreateProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestCreateProtectionRule_MissingProjectID verifies the behavior of create protection rule missing project i d.
+// TestCreateProtectionRule_MissingProjectID verifies CreateProtectionRule when missing project ID.
 func TestCreateProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{RepositoryPathPattern: "x"})
@@ -94,7 +94,7 @@ func TestCreateProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateProtectionRule_MissingPattern verifies the behavior of create protection rule missing pattern.
+// TestCreateProtectionRule_MissingPattern verifies CreateProtectionRule when missing pattern.
 func TestCreateProtectionRule_MissingPattern(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -107,7 +107,7 @@ func TestCreateProtectionRule_MissingPattern(t *testing.T) {
 // UpdateProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestUpdateProtectionRule_Success verifies the behavior of update protection rule success.
+// TestUpdateProtectionRule_Success verifies UpdateProtectionRule when success.
 func TestUpdateProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules/5", func(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +133,7 @@ func TestUpdateProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateProtectionRule_MissingProjectID verifies the behavior of update protection rule missing project i d.
+// TestUpdateProtectionRule_MissingProjectID verifies UpdateProtectionRule when missing project ID.
 func TestUpdateProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateProtectionRule(context.Background(), client, UpdateProtectionRuleInput{RuleID: 5})
@@ -142,7 +142,7 @@ func TestUpdateProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdateProtectionRule_MissingRuleID verifies the behavior of update protection rule missing rule i d.
+// TestUpdateProtectionRule_MissingRuleID verifies UpdateProtectionRule when missing rule ID.
 func TestUpdateProtectionRule_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateProtectionRule(context.Background(), client, UpdateProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -155,7 +155,7 @@ func TestUpdateProtectionRule_MissingRuleID(t *testing.T) {
 // DeleteProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProtectionRule_Success verifies the behavior of delete protection rule success.
+// TestDeleteProtectionRule_Success verifies DeleteProtectionRule when success.
 func TestDeleteProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules/5", func(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +176,7 @@ func TestDeleteProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProtectionRule_MissingProjectID verifies the behavior of delete protection rule missing project i d.
+// TestDeleteProtectionRule_MissingProjectID verifies DeleteProtectionRule when missing project ID.
 func TestDeleteProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteProtectionRule(context.Background(), client, DeleteProtectionRuleInput{RuleID: 5})
@@ -185,7 +185,7 @@ func TestDeleteProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteProtectionRule_MissingRuleID verifies the behavior of delete protection rule missing rule i d.
+// TestDeleteProtectionRule_MissingRuleID verifies DeleteProtectionRule when missing rule ID.
 func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteProtectionRule(context.Background(), client, DeleteProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -198,7 +198,7 @@ func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatProtectionRuleMarkdown verifies the behavior of format protection rule markdown.
+// TestFormatProtectionRuleMarkdown verifies FormatProtectionRuleMarkdown.
 func TestFormatProtectionRuleMarkdown(t *testing.T) {
 	out := ProtectionRuleOutput{
 		ID: 1, ProjectID: 10,
@@ -212,7 +212,7 @@ func TestFormatProtectionRuleMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectionRuleListMarkdown verifies the behavior of format protection rule list markdown.
+// TestFormatProtectionRuleListMarkdown verifies FormatProtectionRuleListMarkdown.
 func TestFormatProtectionRuleListMarkdown(t *testing.T) {
 	out := ProtectionRuleListOutput{
 		Rules: []ProtectionRuleOutput{

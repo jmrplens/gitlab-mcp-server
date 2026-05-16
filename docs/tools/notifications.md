@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Notifications & Events
 > **Individual tools**: 44
-> **Meta-tools**: `gitlab_notification`, `gitlab_event`, `gitlab_resource_event`, `gitlab_award_emoji` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_notification`, `gitlab_event`, `gitlab_resource_event`, `gitlab_award_emoji` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Events](https://docs.gitlab.com/ee/api/events.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The notifications & events domain covers notification settings (global, project, group), project and user events, resource-level change events (label, milestone, state), and award emoji reactions on issues, merge requests, snippets, and their notes.
 
-When `META_TOOLS=true` (the default), the individual tools below are consolidated into four meta-tools that dispatch by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, the individual tools below are consolidated into four meta-tools that dispatch by `action` parameter.
 
 ### Common Questions
 

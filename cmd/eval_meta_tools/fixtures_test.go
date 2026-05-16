@@ -11,7 +11,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
-// TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies that ApplyLiveFixtureState handles the replaces prompt placeholders scenario correctly.
+// TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies ApplyLiveFixtureState when replaces prompt placeholders.
 func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	state := &liveFixtureState{
 		ProjectPath:            liveFixtureProjectPath,
@@ -32,6 +32,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		MergeRequestThreadID:   "thread-123",
 		PipelineScheduleID:     23,
 		PipelineSchedulePlayID: 24,
+		SnippetID:              26,
 		CleanupReleaseTag:      "v0.0.0-eval-delete",
 		ReleaseSummaryTag:      "v0.0.0-eval-summary",
 	}
@@ -51,6 +52,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MS-004", Prompt: "Clean up release `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`."},
 		{ID: "MS-012", Prompt: "Compare refs `main` and `v0.0.0-eval-ms` in project `my-org/tools/gitlab-mcp-server`."},
 		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
+		{ID: "MT-174", Prompt: "Schedule a storage move for numeric snippet ID `44` to shard `default`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -74,6 +76,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[12].Prompt, "release `v0.0.0-eval-delete`")
 	assertContains(t, got[13].Prompt, "`v0.0.0-eval-summary`")
 	assertContains(t, got[14].Prompt, "MR `25`")
+	assertContains(t, got[15].Prompt, "numeric snippet ID `26`")
 }
 
 // TestFilterTasksByLiveFixtureState_SkipsMissingJobResources verifies that missing Docker job fixtures do not become model failures.
@@ -111,7 +114,7 @@ func TestFilterTasksByLiveFixtureState_KeepsSeededJobResources(t *testing.T) {
 	}
 }
 
-// TestFixtureCI_IsValidYAMLShape verifies that FixtureCI handles the is valid y a m l shape scenario correctly.
+// TestFixtureCI_IsValidYAMLShape verifies FixtureCI is valid YAML shape.
 func TestFixtureCI_IsValidYAMLShape(t *testing.T) {
 	ci := fixtureCI()
 	if strings.Contains(ci, "\t") {
@@ -122,7 +125,7 @@ func TestFixtureCI_IsValidYAMLShape(t *testing.T) {
 	assertContains(t, ci, "stage: test")
 }
 
-// TestFixtureRemoteURL verifies the behavior of fixture remote u r l.
+// TestFixtureRemoteURL verifies FixtureRemoteURL.
 func TestFixtureRemoteURL(t *testing.T) {
 	got := fixtureRemoteURL("http://localhost:8929/", liveFixtureProjectPath)
 	want := "http://localhost:8929/my-org/tools/gitlab-mcp-server.git"
@@ -131,7 +134,7 @@ func TestFixtureRemoteURL(t *testing.T) {
 	}
 }
 
-// TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject verifies that EnsureLiveProjectActive handles the unarchives archived fixture project scenario correctly.
+// TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject verifies EnsureLiveProjectActive when unarchives archived fixture project.
 func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) {
 	calls := make([]string, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +177,7 @@ func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) 
 	}
 }
 
-// TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable verifies that EnsureLiveProjectVariableDeleteTarget handles the seeds production scoped variable scenario correctly.
+// TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable verifies EnsureLiveProjectVariableDeleteTarget when seeds production scoped variable.
 func TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable(t *testing.T) {
 	calls := make([]string, 0, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +228,7 @@ func TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable(t *
 	}
 }
 
-// TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources verifies that AddLiveAttemptResourceSuffix handles the isolates created resources scenario correctly.
+// TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources verifies AddLiveAttemptResourceSuffix isolates created resources.
 func TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-036",
@@ -239,7 +242,7 @@ func TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources(t *testing.T) {
 	assertContains(t, got.Prompt, "`my-org/tools/gitlab-mcp-server`")
 }
 
-// TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone verifies that AddLiveAttemptResourceSuffix handles the leaves lookup tasks alone scenario correctly.
+// TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone verifies AddLiveAttemptResourceSuffix leaves lookup tasks alone.
 func TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-027",
@@ -253,7 +256,7 @@ func TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone(t *testing.T) {
 	}
 }
 
-// TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys verifies that AddLiveAttemptResourceSuffix handles the uses underscores for c i variable keys scenario correctly.
+// TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys verifies AddLiveAttemptResourceSuffix uses underscores for CI variable keys.
 func TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-026",
@@ -277,7 +280,7 @@ func TestAddLiveAttemptResourceSuffix_IsolatesInstanceVariableDelete(t *testing.
 	assertContains(t, got.Prompt, "`INSTANCE_EVAL_TOKEN_gpt54nano_r1_abc123`")
 }
 
-// TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources verifies that AddLiveAttemptResourceSuffix handles the isolates workflow resources scenario correctly.
+// TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources verifies AddLiveAttemptResourceSuffix isolates workflow resources.
 func TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-018",
@@ -291,7 +294,7 @@ func TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources(t *testing.T) {
 	assertContains(t, got.Prompt, "`eval-crud-link-248-gemini31flas-r2-abc123`")
 }
 
-// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch verifies that AddLiveAttemptResourceSuffix handles the file create keeps fixture branch scenario correctly.
+// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch verifies AddLiveAttemptResourceSuffix when file create keeps fixture branch.
 func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-030",
@@ -304,7 +307,7 @@ func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch(t *testing.T)
 	assertContains(t, got.Prompt, "`feature/eval`")
 }
 
-// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement verifies that AddLiveAttemptResourceSuffix handles the file create keeps fixture branch after fixture replacement scenario correctly.
+// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement verifies AddLiveAttemptResourceSuffix when file create keeps fixture branch after fixture replacement.
 func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-030",
@@ -317,7 +320,7 @@ func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureRe
 	assertContains(t, got.Prompt, "`feature/eval`")
 }
 
-// TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch verifies that AddLiveAttemptResourceSuffix handles the m r create isolates source branch scenario correctly.
+// TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch verifies AddLiveAttemptResourceSuffix isolates source branch for MR create.
 func TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch(t *testing.T) {
 	task := evalTask{
 		ID:     "MT-015",
@@ -332,7 +335,7 @@ func TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch(t *testing.T)
 	assertContains(t, got.Prompt, "`my-org/tools/gitlab-mcp-server`")
 }
 
-// TestBacktickValueAfter verifies the behavior of backtick value after.
+// TestBacktickValueAfter verifies BacktickValueAfter.
 func TestBacktickValueAfter(t *testing.T) {
 	prompt := "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval-x` into `main`."
 
@@ -343,7 +346,7 @@ func TestBacktickValueAfter(t *testing.T) {
 	}
 }
 
-// TestReplacePromptJobID verifies the behavior of replace prompt job i d.
+// TestReplacePromptJobID verifies ReplacePromptJobID.
 func TestReplacePromptJobID(t *testing.T) {
 	prompt := "Play manual job `496` in project `my-org/tools/gitlab-mcp-server` with variable `DEPLOY_ENV=staging`."
 
@@ -496,7 +499,7 @@ func TestEnsureLiveJobTokenScopeRemoveProjectTarget_SeedsAllowlist(t *testing.T)
 	assertContains(t, got.Prompt, "project `42`")
 }
 
-// TestReplacePromptBacktickValueAfter verifies the behavior of replace prompt backtick value after.
+// TestReplacePromptBacktickValueAfter verifies ReplacePromptBacktickValueAfter.
 func TestReplacePromptBacktickValueAfter(t *testing.T) {
 	prompt := "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`."
 
@@ -511,7 +514,7 @@ func TestReplacePromptBacktickValueAfter(t *testing.T) {
 	}
 }
 
-// TestSafeFixturePathPart verifies the behavior of safe fixture path part.
+// TestSafeFixturePathPart verifies SafeFixturePathPart.
 func TestSafeFixturePathPart(t *testing.T) {
 	got := safeFixturePathPart("feature/eval-GPT54Mini-r1-abc123")
 	want := "feature-eval-gpt54mini-r1-abc123"
@@ -673,7 +676,7 @@ func assertVariableCreateRequest(t *testing.T, w http.ResponseWriter, r *http.Re
 	return true
 }
 
-// assertContains is an internal helper for the main package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, text, want string) {
 	t.Helper()
 	if !strings.Contains(text, want) {

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security & Monitoring
 > **Individual tools**: 28
-> **Meta-tools**: `gitlab_feature_flags`, `gitlab_admin`, `gitlab_user` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_feature_flags`, `gitlab_admin`, `gitlab_user` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Feature Flags](https://docs.gitlab.com/ee/api/feature_flags.html) · [Feature Flag User Lists](https://docs.gitlab.com/ee/api/feature_flag_user_lists.html) · [Secure Files](https://docs.gitlab.com/ee/api/secure_files.html) · [Error Tracking](https://docs.gitlab.com/ee/api/error_tracking.html) · [Alert Management](https://docs.gitlab.com/ee/api/alert_management_alerts.html) · [Impersonation Tokens](https://docs.gitlab.com/ee/api/users.html#get-all-impersonation-tokens-of-a-user)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The security & monitoring domain covers project feature flags, feature flag user lists, CI/CD secure files, error tracking settings and client keys, alert management metric images, and user impersonation/personal access token management (admin only).
 
-When `META_TOOLS=true` (the default), feature flag and feature-flag user-list actions are consolidated into `gitlab_feature_flags` with `feature_flag_*` and `ff_user_list_*` action prefixes. Secure file, error tracking, and alert metric image actions are exposed through `gitlab_admin` action prefixes, while user impersonation and personal access token actions are exposed through `gitlab_user` or `gitlab_access` depending on scope.
+With the default `TOOL_SURFACE=meta` catalog, feature flag and feature-flag user-list actions are consolidated into `gitlab_feature_flags` with `feature_flag_*` and `ff_user_list_*` action prefixes. Secure file, error tracking, and alert metric image actions are exposed through `gitlab_admin` action prefixes, while user impersonation and personal access token actions are exposed through `gitlab_user` or `gitlab_access` depending on scope.
 
 ### Common Questions
 

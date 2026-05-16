@@ -1,21 +1,32 @@
 package awardemoji
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+const (
+	awardEmojiResourceName       = "Award Emoji"
+	awardEmojiDeleteResult       = "award emoji"
+	awardEmojiHintVerifyBasic    = "Verify the award_id, iid, and project_id are correct"
+	awardEmojiHintVerifyWithNote = "Verify the award_id, note_id, iid, and project_id are correct"
 )
 
 // SnippetActionSpecs returns canonical specs for snippet award emoji actions.
 func SnippetActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		snippetEmojiReadSpec("emoji_snippet_list", toolutil.RouteAction(client, ListSnippetAwardEmoji), "gitlab_snippet_emoji_list"),
-		snippetEmojiReadSpec("emoji_snippet_get", toolutil.RouteAction(client, GetSnippetAwardEmoji), "gitlab_snippet_emoji_get"),
+		snippetEmojiReadSpec("emoji_snippet_get", awardEmojiGetRoute(client, GetSnippetAwardEmoji, snippetEmojiNotFound), "gitlab_snippet_emoji_get"),
 		snippetEmojiCreateSpec("emoji_snippet_create", toolutil.RouteAction(client, CreateSnippetAwardEmoji), "gitlab_snippet_emoji_create"),
-		snippetEmojiDeleteSpec("emoji_snippet_delete", toolutil.DestructiveVoidAction(client, DeleteSnippetAwardEmoji), "gitlab_snippet_emoji_delete"),
+		snippetEmojiDeleteSpec("emoji_snippet_delete", awardEmojiDeleteRoute[SnippetDeleteInput](client, DeleteSnippetAwardEmoji), "gitlab_snippet_emoji_delete"),
 		snippetEmojiReadSpec("emoji_snippet_note_list", toolutil.RouteAction(client, ListSnippetNoteAwardEmoji), "gitlab_snippet_note_emoji_list"),
-		snippetEmojiReadSpec("emoji_snippet_note_get", toolutil.RouteAction(client, GetSnippetNoteAwardEmoji), "gitlab_snippet_note_emoji_get"),
+		snippetEmojiReadSpec("emoji_snippet_note_get", awardEmojiGetRoute(client, GetSnippetNoteAwardEmoji, snippetNoteEmojiNotFound), "gitlab_snippet_note_emoji_get"),
 		snippetEmojiCreateSpec("emoji_snippet_note_create", toolutil.RouteAction(client, CreateSnippetNoteAwardEmoji), "gitlab_snippet_note_emoji_create"),
-		snippetEmojiDeleteSpec("emoji_snippet_note_delete", toolutil.DestructiveVoidAction(client, DeleteSnippetNoteAwardEmoji), "gitlab_snippet_note_emoji_delete"),
+		snippetEmojiDeleteSpec("emoji_snippet_note_delete", awardEmojiDeleteRoute[SnippetDeleteOnNoteInput](client, DeleteSnippetNoteAwardEmoji), "gitlab_snippet_note_emoji_delete"),
 	}
 }
 
@@ -23,13 +34,13 @@ func SnippetActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		issueEmojiReadSpec("emoji_issue_list", toolutil.RouteAction(client, ListIssueAwardEmoji), "gitlab_issue_emoji_list"),
-		issueEmojiReadSpec("emoji_issue_get", toolutil.RouteAction(client, GetIssueAwardEmoji), "gitlab_issue_emoji_get"),
+		issueEmojiReadSpec("emoji_issue_get", awardEmojiGetRoute(client, GetIssueAwardEmoji, issueEmojiNotFound), "gitlab_issue_emoji_get"),
 		issueEmojiCreateSpec("emoji_issue_create", toolutil.RouteAction(client, CreateIssueAwardEmoji), "gitlab_issue_emoji_create"),
-		issueEmojiDeleteSpec("emoji_issue_delete", toolutil.DestructiveVoidAction(client, DeleteIssueAwardEmoji), "gitlab_issue_emoji_delete"),
+		issueEmojiDeleteSpec("emoji_issue_delete", awardEmojiDeleteRoute[IssueDeleteInput](client, DeleteIssueAwardEmoji), "gitlab_issue_emoji_delete"),
 		issueEmojiReadSpec("emoji_issue_note_list", toolutil.RouteAction(client, ListIssueNoteAwardEmoji), "gitlab_issue_note_emoji_list"),
-		issueEmojiReadSpec("emoji_issue_note_get", toolutil.RouteAction(client, GetIssueNoteAwardEmoji), "gitlab_issue_note_emoji_get"),
+		issueEmojiReadSpec("emoji_issue_note_get", awardEmojiGetRoute(client, GetIssueNoteAwardEmoji, issueNoteEmojiNotFound), "gitlab_issue_note_emoji_get"),
 		issueEmojiCreateSpec("emoji_issue_note_create", toolutil.RouteAction(client, CreateIssueNoteAwardEmoji), "gitlab_issue_note_emoji_create"),
-		issueEmojiDeleteSpec("emoji_issue_note_delete", toolutil.DestructiveVoidAction(client, DeleteIssueNoteAwardEmoji), "gitlab_issue_note_emoji_delete"),
+		issueEmojiDeleteSpec("emoji_issue_note_delete", awardEmojiDeleteRoute[IssueDeleteOnNoteInput](client, DeleteIssueNoteAwardEmoji), "gitlab_issue_note_emoji_delete"),
 	}
 }
 
@@ -64,13 +75,13 @@ func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 func MergeRequestActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		mergeRequestEmojiReadSpec("emoji_mr_list", toolutil.RouteAction(client, ListMRAwardEmoji), "gitlab_mr_emoji_list"),
-		mergeRequestEmojiReadSpec("emoji_mr_get", toolutil.RouteAction(client, GetMRAwardEmoji), "gitlab_mr_emoji_get"),
+		mergeRequestEmojiReadSpec("emoji_mr_get", awardEmojiGetRoute(client, GetMRAwardEmoji, mrEmojiNotFound), "gitlab_mr_emoji_get"),
 		mergeRequestEmojiCreateSpec("emoji_mr_create", toolutil.RouteAction(client, CreateMRAwardEmoji), "gitlab_mr_emoji_create"),
-		mergeRequestEmojiDeleteSpec("emoji_mr_delete", toolutil.DestructiveVoidAction(client, DeleteMRAwardEmoji), "gitlab_mr_emoji_delete"),
+		mergeRequestEmojiDeleteSpec("emoji_mr_delete", awardEmojiDeleteRoute[MRDeleteInput](client, DeleteMRAwardEmoji), "gitlab_mr_emoji_delete"),
 		mergeRequestEmojiReadSpec("emoji_mr_note_list", toolutil.RouteAction(client, ListMRNoteAwardEmoji), "gitlab_mr_note_emoji_list"),
-		mergeRequestEmojiReadSpec("emoji_mr_note_get", toolutil.RouteAction(client, GetMRNoteAwardEmoji), "gitlab_mr_note_emoji_get"),
+		mergeRequestEmojiReadSpec("emoji_mr_note_get", awardEmojiGetRoute(client, GetMRNoteAwardEmoji, mrNoteEmojiNotFound), "gitlab_mr_note_emoji_get"),
 		mergeRequestEmojiCreateSpec("emoji_mr_note_create", toolutil.RouteAction(client, CreateMRNoteAwardEmoji), "gitlab_mr_note_emoji_create"),
-		mergeRequestEmojiDeleteSpec("emoji_mr_note_delete", toolutil.DestructiveVoidAction(client, DeleteMRNoteAwardEmoji), "gitlab_mr_note_emoji_delete"),
+		mergeRequestEmojiDeleteSpec("emoji_mr_note_delete", awardEmojiDeleteRoute[MRDeleteOnNoteInput](client, DeleteMRNoteAwardEmoji), "gitlab_mr_note_emoji_delete"),
 	}
 }
 
@@ -125,5 +136,75 @@ func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 		OpenWorld:      true,
 		OwnerPackage:   "awardemoji",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+func awardEmojiGetRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (Output, error), notFound func(map[string]any) awardEmojiNotFoundOutput) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, fn)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return notFound(input), nil
+		}
+		return result, err
+	}
+	return route
+}
+
+func awardEmojiDeleteRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) error) toolutil.ActionRoute {
+	return toolutil.DestructiveAction(client, func(ctx context.Context, client *gitlabclient.Client, input T) (toolutil.DeleteOutput, error) {
+		if err := fn(ctx, client, input); err != nil {
+			return toolutil.DeleteOutput{}, err
+		}
+		return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted %s.", awardEmojiDeleteResult)}, nil
+	})
+}
+
+func issueEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on issue IID %v in project %v", input["award_id"], input["issue_iid"], input["project_id"]),
+		ListHint:   "Use gitlab_issue_emoji_list to list emojis on this issue",
+		VerifyHint: awardEmojiHintVerifyBasic,
+	}
+}
+
+func issueNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on note %v (issue IID %v) in project %v", input["award_id"], input["note_id"], input["issue_iid"], input["project_id"]),
+		ListHint:   "Use gitlab_issue_note_emoji_list to list emojis on this note",
+		VerifyHint: awardEmojiHintVerifyWithNote,
+	}
+}
+
+func mrEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on MR IID %v in project %v", input["award_id"], input["merge_request_iid"], input["project_id"]),
+		ListHint:   "Use gitlab_mr_emoji_list to list emojis on this merge request",
+		VerifyHint: awardEmojiHintVerifyBasic,
+	}
+}
+
+func mrNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on note %v (MR IID %v) in project %v", input["award_id"], input["note_id"], input["merge_request_iid"], input["project_id"]),
+		ListHint:   "Use gitlab_mr_note_emoji_list to list emojis on this note",
+		VerifyHint: awardEmojiHintVerifyWithNote,
+	}
+}
+
+func snippetEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on snippet IID %v in project %v", input["award_id"], input["snippet_id"], input["project_id"]),
+		ListHint:   "Use gitlab_snippet_emoji_list to list emojis on this snippet",
+		VerifyHint: awardEmojiHintVerifyBasic,
+	}
+}
+
+func snippetNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
+	return awardEmojiNotFoundOutput{
+		Identifier: fmt.Sprintf("award %v on note %v (snippet IID %v) in project %v", input["award_id"], input["note_id"], input["snippet_id"], input["project_id"]),
+		ListHint:   "Use gitlab_snippet_note_emoji_list to list emojis on this note",
+		VerifyHint: awardEmojiHintVerifyWithNote,
 	}
 }

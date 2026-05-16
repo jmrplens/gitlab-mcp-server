@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -893,6 +894,28 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 
 	// Should not panic.
 	printHelp()
+}
+
+// TestStaticConfigurationExamplesPreferToolSurface verifies static setup
+// examples do not reintroduce META_TOOLS as the preferred selector.
+func TestStaticConfigurationExamplesPreferToolSurface(t *testing.T) {
+	repoRoot := filepath.Clean("../..")
+	files := []string{"mcp.json", "docker-compose.yml", "server.json"}
+	for _, name := range files {
+		t.Run(name, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(repoRoot, name))
+			if err != nil {
+				t.Fatalf("reading %s: %v", name, err)
+			}
+			content := string(data)
+			if strings.Contains(content, "META_TOOLS") {
+				t.Fatalf("%s still recommends deprecated META_TOOLS", name)
+			}
+			if !strings.Contains(content, "TOOL_SURFACE") {
+				t.Fatalf("%s does not mention TOOL_SURFACE", name)
+			}
+		})
+	}
 }
 
 // TestMain_HelpParsesEnterpriseFlag verifies the CLI registers and visits the

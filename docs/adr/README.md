@@ -10,21 +10,22 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 
 ## ADR Index
 
-| ADR | Title | Status | Date |
-| --- | --- | --- | --- |
-| ADR-0001 | Go as implementation language | Implicit founding decision (not formally recorded) | — |
-| ADR-0002 | stdio as primary MCP transport | Implicit founding decision (not formally recorded) | — |
-| ADR-0003 | GitLab REST API v4 via official client | Implicit founding decision (not formally recorded) | — |
-| [ADR-0004](adr-0004-modular-tools-subpackages.md) | Modular sub-packages under `internal/tools/{domain}/` | Accepted | 2026-02-15 |
-| [ADR-0005](adr-0005-meta-tool-consolidation.md) | Meta-tool consolidation from 68 to 32 base tools | Accepted | 2026-03-06 |
-| [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md) | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted | 2026-03-23 |
-| [ADR-0007](adr-0007-rich-error-semantics.md) | Rich error semantics for LLM-actionable diagnostics | Accepted | 2026-04-06 |
-| [ADR-0008](adr-0008-universal-identity.md) | Universal identity system | Accepted | 2026-04-13 |
-| [ADR-0009](adr-0009-progressive-graphql-migration.md) | Progressive GraphQL migration strategy | Accepted | 2026-04-20 |
-| [ADR-0010](adr-0010-no-resource-subscribe.md) | No resource subscribe capability | Accepted | 2026-04-26 |
-| [ADR-0011](adr-0011-low-token-dynamic-toolset.md) | Low-token dynamic toolset mode | Accepted | 2026-05-07 |
-| [ADR-0012](adr-0012-action-catalog-package-name.md) | Action catalog package name | Accepted | 2026-05-12 |
-| [ADR-0013](adr-0013-documentation-artifact-boundaries.md) | Documentation artifact boundaries | Accepted | 2026-05-13 |
+| ADR | Title | Status | Classification | Date |
+| --- | --- | --- | --- | --- |
+| ADR-0001 | Go as implementation language | Implicit founding decision (not formally recorded) | Current | — |
+| ADR-0002 | stdio as primary MCP transport | Implicit founding decision (not formally recorded) | Current | — |
+| ADR-0003 | GitLab REST API v4 via official client | Implicit founding decision (not formally recorded) | Current | — |
+| [ADR-0004](adr-0004-modular-tools-subpackages.md) | Modular sub-packages under `internal/tools/{domain}/` | Accepted; runtime registration superseded by ADR-0014 | Historical but useful | 2026-02-15 |
+| [ADR-0005](adr-0005-meta-tool-consolidation.md) | Meta-tool consolidation from 68 to a compact domain catalog | Accepted; registration mechanics superseded by ADR-0014 | Historical but useful | 2026-03-06 |
+| [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md) | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted | Current | 2026-03-23 |
+| [ADR-0007](adr-0007-rich-error-semantics.md) | Rich error semantics for LLM-actionable diagnostics | Accepted | Current | 2026-04-06 |
+| [ADR-0008](adr-0008-universal-identity.md) | Universal identity system | Accepted | Current | 2026-04-13 |
+| [ADR-0009](adr-0009-progressive-graphql-migration.md) | Progressive GraphQL migration strategy | Accepted | Current | 2026-04-20 |
+| [ADR-0010](adr-0010-no-resource-subscribe.md) | No resource subscribe capability | Accepted | Current | 2026-04-26 |
+| [ADR-0011](adr-0011-low-token-dynamic-toolset.md) | Low-token dynamic toolset mode | Accepted; catalog source refined by ADR-0014 | Current, with catalog-first terminology updates | 2026-05-07 |
+| [ADR-0012](adr-0012-action-catalog-package-name.md) | Action catalog package name | Accepted | Current | 2026-05-12 |
+| [ADR-0013](adr-0013-documentation-artifact-boundaries.md) | Documentation artifact boundaries | Accepted | Current | 2026-05-13 |
+| [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) | Catalog-first runtime architecture | Accepted | Current | 2026-05-15 |
 
 ## About Missing ADRs
 

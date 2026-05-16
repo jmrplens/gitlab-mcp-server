@@ -1,6 +1,3 @@
-// Package broadcastmessages implements MCP tool handlers for GitLab broadcast messages.
-// It wraps the BroadcastMessagesService from client-go v2.
-// These are admin-only endpoints requiring administrator access.
 package broadcastmessages
 
 import (

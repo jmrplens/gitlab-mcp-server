@@ -1,6 +1,3 @@
-// Package cilint implements MCP tool handlers for GitLab CI/CD configuration
-// linting. It supports validating a project's existing .gitlab-ci.yml and
-// arbitrary YAML content via the CI Lint API.
 package cilint
 
 import (

@@ -1,6 +1,3 @@
-// Package branches implements MCP tool handlers for GitLab branch operations
-// including create, list, get, delete, and branch protection management.
-// It wraps the Branches and ProtectedBranches services from client-go v2.
 package branches
 
 import (

@@ -19,7 +19,7 @@ Las meta-herramientas siguen siendo el modo predeterminado hoy porque son la sup
 
 ## Por qué existe el modo dinámico
 
-Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1011 operaciones individuales, e incluso el catálogo predeterminado de meta-herramientas anuncia entre 32 y 48 herramientas de dominio.
+Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1011 operaciones individuales, e incluso el catálogo predeterminado de meta-herramientas anuncia entre 33 y 48 herramientas de dominio.
 
 El modo dinámico expone ese catálogo canónico mediante tres herramientas visibles. El modelo descubre solo lo que necesita para la tarea actual.
 
@@ -73,10 +73,12 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-:::tip[Nombres actuales]
-`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la misma superficie actual de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites fijar explícitamente la variante de tres herramientas.
+`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Dynamic conserva el descubrimiento de schemas porque `gitlab_describe_tools` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
-`TOOL_SURFACE=dynamic-2` es una variante experimental de dos herramientas con `gitlab_find_action` más `gitlab_execute_tool`.
+:::caution[Variantes dynamic]
+`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la superficie estable de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites fijar explícitamente la variante de tres herramientas.
+
+`TOOL_SURFACE=dynamic-2` es una variante experimental de dos herramientas con `gitlab_find_action` más `gitlab_execute_tool`. No la uses en despliegues nuevos salvo que estés probando intencionadamente ese experimento.
 :::
 
 ## Flujo del modelo
@@ -232,7 +234,7 @@ Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar accione
 
 | Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                                     |
 | --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| Qué aparece en `tools/list` | 32 a 48 herramientas de dominio                             | 3 herramientas públicas de descubrimiento y ejecución                 |
+| Qué aparece en `tools/list` | 33 a 48 herramientas de dominio                             | 3 herramientas públicas de descubrimiento y ejecución                 |
 | Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Busca en el catálogo canónico y después describe la acción            |
 | Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_describe_tools`                                               |
 | Mejor uso actual            | Compatibilidad predeterminada                               | Clientes con pocos tokens y preparación para el futuro predeterminado |

@@ -1,7 +1,3 @@
-// Package repository implements MCP tool handlers for GitLab repository
-// operations including tree listing, branch/tag/commit comparison, contributors,
-// merge base, blob retrieval, changelog generation, and archive URLs.
-// It wraps the Repositories service from client-go v2.
 package repository
 
 import (

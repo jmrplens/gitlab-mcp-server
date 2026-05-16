@@ -1,4 +1,3 @@
-// Package mergetrains implements MCP tool handlers for GitLab merge trains.
 package mergetrains
 
 import (

@@ -1,6 +1,3 @@
-// Package appearance implements MCP tool handlers for GitLab application appearance.
-// It wraps the AppearanceService from client-go v2.
-// These are admin-only endpoints requiring administrator access.
 package appearance
 
 import (

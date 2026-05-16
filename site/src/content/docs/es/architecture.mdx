@@ -104,9 +104,19 @@ Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) par
 
 ## Arquitectura de herramientas
 
+### Catálogo de acciones canónico
+
+Cada operación ordinaria de GitLab se define una sola vez en el catálogo de acciones canónico. Las superficies visibles de herramientas son proyecciones de ese catálogo:
+
+- **Meta-herramientas** agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
+- **Herramientas individuales** proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
+- **Herramientas dinámicas** buscan, describen y ejecutan las mismas entradas del catálogo con una lista visible mucho más pequeña.
+
+Como todas las superficies comparten la misma entrada del catálogo, los schemas, el filtrado de solo lectura, las confirmaciones de acciones destructivas, las previsualizaciones de safe mode, el filtrado por scopes, el formato Markdown y la salida JSON se mantienen consistentes entre modos.
+
 ### Modo meta-herramientas (predeterminado)
 
-Con `META_TOOLS=true` (predeterminado), el servidor expone una base de **32 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 15 herramientas Enterprise/Premium para un total de 47, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 48. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `TOOL_SURFACE=meta` (predeterminado), el servidor expone una base de **33 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 14 herramientas Enterprise/Premium para un total de 47, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 48. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -138,7 +148,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `META_TOOLS=false`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): 1006 en Enterprise/Premium autoalojado, o 1011 en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): 1006 en Enterprise/Premium autoalojado, o 1011 en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ### Conjunto de herramientas dinámico
 
@@ -146,12 +156,13 @@ Con `TOOL_SURFACE=dynamic`, el servidor expone solo `gitlab_search_tools`, `gitl
 
 ```mermaid
 flowchart TD
-    A[Catálogo de acciones canónico] --> B[Registro dinámico]
-    B --> C[gitlab_search_tools]
-    B --> D[gitlab_describe_tools]
-    B --> E[gitlab_execute_tool]
-    E --> F[Handler tipado existente]
-    F --> G[API de GitLab]
+    specs[ActionSpecs de dominio] --> catalog[Catálogo de acciones canónico]
+    catalog --> search[gitlab_search_tools]
+    catalog --> describe[gitlab_describe_tools]
+    catalog --> execute[gitlab_execute_tool]
+    execute --> route[ActionRoute compartido]
+    route --> handler[Handler tipado existente]
+    handler --> gitlab[API de GitLab]
 ```
 
 Las meta-herramientas siguen siendo el modo predeterminado hoy. El modo dinámico es la alternativa de bajo consumo de tokens y está documentado en [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/).

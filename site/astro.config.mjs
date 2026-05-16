@@ -477,6 +477,11 @@ export default defineConfig({
 							translations: { es: "Uso en CI/CD" },
 						},
 						{
+							slug: "operations/docker-testing",
+							label: "Docker E2E Testing",
+							translations: { es: "Pruebas E2E con Docker" },
+						},
+						{
 							slug: "operations/troubleshooting",
 							label: "Troubleshooting",
 							translations: { es: "Solución de problemas" },

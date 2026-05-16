@@ -1,70 +1,76 @@
-// register_test.go contains integration tests for the bulk import tool
-// closures in register.go. Tests exercise success and error paths via an
-// in-memory MCP session with a mock GitLab API.
 package bulkimports
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// newSession boots an in-memory MCP server with bulkimports tools wired to a
-// mock GitLab API and returns an MCP client session ready for tool calls.
-func newSession(t *testing.T, mux *http.ServeMux) *mcp.ClientSession {
+func bulkImportSpecsByTool(t *testing.T, mux *http.ServeMux) map[string]toolutil.ActionSpec {
 	t.Helper()
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
 
-// TestRegisterTools_StartMigrationError covers the if-err branch after
-// StartMigration() in the register.go closure.
-func TestRegisterTools_StartMigrationError(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for bulk import actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := bulkImportSpecsByTool(t, http.NewServeMux())
+
+	if len(byTool) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "bulkimports" {
+			t.Errorf("OwnerPackage for %s = %q, want bulkimports", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+	for _, name := range []string{
+		"gitlab_list_bulk_imports",
+		"gitlab_get_bulk_import",
+		"gitlab_list_bulk_import_entities",
+		"gitlab_get_bulk_import_entity",
+		"gitlab_list_bulk_import_entity_failures",
+	} {
+		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+			t.Errorf("%s should be read-only and idempotent", name)
+		}
+	}
+	if !byTool["gitlab_cancel_bulk_import"].Idempotent {
+		t.Error("gitlab_cancel_bulk_import should be idempotent")
+	}
+}
+
+// TestActionSpecs_StartMigrationError covers the route error branch after StartMigration.
+func TestActionSpecs_StartMigrationError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
-	session := newSession(t, mux)
+	byTool := bulkImportSpecsByTool(t, mux)
 
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_start_bulk_import",
-		Arguments: map[string]any{
-			"url":          "https://gitlab.example.com",
-			"access_token": "glpat-test",
-			"entities":     []any{map[string]any{"source_type": "group_entity", "source_full_path": "my-group", "destination_slug": "my-group", "destination_namespace": "root"}},
-		},
+	_, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
+		"url":          "https://gitlab.example.com",
+		"access_token": "glpat-test",
+		"entities":     []any{map[string]any{"source_type": "group_entity", "source_full_path": "my-group", "destination_slug": "my-group", "destination_namespace": "root"}},
 	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Error("expected error result from gitlab_start_bulk_import")
+	if err == nil {
+		t.Error("expected error from gitlab_start_bulk_import")
 	}
 }
 
-// TestRegisterTools_SuccessPaths exercises the happy path of every tool
-// closure registered in register.go. This validates marshaling, markdown
-// formatting, and structured-content emission for each tool.
-func TestRegisterTools_SuccessPaths(t *testing.T) {
+// TestActionSpecs_SuccessPaths exercises the happy path of every bulk import route.
+func TestActionSpecs_SuccessPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	migrationJSON := `{"id":1,"status":"started","source_type":"gitlab","source_url":"https://src","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","has_failures":false}`
 	entityJSON := `{"id":7,"bulk_import_id":1,"status":"started","entity_type":"group_entity","source_full_path":"src","destination_full_path":"dst","destination_name":"dst","destination_slug":"dst","destination_namespace":"ns","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","migrate_projects":true,"migrate_memberships":true,"has_failures":false,"stats":{"labels":{"source":1,"fetched":1,"imported":1},"milestones":{"source":2,"fetched":2,"imported":2}}}`
@@ -97,8 +103,7 @@ func TestRegisterTools_SuccessPaths(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, failureJSON)
 	})
 
-	session := newSession(t, mux)
-	ctx := context.Background()
+	byTool := bulkImportSpecsByTool(t, mux)
 
 	cases := []struct {
 		name string
@@ -119,15 +124,12 @@ func TestRegisterTools_SuccessPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil result", tc.name)
-			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) unexpected error result: %+v", tc.name, result.Content)
+				t.Fatalf("Route.Handler(%s) returned nil result", tc.name)
 			}
 		})
 	}
@@ -206,16 +208,13 @@ func TestListEntityFailures_Validation(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NotFoundResults verifies that gitlab_get_bulk_import and
-// gitlab_get_bulk_import_entity return informational NotFoundResult (IsError
-// with hints) rather than transport errors when the API returns 404.
-func TestRegisterTools_NotFoundResults(t *testing.T) {
+// TestActionSpecs_NotFoundErrors verifies get routes propagate 404 API errors.
+func TestActionSpecs_NotFoundErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	})
-	session := newSession(t, mux)
-	ctx := context.Background()
+	byTool := bulkImportSpecsByTool(t, mux)
 
 	cases := []struct {
 		name string
@@ -226,28 +225,21 @@ func TestRegisterTools_NotFoundResults(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected NotFoundResult IsError=true; got %+v", result)
+			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_ErrorPaths covers the if-err branches in every list/get/
-// cancel/failures closure when the GitLab API responds with a non-404 error.
-// This exercises the LogToolCallAll(err) + return err paths that 404 short-
-// circuit handling does not reach.
-func TestRegisterTools_ErrorPaths(t *testing.T) {
+// TestActionSpecs_ErrorPaths covers route errors when the GitLab API responds with a non-404 error.
+func TestActionSpecs_ErrorPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
 	})
-	session := newSession(t, mux)
-	ctx := context.Background()
+	byTool := bulkImportSpecsByTool(t, mux)
 
 	cases := []struct {
 		name string
@@ -262,12 +254,9 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result; got %+v", result)
+			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
 			}
 		})
 	}

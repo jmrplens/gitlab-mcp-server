@@ -1,4 +1,3 @@
-// Package issuestatistics implements MCP tools for GitLab issue statistics operations.
 package issuestatistics
 
 import (
@@ -22,7 +21,7 @@ type StatisticsOutput struct {
 	Opened int64 `json:"opened"`
 }
 
-// fromGL is an internal helper for the issuestatistics package.
+// fromGL maps GitLab issue statistics counts into MCP output.
 func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 	return StatisticsOutput{
 		All:    s.Statistics.Counts.All,

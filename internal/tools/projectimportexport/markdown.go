@@ -9,7 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// FormatScheduleExportMarkdown performs the format schedule export markdown operation for the projectimportexport package.
+// FormatScheduleExportMarkdown coordinates format schedule export markdown for the projectimportexport package.
 func FormatScheduleExportMarkdown(out ScheduleExportOutput) *mcp.CallToolResult {
 	if out.Message == "" {
 		return nil
@@ -17,7 +17,7 @@ func FormatScheduleExportMarkdown(out ScheduleExportOutput) *mcp.CallToolResult 
 	return toolutil.ToolResultWithMarkdown(out.Message)
 }
 
-// FormatExportStatusMarkdown performs the format export status markdown operation for the projectimportexport package.
+// FormatExportStatusMarkdown coordinates format export status markdown for the projectimportexport package.
 func FormatExportStatusMarkdown(out ExportStatusOutput) *mcp.CallToolResult {
 	if out.ID == 0 {
 		return nil
@@ -41,7 +41,7 @@ func FormatExportStatusMarkdown(out ExportStatusOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatExportDownloadMarkdown performs the format export download markdown operation for the projectimportexport package.
+// FormatExportDownloadMarkdown coordinates format export download markdown for the projectimportexport package.
 func FormatExportDownloadMarkdown(out ExportDownloadOutput) *mcp.CallToolResult {
 	if out.SizeBytes == 0 {
 		return nil
@@ -49,7 +49,7 @@ func FormatExportDownloadMarkdown(out ExportDownloadOutput) *mcp.CallToolResult 
 	return toolutil.ToolResultWithMarkdown(fmt.Sprintf("Export archive downloaded: %d bytes (base64-encoded in content_base64 field)", out.SizeBytes))
 }
 
-// FormatImportStatusMarkdown performs the format import status markdown operation for the projectimportexport package.
+// FormatImportStatusMarkdown coordinates format import status markdown for the projectimportexport package.
 func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
 	if out.ID == 0 {
 		return nil

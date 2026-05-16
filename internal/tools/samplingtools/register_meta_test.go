@@ -140,11 +140,7 @@ func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
 // TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas verifies that every
 // registered gitlab_analyze route declares an output schema.
 func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, nil)
-	})
-
-	routes := metaDefinitionRoutes(t, definitions, "gitlab_analyze")
+	routes := analyzeActionSpecRoutes(t)
 	if len(routes) == 0 {
 		t.Fatal("gitlab_analyze routes were not registered")
 	}
@@ -158,10 +154,7 @@ func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 // TestRegisterMeta_UsesActionSpecs verifies that gitlab_analyze meta routes
 // are projected from canonical ActionSpec definitions while preserving schemas.
 func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, nil)
-	})
-	got := metaDefinitionRoutes(t, definitions, "gitlab_analyze")
+	got := analyzeActionSpecRoutes(t)
 	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(nil))
 	if err != nil {
 		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
@@ -193,7 +186,7 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 // sampling capability failure returns an error result without structured output.
 func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, nil)
+	registerAnalyzeMetaForTest(t, server)
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, st, nil); err != nil {
@@ -227,15 +220,13 @@ func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
 	}
 }
 
-func metaDefinitionRoutes(t *testing.T, definitions []toolutil.MetaToolDefinition, name string) toolutil.ActionMap {
+func analyzeActionSpecRoutes(t *testing.T) toolutil.ActionMap {
 	t.Helper()
-	for _, definition := range definitions {
-		if definition.Name == name {
-			return definition.Routes
-		}
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(nil))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
 	}
-	t.Fatalf("missing %s meta definition", name)
-	return nil
+	return routes
 }
 
 // TestMetaMarkdownForResult_SamplingUnsupported verifies that metaMarkdownForResult renders a user-facing message when the sampling capability is unavailable.
@@ -298,7 +289,7 @@ func TestRegisterMeta_RegistersTool(t *testing.T) {
 	impl := &mcp.Implementation{Name: "test", Version: "1.0.0"}
 	server := mcp.NewServer(impl, nil)
 
-	RegisterMeta(server, nil)
+	registerAnalyzeMetaForTest(t, server)
 
 	// Connect a client to verify tool registration
 	client := mcp.NewClient(impl, nil)
@@ -330,4 +321,9 @@ func TestRegisterMeta_RegistersTool(t *testing.T) {
 	if !found {
 		t.Error("gitlab_analyze tool not registered")
 	}
+}
+
+func registerAnalyzeMetaForTest(t *testing.T, server *mcp.Server) {
+	t.Helper()
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_analyze", "Ask the host model to analyze GitLab resources.", analyzeActionSpecRoutes(t), toolutil.IconAnalytics, metaMarkdownForResult)
 }

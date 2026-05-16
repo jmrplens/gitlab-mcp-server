@@ -11,14 +11,15 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
+
+// testFilename identifies the test filename constant used by this package.
 const testFilename = "image.png"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -39,7 +40,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -50,7 +51,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID verifies the behavior of delete by i d.
+// TestDeleteByID verifies DeleteByID.
 func TestDeleteByID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/groups/5/uploads/1" {
@@ -65,7 +66,7 @@ func TestDeleteByID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_Error verifies the behavior of delete by i d error.
+// TestDeleteByID_Error verifies DeleteByID when error.
 func TestDeleteByID_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -76,7 +77,7 @@ func TestDeleteByID_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_ValidationUploadID verifies the behavior of delete by i d validation upload i d.
+// TestDeleteByID_ValidationUploadID verifies DeleteByID when validation upload ID.
 func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when upload_id is invalid")
@@ -92,7 +93,7 @@ func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename verifies the behavior of delete by secret and filename.
+// TestDeleteBySecretAndFilename verifies DeleteBySecretAndFilename.
 func TestDeleteBySecretAndFilename(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -111,7 +112,7 @@ func TestDeleteBySecretAndFilename(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_Error verifies the behavior of delete by secret and filename error.
+// TestDeleteBySecretAndFilename_Error verifies DeleteBySecretAndFilename when error.
 func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -126,7 +127,7 @@ func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	}
 }
 
-// TestFormatList verifies the behavior of format list.
+// TestFormatList verifies FormatList.
 func TestFormatList(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -139,7 +140,7 @@ func TestFormatList(t *testing.T) {
 	}
 }
 
-// TestFormatList_Empty verifies the behavior of format list empty.
+// TestFormatList_Empty verifies FormatList when empty.
 func TestFormatList_Empty(t *testing.T) {
 	out := &ListOutput{Uploads: []UploadItem{}}
 	md := FormatList(out)
@@ -150,17 +151,20 @@ func TestFormatList_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — canceled context, pagination, empty result, multiple uploads
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -170,7 +174,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_EmptyGroupID verifies the behavior of list empty group i d.
+// TestList_EmptyGroupID verifies List when empty group ID.
 func TestList_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -181,7 +185,7 @@ func TestList_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -199,7 +203,7 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestList_MultipleUploads verifies the behavior of list multiple uploads.
+// TestList_MultipleUploads verifies List when multiple uploads.
 func TestList_MultipleUploads(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -230,7 +234,7 @@ func TestList_MultipleUploads(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -258,7 +262,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_APIErrorInternalServer verifies the behavior of list a p i error internal server.
+// TestList_APIErrorInternalServer verifies List when API error internal server.
 func TestList_APIErrorInternalServer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -273,7 +277,7 @@ func TestList_APIErrorInternalServer(t *testing.T) {
 // DeleteByID — canceled context, empty group_id
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByID_CancelledContext verifies the behavior of delete by i d cancelled context.
+// TestDeleteByID_CancelledContext verifies DeleteByID when cancelled context.
 func TestDeleteByID_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -283,7 +287,7 @@ func TestDeleteByID_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_EmptyGroupID verifies the behavior of delete by i d empty group i d.
+// TestDeleteByID_EmptyGroupID verifies DeleteByID when empty group ID.
 func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -294,7 +298,7 @@ func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_InternalServerError verifies the behavior of delete by i d internal server error.
+// TestDeleteByID_InternalServerError verifies DeleteByID when internal server error.
 func TestDeleteByID_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -309,7 +313,7 @@ func TestDeleteByID_InternalServerError(t *testing.T) {
 // DeleteBySecretAndFilename — canceled context, empty fields
 // ---------------------------------------------------------------------------.
 
-// TestDeleteBySecretAndFilename_CancelledContext verifies the behavior of delete by secret and filename cancelled context.
+// TestDeleteBySecretAndFilename_CancelledContext verifies DeleteBySecretAndFilename when cancelled context.
 func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -321,7 +325,7 @@ func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_EmptyGroupID verifies the behavior of delete by secret and filename empty group i d.
+// TestDeleteBySecretAndFilename_EmptyGroupID verifies DeleteBySecretAndFilename when empty group ID.
 func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -334,7 +338,7 @@ func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_InternalServerError verifies the behavior of delete by secret and filename internal server error.
+// TestDeleteBySecretAndFilename_InternalServerError verifies DeleteBySecretAndFilename when internal server error.
 func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -351,7 +355,7 @@ func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 // FormatList — with pagination, special characters, nil created_at
 // ---------------------------------------------------------------------------.
 
-// TestFormatList_WithPagination verifies the behavior of format list with pagination.
+// TestFormatList_WithPagination verifies FormatList when with pagination.
 func TestFormatList_WithPagination(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -373,7 +377,7 @@ func TestFormatList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestFormatList_SpecialCharacters verifies the behavior of format list special characters.
+// TestFormatList_SpecialCharacters verifies FormatList when special characters.
 func TestFormatList_SpecialCharacters(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -387,7 +391,7 @@ func TestFormatList_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatList_NilCreatedAt verifies the behavior of format list nil created at.
+// TestFormatList_NilCreatedAt verifies FormatList when nil created at.
 func TestFormatList_NilCreatedAt(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -403,7 +407,7 @@ func TestFormatList_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatList_MultipleRows verifies the behavior of format list multiple rows.
+// TestFormatList_MultipleRows verifies FormatList when multiple rows.
 func TestFormatList_MultipleRows(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -417,255 +421,5 @@ func TestFormatList_MultipleRows(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 3 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupMarkdownUploadsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_group_markdown_uploads", map[string]any{"group_id": "5"}},
-		{"delete_by_id", "gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "5", "upload_id": 1}},
-		{"delete_by_secret", "gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "5", "secret": "abc123", "filename": "image.png"}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// MCP roundtrip — API error propagation
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundtripList_APIError verifies the behavior of m c p roundtrip list a p i error.
-func TestMCPRoundtripList_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_group_markdown_uploads",
-		Arguments: map[string]any{"group_id": "5"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected IsError=true for API error")
-	}
-}
-
-// TestMCPRoundtripDeleteByID_APIError verifies the behavior of m c p roundtrip delete by i d a p i error.
-func TestMCPRoundtripDeleteByID_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_group_markdown_upload_by_id",
-		Arguments: map[string]any{"group_id": "5", "upload_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected IsError=true for API error")
-	}
-}
-
-// TestMCPRoundtripDeleteBySecret_APIError verifies the behavior of m c p roundtrip delete by secret a p i error.
-func TestMCPRoundtripDeleteBySecret_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_group_markdown_upload_by_secret",
-		Arguments: map[string]any{"group_id": "5", "secret": "abc", "filename": "file.png"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected IsError=true for API error")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newGroupMarkdownUploadsMCPSession is an internal helper for the groupmarkdownuploads package.
-func newGroupMarkdownUploadsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	// List group markdown uploads
-	handler.HandleFunc("GET /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"}]`)
-	})
-
-	// Delete by ID
-	handler.HandleFunc("DELETE /api/v4/groups/5/uploads/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Delete by secret and filename
-	handler.HandleFunc("DELETE /api/v4/groups/5/uploads/abc123/image.png", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branches in the group markdown upload delete handlers when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "42", "upload_id": 1}},
-		{"gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "42", "secret": "s", "filename": "f.png"}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
-			}
-			if result == nil {
-				t.Fatal("expected non-nil result for declined confirmation")
-			}
-		})
 	}
 }

@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // Shared test constants used across accesstokens_test.go and coverage_test.go.
@@ -59,7 +58,7 @@ const (
 // Project Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_Success verifies the behavior of project list success.
+// TestProjectList_Success verifies ProjectList when success.
 func TestProjectList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodGet {
@@ -87,7 +86,7 @@ func TestProjectList_Success(t *testing.T) {
 	}
 }
 
-// TestProjectList_WithState verifies the behavior of project list with state.
+// TestProjectList_WithState verifies ProjectList when with state.
 func TestProjectList_WithState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens {
@@ -109,7 +108,7 @@ func TestProjectList_WithState(t *testing.T) {
 	}
 }
 
-// TestProjectList_MissingProjectID verifies the behavior of project list missing project i d.
+// TestProjectList_MissingProjectID verifies ProjectList when missing project ID.
 func TestProjectList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := ProjectList(context.Background(), client, ProjectListInput{})
@@ -118,7 +117,7 @@ func TestProjectList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectGet_Success verifies the behavior of project get success.
+// TestProjectGet_Success verifies ProjectGet when success.
 func TestProjectGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5" && r.Method == http.MethodGet {
@@ -137,7 +136,7 @@ func TestProjectGet_Success(t *testing.T) {
 	}
 }
 
-// TestProjectGet_MissingInputs verifies the behavior of project get missing inputs.
+// TestProjectGet_MissingInputs verifies ProjectGet when missing inputs.
 func TestProjectGet_MissingInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -152,7 +151,7 @@ func TestProjectGet_MissingInputs(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_Success verifies the behavior of project create success.
+// TestProjectCreate_Success verifies ProjectCreate when success.
 func TestProjectCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodPost {
@@ -180,7 +179,7 @@ func TestProjectCreate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_Validation validates project create validation across multiple scenarios using table-driven subtests.
+// TestProjectCreate_Validation covers ProjectCreate with table-driven subtests for validation.
 func TestProjectCreate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -205,7 +204,7 @@ func TestProjectCreate_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_Success verifies the behavior of project rotate success.
+// TestProjectRotate_Success verifies ProjectRotate when success.
 func TestProjectRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5/rotate" && r.Method == http.MethodPost {
@@ -224,7 +223,7 @@ func TestProjectRotate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_Success verifies the behavior of project revoke success.
+// TestProjectRevoke_Success verifies ProjectRevoke when success.
 func TestProjectRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5" && r.Method == http.MethodDelete {
@@ -240,7 +239,7 @@ func TestProjectRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_Validation verifies the behavior of project revoke validation.
+// TestProjectRevoke_Validation verifies ProjectRevoke when validation.
 func TestProjectRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -258,7 +257,7 @@ func TestProjectRevoke_Validation(t *testing.T) {
 // Group Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestGroupList_Success verifies the behavior of group list success.
+// TestGroupList_Success verifies GroupList when success.
 func TestGroupList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodGet {
@@ -282,7 +281,7 @@ func TestGroupList_Success(t *testing.T) {
 	}
 }
 
-// TestGroupList_MissingGroupID verifies the behavior of group list missing group i d.
+// TestGroupList_MissingGroupID verifies GroupList when missing group ID.
 func TestGroupList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := GroupList(context.Background(), client, GroupListInput{})
@@ -291,7 +290,7 @@ func TestGroupList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupGet_Success verifies the behavior of group get success.
+// TestGroupGet_Success verifies GroupGet when success.
 func TestGroupGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodGet {
@@ -310,7 +309,7 @@ func TestGroupGet_Success(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_Success verifies the behavior of group create success.
+// TestGroupCreate_Success verifies GroupCreate when success.
 func TestGroupCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodPost {
@@ -334,7 +333,7 @@ func TestGroupCreate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_Success verifies the behavior of group rotate success.
+// TestGroupRotate_Success verifies GroupRotate when success.
 func TestGroupRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3/rotate" && r.Method == http.MethodPost {
@@ -353,7 +352,7 @@ func TestGroupRotate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_Success verifies the behavior of group revoke success.
+// TestGroupRevoke_Success verifies GroupRevoke when success.
 func TestGroupRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodDelete {
@@ -373,7 +372,7 @@ func TestGroupRevoke_Success(t *testing.T) {
 // Personal Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestPersonalList_Success verifies the behavior of personal list success.
+// TestPersonalList_Success verifies PersonalList when success.
 func TestPersonalList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" && r.Method == http.MethodGet {
@@ -397,7 +396,7 @@ func TestPersonalList_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithFilters verifies the behavior of personal list with filters.
+// TestPersonalList_WithFilters verifies PersonalList when with filters.
 func TestPersonalList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -419,7 +418,7 @@ func TestPersonalList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_SelfSuccess verifies the behavior of personal get self success.
+// TestPersonalGet_SelfSuccess verifies PersonalGet when self success.
 func TestPersonalGet_SelfSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self" && r.Method == http.MethodGet {
@@ -438,7 +437,7 @@ func TestPersonalGet_SelfSuccess(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_ByIDSuccess verifies the behavior of personal get by i d success.
+// TestPersonalGet_ByIDSuccess verifies PersonalGet when by ID success.
 func TestPersonalGet_ByIDSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99" && r.Method == http.MethodGet {
@@ -457,7 +456,7 @@ func TestPersonalGet_ByIDSuccess(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_Success verifies the behavior of personal rotate success.
+// TestPersonalRotate_Success verifies PersonalRotate when success.
 func TestPersonalRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99/rotate" && r.Method == http.MethodPost {
@@ -476,7 +475,7 @@ func TestPersonalRotate_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_Validation verifies the behavior of personal rotate validation.
+// TestPersonalRotate_Validation verifies PersonalRotate when validation.
 func TestPersonalRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{})
@@ -485,7 +484,7 @@ func TestPersonalRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_Success verifies the behavior of personal revoke success.
+// TestPersonalRevoke_Success verifies PersonalRevoke when success.
 func TestPersonalRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99" && r.Method == http.MethodDelete {
@@ -501,7 +500,7 @@ func TestPersonalRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_Validation verifies the behavior of personal revoke validation.
+// TestPersonalRevoke_Validation verifies PersonalRevoke when validation.
 func TestPersonalRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	err := PersonalRevoke(context.Background(), client, PersonalRevokeInput{})
@@ -514,7 +513,7 @@ func TestPersonalRevoke_Validation(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelName validates access level name across multiple scenarios using table-driven subtests.
+// TestAccessLevelName covers AccessLevelName with table-driven subtests.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
 		level int
@@ -538,7 +537,7 @@ func TestAccessLevelName(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID:     5,
@@ -556,7 +555,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_AccessLevel verifies the behavior of format output markdown access level.
+// TestFormatOutputMarkdown_AccessLevel verifies FormatOutputMarkdown when access level.
 func TestFormatOutputMarkdown_AccessLevel(t *testing.T) {
 	out := Output{
 		ID:          7,
@@ -573,7 +572,7 @@ func TestFormatOutputMarkdown_AccessLevel(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No access tokens found") {
@@ -581,7 +580,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithTokens verifies the behavior of format list markdown with tokens.
+// TestFormatListMarkdown_WithTokens verifies FormatListMarkdown when with tokens.
 func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
@@ -602,7 +601,7 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 // ProjectRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestProjectRotateSelf_Success verifies the behavior of project rotate self success.
+// TestProjectRotateSelf_Success verifies ProjectRotateSelf when success.
 func TestProjectRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -621,7 +620,7 @@ func TestProjectRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_MissingProjectID verifies the behavior of project rotate self missing project i d.
+// TestProjectRotateSelf_MissingProjectID verifies ProjectRotateSelf when missing project ID.
 func TestProjectRotateSelf_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -637,7 +636,7 @@ func TestProjectRotateSelf_MissingProjectID(t *testing.T) {
 // GroupRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotateSelf_Success verifies the behavior of group rotate self success.
+// TestGroupRotateSelf_Success verifies GroupRotateSelf when success.
 func TestGroupRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -656,7 +655,7 @@ func TestGroupRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_MissingGroupID verifies the behavior of group rotate self missing group i d.
+// TestGroupRotateSelf_MissingGroupID verifies GroupRotateSelf when missing group ID.
 func TestGroupRotateSelf_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -672,7 +671,7 @@ func TestGroupRotateSelf_MissingGroupID(t *testing.T) {
 // PersonalRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotateSelf_Success verifies the behavior of personal rotate self success.
+// TestPersonalRotateSelf_Success verifies PersonalRotateSelf when success.
 func TestPersonalRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -691,7 +690,7 @@ func TestPersonalRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRotateSelf_APIError verifies the behavior of personal rotate self a p i error.
+// TestPersonalRotateSelf_APIError verifies PersonalRotateSelf when API error.
 func TestPersonalRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -707,7 +706,7 @@ func TestPersonalRotateSelf_APIError(t *testing.T) {
 // PersonalRevokeSelf
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRevokeSelf_Success verifies the behavior of personal revoke self success.
+// TestPersonalRevokeSelf_Success verifies PersonalRevokeSelf when success.
 func TestPersonalRevokeSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self" && r.Method == http.MethodDelete {
@@ -723,7 +722,7 @@ func TestPersonalRevokeSelf_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRevokeSelf_APIError verifies the behavior of personal revoke self a p i error.
+// TestPersonalRevokeSelf_APIError verifies PersonalRevokeSelf when API error.
 func TestPersonalRevokeSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -741,7 +740,7 @@ func TestPersonalRevokeSelf_APIError(t *testing.T) {
 // Canceled context -- ALL 18 handlers
 // ---------------------------------------------------------------------------.
 
-// TestCancelled_Context validates cancelled context across multiple scenarios using table-driven subtests.
+// TestCancelled_Context covers Cancelled with table-driven subtests for context.
 func TestCancelled_Context(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -822,7 +821,7 @@ func TestCancelled_Context(t *testing.T) {
 // API error -- handlers missing error coverage
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_APIError verifies the behavior of project list a p i error.
+// TestProjectList_APIError verifies ProjectList when API error.
 func TestProjectList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -833,7 +832,7 @@ func TestProjectList_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectGet_APIError verifies the behavior of project get a p i error.
+// TestProjectGet_APIError verifies ProjectGet when API error.
 func TestProjectGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -844,7 +843,7 @@ func TestProjectGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_APIError verifies the behavior of project create a p i error.
+// TestProjectCreate_APIError verifies ProjectCreate when API error.
 func TestProjectCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -857,7 +856,7 @@ func TestProjectCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_APIError verifies the behavior of project rotate a p i error.
+// TestProjectRotate_APIError verifies ProjectRotate when API error.
 func TestProjectRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -868,7 +867,7 @@ func TestProjectRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_APIError verifies the behavior of project revoke a p i error.
+// TestProjectRevoke_APIError verifies ProjectRevoke when API error.
 func TestProjectRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -879,7 +878,7 @@ func TestProjectRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_APIError verifies the behavior of project rotate self a p i error.
+// TestProjectRotateSelf_APIError verifies ProjectRotateSelf when API error.
 func TestProjectRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -890,7 +889,7 @@ func TestProjectRotateSelf_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupList_APIError verifies the behavior of group list a p i error.
+// TestGroupList_APIError verifies GroupList when API error.
 func TestGroupList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -901,7 +900,7 @@ func TestGroupList_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupGet_APIError verifies the behavior of group get a p i error.
+// TestGroupGet_APIError verifies GroupGet when API error.
 func TestGroupGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -912,7 +911,7 @@ func TestGroupGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_APIError verifies the behavior of group create a p i error.
+// TestGroupCreate_APIError verifies GroupCreate when API error.
 func TestGroupCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -925,7 +924,7 @@ func TestGroupCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_APIError verifies the behavior of group rotate a p i error.
+// TestGroupRotate_APIError verifies GroupRotate when API error.
 func TestGroupRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -936,7 +935,7 @@ func TestGroupRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_APIError verifies the behavior of group revoke a p i error.
+// TestGroupRevoke_APIError verifies GroupRevoke when API error.
 func TestGroupRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -947,7 +946,7 @@ func TestGroupRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_APIError verifies the behavior of group rotate self a p i error.
+// TestGroupRotateSelf_APIError verifies GroupRotateSelf when API error.
 func TestGroupRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -958,7 +957,7 @@ func TestGroupRotateSelf_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalList_APIError verifies the behavior of personal list a p i error.
+// TestPersonalList_APIError verifies PersonalList when API error.
 func TestPersonalList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -969,7 +968,7 @@ func TestPersonalList_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_SelfAPIError verifies the behavior of personal get self a p i error.
+// TestPersonalGet_SelfAPIError verifies PersonalGet when self API error.
 func TestPersonalGet_SelfAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -980,7 +979,7 @@ func TestPersonalGet_SelfAPIError(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_ByIDAPIError verifies the behavior of personal get by i d a p i error.
+// TestPersonalGet_ByIDAPIError verifies PersonalGet when by idapi error.
 func TestPersonalGet_ByIDAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -991,7 +990,7 @@ func TestPersonalGet_ByIDAPIError(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_APIError verifies the behavior of personal rotate a p i error.
+// TestPersonalRotate_APIError verifies PersonalRotate when API error.
 func TestPersonalRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -1002,7 +1001,7 @@ func TestPersonalRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_APIError verifies the behavior of personal revoke a p i error.
+// TestPersonalRevoke_APIError verifies PersonalRevoke when API error.
 func TestPersonalRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -1017,7 +1016,7 @@ func TestPersonalRevoke_APIError(t *testing.T) {
 // Validation tests -- missing coverage
 // ---------------------------------------------------------------------------.
 
-// TestGroupGet_MissingInputs verifies the behavior of group get missing inputs.
+// TestGroupGet_MissingInputs verifies GroupGet when missing inputs.
 func TestGroupGet_MissingInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1032,7 +1031,7 @@ func TestGroupGet_MissingInputs(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_Validation validates group create validation across multiple scenarios using table-driven subtests.
+// TestGroupCreate_Validation covers GroupCreate with table-driven subtests for validation.
 func TestGroupCreate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1057,7 +1056,7 @@ func TestGroupCreate_Validation(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_Validation validates group rotate validation across multiple scenarios using table-driven subtests.
+// TestGroupRotate_Validation covers GroupRotate with table-driven subtests for validation.
 func TestGroupRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1081,7 +1080,7 @@ func TestGroupRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_Validation verifies the behavior of group revoke validation.
+// TestGroupRevoke_Validation verifies GroupRevoke when validation.
 func TestGroupRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1095,7 +1094,7 @@ func TestGroupRevoke_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_Validation validates project rotate validation across multiple scenarios using table-driven subtests.
+// TestProjectRotate_Validation covers ProjectRotate with table-driven subtests for validation.
 func TestProjectRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1119,7 +1118,7 @@ func TestProjectRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_BadDate verifies the behavior of project rotate self bad date.
+// TestProjectRotateSelf_BadDate verifies ProjectRotateSelf when bad date.
 func TestProjectRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := ProjectRotateSelf(context.Background(), client, ProjectRotateSelfInput{ProjectID: "42", ExpiresAt: "bad"})
@@ -1128,7 +1127,7 @@ func TestProjectRotateSelf_BadDate(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_BadDate verifies the behavior of group rotate self bad date.
+// TestGroupRotateSelf_BadDate verifies GroupRotateSelf when bad date.
 func TestGroupRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := GroupRotateSelf(context.Background(), client, GroupRotateSelfInput{GroupID: "10", ExpiresAt: "bad"})
@@ -1137,7 +1136,7 @@ func TestGroupRotateSelf_BadDate(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_BadDate verifies the behavior of personal rotate bad date.
+// TestPersonalRotate_BadDate verifies PersonalRotate when bad date.
 func TestPersonalRotate_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{TokenID: 1, ExpiresAt: "bad"})
@@ -1146,7 +1145,7 @@ func TestPersonalRotate_BadDate(t *testing.T) {
 	}
 }
 
-// TestPersonalRotateSelf_BadDate verifies the behavior of personal rotate self bad date.
+// TestPersonalRotateSelf_BadDate verifies PersonalRotateSelf when bad date.
 func TestPersonalRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := PersonalRotateSelf(context.Background(), client, PersonalRotateSelfInput{ExpiresAt: "bad"})
@@ -1159,7 +1158,7 @@ func TestPersonalRotateSelf_BadDate(t *testing.T) {
 // Converter edge cases -- all date fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFromProjectToken_AllDates verifies the behavior of from project token all dates.
+// TestFromProjectToken_AllDates verifies FromProjectToken when all dates.
 func TestFromProjectToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/access_tokens/5" && r.Method == http.MethodGet {
@@ -1194,7 +1193,7 @@ func TestFromProjectToken_AllDates(t *testing.T) {
 	}
 }
 
-// TestFromGroupToken_AllDates verifies the behavior of from group token all dates.
+// TestFromGroupToken_AllDates verifies FromGroupToken when all dates.
 func TestFromGroupToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodGet {
@@ -1226,7 +1225,7 @@ func TestFromGroupToken_AllDates(t *testing.T) {
 	}
 }
 
-// TestFromPersonalToken_AllDates verifies the behavior of from personal token all dates.
+// TestFromPersonalToken_AllDates verifies FromPersonalToken when all dates.
 func TestFromPersonalToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/50" && r.Method == http.MethodGet {
@@ -1262,7 +1261,7 @@ func TestFromPersonalToken_AllDates(t *testing.T) {
 // Pagination parameters
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_WithPagination verifies the behavior of project list with pagination.
+// TestProjectList_WithPagination verifies ProjectList when with pagination.
 func TestProjectList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens {
@@ -1286,7 +1285,7 @@ func TestProjectList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithUserID verifies the behavior of personal list with user i d.
+// TestPersonalList_WithUserID verifies PersonalList when with user ID.
 func TestPersonalList_WithUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -1310,7 +1309,7 @@ func TestPersonalList_WithUserID(t *testing.T) {
 	}
 }
 
-// TestGroupList_WithPagination verifies the behavior of group list with pagination.
+// TestGroupList_WithPagination verifies GroupList when with pagination.
 func TestGroupList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens {
@@ -1334,7 +1333,7 @@ func TestGroupList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGroupList_WithState verifies the behavior of group list with state.
+// TestGroupList_WithState verifies GroupList when with state.
 func TestGroupList_WithState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens {
@@ -1353,7 +1352,7 @@ func TestGroupList_WithState(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithPagination verifies the behavior of personal list with pagination.
+// TestPersonalList_WithPagination verifies PersonalList when with pagination.
 func TestPersonalList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -1381,7 +1380,7 @@ func TestPersonalList_WithPagination(t *testing.T) {
 // GroupCreate with optional fields (description, access_level, expires_at)
 // ---------------------------------------------------------------------------.
 
-// TestGroupCreate_WithOptionalFields verifies the behavior of group create with optional fields.
+// TestGroupCreate_WithOptionalFields verifies GroupCreate when with optional fields.
 func TestGroupCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodPost {
@@ -1418,7 +1417,7 @@ func TestGroupCreate_WithOptionalFields(t *testing.T) {
 // ProjectCreate with description (optional field coverage)
 // ---------------------------------------------------------------------------.
 
-// TestProjectCreate_WithDescription verifies the behavior of project create with description.
+// TestProjectCreate_WithDescription verifies ProjectCreate when with description.
 func TestProjectCreate_WithDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodPost {
@@ -1449,7 +1448,7 @@ func TestProjectCreate_WithDescription(t *testing.T) {
 // GroupRotate with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotate_WithExpiresAt verifies the behavior of group rotate with expires at.
+// TestGroupRotate_WithExpiresAt verifies GroupRotate when with expires at.
 func TestGroupRotate_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3/rotate" && r.Method == http.MethodPost {
@@ -1472,7 +1471,7 @@ func TestGroupRotate_WithExpiresAt(t *testing.T) {
 // GroupRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotateSelf_WithExpiresAt verifies the behavior of group rotate self with expires at.
+// TestGroupRotateSelf_WithExpiresAt verifies GroupRotateSelf when with expires at.
 func TestGroupRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1495,7 +1494,7 @@ func TestGroupRotateSelf_WithExpiresAt(t *testing.T) {
 // ProjectRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestProjectRotateSelf_WithExpiresAt verifies the behavior of project rotate self with expires at.
+// TestProjectRotateSelf_WithExpiresAt verifies ProjectRotateSelf when with expires at.
 func TestProjectRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1518,7 +1517,7 @@ func TestProjectRotateSelf_WithExpiresAt(t *testing.T) {
 // PersonalRotate with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotate_WithExpiresAt verifies the behavior of personal rotate with expires at.
+// TestPersonalRotate_WithExpiresAt verifies PersonalRotate when with expires at.
 func TestPersonalRotate_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99/rotate" && r.Method == http.MethodPost {
@@ -1541,7 +1540,7 @@ func TestPersonalRotate_WithExpiresAt(t *testing.T) {
 // PersonalRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotateSelf_WithExpiresAt verifies the behavior of personal rotate self with expires at.
+// TestPersonalRotateSelf_WithExpiresAt verifies PersonalRotateSelf when with expires at.
 func TestPersonalRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1564,7 +1563,7 @@ func TestPersonalRotateSelf_WithExpiresAt(t *testing.T) {
 // FormatOutputMarkdown -- all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:          42,
@@ -1603,7 +1602,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 // FormatListMarkdown -- with pagination data
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies the behavior of format list markdown with pagination.
+// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
@@ -1624,30 +1623,30 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools -- no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for access token actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := accessTokenSpecsByTool(t, specs)
+
+	if len(specs) != 18 {
+		t.Fatalf("len(ActionSpecs) = %d, want 18", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "accesstokens" {
+			t.Fatalf("OwnerPackage for %s = %q, want accesstokens", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP -- full MCP roundtrip for all 20 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newAccessTokensMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates access token routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newAccessTokenRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -1676,39 +1675,30 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.tool, tt.args)
+			assertAccessTokenRouteOK(t, byTool, tt.tool, tt.args)
 		})
 	}
 }
 
-// assertToolCallSuccess calls a tool via MCP and fails the test if the call
-// returns an error or if the result indicates failure.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, toolName string, args map[string]any) {
+// assertAccessTokenRouteOK calls a canonical route and fails the test if it returns an error.
+func assertAccessTokenRouteOK(t *testing.T, byTool map[string]toolutil.ActionSpec, toolName string, args map[string]any) {
 	t.Helper()
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      toolName,
-		Arguments: args,
-	})
+	result, err := byTool[toolName].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", toolName, err)
+		t.Fatalf("Route.Handler(%s) error: %v", toolName, err)
 	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", toolName, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", toolName)
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", toolName)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newAccessTokensMCPSession is an internal helper for the accesstokens package.
-func newAccessTokensMCPSession(t *testing.T) *mcp.ClientSession {
+// newAccessTokenRouteSpecs constructs access token route specs test fixtures.
+func newAccessTokenRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	projectTokenJSON := `{"id":5,"name":"proj-token","active":true,"revoked":false,"scopes":["api"],"access_level":30,"token":"glpat-proj"}`
@@ -1778,22 +1768,15 @@ func newAccessTokensMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	return accessTokenSpecsByTool(t, ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// accessTokenSpecsByTool supports access token specs by tool assertions in accesstokens tests.
+func accessTokenSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }

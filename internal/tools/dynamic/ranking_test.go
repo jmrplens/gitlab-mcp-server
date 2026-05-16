@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestRanking_ExplanationSummaryNilAndFuzzy verifies Ranking when explanation summary nil and fuzzy.
 func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	if got := explanationSummary(nil); got != "-" {
 		t.Fatalf("explanationSummary(nil) = %q, want -", got)
@@ -21,6 +22,7 @@ func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	}
 }
 
+// TestRanking_HasSearchExplanations verifies Ranking when has search explanations.
 func TestRanking_HasSearchExplanations(t *testing.T) {
 	if hasSearchExplanations([]SearchResult{{ID: "project.get"}}) {
 		t.Fatal("hasSearchExplanations() = true, want false for nil explanations")

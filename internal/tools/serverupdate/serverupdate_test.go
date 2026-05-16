@@ -8,10 +8,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestFormatCheckMarkdownString_UpdateAvailable verifies Markdown output
@@ -196,7 +195,7 @@ func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && stringContains(s, substr)
 }
 
-// stringContains is an internal helper for the serverupdate package.
+// stringContains supports string contains assertions in serverupdate tests.
 func stringContains(s, substr string) bool {
 	for i := 0; i+len(substr) <= len(s); i++ {
 		if s[i:i+len(substr)] == substr {
@@ -349,17 +348,32 @@ func TestApply_NoUpdateAvailable(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NilUpdater verifies RegisterTools is a no-op when updater is nil.
-func TestRegisterTools_NilUpdater(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, nil)
+// TestActionSpecs_NilUpdater verifies no update tools are exposed when updater is nil.
+func TestActionSpecs_NilUpdater(t *testing.T) {
+	if specs := ActionSpecs(nil); len(specs) != 0 {
+		t.Fatalf("len(ActionSpecs(nil)) = %d, want 0", len(specs))
+	}
 }
 
-// TestRegisterTools_WithUpdater verifies RegisterTools does not panic with a valid updater.
-func TestRegisterTools_WithUpdater(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for server update actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	updater := newTestUpdater(t)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, updater)
+	byTool := serverUpdateSpecsByTool(t, ActionSpecs(updater))
+
+	if len(byTool) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(byTool))
+	}
+	if !byTool[checkUpdateToolName].ReadOnly || !byTool[checkUpdateToolName].Idempotent {
+		t.Error("check update action should be read-only and idempotent")
+	}
+	if !byTool[applyUpdateToolName].Destructive || !byTool[applyUpdateToolName].Idempotent {
+		t.Error("apply update action should be destructive and idempotent")
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "serverupdate" {
+			t.Errorf("OwnerPackage for %s = %q, want serverupdate", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // TestCheck_APIError verifies Check returns an error when the GitLab API
@@ -441,40 +455,35 @@ func TestFormatApplyMarkdownString_DeferredWithScript(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies the registered tools can be called
-// through MCP in-memory transport.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies the server update routes can be called directly.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	updater := newTestUpdater(t)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, updater)
+	byTool := serverUpdateSpecsByTool(t, ActionSpecs(updater))
 
-	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool[checkUpdateToolName].Route.Handler(ctx, map[string]any{})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	// Check tool — should succeed (no update from empty releases)
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_server_check_update"})
-	if err != nil {
-		t.Fatalf("CallTool(check) error: %v", err)
+		t.Fatalf("Route.Handler(check) error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for check")
 	}
 
-	// Apply tool — should succeed (no update, returns current version)
-	result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_server_apply_update"})
+	result, err = byTool[applyUpdateToolName].Route.Handler(ctx, map[string]any{})
 	if err != nil {
-		t.Fatalf("CallTool(apply) error: %v", err)
+		t.Fatalf("Route.Handler(apply) error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for apply")
 	}
+}
+
+// serverUpdateSpecsByTool supports server update specs by tool assertions in serverupdate tests.
+func serverUpdateSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

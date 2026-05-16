@@ -16,7 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/deployments/7/merge_requests" {
@@ -81,7 +81,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -100,7 +100,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies the behavior of list with filters.
+// TestList_WithFilters verifies List when with filters.
 func TestList_WithFilters(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -129,7 +129,7 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_InvalidDeploymentID verifies the behavior of list invalid deployment i d.
+// TestList_InvalidDeploymentID verifies List when invalid deployment ID.
 func TestList_InvalidDeploymentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -147,7 +147,7 @@ func TestList_InvalidDeploymentID(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -164,7 +164,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -172,7 +172,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -187,15 +187,17 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error (404), canceled context, pagination, nil author
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError404 verifies the behavior of list a p i error404.
+// TestList_APIError404 verifies List when API error 404.
 func TestList_APIError404(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -209,7 +211,7 @@ func TestList_APIError404(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -219,7 +221,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/deployments/5/merge_requests" {
@@ -253,7 +255,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_NilAuthor verifies the behavior of list nil author.
+// TestList_NilAuthor verifies List when nil author.
 func TestList_NilAuthor(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -273,7 +275,7 @@ func TestList_NilAuthor(t *testing.T) {
 	}
 }
 
-// TestList_AllOptionalFilters verifies the behavior of list all optional filters.
+// TestList_AllOptionalFilters verifies List when all optional filters.
 func TestList_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -313,7 +315,7 @@ func TestList_AllOptionalFilters(t *testing.T) {
 // FormatListMarkdown — multiple items, special characters, pagination info
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_MultipleItems verifies the behavior of format list markdown multiple items.
+// TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -353,7 +355,7 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharacters verifies the behavior of format list markdown special characters.
+// TestFormatListMarkdown_SpecialCharacters verifies FormatListMarkdown when special characters.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -370,7 +372,7 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyOutput verifies the behavior of format list markdown empty output.
+// TestFormatListMarkdown_EmptyOutput verifies FormatListMarkdown when empty output.
 func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{MergeRequests: []MergeRequestItem{}})
 	if result == nil {
@@ -385,7 +387,7 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NilSlice verifies the behavior of format list markdown nil slice.
+// TestFormatListMarkdown_NilSlice verifies FormatListMarkdown when nil slice.
 func TestFormatListMarkdown_NilSlice(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -398,26 +400,35 @@ func TestFormatListMarkdown_NilSlice(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for deployment merge request actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := deploymentMRSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(byTool))
+	}
+	spec := byTool["gitlab_list_deployment_merge_requests"]
+	if spec.OwnerPackage != "deploymentmergerequests" {
+		t.Errorf("OwnerPackage = %q, want deploymentmergerequests", spec.OwnerPackage)
+	}
+	if !spec.ReadOnly || !spec.Idempotent {
+		t.Error("deployment merge request list action should be read-only and idempotent")
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all endpoints
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newDeploymentMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates deployment merge request route coverage.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newDeploymentMRSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -431,102 +442,67 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCPWithFilters verifies the behavior of register tools call all through m c p with filters.
-func TestRegisterTools_CallAllThroughMCPWithFilters(t *testing.T) {
-	session := newDeploymentMRMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRouteWithFilters verifies the list route accepts filters.
+func TestActionSpecs_CallRouteWithFilters(t *testing.T) {
+	byTool := newDeploymentMRSpecsByTool(t)
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_list_deployment_merge_requests",
-		Arguments: map[string]any{
-			"project_id":    "42",
-			"deployment_id": 7,
-			"state":         "merged",
-			"order_by":      "created_at",
-			"sort":          "desc",
-			"page":          1,
-			"per_page":      10,
-		},
+	result, err := byTool["gitlab_list_deployment_merge_requests"].Route.Handler(t.Context(), map[string]any{
+		"project_id":    "42",
+		"deployment_id": 7,
+		"state":         "merged",
+		"order_by":      "created_at",
+		"sort":          "desc",
+		"page":          1,
+		"per_page":      10,
 	})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true")
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
 	}
 }
 
-// TestRegisterTools_CallThroughMCPEmptyResult verifies the behavior of register tools call through m c p empty result.
-func TestRegisterTools_CallThroughMCPEmptyResult(t *testing.T) {
+// TestActionSpecs_CallRouteEmptyResult verifies the list route handles empty results.
+func TestActionSpecs_CallRouteEmptyResult(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/42/deployments/7/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := deploymentMRSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_list_deployment_merge_requests"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "deployment_id": 7})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_deployment_merge_requests",
-		Arguments: map[string]any{"project_id": "42", "deployment_id": 7},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+	out, ok := result.(ListOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want ListOutput", result)
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true for empty result")
-	}
-	found := false
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			if strings.Contains(tc.Text, "No merge requests found") {
-				found = true
-			}
-		}
-	}
-	if !found {
-		t.Error("expected 'No merge requests found' in empty MCP response")
+	if len(out.MergeRequests) != 0 {
+		t.Fatalf("len(MergeRequests) = %d, want 0", len(out.MergeRequests))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route factory
 // ---------------------------------------------------------------------------.
 
-// newDeploymentMRMCPSession is an internal helper for the deploymentmergerequests package.
-func newDeploymentMRMCPSession(t *testing.T) *mcp.ClientSession {
+// newDeploymentMRSpecsByTool constructs deployment MR specs by tool test fixtures.
+func newDeploymentMRSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -556,21 +532,15 @@ func newDeploymentMRMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return deploymentMRSpecsByTool(t, ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+// deploymentMRSpecsByTool supports deployment MR specs by tool assertions in deploymentmergerequests tests.
+func deploymentMRSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }

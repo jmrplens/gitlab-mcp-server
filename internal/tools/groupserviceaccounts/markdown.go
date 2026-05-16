@@ -34,8 +34,7 @@ func FormatListMarkdownString(o ListOutput) string {
 		b.WriteString("No service accounts found.\n")
 	} else {
 		toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-		b.WriteString("| ID | Username | Name | Email |\n")
-		b.WriteString("|---|---|---|---|\n")
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email"))
 		for _, a := range o.Accounts {
 			fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
 				a.ID,
@@ -77,8 +76,7 @@ func FormatListPATMarkdownString(o ListPATOutput) string {
 		b.WriteString("No tokens found.\n")
 	} else {
 		toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-		b.WriteString("| ID | Name | Active | Revoked | Scopes | Expires |\n")
-		b.WriteString("|---|---|---|---|---|---|\n")
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", "Expires"))
 		for _, t := range o.Tokens {
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
 				t.ID,

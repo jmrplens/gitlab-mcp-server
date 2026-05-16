@@ -1,7 +1,3 @@
-// Package boards implements MCP tools for GitLab project issue boards and board lists.
-//
-// It wraps the IssueBoardsService from the GitLab client-go library, exposing
-// 10 operations: 5 for board CRUD and 5 for board list CRUD.
 package boards
 
 import (
@@ -71,7 +67,7 @@ type ListBoardListsOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// convertBoard is an internal helper for the boards package.
+// convertBoard maps a GitLab project issue board into the MCP output shape.
 func convertBoard(b *gl.IssueBoard) BoardOutput {
 	out := BoardOutput{
 		ID:              b.ID,
@@ -104,7 +100,7 @@ func convertBoard(b *gl.IssueBoard) BoardOutput {
 	return out
 }
 
-// convertBoardList is an internal helper for the boards package.
+// convertBoardList maps a GitLab board list into the MCP output shape.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
 	out := BoardListOutput{
 		ID:             l.ID,

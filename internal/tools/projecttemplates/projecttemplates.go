@@ -1,4 +1,3 @@
-// Package projecttemplates implements MCP tools for GitLab project template operations.
 package projecttemplates
 
 import (
@@ -97,7 +96,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 
 // helpers.
 
-// templateFromGL is an internal helper for the projecttemplates package.
+// templateFromGL maps template from gl between API and evaluator models.
 func templateFromGL(t *gl.ProjectTemplate) TemplateItem {
 	return TemplateItem{
 		Key:         t.Key,

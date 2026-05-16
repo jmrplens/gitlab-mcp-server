@@ -4,9 +4,23 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type mergeRequestNotFoundOutput struct {
+	Identifier string
+}
+
+func formatMergeRequestNotFound(out mergeRequestNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Merge Request", out.Identifier,
+		"Use gitlab_mr_list with project_id to list available merge requests",
+		"Verify the merge request IID is correct for this project",
+		"The merge request may have been deleted",
+	)
+}
 
 // FormatMarkdown renders a single merge request as a Markdown summary.
 func FormatMarkdown(mr Output) string {
@@ -395,6 +409,7 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatMergeRequestNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatApproveMarkdown)

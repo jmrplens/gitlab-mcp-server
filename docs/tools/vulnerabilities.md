@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Vulnerabilities
 > **Individual tools**: 8
-> **Meta-tool**: `gitlab_vulnerability` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_vulnerability` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Vulnerabilities GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#queryvulnerabilities)
 > **Audience**: 👤 End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium
@@ -14,7 +14,7 @@
 
 The vulnerabilities domain provides full lifecycle management for security vulnerabilities detected by GitLab security scanners. All operations use the GitLab GraphQL API (no REST equivalent for these queries/mutations). This domain covers listing, inspecting, and triaging vulnerabilities, as well as retrieving severity counts and per-pipeline security report summaries.
 
-When `META_TOOLS=true` (the default), all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 
@@ -72,10 +72,16 @@ Get full details of a single vulnerability by its GID. Returns complete vulnerab
 
 State transitions follow the GitLab vulnerability lifecycle:
 
-```text
-DETECTED → CONFIRMED → RESOLVED
-    ↓                     ↓
- DISMISSED ←──────── (revert) ← any state
+```mermaid
+stateDiagram-v2
+    [*] --> DETECTED
+    DETECTED --> CONFIRMED: confirm
+    DETECTED --> RESOLVED: resolve
+    CONFIRMED --> RESOLVED: resolve
+    DETECTED --> DISMISSED: dismiss
+    CONFIRMED --> DISMISSED: dismiss
+    RESOLVED --> DETECTED: revert
+    DISMISSED --> DETECTED: revert
 ```
 
 ### `gitlab_dismiss_vulnerability`

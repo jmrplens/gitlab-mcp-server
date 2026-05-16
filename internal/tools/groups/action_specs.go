@@ -1,6 +1,10 @@
 package groups
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,13 +13,13 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupReadSpec("list", toolutil.RouteAction(client, List), "gitlab_group_list"),
-		groupReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_group_get"),
+		groupReadSpec("get", groupGetRoute(client), "gitlab_group_get"),
 		groupCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_group_create"),
 		groupUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_group_update"),
 		groupDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_delete"),
 		groupUpdateSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_group_restore"),
-		groupUpdateSpec("archive", toolutil.RouteVoidAction(client, Archive), "gitlab_group_archive"),
-		groupUpdateSpec("unarchive", toolutil.RouteVoidAction(client, Unarchive), "gitlab_group_unarchive"),
+		groupUpdateSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
+		groupUpdateSpec("unarchive", toolutil.RouteAction(client, UnarchiveOutput), "gitlab_group_unarchive"),
 		groupReadSpec("search", toolutil.RouteAction(client, Search), "gitlab_group_search"),
 		groupUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
@@ -27,6 +31,35 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit"),
 		groupDeleteSpec("hook_delete", toolutil.DestructiveVoidAction(client, DeleteHook), "gitlab_group_hook_delete"),
 	}
+}
+
+func groupGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return groupNotFoundOutput{Identifier: fmt.Sprint(input["group_id"])}, nil
+		}
+		return result, err
+	}
+	return route
+}
+
+// ArchiveOutput archives a GitLab group and returns the legacy success message shape.
+func ArchiveOutput(ctx context.Context, client *gitlabclient.Client, input ArchiveInput) (toolutil.DeleteOutput, error) {
+	if err := Archive(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Group %s archived successfully", input.GroupID)}, nil
+}
+
+// UnarchiveOutput unarchives a GitLab group and returns the legacy success message shape.
+func UnarchiveOutput(ctx context.Context, client *gitlabclient.Client, input ArchiveInput) (toolutil.DeleteOutput, error) {
+	if err := Unarchive(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Group %s unarchived successfully", input.GroupID)}, nil
 }
 
 func groupReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

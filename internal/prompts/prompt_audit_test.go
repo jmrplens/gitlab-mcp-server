@@ -12,19 +12,31 @@ import (
 )
 
 const (
-	routeProject           = "GET /api/v4/projects/{project}"
-	routePushRule          = "GET /api/v4/projects/{project}/push_rule"
+	// routeProject identifies the route project constant used by this package.
+	routeProject = "GET /api/v4/projects/{project}"
+	// routePushRule identifies the route push rule constant used by this package.
+	routePushRule = "GET /api/v4/projects/{project}/push_rule"
+	// routeProtectedBranches identifies the route protected branches constant used by this package.
 	routeProtectedBranches = "GET /api/v4/projects/{project}/protected_branches"
-	routeMembersAll        = "GET /api/v4/projects/{project}/members/all"
-	routeLabels            = "GET /api/v4/projects/{project}/labels"
-	routeMilestones        = "GET /api/v4/projects/{project}/milestones"
-	routeTemplatesIssues   = "GET /api/v4/projects/{project}/templates/issues"
-	routeTemplatesMRs      = "GET /api/v4/projects/{project}/templates/merge_requests"
+	// routeMembersAll identifies the route members all constant used by this package.
+	routeMembersAll = "GET /api/v4/projects/{project}/members/all"
+	// routeLabels identifies the route labels constant used by this package.
+	routeLabels = "GET /api/v4/projects/{project}/labels"
+	// routeMilestones identifies the route milestones constant used by this package.
+	routeMilestones = "GET /api/v4/projects/{project}/milestones"
+	// routeTemplatesIssues identifies the route templates issues constant used by this package.
+	routeTemplatesIssues = "GET /api/v4/projects/{project}/templates/issues"
+	// routeTemplatesMRs identifies the route templates MRs constant used by this package.
+	routeTemplatesMRs = "GET /api/v4/projects/{project}/templates/merge_requests"
 
-	testProjectPath  = "group/my-project"
+	// testProjectPath identifies the test project path constant used by this package.
+	testProjectPath = "group/my-project"
+	// errMsgUnexpected identifies the err msg unexpected constant used by this package.
 	errMsgUnexpected = "unexpected error: %v"
-	errMsgMissingID  = "expected error for missing project_id"
-	assertContains   = "expected output to contain %q"
+	// errMsgMissingID identifies the err msg missing ID constant used by this package.
+	errMsgMissingID = "expected error for missing project_id"
+	// assertContains identifies the assert contains constant used by this package.
+	assertContains = "expected output to contain %q"
 )
 
 // assertContainsAll checks that text contains all expected substrings.
@@ -37,7 +49,7 @@ func assertContainsAll(t *testing.T, text string, checks []string) {
 	}
 }
 
-// TestAuditProject_Settings verifies the behavior of audit project settings.
+// TestAuditProject_Settings verifies AuditProject when settings.
 func TestAuditProject_Settings(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mux := http.NewServeMux()
@@ -164,7 +176,7 @@ func TestAuditProject_Settings(t *testing.T) {
 	})
 }
 
-// TestAuditBranch_Protection verifies the behavior of audit branch protection.
+// TestAuditBranch_Protection verifies AuditBranch when protection.
 func TestAuditBranch_Protection(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mux := http.NewServeMux()
@@ -276,7 +288,7 @@ func TestAuditBranch_Protection(t *testing.T) {
 	})
 }
 
-// TestAuditProject_Access verifies the behavior of audit project access.
+// TestAuditProject_Access verifies AuditProject when access.
 func TestAuditProject_Access(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mux := http.NewServeMux()
@@ -375,7 +387,7 @@ func TestAuditProject_Access(t *testing.T) {
 	})
 }
 
-// TestAuditProject_Workflow verifies the behavior of audit project workflow.
+// TestAuditProject_Workflow verifies AuditProject when workflow.
 func TestAuditProject_Workflow(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mux := http.NewServeMux()
@@ -493,7 +505,7 @@ func TestAuditProject_Workflow(t *testing.T) {
 	})
 }
 
-// TestAuditProject_Full verifies the behavior of audit project full.
+// TestAuditProject_Full verifies AuditProject when full.
 func TestAuditProject_Full(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mux := http.NewServeMux()
@@ -618,7 +630,7 @@ func TestAuditProject_Full(t *testing.T) {
 
 // Helper tests.
 
-// TestAccessLevelName validates access level name across multiple scenarios using table-driven subtests.
+// TestAccessLevelName covers AccessLevelName with table-driven subtests.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
 		level gl.AccessLevelValue
@@ -639,7 +651,7 @@ func TestAccessLevelName(t *testing.T) {
 	}
 }
 
-// TestEmptyDash verifies the behavior of empty dash.
+// TestEmptyDash verifies EmptyDash.
 func TestEmptyDash(t *testing.T) {
 	if got := emptyDash(""); got != "—" {
 		t.Errorf("emptyDash(\"\") = %q, want \"—\"", got)
@@ -649,7 +661,7 @@ func TestEmptyDash(t *testing.T) {
 	}
 }
 
-// TestFormatBytes validates format bytes across multiple scenarios using table-driven subtests.
+// TestFormatBytes covers FormatBytes with table-driven subtests.
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
 		bytes int64
@@ -669,7 +681,7 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
-// TestMaskURL verifies the behavior of mask u r l.
+// TestMaskURL verifies MaskURL.
 func TestMaskURL(t *testing.T) {
 	short := "http://example.com"
 	if got := maskURL(short); got != short {

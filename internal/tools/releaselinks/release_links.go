@@ -1,6 +1,3 @@
-// Package releaselinks implements MCP tool handlers for GitLab release asset
-// link operations including create, create batch, delete, get, and list.
-// It wraps the ReleaseLinks service from client-go v2.
 package releaselinks
 
 import (

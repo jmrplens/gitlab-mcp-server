@@ -1,6 +1,3 @@
-// Package mrapprovals implements MCP tool handlers for GitLab merge request
-// approval operations including approval state, rules CRUD, configuration,
-// approve, unapprove, and reset. It wraps the MergeRequestApprovals API.
 package mrapprovals
 
 import (

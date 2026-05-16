@@ -4,19 +4,18 @@
 package keys
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// TestGetKeyWithUser_Success verifies that GetKeyWithUser handles the success scenario correctly.
+// TestGetKeyWithUser_Success verifies GetKeyWithUser when success.
 func TestGetKeyWithUser_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/keys/42" {
@@ -39,7 +38,7 @@ func TestGetKeyWithUser_Success(t *testing.T) {
 	}
 }
 
-// TestGetKeyWithUser_MissingID verifies that GetKeyWithUser handles the missing i d scenario correctly.
+// TestGetKeyWithUser_MissingID verifies GetKeyWithUser when missing ID.
 func TestGetKeyWithUser_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -50,7 +49,7 @@ func TestGetKeyWithUser_MissingID(t *testing.T) {
 	}
 }
 
-// TestGetKeyByFingerprint_Success verifies that GetKeyByFingerprint handles the success scenario correctly.
+// TestGetKeyByFingerprint_Success verifies GetKeyByFingerprint when success.
 func TestGetKeyByFingerprint_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("fingerprint") != "SHA256:abc123" {
@@ -70,7 +69,7 @@ func TestGetKeyByFingerprint_Success(t *testing.T) {
 	}
 }
 
-// TestGetKeyByFingerprint_MissingFingerprint verifies that GetKeyByFingerprint handles the missing fingerprint scenario correctly.
+// TestGetKeyByFingerprint_MissingFingerprint verifies GetKeyByFingerprint when missing fingerprint.
 func TestGetKeyByFingerprint_MissingFingerprint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -81,7 +80,7 @@ func TestGetKeyByFingerprint_MissingFingerprint(t *testing.T) {
 	}
 }
 
-// TestGetKeyWithUser_APIError verifies that GetKeyWithUser handles the a p i error scenario correctly.
+// TestGetKeyWithUser_APIError verifies GetKeyWithUser when API error.
 func TestGetKeyWithUser_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -94,7 +93,7 @@ func TestGetKeyWithUser_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies the behavior of format markdown string.
+// TestFormatMarkdownString verifies FormatMarkdownString.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:    1,
@@ -114,7 +113,7 @@ func TestFormatMarkdownString(t *testing.T) {
 // GetKeyByFingerprint — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetKeyByFingerprint_APIError verifies the behavior of get key by fingerprint a p i error.
+// TestGetKeyByFingerprint_APIError verifies GetKeyByFingerprint when API error.
 func TestGetKeyByFingerprint_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -130,7 +129,7 @@ func TestGetKeyByFingerprint_APIError(t *testing.T) {
 // toOutput — CreatedAt populated and nil
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithCreatedAt verifies the behavior of to output with created at.
+// TestToOutput_WithCreatedAt verifies ToOutput when with created at.
 func TestToOutput_WithCreatedAt(t *testing.T) {
 	now := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	key := &gl.Key{
@@ -161,7 +160,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilCreatedAt verifies the behavior of to output nil created at.
+// TestToOutput_NilCreatedAt verifies ToOutput when nil created at.
 func TestToOutput_NilCreatedAt(t *testing.T) {
 	key := &gl.Key{
 		ID:    2,
@@ -188,7 +187,7 @@ func TestToOutput_NilCreatedAt(t *testing.T) {
 // FormatMarkdownString — branch coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_WithCreatedAt verifies the behavior of format markdown string with created at.
+// TestFormatMarkdownString_WithCreatedAt verifies FormatMarkdownString when with created at.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	out := Output{
 		ID:        1,
@@ -208,7 +207,7 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_EmptyTitle verifies the behavior of format markdown string empty title.
+// TestFormatMarkdownString_EmptyTitle verifies FormatMarkdownString when empty title.
 func TestFormatMarkdownString_EmptyTitle(t *testing.T) {
 	out := Output{
 		ID:   3,
@@ -223,7 +222,7 @@ func TestFormatMarkdownString_EmptyTitle(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_LongKey verifies the behavior of format markdown string long key.
+// TestFormatMarkdownString_LongKey verifies FormatMarkdownString when long key.
 func TestFormatMarkdownString_LongKey(t *testing.T) {
 	longKey := strings.Repeat("A", 100)
 	out := Output{
@@ -243,7 +242,7 @@ func TestFormatMarkdownString_LongKey(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_ShortKey verifies the behavior of format markdown string short key.
+// TestFormatMarkdownString_ShortKey verifies FormatMarkdownString when short key.
 func TestFormatMarkdownString_ShortKey(t *testing.T) {
 	shortKey := "ssh-rsa AAAA"
 	out := Output{
@@ -267,7 +266,7 @@ func TestFormatMarkdownString_ShortKey(t *testing.T) {
 // FormatMarkdown — returns non-nil CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_ReturnsResult verifies the behavior of format markdown returns result.
+// TestFormatMarkdown_ReturnsResult verifies FormatMarkdown returns result.
 func TestFormatMarkdown_ReturnsResult(t *testing.T) {
 	out := Output{
 		ID:    1,
@@ -290,7 +289,7 @@ func TestFormatMarkdown_ReturnsResult(t *testing.T) {
 // truncateKey — direct tests
 // ---------------------------------------------------------------------------.
 
-// TestTruncateKey_LongKey verifies the behavior of truncate key long key.
+// TestTruncateKey_LongKey verifies TruncateKey when long key.
 func TestTruncateKey_LongKey(t *testing.T) {
 	long := strings.Repeat("X", 80)
 	got := truncateKey(long)
@@ -306,7 +305,7 @@ func TestTruncateKey_LongKey(t *testing.T) {
 	}
 }
 
-// TestTruncateKey_ExactBoundary verifies the behavior of truncate key exact boundary.
+// TestTruncateKey_ExactBoundary verifies TruncateKey when exact boundary.
 func TestTruncateKey_ExactBoundary(t *testing.T) {
 	exactly60 := strings.Repeat("Y", 60)
 	got := truncateKey(exactly60)
@@ -316,7 +315,7 @@ func TestTruncateKey_ExactBoundary(t *testing.T) {
 	}
 }
 
-// TestTruncateKey_ShortKey verifies the behavior of truncate key short key.
+// TestTruncateKey_ShortKey verifies TruncateKey when short key.
 func TestTruncateKey_ShortKey(t *testing.T) {
 	short := "ssh-rsa AAAA"
 	got := truncateKey(short)
@@ -326,7 +325,7 @@ func TestTruncateKey_ShortKey(t *testing.T) {
 	}
 }
 
-// TestTruncateKey_Empty verifies the behavior of truncate key empty.
+// TestTruncateKey_Empty verifies TruncateKey when empty.
 func TestTruncateKey_Empty(t *testing.T) {
 	got := truncateKey("")
 	if got != "" {
@@ -334,29 +333,28 @@ func TestTruncateKey_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies key action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "keys" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// ---------------------------------------------------------------------------
-// RegisterTools — call all tools through MCP
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes validates all key canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/v4/keys/"):
@@ -370,17 +368,10 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, handler)
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(context.Background(), st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(context.Background(), ct, nil)
-	if err != nil {
-		t.Fatalf("connect error: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
 
 	tests := []struct {
@@ -402,19 +393,16 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(context.Background(), &mcp.CallToolParams{
-				Name:      tc.tool,
-				Arguments: tc.args,
-			})
+			spec, ok := specByTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.tool)
+			}
+			result, err := spec.Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tc.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.tool, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tc.tool)
-			}
-			if len(result.Content) == 0 {
-				t.Errorf("CallTool(%s) returned empty content", tc.tool)
+				t.Fatalf("Route.Handler(%s) returned nil", tc.tool)
 			}
 		})
 	}

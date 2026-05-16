@@ -1,4 +1,3 @@
-// Package avatar implements MCP tools for GitLab avatar retrieval.
 package avatar
 
 import (

@@ -1,6 +1,3 @@
-// Package issuelinks implements MCP tool handlers for GitLab issue link
-// operations including list, get, create, and delete. It manages relationships
-// between issues (relates_to, blocks, is_blocked_by) via the IssueLinks API.
 package issuelinks
 
 import (

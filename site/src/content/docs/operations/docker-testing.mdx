@@ -1,0 +1,83 @@
+---
+title: Docker E2E Testing
+description: Run the end-to-end suite against an ephemeral GitLab CE instance
+---
+
+:::note[Developer Documentation]
+For the complete technical reference, see [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) in the repository.
+:::
+
+Docker E2E mode starts a disposable GitLab CE environment, provisions fixtures, registers a CI runner, and runs the MCP end-to-end suite against that local instance. Use it when you need high-confidence validation without relying on a real `.env` GitLab instance.
+
+## What it includes
+
+| Component | Purpose |
+| --------- | ------- |
+| GitLab CE | Ephemeral GitLab instance for real REST and GraphQL API calls |
+| GitLab Runner | Enables pipeline and job workflows that unit tests cannot exercise |
+| Fixture service | Provides deterministic webhook, custom emoji, and mirror endpoints |
+| E2E suite | Runs individual, meta-tool, and dynamic tool workflows through in-memory MCP transport |
+
+Docker mode covers the same lifecycle workflows as self-hosted E2E plus Docker-only pipeline and job scenarios. It creates temporary GitLab data and removes it when the stack is torn down.
+
+## Quick run
+
+```bash
+make test-e2e-docker
+```
+
+That target orchestrates the Docker stack, waits for GitLab, configures the test user and runner, runs the Go E2E suite with the `e2e` build tag, and writes JUnit plus JSON reports.
+
+## Manual workflow
+
+Use the manual sequence when you need to inspect the GitLab UI or rerun a focused test without recreating the stack every time.
+
+```bash
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh
+./test/e2e/scripts/setup-gitlab.sh
+./test/e2e/scripts/register-runner.sh
+
+set -a && source test/e2e/.env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+To run only the dynamic tool surface workflow after setup:
+
+```bash
+E2E_MODE=docker \
+  go test -v -tags e2e -timeout 600s \
+  -run '^TestDynamicToolSurface' \
+  ./test/e2e/suite/
+```
+
+## When to use it
+
+| Situation | Use Docker E2E? |
+| --------- | --------------- |
+| Changing tool registration, catalog projection, or schemas | Yes |
+| Changing pipeline, job, webhook, custom emoji, or mirror behavior | Yes |
+| Verifying release candidates before publishing binaries | Yes |
+| Editing a narrow Markdown page only | Usually no |
+| Debugging a failing unit test with mocked GitLab responses | Usually no |
+
+## Reports and cleanup
+
+The suite writes machine-readable reports for CI and local triage. If a run fails, keep the Docker stack up while inspecting GitLab data, runner logs, and the generated E2E report files. When finished, remove all test data with:
+
+```bash
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+## Troubleshooting
+
+| Symptom | What to check |
+| ------- | ------------- |
+| GitLab never becomes ready | Docker memory and CPU limits; GitLab CE needs several GB of RAM |
+| Pipeline or job tests are skipped/failing | Runner registration output and `test/e2e/.env.docker` values |
+| Webhook or mirror tests fail | Fixture service container health and internal Docker network URLs |
+| A rerun sees stale data | Run `docker compose -f test/e2e/docker-compose.yml down -v` and start again |
+
+Docker E2E is slower than unit tests, but it is the preferred validation path for architecture migrations because it exercises the real GitLab API, the MCP transport, and every public tool surface together.

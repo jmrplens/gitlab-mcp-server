@@ -13,15 +13,19 @@ import (
 )
 
 const (
+	// routeProjectMergeRequests identifies the route project merge requests constant used by this package.
 	routeProjectMergeRequests = "GET /api/v4/projects/{project}/merge_requests"
-	testAnalyticsProjectPath  = "mygroup/myproject"
-	errMissingProjectID       = "expected error for missing project_id"
-	testReleaseBranch         = "release/2.0"
+	// testAnalyticsProjectPath identifies the test analytics project path constant used by this package.
+	testAnalyticsProjectPath = "mygroup/myproject"
+	// errMissingProjectID identifies the err missing project ID constant used by this package.
+	errMissingProjectID = "expected error for missing project_id"
+	// testReleaseBranch identifies the test release branch constant used by this package.
+	testReleaseBranch = "release/2.0"
 )
 
 // merge_velocity.
 
-// TestMergeVelocity_CalculatesMetrics verifies the behavior of merge velocity calculates metrics.
+// TestMergeVelocity_CalculatesMetrics verifies MergeVelocity when calculates metrics.
 func TestMergeVelocity_CalculatesMetrics(t *testing.T) {
 	created := time.Now().Add(-10 * 24 * time.Hour)
 	merged := time.Now().Add(-2 * 24 * time.Hour)
@@ -60,7 +64,7 @@ func TestMergeVelocity_CalculatesMetrics(t *testing.T) {
 	}
 }
 
-// TestMergeVelocity_EmptyResult verifies the behavior of merge velocity empty result.
+// TestMergeVelocity_EmptyResult verifies MergeVelocity when empty result.
 func TestMergeVelocity_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +86,7 @@ func TestMergeVelocity_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestMergeVelocity_MissingProjectID verifies the behavior of merge velocity missing project i d.
+// TestMergeVelocity_MissingProjectID verifies MergeVelocity when missing project ID.
 func TestMergeVelocity_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -95,7 +99,7 @@ func TestMergeVelocity_MissingProjectID(t *testing.T) {
 
 // release_readiness.
 
-// TestReleaseReadiness_ShowsBlockers verifies the behavior of release readiness shows blockers.
+// TestReleaseReadiness_ShowsBlockers verifies ReleaseReadiness when shows blockers.
 func TestReleaseReadiness_ShowsBlockers(t *testing.T) {
 	created := time.Now().Add(-48 * time.Hour)
 	mux := http.NewServeMux()
@@ -146,7 +150,7 @@ func TestReleaseReadiness_ShowsBlockers(t *testing.T) {
 	}
 }
 
-// TestReleaseReadiness_NoOpenMRs verifies the behavior of release readiness no open m rs.
+// TestReleaseReadiness_NoOpenMRs verifies ReleaseReadiness when no open MRs.
 func TestReleaseReadiness_NoOpenMRs(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +172,7 @@ func TestReleaseReadiness_NoOpenMRs(t *testing.T) {
 	}
 }
 
-// TestReleaseReadiness_MissingProjectID verifies the behavior of release readiness missing project i d.
+// TestReleaseReadiness_MissingProjectID verifies ReleaseReadiness when missing project ID.
 func TestReleaseReadiness_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -181,7 +185,7 @@ func TestReleaseReadiness_MissingProjectID(t *testing.T) {
 
 // release_cadence.
 
-// TestReleaseCadence_CalculatesIntervals verifies the behavior of release cadence calculates intervals.
+// TestReleaseCadence_CalculatesIntervals verifies ReleaseCadence when calculates intervals.
 func TestReleaseCadence_CalculatesIntervals(t *testing.T) {
 	r1Date := time.Now().Add(-60 * 24 * time.Hour)
 	r2Date := time.Now().Add(-30 * 24 * time.Hour)
@@ -219,7 +223,7 @@ func TestReleaseCadence_CalculatesIntervals(t *testing.T) {
 	}
 }
 
-// TestReleaseCadence_NoReleases verifies the behavior of release cadence no releases.
+// TestReleaseCadence_NoReleases verifies ReleaseCadence when no releases.
 func TestReleaseCadence_NoReleases(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/releases", func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +245,7 @@ func TestReleaseCadence_NoReleases(t *testing.T) {
 	}
 }
 
-// TestReleaseCadence_MissingProjectID verifies the behavior of release cadence missing project i d.
+// TestReleaseCadence_MissingProjectID verifies ReleaseCadence when missing project ID.
 func TestReleaseCadence_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -254,7 +258,7 @@ func TestReleaseCadence_MissingProjectID(t *testing.T) {
 
 // weekly_team_recap.
 
-// TestWeeklyTeam_RecapCombinesData verifies the behavior of weekly team recap combines data.
+// TestWeeklyTeam_RecapCombinesData verifies WeeklyTeam when recap combines data.
 func TestWeeklyTeam_RecapCombinesData(t *testing.T) {
 	created := time.Now().Add(-3 * 24 * time.Hour)
 	merged := time.Now().Add(-1 * 24 * time.Hour)
@@ -307,7 +311,7 @@ func TestWeeklyTeam_RecapCombinesData(t *testing.T) {
 	}
 }
 
-// TestWeeklyTeamRecap_MissingGroupID verifies the behavior of weekly team recap missing group i d.
+// TestWeeklyTeamRecap_MissingGroupID verifies WeeklyTeamRecap when missing group ID.
 func TestWeeklyTeamRecap_MissingGroupID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{

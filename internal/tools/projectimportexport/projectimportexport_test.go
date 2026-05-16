@@ -4,7 +4,6 @@
 package projectimportexport
 
 import (
-	"context"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const errExpNonNilResult = "expected non-nil result"
@@ -466,18 +466,34 @@ func TestFormatScheduleExportMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for project import/export actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := projectImportExportSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "projectimportexport" {
+			t.Errorf("OwnerPackage for %s = %q, want projectimportexport", spec.Name, spec.OwnerPackage)
+		}
+	}
+	for _, name := range []string{
+		"gitlab_get_project_export_status",
+		"gitlab_download_project_export",
+		"gitlab_get_project_import_status",
+	} {
+		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+			t.Errorf("%s should be read-only and idempotent", name)
+		}
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies all registered tools can be called
-// through MCP in-memory transport, covering the handler closures.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoutes verifies all project import/export routes can be called directly.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -500,20 +516,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := projectImportExportSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -522,17 +525,17 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		{"gitlab_schedule_project_export", map[string]any{"project_id": "1"}},
 		{"gitlab_get_project_export_status", map[string]any{"project_id": "1"}},
 		{"gitlab_download_project_export", map[string]any{"project_id": "1"}},
+		{"gitlab_import_project_from_file", map[string]any{"content_base64": base64.StdEncoding.EncodeToString([]byte("archive-data")), "name": "p", "path": "p"}},
 		{"gitlab_get_project_import_status", map[string]any{"project_id": "1"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
@@ -588,36 +591,27 @@ func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestMCPRound_Trip_ImportFileError validates the register.go error path
-// for gitlab_import_project_from_file via MCP round-trip with a 500 backend.
-func TestMCPRound_Trip_ImportFileError(t *testing.T) {
+// TestActionSpecs_ImportFileError validates the import route error path.
+func TestActionSpecs_ImportFileError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
+	byTool := projectImportExportSpecsByTool(t, ActionSpecs(client))
 
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
+	_, err := byTool["gitlab_import_project_from_file"].Route.Handler(t.Context(), map[string]any{"content_base64": base64.StdEncoding.EncodeToString([]byte("data"))})
+	if err == nil {
+		t.Error("expected import route error")
+	}
+}
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, callErr := mcpClient.Connect(ctx, ct, nil)
-	if callErr != nil {
-		t.Fatalf("connect: %v", callErr)
+func projectImportExportSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_import_project_from_file",
-		Arguments: map[string]any{"content_base64": base64.StdEncoding.EncodeToString([]byte("data"))},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true")
-	}
+	return byTool
 }

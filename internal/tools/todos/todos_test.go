@@ -12,22 +12,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 const (
-	fmtUnexpPath       = "unexpected path: %s"
+	// fmtUnexpPath identifies the fmt unexp path constant used by this package.
+	fmtUnexpPath = "unexpected path: %s"
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 	errExpCancelledCtx = "expected error for canceled context"
-	fmtUnexpErr        = "unexpected error: %v"
-	pathTodos          = "/api/v4/todos"
-	pathTodoMarkDone   = "/api/v4/todos/1/mark_as_done"
-	pathTodoMarkAll    = "/api/v4/todos/mark_as_done"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// pathTodos identifies the path todos constant used by this package.
+	pathTodos = "/api/v4/todos"
+	// pathTodoMarkDone identifies the path todo mark done constant used by this package.
+	pathTodoMarkDone = "/api/v4/todos/1/mark_as_done"
+	// pathTodoMarkAll identifies the path todo mark all constant used by this package.
+	pathTodoMarkAll = "/api/v4/todos/mark_as_done"
 )
 
 // todoList tests.
 
-// TestTodoList_Success verifies the behavior of todo list success.
+// TestTodoList_Success verifies TodoList when success.
 func TestTodoList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodos {
@@ -91,7 +96,7 @@ func TestTodoList_Success(t *testing.T) {
 	}
 }
 
-// TestTodoList_WithFilters verifies the behavior of todo list with filters.
+// TestTodoList_WithFilters verifies TodoList when with filters.
 func TestTodoList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("action") != "assigned" {
@@ -119,7 +124,7 @@ func TestTodoList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestTodoListServer_Error verifies the behavior of todo list server error.
+// TestTodoListServer_Error verifies TodoListServer when error.
 func TestTodoListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -131,7 +136,7 @@ func TestTodoListServer_Error(t *testing.T) {
 	}
 }
 
-// TestTodoList_CancelledContext verifies the behavior of todo list cancelled context.
+// TestTodoList_CancelledContext verifies TodoList when cancelled context.
 func TestTodoList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -146,7 +151,7 @@ func TestTodoList_CancelledContext(t *testing.T) {
 
 // todoMarkDone tests.
 
-// TestTodoMarkDone_Success verifies the behavior of todo mark done success.
+// TestTodoMarkDone_Success verifies TodoMarkDone when success.
 func TestTodoMarkDone_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodoMarkDone {
@@ -170,7 +175,7 @@ func TestTodoMarkDone_Success(t *testing.T) {
 	}
 }
 
-// TestTodoMark_DoneZeroID verifies the behavior of todo mark done zero i d.
+// TestTodoMark_DoneZeroID verifies TodoMark when done zero ID.
 func TestTodoMark_DoneZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -182,7 +187,7 @@ func TestTodoMark_DoneZeroID(t *testing.T) {
 	}
 }
 
-// TestTodoMarkDone_NotFound verifies the behavior of todo mark done not found.
+// TestTodoMarkDone_NotFound verifies TodoMarkDone when not found.
 func TestTodoMarkDone_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Todo Not Found"}`)
@@ -194,7 +199,7 @@ func TestTodoMarkDone_NotFound(t *testing.T) {
 	}
 }
 
-// TestTodoMarkDone_CancelledContext verifies the behavior of todo mark done cancelled context.
+// TestTodoMarkDone_CancelledContext verifies TodoMarkDone when cancelled context.
 func TestTodoMarkDone_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -209,7 +214,7 @@ func TestTodoMarkDone_CancelledContext(t *testing.T) {
 
 // todoMarkAllDone tests.
 
-// TestTodoMarkAllDone_Success verifies the behavior of todo mark all done success.
+// TestTodoMarkAllDone_Success verifies TodoMarkAllDone when success.
 func TestTodoMarkAllDone_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodoMarkAll {
@@ -230,7 +235,7 @@ func TestTodoMarkAllDone_Success(t *testing.T) {
 	}
 }
 
-// TestTodoMarkAllDoneServer_Error verifies the behavior of todo mark all done server error.
+// TestTodoMarkAllDoneServer_Error verifies TodoMarkAllDoneServer when error.
 func TestTodoMarkAllDoneServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -242,7 +247,7 @@ func TestTodoMarkAllDoneServer_Error(t *testing.T) {
 	}
 }
 
-// TestTodoMarkAllDone_CancelledContext verifies the behavior of todo mark all done cancelled context.
+// TestTodoMarkAllDone_CancelledContext verifies TodoMarkAllDone when cancelled context.
 func TestTodoMarkAllDone_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -257,13 +262,14 @@ func TestTodoMarkAllDone_CancelledContext(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedNonNilResult identifies the err expected non nil result constant used by this package.
 const errExpectedNonNilResult = "expected non-nil result"
 
 // ---------------------------------------------------------------------------
 // List with all filter params
 // ---------------------------------------------------------------------------.
 
-// TestTodoList_AllFilters verifies the behavior of todo list all filters.
+// TestTodoList_AllFilters verifies TodoList when all filters.
 func TestTodoList_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -297,7 +303,7 @@ func TestTodoList_AllFilters(t *testing.T) {
 // toOutput with nil fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilTargetProjectAuthorCreatedAt verifies the behavior of to output nil target project author created at.
+// TestToOutput_NilTargetProjectAuthorCreatedAt verifies ToOutput when nil target project author created at.
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
 	out := toOutput(&todo)
@@ -335,7 +341,7 @@ func todoWithNils() gl.Todo {
 // Markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString_Full verifies the behavior of format output markdown string full.
+// TestFormatOutputMarkdownString_Full verifies FormatOutputMarkdownString when full.
 func TestFormatOutputMarkdownString_Full(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
 		ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue",
@@ -353,7 +359,7 @@ func TestFormatOutputMarkdownString_Full(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdownString_Minimal verifies the behavior of format output markdown string minimal.
+// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
 func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{ID: 2, ActionName: "mentioned", State: "done"})
 	if !strings.Contains(s, "To-Do #2") {
@@ -364,7 +370,7 @@ func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	r := FormatOutputMarkdown(Output{ID: 1})
 	if r == nil {
@@ -372,7 +378,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(s, "No to-do items found") {
@@ -380,7 +386,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithItems verifies the behavior of format list markdown string with items.
+// TestFormatListMarkdownString_WithItems verifies FormatListMarkdownString when with items.
 func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
@@ -455,7 +461,7 @@ func TestFormatOutputMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	r := FormatListMarkdown(ListOutput{})
 	if r == nil {
@@ -463,7 +469,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMarkDoneMarkdownString verifies the behavior of format mark done markdown string.
+// TestFormatMarkDoneMarkdownString verifies FormatMarkDoneMarkdownString.
 func TestFormatMarkDoneMarkdownString(t *testing.T) {
 	s := FormatMarkDoneMarkdownString(MarkDoneOutput{ID: 1, Message: "To-do 1 marked as done"})
 	if !strings.Contains(s, "To-do 1 marked as done") {
@@ -471,7 +477,7 @@ func TestFormatMarkDoneMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatMarkDoneMarkdown verifies the behavior of format mark done markdown.
+// TestFormatMarkDoneMarkdown verifies FormatMarkDoneMarkdown.
 func TestFormatMarkDoneMarkdown(t *testing.T) {
 	r := FormatMarkDoneMarkdown(MarkDoneOutput{Message: "done"})
 	if r == nil {
@@ -479,7 +485,7 @@ func TestFormatMarkDoneMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMarkAllDoneMarkdownString verifies the behavior of format mark all done markdown string.
+// TestFormatMarkAllDoneMarkdownString verifies FormatMarkAllDoneMarkdownString.
 func TestFormatMarkAllDoneMarkdownString(t *testing.T) {
 	s := FormatMarkAllDoneMarkdownString(MarkAllDoneOutput{Message: "All done"})
 	if !strings.Contains(s, "All done") {
@@ -487,7 +493,7 @@ func TestFormatMarkAllDoneMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatMarkAllDoneMarkdown verifies the behavior of format mark all done markdown.
+// TestFormatMarkAllDoneMarkdown verifies FormatMarkAllDoneMarkdown.
 func TestFormatMarkAllDoneMarkdown(t *testing.T) {
 	r := FormatMarkAllDoneMarkdown(MarkAllDoneOutput{Message: "done"})
 	if r == nil {
@@ -496,25 +502,31 @@ func TestFormatMarkAllDoneMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration tests
+// ActionSpec route tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies todo action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "todos" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllTodoTools validates m c p round trip all todo tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == pathTodos && r.Method == http.MethodGet:
@@ -528,18 +540,11 @@ func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	defer session.Close()
 
 	tools := []struct {
 		name string
@@ -552,16 +557,16 @@ func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			result, err := spec.Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}

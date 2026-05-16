@@ -12,23 +12,23 @@ GitLab business logic.
 
 | Surface | Selector | Visible MCP tools | Source of action metadata |
 | --- | --- | ---: | --- |
-| Individual tools | `TOOL_SURFACE=individual` or `META_TOOLS=false` | One tool per GitLab operation | Domain `RegisterTools` handlers with tool metadata projected from `ActionSpec` |
+| Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) | One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
 | Meta-tools | default, `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
 | Dynamic / dynamic-3 | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Canonical action catalog |
 | Dynamic-2 | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
 
-Individual tools are still registered by their domain packages so handler
-ownership and compatibility behavior stay local. The visible MCP tool metadata,
-including title, description, icons, schemas, and annotations, is projected from
-the same `ActionSpec` records that feed meta-tools and dynamic mode. Meta-tools
-and dynamic tools are catalog-backed surfaces over the same action core.
+Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
+over the same action core. Domain packages still own typed handlers,
+ActionSpecs, markdown formatting, and compatibility behavior, but the root
+individual runtime no longer loops through per-domain `RegisterTools` calls.
+`RegisterAll` builds the canonical catalog and projects visible individual MCP
+tools from it.
 
-Catalog-first generation for individual tools has moved from deferred design to
-metadata parity policy. Domain packages keep explicit handler registration, but
-new and existing individual tools must derive their metadata from specs unless
-they are documented non-GitLab standalone surfaces. See
-[Catalog-First Individual Tools Evaluation](catalog-first-individual-tools.md)
-for the parity checklist and current generation policy.
+Catalog-first generation for individual tools is the runtime contract. New and
+existing individual tools must derive their metadata from specs unless they are
+documented non-GitLab standalone surfaces. See
+[Catalog-First Individual Tools Policy](catalog-first-individual-tools.md) for
+the parity checklist and current generation policy.
 
 ## Canonical Action Core
 
@@ -62,12 +62,13 @@ The core pieces are:
 
 | File | Responsibility |
 | --- | --- |
-| `internal/toolutil/action_spec.go` | Canonical per-action metadata model, validation, defensive cloning, and projection back to legacy route maps |
+| `internal/toolutil/action_spec.go` | Canonical per-action metadata model, validation, defensive cloning, compatibility policy, and route/catalog projection |
 | `internal/toolutil/action_spec_individual.go` | `ActionSpec` projection into individual `mcp.Tool` metadata and schema/annotation policy |
 | `internal/toolutil/metatool.go` | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
 | `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs |
+| `internal/tools/actioncatalog/group_spec.go` | `CatalogGroupSpec`, `SurfaceKind`, group validation, group option projection, and compatibility alias conflict checks |
 | `internal/tools/action_specs.go` | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating |
-| `internal/tools/action_catalog.go` | Captures meta route definitions, prefers matching specs, and fails when a spec targets a missing route |
+| `internal/tools/action_catalog.go` | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from catalog groups |
 | `internal/tools/dynamic/register.go` | Builds the dynamic registry, search index, describe output, and execute dispatch from the catalog |
 | `internal/tools/dynamic/standalone.go` | Adds dynamic-only catalog actions that do not fit the normal meta route model |
@@ -90,6 +91,38 @@ Standalone dynamic actions such as `discover_project.resolve` and interactive
 elicitation flows are added through their own spec builders before dynamic mode
 registers visible tools.
 
+## Final Model Vocabulary
+
+The catalog-first runtime uses these model terms consistently:
+
+- `ActionSpec`: one executable GitLab action, including the typed route,
+  action name, behavior annotations, ownership, individual-tool projection
+  metadata, discovery hints, result policies, validation notes, and
+  compatibility policy.
+- `CatalogGroupSpec`: one visible catalog group or utility surface. It declares
+  the MCP tool name, title, description, icons, base dynamic domain, ownership,
+  edition gates, GitLab.com-only gates, capability requirements, surface kind,
+  and owned actions.
+- `SurfaceKind`: an explicit classification for catalog and non-catalog
+  surfaces. Valid values are `gitlab-action`, `meta-group`,
+  `dynamic-controller`, `runtime-utility`, `interactive-utility`,
+  `sampling-utility`, and `server-maintenance`.
+- `SurfaceToolSpec`: the planned non-GitLab utility model for visible tools that
+  are not ordinary GitLab API actions, such as dynamic controllers,
+  interactive elicitation flows, sampling helpers, and server maintenance.
+- Compatibility alias: an action-level alias with `Alias`, `Target`, `Source`,
+  `Searchable`, `Deprecated`, `RemovalVersion`, and `Reason`. These replace
+  hardcoded action-specific Dynamic aliases as the owned metadata source.
+- Parameter alias: an action-scoped parameter alias with the same policy fields
+  as compatibility aliases. Parameter aliases must target an input schema
+  property owned by the same action.
+- Surface controller: a visible controller tool that orchestrates catalog
+  actions rather than representing one GitLab API endpoint, for example Dynamic
+  search/describe/execute.
+- Runtime utility: a non-GitLab helper tool that supports the server runtime or
+  user workflow. Runtime utilities need explicit surface classification,
+  capability requirements when applicable, and guardrail tests.
+
 ## Registration Flow
 
 `cmd/server/main.go` selects one tool surface when the server is created.
@@ -102,18 +135,21 @@ flowchart TD
     server --> selector
 
     selector -->|individual| registerAll[internal/tools.RegisterAll]
-    registerAll --> domainTools[Domain RegisterTools functions]
-    domainTools --> individualSpecs[Domain ActionSpecs]
-    individualSpecs --> individualProjection[toolutil.IndividualToolFromSpecs]
+    registerAll --> buildIndividual[internal/tools.BuildActionCatalog]
+    buildIndividual --> collectIndividualSpecs[internal/tools.CollectActionSpecs]
+    collectIndividualSpecs --> generatedManifest
+    buildIndividual --> individualProjection[internal/tools.RegisterIndividualCatalogTools]
     individualProjection --> visibleIndividual[Visible individual tools]
 
     selector -->|meta| buildMeta[internal/tools.BuildActionCatalog]
     buildMeta --> collectSpecs[internal/tools.CollectActionSpecs]
+    collectSpecs --> generatedManifest[action_specs_manifest_gen.go]
     buildMeta --> registerMeta[internal/tools.RegisterMetaCatalog]
     registerMeta --> metaTools[Visible domain meta-tools]
 
     selector -->|dynamic or dynamic-3| buildDynamic[cmd/server.buildDynamicActionCatalog]
     buildDynamic --> collectDynamicSpecs[internal/tools.CollectActionSpecs]
+    collectDynamicSpecs --> generatedManifest
     buildDynamic --> standalone[dynamic.AddStandaloneCatalog]
     standalone --> dynamic3[dynamic.RegisterCatalogTools]
     dynamic3 --> threeTools[gitlab_search_tools\ngitlab_describe_tools\ngitlab_execute_tool]
@@ -144,16 +180,19 @@ Target builder rules:
   owns the action semantics; central aggregation builders remain appropriate for
   visible groups that span many packages, such as `gitlab_admin` or
   `gitlab_group`.
-- Domain packages should expose typed handlers and individual `RegisterTools`
-  functions. `RegisterTools` should obtain tool metadata through
-  `toolutil.MustIndividualToolFromSpecs` or equivalent spec projection, while
-  keeping handler registration and compatibility behavior in the domain package.
-  Domain packages should expose `ActionSpecs` without importing
-  `internal/tools/actioncatalog`; catalog projection belongs to the central
+- `action_specs_manifest_gen.go` is generated from the source-defined
+  `build*ActionSpecs` aggregation builders. Add or remove a builder in source,
+  then run `make gen-action-catalog-manifest`; CI and audits should use
+  `make check-action-catalog-manifest` or `cmd/audit_action_spec_coverage` to
+  fail when the manifest is stale.
+- Domain packages should expose typed handlers, markdown formatters, and
+  `ActionSpecs` without importing `internal/tools/actioncatalog`. Catalog
+  projection and visible tool registration belong to the central
   `internal/tools` layer.
-- Delegated meta groups are allowed only for packages explicitly called from
-  `registerAllMetaGroups`; otherwise ordinary GitLab API operations should flow
-  through the central catalog builders.
+- Package-level `RegisterMeta` functions are no longer an approved runtime
+  registration pattern. Ordinary GitLab API operations should flow through
+  ActionSpecs, the generated builder manifest, `BuildActionCatalog`, and the
+  catalog-backed surface registrars.
 
 Current direction: keep the catalog composition in `internal/tools`, keep
 domain-owned spec builders close to their handlers, and use central aggregation
@@ -161,8 +200,8 @@ only when a visible meta group intentionally spans multiple packages.
 
 ## Standalone Dynamic Actions
 
-Most dynamic actions come from the canonical catalog built from specs that match
-captured meta route definitions. A small set of actions are added only for
+Most dynamic actions come from the canonical catalog built directly from specs
+and the generated builder manifest. A small set of actions are added only for
 dynamic mode because they are standalone tools or interactive flows rather than
 normal meta-tool actions.
 
@@ -207,15 +246,15 @@ because every individual tool already advertises its own tool input schema.
 ## Historical Duplication
 
 ADR-0005 consolidated many standalone meta-tools into broader domain meta-tools.
-The visible taxonomy changed, but many package-level `RegisterMeta` functions
-were intentionally left in place during the migration.
+The visible taxonomy changed, and the intermediate package-level `RegisterMeta`
+bridge has now been removed from active runtime registration.
 
 Current baseline for delegated meta ownership:
 
 | Metric | Count |
 | --- | ---: |
-| Package-level `RegisterMeta` definitions under `internal/tools/*` | 4 |
-| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` | 4 |
+| Package-level `RegisterMeta` definitions under `internal/tools/*` | 0 |
+| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` | 0 |
 | Apparent legacy `RegisterMeta` definitions requiring verification | 0 |
 
 Historical names still handled as compatibility aliases:
@@ -229,9 +268,9 @@ Historical names still handled as compatibility aliases:
 | `gitlab_access_request` | `gitlab_access` |
 | `gitlab_project_snippet` | `gitlab_snippet` |
 
-Package-level `RegisterMeta` functions are currently limited to the approved
-delegated groups above. They are still captured by `registerAllMetaGroups`, and
-their actions must also be backed by collected specs.
+Package-level `RegisterMeta` functions are now treated as audit violations.
+Former delegated groups such as `gitlab_search`, `gitlab_runner`,
+`gitlab_analyze`, and `gitlab_orbit` are catalog-backed groups.
 
 ## Import Layering Rules
 
@@ -296,12 +335,11 @@ or override the metadata for that spec.
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.
-2. Register the individual tool through that package's `RegisterTools` when the individual surface should expose it, using `ActionSpec` projection for MCP tool metadata.
-3. Add an `ActionSpec` in the owning domain package or central aggregation builder with the exact individual tool name and title.
-4. Add the catalog-backed route to the central route definitions or an approved delegated meta group using typed `ActionRoute` constructors.
-5. Keep destructive classification on the route metadata, not in dynamic-only code.
-6. Add dynamic search tags or aliases only when natural language discovery is weak and there is evidence from tests, traces, evaluations, or user prompts.
-7. Update tests, generated docs, and schema resources as required.
+2. Add an `ActionSpec` in the owning domain package or central aggregation builder with the exact individual tool name and title when the individual surface should expose it.
+3. Ensure the source-defined builder is present in `action_specs_manifest_gen.go` by running `make gen-action-catalog-manifest` or `go run ./cmd/gen_action_catalog_manifest/`.
+4. Keep destructive classification on route/spec metadata, not in dynamic-only code.
+5. Add dynamic search tags or aliases only when natural language discovery is weak and there is evidence from tests, traces, evaluations, or user prompts.
+6. Update tests, generated docs, and schema resources as required.
 
 ## ActionSpec Guardrails
 
@@ -309,14 +347,17 @@ The migration is enforced by source-level tests and audits:
 
 - `TestActionSpecCoverage_AllCatalogRoutesClassified` builds the GitLab.com
   Enterprise dynamic catalog and fails if any catalog action is not spec-backed.
-- `TestCollectedActionSpecs_MigratedMetaToolParity` captures all meta route
-  groups for CE, self-managed Enterprise, and GitLab.com Enterprise, then checks
-  spec action counts, destructive flags, schemas, read-only projection, and
+- `TestCollectedActionSpecs_ProjectIntoActionCatalog` builds the catalog for
+  CE, self-managed Enterprise, and GitLab.com Enterprise, then checks spec
+  action routes, destructive flags, schemas, read-only projection, and
   individual-tool metadata.
 - `TestCollectedActionSpecs_KnownGuidancePreserved` locks the parameter guidance
   for historically ambiguous actions such as merge request creation, issue
   links, epic issue assignment, CI job token scope removal, and deploy token
   deletion.
+- `TestCollectedActionSpecs_DeclareCatalogOwnership` requires every collected
+  catalog group to declare an owner and every action owner to resolve to the
+  central `tools` package or a real `internal/tools/*` package.
 - `TestIndividualToolProjection_RepresentativeDomainParity` pilots the
   `ActionSpec`-to-`mcp.Tool` projection adapter against registered individual
   tools for project, issue, merge request, job, and group domains.
@@ -331,7 +372,10 @@ The migration is enforced by source-level tests and audits:
   registered individual tool without ActionSpec metadata is an explicit
   standalone exception.
 - `cmd/audit_action_spec_coverage` writes `dist/action-spec-coverage.json` with
-  source-discovered surface classifications for domain coverage sweeps.
+  source-discovered surface classifications for domain coverage sweeps and
+  fails when `action_specs_manifest_gen.go` is stale.
+- `make check-action-catalog-manifest` verifies the generated ActionSpec group
+  builder manifest without writing files.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
 - `make audit-dynamic-aliases`, `go run ./cmd/audit_output/`,
@@ -341,11 +385,11 @@ The migration is enforced by source-level tests and audits:
 ## Useful Checks
 
 ```bash
+go run ./cmd/gen_action_catalog_manifest/ --check
 rg -n "func RegisterMeta\(" internal/tools --glob '*.go'
-rg -n "RegisterMeta\(server, client\)|RegisterMeta\(server, .*client" internal/tools/register_meta.go
 rg -n "\*gitlab\.Client" internal/tools -g 'register.go'
 rg -n "BuildActionCatalog\(|RegisterMetaCatalog\(|actioncatalog\.|internal/tools/actioncatalog|internal/tools/dynamic" --glob '*.go' cmd internal
 ```
 
-Use these checks before removing legacy registration functions or moving the
-catalog package.
+Use these checks after adding or moving catalog builders, changing registration
+paths, or tightening legacy registration audits.

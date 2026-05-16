@@ -4,18 +4,18 @@
 package planlimits
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// planLimitJSON identifies the plan limit JSON constant used by this package.
 const planLimitJSON = `{
 	"conan_max_file_size": 3221225472,
 	"generic_packages_max_file_size": 5368709120,
@@ -27,7 +27,7 @@ const planLimitJSON = `{
 	"terraform_module_max_file_size": 1073741824
 }`
 
-// TestGet_Success verifies that Get handles the success scenario correctly.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodGet {
@@ -49,7 +49,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_WithPlanName verifies that Get handles the with plan name scenario correctly.
+// TestGet_WithPlanName verifies Get when with plan name.
 func TestGet_WithPlanName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodGet {
@@ -71,7 +71,7 @@ func TestGet_WithPlanName(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -83,7 +83,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestChange_Success verifies that Change handles the success scenario correctly.
+// TestChange_Success verifies Change when success.
 func TestChange_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodPut {
@@ -106,7 +106,7 @@ func TestChange_Success(t *testing.T) {
 	}
 }
 
-// TestChange_Error verifies that Change handles the error scenario correctly.
+// TestChange_Error verifies Change when error.
 func TestChange_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -118,7 +118,7 @@ func TestChange_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -141,7 +141,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatChangeMarkdown verifies the behavior of format change markdown.
+// TestFormatChangeMarkdown verifies FormatChangeMarkdown.
 func TestFormatChangeMarkdown(t *testing.T) {
 	out := ChangeOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -161,7 +161,7 @@ func TestFormatChangeMarkdown(t *testing.T) {
 // FormatGetMarkdown — all fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies the behavior of format get markdown all fields.
+// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	out := GetOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -187,7 +187,7 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // FormatChangeMarkdown — all fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatChangeMarkdown_AllFields verifies the behavior of format change markdown all fields.
+// TestFormatChangeMarkdown_AllFields verifies FormatChangeMarkdown when all fields.
 func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 	out := ChangeOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -216,7 +216,7 @@ func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 // Change — all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestChange_AllOptionalFields verifies the behavior of change all optional fields.
+// TestChange_AllOptionalFields verifies Change when all optional fields.
 func TestChange_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodPut {
@@ -246,24 +246,30 @@ func TestChange_AllOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies plan limit action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "planlimits" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newPlanLimitsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates plan limit canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newPlanLimitsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -277,22 +283,23 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// newPlanLimitsMCPSession is an internal helper for the planlimits package.
-func newPlanLimitsMCPSession(t *testing.T) *mcp.ClientSession {
+// newPlanLimitsRouteSpecs constructs plan limits route specs test fixtures.
+func newPlanLimitsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -304,22 +311,14 @@ func newPlanLimitsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return planLimitSpecsByTool(ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// planLimitSpecsByTool supports plan limit specs by tool assertions in planlimits tests.
+func planLimitSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }

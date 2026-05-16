@@ -1,6 +1,8 @@
 package runnercontrollers
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,8 +14,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerControllerReadSpec("controller_get", toolutil.RouteAction(client, Get), "gitlab_runner_controller_get"),
 		runnerControllerCreateSpec("controller_create", toolutil.RouteAction(client, Create), "gitlab_runner_controller_create"),
 		runnerControllerUpdateSpec("controller_update", toolutil.RouteAction(client, Update), "gitlab_runner_controller_update"),
-		runnerControllerUpdateSpec("controller_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_runner_controller_delete"),
+		runnerControllerDeleteSpec("controller_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_runner_controller_delete"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("runner controller")
+	return out, nil
 }
 
 func runnerControllerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -29,6 +39,13 @@ func runnerControllerCreateSpec(name string, route toolutil.ActionRoute, individ
 
 func runnerControllerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := runnerControllerOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func runnerControllerDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerControllerOptions(individualTool)
+	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }

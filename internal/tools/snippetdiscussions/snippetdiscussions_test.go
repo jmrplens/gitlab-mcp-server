@@ -12,13 +12,13 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/snippets/5/discussions" {
@@ -42,7 +42,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -55,7 +55,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/snippets/5/discussions/d1" {
@@ -75,7 +75,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -92,7 +92,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestAddNote_Success verifies the behavior of add note success.
+// TestAddNote_Success verifies AddNote when success.
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -109,7 +109,7 @@ func TestAddNote_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_Success verifies the behavior of update note success.
+// TestUpdateNote_Success verifies UpdateNote when success.
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
@@ -126,7 +126,7 @@ func TestUpdateNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_Success verifies the behavior of delete note success.
+// TestDeleteNote_Success verifies DeleteNote when success.
 func TestDeleteNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -139,7 +139,7 @@ func TestDeleteNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_APIError verifies the behavior of delete note a p i error.
+// TestDeleteNote_APIError verifies DeleteNote when API error.
 func TestDeleteNote_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -265,18 +265,23 @@ func TestProjectIDRequired_Validation(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// covDiscussionJSON identifies the cov discussion JSON constant used by this package.
 const covDiscussionJSON = `{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}`
+
+// covNoteJSON identifies the cov note JSON constant used by this package.
 const covNoteJSON = `{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}`
 
 // ---------------------------------------------------------------------------
 // API error paths (use 400 to avoid go-retryablehttp retries)
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -287,7 +292,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -298,7 +303,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestAddNote_APIError verifies the behavior of add note a p i error.
+// TestAddNote_APIError verifies AddNote when API error.
 func TestAddNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -309,7 +314,7 @@ func TestAddNote_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_APIError verifies the behavior of update note a p i error.
+// TestUpdateNote_APIError verifies UpdateNote when API error.
 func TestUpdateNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -324,7 +329,7 @@ func TestUpdateNote_APIError(t *testing.T) {
 // Converter edge cases
 // ---------------------------------------------------------------------------.
 
-// TestNoteToOutput_NilUpdatedAt verifies the behavior of note to output nil updated at.
+// TestNoteToOutput_NilUpdatedAt verifies NoteToOutput when nil updated at.
 func TestNoteToOutput_NilUpdatedAt(t *testing.T) {
 	n := &gl.Note{
 		ID:        42,
@@ -343,7 +348,7 @@ func TestNoteToOutput_NilUpdatedAt(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_EmptyAuthor verifies the behavior of note to output empty author.
+// TestNoteToOutput_EmptyAuthor verifies NoteToOutput when empty author.
 func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	n := &gl.Note{
 		ID:        1,
@@ -356,7 +361,7 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_ZeroCreatedAt verifies the behavior of note to output zero created at.
+// TestNoteToOutput_ZeroCreatedAt verifies NoteToOutput when zero created at.
 func TestNoteToOutput_ZeroCreatedAt(t *testing.T) {
 	zero := time.Time{}
 	n := &gl.Note{
@@ -370,7 +375,7 @@ func TestNoteToOutput_ZeroCreatedAt(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoNotes verifies the behavior of to output no notes.
+// TestToOutput_NoNotes verifies ToOutput when no notes.
 func TestToOutput_NoNotes(t *testing.T) {
 	d := &gl.Discussion{
 		ID:             "d1",
@@ -386,7 +391,7 @@ func TestToOutput_NoNotes(t *testing.T) {
 	}
 }
 
-// TestToListOutput_Empty verifies the behavior of to list output empty.
+// TestToListOutput_Empty verifies ToListOutput when empty.
 func TestToListOutput_Empty(t *testing.T) {
 	out := toListOutput(nil, nil)
 	if len(out.Discussions) != 0 {
@@ -398,7 +403,7 @@ func TestToListOutput_Empty(t *testing.T) {
 // Formatter coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
@@ -423,7 +428,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(s, "No snippet discussions found") {
@@ -431,7 +436,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_WithNotes verifies the behavior of format markdown with notes.
+// TestFormatMarkdown_WithNotes verifies FormatMarkdown when with notes.
 func TestFormatMarkdown_WithNotes(t *testing.T) {
 	out := Output{
 		ID: "d1",
@@ -452,7 +457,7 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdown_AllFields verifies the behavior of format note markdown all fields.
+// TestFormatNoteMarkdown_AllFields verifies FormatNoteMarkdown when all fields.
 func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 	out := NoteOutput{
 		ID:        1,
@@ -476,92 +481,10 @@ func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdown_NoCreatedAt verifies the behavior of format note markdown no created at.
+// TestFormatNoteMarkdown_NoCreatedAt verifies FormatNoteMarkdown when no created at.
 func TestFormatNoteMarkdown_NoCreatedAt(t *testing.T) {
 	s := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: "x", Body: "y"})
 	if strings.Contains(s, "Created") {
 		t.Error("should not include Created when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Registration
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip for all 6 individual tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost:
-			if strings.Contains(r.URL.Path, "/notes") {
-				testutil.RespondJSON(w, http.StatusCreated, covNoteJSON)
-			} else {
-				testutil.RespondJSON(w, http.StatusCreated, covDiscussionJSON)
-			}
-		case r.Method == http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, covNoteJSON)
-		case strings.Contains(r.URL.Path, "/discussions/d1"):
-			testutil.RespondJSON(w, http.StatusOK, covDiscussionJSON)
-		default:
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[`+covDiscussionJSON+`]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		}
-	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_snippet_discussions", map[string]any{"project_id": "1", "snippet_id": float64(5)}},
-		{"gitlab_get_snippet_discussion", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1"}},
-		{"gitlab_create_snippet_discussion", map[string]any{"project_id": "1", "snippet_id": float64(5), "body": "test"}},
-		{"gitlab_add_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "body": "reply"}},
-		{"gitlab_update_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "note_id": float64(1), "body": "updated"}},
-		{"gitlab_delete_snippet_discussion_note", map[string]any{"project_id": "1", "snippet_id": float64(5), "discussion_id": "d1", "note_id": float64(1)}},
-	}
-
-	for _, tc := range tools {
-		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
-			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
-			}
-		})
 	}
 }

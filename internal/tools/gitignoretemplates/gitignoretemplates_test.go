@@ -10,11 +10,10 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitignores" {
@@ -32,7 +31,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -43,7 +42,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitignores/Go" {
@@ -61,7 +60,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -83,7 +82,7 @@ func TestGet_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateListItem{{Key: "Go", Name: "Go"}}})
 	if !strings.Contains(md, "Go") {
@@ -91,7 +90,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Go", Content: "*.exe"})
 	if !strings.Contains(md, "*.exe") {
@@ -105,7 +104,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: nil})
 	if !strings.Contains(md, "No templates found") {
@@ -117,7 +116,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // List — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies the behavior of list a p i error400.
+// TestList_APIError400 verifies List when API error 400.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -132,7 +131,7 @@ func TestList_APIError400(t *testing.T) {
 // Get — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError400 verifies the behavior of get a p i error400.
+// TestGet_APIError400 verifies Get when API error 400.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -147,7 +146,7 @@ func TestGet_APIError400(t *testing.T) {
 // List — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" || r.URL.Query().Get("per_page") != "5" {
@@ -164,27 +163,29 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies gitignore template action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "gitignoretemplates" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — all tools
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGitignoreMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates gitignore template canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newGitignoreRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -197,31 +198,27 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — error paths
+// ActionSpec route execution error paths
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_Errors validates m c p round trip errors across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_Errors(t *testing.T) {
+// TestActionSpecs_CallRouteErrors validates gitignore template route errors.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/templates/gitignores", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -231,23 +228,7 @@ func TestMCPRoundTrip_Errors(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := gitignoreTemplateSpecsByTool(ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -260,27 +241,23 @@ func TestMCPRoundTrip_Errors(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route specs factory
 // ---------------------------------------------------------------------------.
 
-// newGitignoreMCPSession is an internal helper for the gitignoretemplates package.
-func newGitignoreMCPSession(t *testing.T) *mcp.ClientSession {
+// newGitignoreRouteSpecs constructs gitignore route specs test fixtures.
+func newGitignoreRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -292,22 +269,14 @@ func newGitignoreMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return gitignoreTemplateSpecsByTool(ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// gitignoreTemplateSpecsByTool supports gitignore template specs by tool assertions in gitignoretemplates tests.
+func gitignoreTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }

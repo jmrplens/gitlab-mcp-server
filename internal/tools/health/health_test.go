@@ -10,19 +10,23 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
-	pathVersion       = "/api/v4/version"
-	pathCurrentUser   = "/api/v4/user"
+	// pathVersion identifies the path version constant used by this package.
+	pathVersion = "/api/v4/version"
+	// pathCurrentUser identifies the path current user constant used by this package.
+	pathCurrentUser = "/api/v4/user"
+	// fmtStatusCheckErr identifies the fmt status check err constant used by this package.
 	fmtStatusCheckErr = "Check() unexpected error: %v"
-	fmtStatusWant     = "Status = %q, want %q"
+	// fmtStatusWant identifies the fmt status want constant used by this package.
+	fmtStatusWant = "Status = %q, want %q"
+	// testGitLabVersion identifies the test GitLab version constant used by this package.
 	testGitLabVersion = "17.5.0"
 )
 
-// TestCheck_Healthy verifies the behavior of check healthy.
+// TestCheck_Healthy verifies Check when healthy.
 func TestCheck_Healthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -152,7 +156,7 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 	}
 }
 
-// TestCheck_UnhealthyVersionFails verifies the behavior of check unhealthy version fails.
+// TestCheck_UnhealthyVersionFails verifies Check when unhealthy version fails.
 func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -178,7 +182,7 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	}
 }
 
-// TestCheck_DegradedUserFails verifies the behavior of check degraded user fails.
+// TestCheck_DegradedUserFails verifies Check when degraded user fails.
 func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -209,7 +213,7 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	}
 }
 
-// TestCheck_CancelledContext verifies the behavior of check cancelled context.
+// TestCheck_CancelledContext verifies Check when cancelled context.
 func TestCheck_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -229,7 +233,7 @@ func TestCheck_CancelledContext(t *testing.T) {
 // FormatMarkdownString — healthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Healthy validates cov format markdown string healthy across multiple scenarios using table-driven subtests.
+// TestFormatMarkdownString_Healthy covers FormatMarkdownString with table-driven subtests for healthy.
 func TestFormatMarkdownString_Healthy(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -324,7 +328,7 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 // FormatMarkdownString — unhealthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Unhealthy verifies the behavior of cov format markdown string unhealthy.
+// TestFormatMarkdownString_Unhealthy verifies FormatMarkdownString when unhealthy.
 func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 	out := Output{
 		Status:         "unhealthy",
@@ -354,7 +358,7 @@ func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 // FormatMarkdownString — degraded
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Degraded verifies the behavior of cov format markdown string degraded.
+// TestFormatMarkdownString_Degraded verifies FormatMarkdownString when degraded.
 func TestFormatMarkdownString_Degraded(t *testing.T) {
 	out := Output{
 		Status:         "degraded",
@@ -381,7 +385,7 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 // FormatMarkdownString — no username (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoUsername verifies the behavior of cov format markdown string no username.
+// TestFormatMarkdownString_NoUsername verifies FormatMarkdownString when no username.
 func TestFormatMarkdownString_NoUsername(t *testing.T) {
 	out := Output{
 		Status:    "healthy",
@@ -397,7 +401,7 @@ func TestFormatMarkdownString_NoUsername(t *testing.T) {
 // FormatMarkdownString — no version (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoVersion verifies the behavior of cov format markdown string no version.
+// TestFormatMarkdownString_NoVersion verifies FormatMarkdownString when no version.
 func TestFormatMarkdownString_NoVersion(t *testing.T) {
 	out := Output{
 		Status:    "unhealthy",
@@ -414,7 +418,7 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 // FormatMarkdown wrapper
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Wrapper verifies the behavior of cov format markdown wrapper.
+// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	out := Output{Status: "healthy", GitLabURL: "https://gitlab.example.com"}
 	result := FormatMarkdown(out)
@@ -427,24 +431,31 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools no-panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies health action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "health" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_server_status
+// ActionSpec route execution — gitlab_server_status
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_Trip verifies the behavior of cov m c p round trip.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_CallRoute verifies the health canonical route.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
@@ -456,65 +467,44 @@ func TestMCPRound_Trip(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := healthSpecByTool(t, ActionSpecs(client), "gitlab_server_status")
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_server_status",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool gitlab_server_status: %v", err)
+		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
-	}
-	if res.IsError {
-		t.Error("expected no error")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_server_status unhealthy (API error)
+// ActionSpec route execution — gitlab_server_status unhealthy (API error)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripUnhealthy verifies the behavior of cov m c p round trip unhealthy.
-func TestMCPRound_TripUnhealthy(t *testing.T) {
+// TestActionSpecs_CallRouteUnhealthy verifies the unhealthy health route path.
+func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := healthSpecByTool(t, ActionSpecs(client), "gitlab_server_status")
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_server_status",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool gitlab_server_status: %v", err)
+		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
+}
+
+// healthSpecByTool supports health spec by tool assertions in health tests.
+func healthSpecByTool(t *testing.T, specs []toolutil.ActionSpec, tool string) toolutil.ActionSpec {
+	t.Helper()
+	for _, spec := range specs {
+		if spec.IndividualTool.Name == tool {
+			return spec
+		}
+	}
+	t.Fatalf("missing ActionSpec for %s", tool)
+	return toolutil.ActionSpec{}
 }

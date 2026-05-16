@@ -1,4 +1,3 @@
-// Package dockerfiletemplates implements MCP tools for GitLab Dockerfile Templates API.
 package dockerfiletemplates
 
 import (

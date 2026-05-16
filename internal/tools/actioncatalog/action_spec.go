@@ -34,6 +34,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			Tags:                   append([]string(nil), spec.Tags...),
 			Usage:                  spec.Usage,
 			RelatedActions:         append([]string(nil), spec.RelatedActions...),
+			Compatibility:          toolutil.CloneCompatibilityPolicy(spec.Compatibility),
 			ReadOnly:               spec.ReadOnly,
 			Edition:                spec.Edition,
 			GitLabDotComOnly:       spec.GitLabDotComOnly,
@@ -45,6 +46,9 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			RichResultPolicy:       spec.RichResultPolicy,
 			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
 			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),
+			Destructive:            spec.Destructive,
+			Idempotent:             spec.Idempotent,
+			OpenWorld:              spec.OpenWorld,
 		})
 	}
 	return actions, errors.Join(errs...)

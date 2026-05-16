@@ -78,7 +78,7 @@ func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Cl
 	})
 }
 
-// handleMilestoneProgress performs the handle milestone progress operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleMilestoneProgress handles handle milestone progress and returns [*mcp.GetPromptResult].
 func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -157,7 +157,7 @@ func registerLabelDistributionPrompt(server *mcp.Server, client *gitlabclient.Cl
 	})
 }
 
-// handleLabelDistribution performs the handle label distribution operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleLabelDistribution handles handle label distribution and returns [*mcp.GetPromptResult].
 func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -237,7 +237,7 @@ func registerGroupMilestoneProgressPrompt(server *mcp.Server, client *gitlabclie
 	})
 }
 
-// handleGroupMilestoneProgress performs the handle group milestone progress operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleGroupMilestoneProgress handles handle group milestone progress and returns [*mcp.GetPromptResult].
 func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
@@ -306,7 +306,7 @@ func registerProjectContributorsPrompt(server *mcp.Server, client *gitlabclient.
 	})
 }
 
-// handleProjectContributors performs the handle project contributors operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleProjectContributors handles handle project contributors and returns [*mcp.GetPromptResult].
 func handleProjectContributors(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {

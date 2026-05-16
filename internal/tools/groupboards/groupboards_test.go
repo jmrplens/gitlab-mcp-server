@@ -12,16 +12,16 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // Shared JSON fixtures
 // ---------------------------------------------------------------------------.
 
+// groupBoardJSON stores the package-level group board JSON state.
 var groupBoardJSON = `{
 	"id": 1,
 	"name": "Development",
@@ -33,8 +33,10 @@ var groupBoardJSON = `{
 	]
 }`
 
+// groupBoardListJSON stores the package-level group board list JSON state.
 var groupBoardListJSON = `[` + groupBoardJSON + `]`
 
+// boardListItemJSON stores the package-level board list item JSON state.
 var boardListItemJSON = `{
 	"id": 10,
 	"label": {"id": 20, "name": "To Do"},
@@ -45,13 +47,14 @@ var boardListItemJSON = `{
 	"milestone": {"id": 7, "title": "sprint-1"}
 }`
 
+// boardListsArrayJSON stores the package-level board lists array JSON state.
 var boardListsArrayJSON = `[` + boardListItemJSON + `]`
 
 // ---------------------------------------------------------------------------
 // Group Board CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoards_Success verifies the behavior of list group boards success.
+// TestListGroupBoards_Success verifies ListGroupBoards when success.
 func TestListGroupBoards_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +78,7 @@ func TestListGroupBoards_Success(t *testing.T) {
 	}
 }
 
-// TestListGroupBoards_MissingGroupID verifies the behavior of list group boards missing group i d.
+// TestListGroupBoards_MissingGroupID verifies ListGroupBoards when missing group ID.
 func TestListGroupBoards_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{})
@@ -84,7 +87,7 @@ func TestListGroupBoards_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_Success verifies the behavior of get group board success.
+// TestGetGroupBoard_Success verifies GetGroupBoard when success.
 func TestGetGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +113,7 @@ func TestGetGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_MissingParams verifies the behavior of get group board missing params.
+// TestGetGroupBoard_MissingParams verifies GetGroupBoard when missing params.
 func TestGetGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{})
@@ -123,7 +126,7 @@ func TestGetGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_Success verifies the behavior of create group board success.
+// TestCreateGroupBoard_Success verifies CreateGroupBoard when success.
 func TestCreateGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +149,7 @@ func TestCreateGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_MissingParams verifies the behavior of create group board missing params.
+// TestCreateGroupBoard_MissingParams verifies CreateGroupBoard when missing params.
 func TestCreateGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{})
@@ -159,7 +162,7 @@ func TestCreateGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_Success verifies the behavior of update group board success.
+// TestUpdateGroupBoard_Success verifies UpdateGroupBoard when success.
 func TestUpdateGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +182,7 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_MissingParams verifies the behavior of update group board missing params.
+// TestUpdateGroupBoard_MissingParams verifies UpdateGroupBoard when missing params.
 func TestUpdateGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{})
@@ -192,7 +195,7 @@ func TestUpdateGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_Success verifies the behavior of delete group board success.
+// TestDeleteGroupBoard_Success verifies DeleteGroupBoard when success.
 func TestDeleteGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +209,7 @@ func TestDeleteGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_MissingParams verifies the behavior of delete group board missing params.
+// TestDeleteGroupBoard_MissingParams verifies DeleteGroupBoard when missing params.
 func TestDeleteGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteGroupBoard(context.Background(), client, DeleteGroupBoardInput{})
@@ -223,7 +226,7 @@ func TestDeleteGroupBoard_MissingParams(t *testing.T) {
 // Group Board List CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoardLists_Success verifies the behavior of list group board lists success.
+// TestListGroupBoardLists_Success verifies ListGroupBoardLists when success.
 func TestListGroupBoardLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +247,7 @@ func TestListGroupBoardLists_Success(t *testing.T) {
 	}
 }
 
-// TestListGroupBoardLists_MissingParams verifies the behavior of list group board lists missing params.
+// TestListGroupBoardLists_MissingParams verifies ListGroupBoardLists when missing params.
 func TestListGroupBoardLists_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{})
@@ -257,7 +260,7 @@ func TestListGroupBoardLists_MissingParams(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_Success verifies the behavior of get group board list success.
+// TestGetGroupBoardList_Success verifies GetGroupBoardList when success.
 func TestGetGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +283,7 @@ func TestGetGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_MissingParams verifies the behavior of get group board list missing params.
+// TestGetGroupBoardList_MissingParams verifies GetGroupBoardList when missing params.
 func TestGetGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetGroupBoardList(context.Background(), client, GetGroupBoardListInput{})
@@ -297,7 +300,7 @@ func TestGetGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_Success verifies the behavior of create group board list success.
+// TestCreateGroupBoardList_Success verifies CreateGroupBoardList when success.
 func TestCreateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -318,7 +321,7 @@ func TestCreateGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_MissingParams verifies the behavior of create group board list missing params.
+// TestCreateGroupBoardList_MissingParams verifies CreateGroupBoardList when missing params.
 func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{})
@@ -335,7 +338,7 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_Success verifies the behavior of update group board list success.
+// TestUpdateGroupBoardList_Success verifies UpdateGroupBoardList when success.
 func TestUpdateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -352,7 +355,7 @@ func TestUpdateGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_MissingParams verifies the behavior of update group board list missing params.
+// TestUpdateGroupBoardList_MissingParams verifies UpdateGroupBoardList when missing params.
 func TestUpdateGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{})
@@ -369,7 +372,7 @@ func TestUpdateGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_Success verifies the behavior of delete group board list success.
+// TestDeleteGroupBoardList_Success verifies DeleteGroupBoardList when success.
 func TestDeleteGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +386,7 @@ func TestDeleteGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_MissingParams verifies the behavior of delete group board list missing params.
+// TestDeleteGroupBoardList_MissingParams verifies DeleteGroupBoardList when missing params.
 func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteGroupBoardList(context.Background(), client, DeleteGroupBoardListInput{})
@@ -404,7 +407,7 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown verifies the behavior of format group board markdown.
+// TestFormatGroupBoardMarkdown verifies FormatGroupBoardMarkdown.
 func TestFormatGroupBoardMarkdown(t *testing.T) {
 	out := GroupBoardOutput{
 		ID:             1,
@@ -434,7 +437,7 @@ func TestFormatGroupBoardMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListGroupBoardsMarkdown verifies the behavior of format list group boards markdown.
+// TestFormatListGroupBoardsMarkdown verifies FormatListGroupBoardsMarkdown.
 func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	out := ListGroupBoardsOutput{
 		Boards: []GroupBoardOutput{
@@ -448,7 +451,7 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown verifies the behavior of format board list markdown.
+// TestFormatBoardListMarkdown verifies FormatBoardListMarkdown.
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
@@ -476,15 +479,17 @@ func TestFormatBoardListMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // ListGroupBoards — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoards_APIError verifies the behavior of list group boards a p i error.
+// TestListGroupBoards_APIError verifies ListGroupBoards when API error.
 func TestListGroupBoards_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -495,7 +500,7 @@ func TestListGroupBoards_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroupBoards_CancelledContext verifies the behavior of list group boards cancelled context.
+// TestListGroupBoards_CancelledContext verifies ListGroupBoards when cancelled context.
 func TestListGroupBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -509,7 +514,7 @@ func TestListGroupBoards_CancelledContext(t *testing.T) {
 // GetGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetGroupBoard_APIError verifies the behavior of get group board a p i error.
+// TestGetGroupBoard_APIError verifies GetGroupBoard when API error.
 func TestGetGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -520,7 +525,7 @@ func TestGetGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_CancelledContext verifies the behavior of get group board cancelled context.
+// TestGetGroupBoard_CancelledContext verifies GetGroupBoard when cancelled context.
 func TestGetGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -534,7 +539,7 @@ func TestGetGroupBoard_CancelledContext(t *testing.T) {
 // CreateGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroupBoard_APIError verifies the behavior of create group board a p i error.
+// TestCreateGroupBoard_APIError verifies CreateGroupBoard when API error.
 func TestCreateGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -545,7 +550,7 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_CancelledContext verifies the behavior of create group board cancelled context.
+// TestCreateGroupBoard_CancelledContext verifies CreateGroupBoard when cancelled context.
 func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -559,7 +564,7 @@ func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 // UpdateGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdateGroupBoard_APIError verifies the behavior of update group board a p i error.
+// TestUpdateGroupBoard_APIError verifies UpdateGroupBoard when API error.
 func TestUpdateGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -570,7 +575,7 @@ func TestUpdateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_CancelledContext verifies the behavior of update group board cancelled context.
+// TestUpdateGroupBoard_CancelledContext verifies UpdateGroupBoard when cancelled context.
 func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -584,7 +589,7 @@ func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 // DeleteGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroupBoard_APIError verifies the behavior of delete group board a p i error.
+// TestDeleteGroupBoard_APIError verifies DeleteGroupBoard when API error.
 func TestDeleteGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -595,7 +600,7 @@ func TestDeleteGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_CancelledContext verifies the behavior of delete group board cancelled context.
+// TestDeleteGroupBoard_CancelledContext verifies DeleteGroupBoard when cancelled context.
 func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -609,7 +614,7 @@ func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 // ListGroupBoardLists — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoardLists_APIError verifies the behavior of list group board lists a p i error.
+// TestListGroupBoardLists_APIError verifies ListGroupBoardLists when API error.
 func TestListGroupBoardLists_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -620,7 +625,7 @@ func TestListGroupBoardLists_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroupBoardLists_CancelledContext verifies the behavior of list group board lists cancelled context.
+// TestListGroupBoardLists_CancelledContext verifies ListGroupBoardLists when cancelled context.
 func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -634,7 +639,7 @@ func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 // GetGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetGroupBoardList_APIError verifies the behavior of get group board list a p i error.
+// TestGetGroupBoardList_APIError verifies GetGroupBoardList when API error.
 func TestGetGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -645,7 +650,7 @@ func TestGetGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_CancelledContext verifies the behavior of get group board list cancelled context.
+// TestGetGroupBoardList_CancelledContext verifies GetGroupBoardList when cancelled context.
 func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -659,7 +664,7 @@ func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 // CreateGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroupBoardList_APIError verifies the behavior of create group board list a p i error.
+// TestCreateGroupBoardList_APIError verifies CreateGroupBoardList when API error.
 func TestCreateGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -670,7 +675,7 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_CancelledContext verifies the behavior of create group board list cancelled context.
+// TestCreateGroupBoardList_CancelledContext verifies CreateGroupBoardList when cancelled context.
 func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -684,7 +689,7 @@ func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 // UpdateGroupBoardList — API error, canceled context, fallback, empty
 // ---------------------------------------------------------------------------.
 
-// TestUpdateGroupBoardList_APIError verifies the behavior of update group board list a p i error.
+// TestUpdateGroupBoardList_APIError verifies UpdateGroupBoardList when API error.
 func TestUpdateGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -695,7 +700,7 @@ func TestUpdateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_CancelledContext verifies the behavior of update group board list cancelled context.
+// TestUpdateGroupBoardList_CancelledContext verifies UpdateGroupBoardList when cancelled context.
 func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -705,7 +710,7 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_FallbackFirstElement verifies the behavior of update group board list fallback first element.
+// TestUpdateGroupBoardList_FallbackFirstElement verifies UpdateGroupBoardList when fallback first element.
 func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -727,7 +732,7 @@ func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_EmptyResult verifies the behavior of update group board list empty result.
+// TestUpdateGroupBoardList_EmptyResult verifies UpdateGroupBoardList when empty result.
 func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -750,7 +755,7 @@ func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
 // DeleteGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroupBoardList_APIError verifies the behavior of delete group board list a p i error.
+// TestDeleteGroupBoardList_APIError verifies DeleteGroupBoardList when API error.
 func TestDeleteGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -761,7 +766,7 @@ func TestDeleteGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_CancelledContext verifies the behavior of delete group board list cancelled context.
+// TestDeleteGroupBoardList_CancelledContext verifies DeleteGroupBoardList when cancelled context.
 func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -775,7 +780,7 @@ func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 // Formatter coverage: FormatGroupBoardMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown_Minimal verifies the behavior of format group board markdown minimal.
+// TestFormatGroupBoardMarkdown_Minimal verifies FormatGroupBoardMarkdown when minimal.
 func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 	md := FormatGroupBoardMarkdown(GroupBoardOutput{ID: 1, Name: "Board"})
 	if !strings.Contains(md, "Board") {
@@ -792,7 +797,7 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListGroupBoardsMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListGroupBoardsMarkdown_Empty verifies the behavior of format list group boards markdown empty.
+// TestFormatListGroupBoardsMarkdown_Empty verifies FormatListGroupBoardsMarkdown when empty.
 func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 	md := FormatListGroupBoardsMarkdown(ListGroupBoardsOutput{})
 	if !strings.Contains(md, "## Group Issue Boards") {
@@ -804,7 +809,7 @@ func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 // Formatter coverage: FormatBoardListMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardListMarkdown_Minimal verifies the behavior of format board list markdown minimal.
+// TestFormatBoardListMarkdown_Minimal verifies FormatBoardListMarkdown when minimal.
 func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 	md := FormatBoardListMarkdown(BoardListOutput{ID: 5, Position: 1})
 	if !strings.Contains(md, "Board List (ID: 5)") {
@@ -824,7 +829,7 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListBoardListsMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListBoardListsMarkdown_WithData verifies the behavior of format list board lists markdown with data.
+// TestFormatListBoardListsMarkdown_WithData verifies FormatListBoardListsMarkdown when with data.
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -841,157 +846,10 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_Empty verifies the behavior of format list board lists markdown empty.
+// TestFormatListBoardListsMarkdown_Empty verifies FormatListBoardListsMarkdown when empty.
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	md := FormatListBoardListsMarkdown(ListBoardListsOutput{})
 	if !strings.Contains(md, "## Board Lists") {
 		t.Error("markdown missing header")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 10 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupBoardsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list_boards", "gitlab_group_board_list", map[string]any{"group_id": "42"}},
-		{"get_board", "gitlab_group_board_get", map[string]any{"group_id": "42", "board_id": 1}},
-		{"create_board", "gitlab_group_board_create", map[string]any{"group_id": "42", "name": "New Board"}},
-		{"update_board", "gitlab_group_board_update", map[string]any{"group_id": "42", "board_id": 1, "name": "Updated"}},
-		{"delete_board", "gitlab_group_board_delete", map[string]any{"group_id": "42", "board_id": 1}},
-		{"list_board_lists", "gitlab_group_board_list_lists", map[string]any{"group_id": "42", "board_id": 1}},
-		{"get_board_list", "gitlab_group_board_list_get", map[string]any{"group_id": "42", "board_id": 1, "list_id": 10}},
-		{"create_board_list", "gitlab_group_board_list_create", map[string]any{"group_id": "42", "board_id": 1, "label_id": 5}},
-		{"update_board_list", "gitlab_group_board_list_update", map[string]any{"group_id": "42", "board_id": 1, "list_id": 10, "position": 2}},
-		{"delete_board_list", "gitlab_group_board_list_delete", map[string]any{"group_id": "42", "board_id": 1, "list_id": 10}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newGroupBoardsMCPSession is an internal helper for the groupboards package.
-func newGroupBoardsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	boardJSON := `{"id":1,"name":"Development","group":{"id":42,"name":"mygroup"},"milestone":{"id":5,"title":"v1.0"},"labels":[{"name":"bug"}],"lists":[{"id":10,"label":{"id":20,"name":"To Do"},"position":0}]}`
-	boardListJSON := `{"id":10,"label":{"id":20,"name":"To Do"},"position":0,"max_issue_count":10}`
-
-	handler := http.NewServeMux()
-
-	// List group boards
-	handler.HandleFunc("GET /api/v4/groups/42/boards", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+boardJSON+`]`)
-	})
-
-	// Get group board
-	handler.HandleFunc("GET /api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, boardJSON)
-	})
-
-	// Create group board
-	handler.HandleFunc("POST /api/v4/groups/42/boards", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, boardJSON)
-	})
-
-	// Update group board
-	handler.HandleFunc("PUT /api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, boardJSON)
-	})
-
-	// Delete group board
-	handler.HandleFunc("DELETE /api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// List board lists
-	handler.HandleFunc("GET /api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+boardListJSON+`]`)
-	})
-
-	// Get board list
-	handler.HandleFunc("GET /api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, boardListJSON)
-	})
-
-	// Create board list
-	handler.HandleFunc("POST /api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, boardListJSON)
-	})
-
-	// Update board list (V2 returns a slice)
-	handler.HandleFunc("PUT /api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"label":{"id":20,"name":"To Do"},"position":2}]`)
-	})
-
-	// Delete board list
-	handler.HandleFunc("DELETE /api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

@@ -28,12 +28,12 @@ type mockSource struct {
 	err      error
 }
 
-// ListReleases performs the list releases operation on *mockSource.
+// ListReleases handles list releases for mockSource.
 func (m *mockSource) ListReleases(_ context.Context, _ selfupdate.Repository) ([]selfupdate.SourceRelease, error) {
 	return m.releases, m.err
 }
 
-// DownloadReleaseAsset performs the download release asset operation on *mockSource.
+// DownloadReleaseAsset handles download release asset for mockSource.
 func (m *mockSource) DownloadReleaseAsset(_ context.Context, _ *selfupdate.Release, _ int64) (io.ReadCloser, error) {
 	return nil, errors.New("mock: download not implemented")
 }
@@ -46,10 +46,10 @@ type mockRelease struct {
 	assets []selfupdate.SourceAsset
 }
 
-// GetID performs the get i d operation on *mockRelease.
+// GetID returns the ID value from mockRelease.
 func (r *mockRelease) GetID() int64 { return 1 }
 
-// GetTagName performs the get tag name operation on *mockRelease.
+// GetTagName returns the tag name value from mockRelease.
 func (r *mockRelease) GetTagName() string { return r.tag }
 
 // GetDraft reports whether the *mockRelease satisfies the get draft condition.
@@ -58,19 +58,19 @@ func (r *mockRelease) GetDraft() bool { return false }
 // GetPrerelease reports whether the *mockRelease satisfies the get prerelease condition.
 func (r *mockRelease) GetPrerelease() bool { return false }
 
-// GetPublishedAt performs the get published at operation on *mockRelease.
+// GetPublishedAt returns the published at value from mockRelease.
 func (r *mockRelease) GetPublishedAt() time.Time { return time.Now() }
 
-// GetReleaseNotes performs the get release notes operation on *mockRelease.
+// GetReleaseNotes returns the release notes value from mockRelease.
 func (r *mockRelease) GetReleaseNotes() string { return r.notes }
 
-// GetName performs the get name operation on *mockRelease.
+// GetName returns the name value from mockRelease.
 func (r *mockRelease) GetName() string { return r.tag }
 
-// GetURL performs the get u r l operation on *mockRelease.
+// GetURL returns the URL value from mockRelease.
 func (r *mockRelease) GetURL() string { return r.url }
 
-// GetAssets performs the get assets operation on *mockRelease.
+// GetAssets returns the assets value from mockRelease.
 func (r *mockRelease) GetAssets() []selfupdate.SourceAsset { return r.assets }
 
 // mockAsset implements selfupdate.SourceAsset.
@@ -80,16 +80,16 @@ type mockAsset struct {
 	url  string
 }
 
-// GetID performs the get i d operation on *mockAsset.
+// GetID returns the ID value from mockAsset.
 func (a *mockAsset) GetID() int64 { return a.id }
 
-// GetName performs the get name operation on *mockAsset.
+// GetName returns the name value from mockAsset.
 func (a *mockAsset) GetName() string { return a.name }
 
-// GetSize performs the get size operation on *mockAsset.
+// GetSize returns the size value from mockAsset.
 func (a *mockAsset) GetSize() int { return 1024 }
 
-// GetBrowserDownloadURL performs the get browser download u r l operation on *mockAsset.
+// GetBrowserDownloadURL returns the browser download URL value from mockAsset.
 func (a *mockAsset) GetBrowserDownloadURL() string { return a.url }
 
 // newMockReleaseForPlatform creates a mock release with an asset matching
@@ -715,7 +715,7 @@ type downloadableMockSource struct {
 	downloadErr  error
 }
 
-// ListReleases performs the list releases operation on downloadableMockSource.
+// ListReleases handles list releases for downloadableMockSource.
 func (m *downloadableMockSource) ListReleases(_ context.Context, _ selfupdate.Repository) ([]selfupdate.SourceRelease, error) {
 	return m.releases, m.listErr
 }

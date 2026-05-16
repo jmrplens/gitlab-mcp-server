@@ -1,6 +1,8 @@
 package systemhooks
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,8 +14,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		systemHookReadSpec("system_hook_get", toolutil.RouteAction(client, Get), "gitlab_get_system_hook"),
 		systemHookCreateSpec("system_hook_add", toolutil.RouteAction(client, Add), "gitlab_add_system_hook"),
 		systemHookTestSpec(client),
-		systemHookDeleteSpec("system_hook_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_system_hook"),
+		systemHookDeleteSpec("system_hook_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_system_hook"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("system hook")
+	return out, nil
 }
 
 func systemHookReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

@@ -1,4 +1,3 @@
-// Package features implements MCP tools for GitLab Features (feature flags) API.
 package features
 
 import (

@@ -1,10 +1,3 @@
-// Package epicdiscussions implements MCP tools for GitLab epic discussion
-// operations using the Work Items GraphQL API. Discussions are threaded
-// conversations on group epics, each containing one or more notes.
-//
-// This package was migrated from the deprecated Epics REST API (deprecated
-// GitLab 17.0, removal planned 19.0) to the Work Items GraphQL API per
-// ADR-0009 (progressive GraphQL migration).
 package epicdiscussions
 
 import (

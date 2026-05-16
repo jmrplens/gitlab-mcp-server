@@ -7,19 +7,21 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 const (
-	fmtUnexpErr              = "unexpected error: %v"
-	testCronFreezeStart      = "0 23 * * 5"
-	testCronUpdatedStart     = "0 0 * * 5"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// testCronFreezeStart identifies the test cron freeze start constant used by this package.
+	testCronFreezeStart = "0 23 * * 5"
+	// testCronUpdatedStart identifies the test cron updated start constant used by this package.
+	testCronUpdatedStart = "0 0 * * 5"
+	// errMissingFreezePeriodID identifies the err missing freeze period ID constant used by this package.
 	errMissingFreezePeriodID = "expected error for missing freeze_period_id"
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/1/freeze_periods" {
@@ -43,7 +45,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -54,7 +56,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/freeze_periods/5" {
@@ -74,7 +76,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -99,7 +101,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -123,7 +125,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -139,7 +141,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -152,7 +154,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies the behavior of format markdown string.
+// TestFormatMarkdownString verifies FormatMarkdownString.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:           1,
@@ -167,7 +169,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md != "No freeze periods found.\n" {
@@ -175,7 +177,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestGet_MissingFreezePeriodID verifies the behavior of get missing freeze period i d.
+// TestGet_MissingFreezePeriodID verifies Get when missing freeze period ID.
 func TestGet_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -186,7 +188,7 @@ func TestGet_MissingFreezePeriodID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingFreezePeriodID verifies the behavior of update missing freeze period i d.
+// TestUpdate_MissingFreezePeriodID verifies Update when missing freeze period ID.
 func TestUpdate_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -197,7 +199,7 @@ func TestUpdate_MissingFreezePeriodID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingFreezePeriodID verifies the behavior of delete missing freeze period i d.
+// TestDelete_MissingFreezePeriodID verifies Delete when missing freeze period ID.
 func TestDelete_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -471,73 +473,4 @@ func containsStr(s, sub string) bool {
 		}
 	}
 	return false
-}
-
-// TestRegisterTools_NoPanic verifies that RegisterTools does not panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallThroughMCP verifies that all registered tools can be
-// called through MCP in-memory transport, covering the handler closures of
-// RegisterTools. Each tool is called with valid inputs and a mock handler
-// that returns appropriate JSON responses.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}]`)
-		case http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}`)
-		case http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"freeze_start":"0 0 * * 1","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}`)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := t.Context()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_freeze_periods", map[string]any{"project_id": "1"}},
-		{"gitlab_get_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1}},
-		{"gitlab_create_freeze_period", map[string]any{"project_id": "1", "freeze_start": "0 23 * * 5", "freeze_end": "0 7 * * 1"}},
-		{"gitlab_update_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1, "freeze_start": "0 0 * * 1"}},
-		{"gitlab_delete_freeze_period", map[string]any{"project_id": "1", "freeze_period_id": 1}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil result", tt.name)
-			}
-		})
-	}
 }

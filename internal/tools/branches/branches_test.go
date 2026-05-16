@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -456,7 +455,7 @@ func TestBranchDelete_APIError(t *testing.T) {
 // protectedBranchGet tests
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchGet_Success verifies the behavior of protected branch get success.
+// TestProtectedBranchGet_Success verifies ProtectedBranchGet when success.
 func TestProtectedBranchGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches+"/main" {
@@ -487,7 +486,7 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingProjectID verifies the behavior of protected branch get missing project i d.
+// TestProtectedBranchGet_MissingProjectID verifies ProtectedBranchGet when missing project ID.
 func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -502,7 +501,7 @@ func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingBranchName verifies the behavior of protected branch get missing branch name.
+// TestProtectedBranchGet_MissingBranchName verifies ProtectedBranchGet when missing branch name.
 func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -517,7 +516,7 @@ func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_CancelledContext verifies the behavior of protected branch get cancelled context.
+// TestProtectedBranchGet_CancelledContext verifies ProtectedBranchGet when cancelled context.
 func TestProtectedBranchGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -535,7 +534,7 @@ func TestProtectedBranchGet_CancelledContext(t *testing.T) {
 // protectedBranchUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchUpdate_Success verifies the behavior of protected branch update success.
+// TestProtectedBranchUpdate_Success verifies ProtectedBranchUpdate when success.
 func TestProtectedBranchUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathProtectedBranches+"/main" {
@@ -562,7 +561,7 @@ func TestProtectedBranchUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingProjectID verifies the behavior of protected branch update missing project i d.
+// TestProtectedBranchUpdate_MissingProjectID verifies ProtectedBranchUpdate when missing project ID.
 func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -577,7 +576,7 @@ func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingBranchName verifies the behavior of protected branch update missing branch name.
+// TestProtectedBranchUpdate_MissingBranchName verifies ProtectedBranchUpdate when missing branch name.
 func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -592,7 +591,7 @@ func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_CancelledContext verifies the behavior of protected branch update cancelled context.
+// TestProtectedBranchUpdate_CancelledContext verifies ProtectedBranchUpdate when cancelled context.
 func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -610,7 +609,7 @@ func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
 // DeleteMerged tests
 // ---------------------------------------------------------------------------.
 
-// TestDeleteMerged_Success verifies the behavior of delete merged success.
+// TestDeleteMerged_Success verifies DeleteMerged when success.
 func TestDeleteMerged_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/merged_branches" {
@@ -626,7 +625,7 @@ func TestDeleteMerged_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_MissingProjectID verifies the behavior of delete merged missing project i d.
+// TestDeleteMerged_MissingProjectID verifies DeleteMerged when missing project ID.
 func TestDeleteMerged_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -638,7 +637,7 @@ func TestDeleteMerged_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_APIError verifies the behavior of delete merged a p i error.
+// TestDeleteMerged_APIError verifies DeleteMerged when API error.
 func TestDeleteMerged_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -650,7 +649,7 @@ func TestDeleteMerged_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_CancelledContext verifies the behavior of delete merged cancelled context.
+// TestDeleteMerged_CancelledContext verifies DeleteMerged when cancelled context.
 func TestDeleteMerged_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -668,7 +667,7 @@ func TestDeleteMerged_CancelledContext(t *testing.T) {
 // Canceled context tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_CancelledContext verifies the behavior of branch create cancelled context.
+// TestBranchCreate_CancelledContext verifies BranchCreate when cancelled context.
 func TestBranchCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -680,7 +679,7 @@ func TestBranchCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchList_CancelledContext verifies the behavior of branch list cancelled context.
+// TestBranchList_CancelledContext verifies BranchList when cancelled context.
 func TestBranchList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -692,7 +691,7 @@ func TestBranchList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchGet_CancelledContext verifies the behavior of branch get cancelled context.
+// TestBranchGet_CancelledContext verifies BranchGet when cancelled context.
 func TestBranchGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -704,7 +703,7 @@ func TestBranchGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_CancelledContext verifies the behavior of branch delete cancelled context.
+// TestBranchDelete_CancelledContext verifies BranchDelete when cancelled context.
 func TestBranchDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -716,7 +715,7 @@ func TestBranchDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_CancelledContext verifies the behavior of branch protect cancelled context.
+// TestBranchProtect_CancelledContext verifies BranchProtect when cancelled context.
 func TestBranchProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -728,7 +727,7 @@ func TestBranchProtect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_CancelledContext verifies the behavior of branch unprotect cancelled context.
+// TestBranchUnprotect_CancelledContext verifies BranchUnprotect when cancelled context.
 func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -740,7 +739,7 @@ func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestProtectedList_CancelledContext verifies the behavior of protected list cancelled context.
+// TestProtectedList_CancelledContext verifies ProtectedList when cancelled context.
 func TestProtectedList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -756,7 +755,7 @@ func TestProtectedList_CancelledContext(t *testing.T) {
 // Empty ProjectID tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_EmptyProjectID verifies the behavior of branch create empty project i d.
+// TestBranchCreate_EmptyProjectID verifies BranchCreate when empty project ID.
 func TestBranchCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -767,7 +766,7 @@ func TestBranchCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchList_EmptyProjectID verifies the behavior of branch list empty project i d.
+// TestBranchList_EmptyProjectID verifies BranchList when empty project ID.
 func TestBranchList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -778,7 +777,7 @@ func TestBranchList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_EmptyProjectID verifies the behavior of branch protect empty project i d.
+// TestBranchProtect_EmptyProjectID verifies BranchProtect when empty project ID.
 func TestBranchProtect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -789,7 +788,7 @@ func TestBranchProtect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_EmptyProjectID verifies the behavior of branch unprotect empty project i d.
+// TestBranchUnprotect_EmptyProjectID verifies BranchUnprotect when empty project ID.
 func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -800,7 +799,7 @@ func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedList_EmptyProjectID verifies the behavior of protected list empty project i d.
+// TestProtectedList_EmptyProjectID verifies ProtectedList when empty project ID.
 func TestProtectedList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -815,7 +814,7 @@ func TestProtectedList_EmptyProjectID(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestBranchProtect_APIError verifies the behavior of branch protect a p i error.
+// TestBranchProtect_APIError verifies BranchProtect when API error.
 func TestBranchProtect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -826,7 +825,7 @@ func TestBranchProtect_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchList_APIError verifies the behavior of branch list a p i error.
+// TestBranchList_APIError verifies BranchList when API error.
 func TestBranchList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -837,7 +836,7 @@ func TestBranchList_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchGet_APIError verifies the behavior of branch get a p i error.
+// TestBranchGet_APIError verifies BranchGet when API error.
 func TestBranchGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
@@ -848,7 +847,7 @@ func TestBranchGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedList_APIError verifies the behavior of protected list a p i error.
+// TestProtectedList_APIError verifies ProtectedList when API error.
 func TestProtectedList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -859,7 +858,7 @@ func TestProtectedList_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_APIError verifies the behavior of protected branch get a p i error.
+// TestProtectedBranchGet_APIError verifies ProtectedBranchGet when API error.
 func TestProtectedBranchGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -870,7 +869,7 @@ func TestProtectedBranchGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_APIError verifies the behavior of protected branch update a p i error.
+// TestProtectedBranchUpdate_APIError verifies ProtectedBranchUpdate when API error.
 func TestProtectedBranchUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -882,7 +881,7 @@ func TestProtectedBranchUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_APIError verifies the behavior of branch unprotect a p i error.
+// TestBranchUnprotect_APIError verifies BranchUnprotect when API error.
 func TestBranchUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -897,7 +896,7 @@ func TestBranchUnprotect_APIError(t *testing.T) {
 // Protect with advanced options
 // ---------------------------------------------------------------------------.
 
-// TestBranchProtect_WithForcePushAndCodeOwner verifies the behavior of branch protect with force push and code owner.
+// TestBranchProtect_WithForcePushAndCodeOwner verifies BranchProtect when with force push and code owner.
 func TestBranchProtect_WithForcePushAndCodeOwner(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -932,7 +931,7 @@ func TestBranchProtect_WithForcePushAndCodeOwner(t *testing.T) {
 // ProtectedUpdate with CodeOwnerApproval
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchUpdate_WithCodeOwner verifies the behavior of protected branch update with code owner.
+// TestProtectedBranchUpdate_WithCodeOwner verifies ProtectedBranchUpdate when with code owner.
 func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathProtectedBranches+"/main" {
@@ -959,7 +958,7 @@ func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 // Converter edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilCommit verifies the behavior of to output nil commit.
+// TestToOutput_NilCommit verifies ToOutput when nil commit.
 func TestToOutput_NilCommit(t *testing.T) {
 	b := &gl.Branch{Name: "main", Protected: true}
 	out := ToOutput(b)
@@ -968,7 +967,7 @@ func TestToOutput_NilCommit(t *testing.T) {
 	}
 }
 
-// TestProtectedToOutput_EmptyAccessLevels verifies the behavior of protected to output empty access levels.
+// TestProtectedToOutput_EmptyAccessLevels verifies ProtectedToOutput when empty access levels.
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
 	out := ProtectedToOutput(pb)
@@ -984,7 +983,7 @@ func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Name:      "main",
@@ -1005,7 +1004,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoURL verifies the behavior of format output markdown no u r l.
+// TestFormatOutputMarkdown_NoURL verifies FormatOutputMarkdown when no URL.
 func TestFormatOutputMarkdown_NoURL(t *testing.T) {
 	md := FormatOutputMarkdown(Output{Name: "dev"})
 	if !strings.Contains(md, "## Branch: dev") {
@@ -1016,7 +1015,7 @@ func TestFormatOutputMarkdown_NoURL(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Branches: []Output{
@@ -1067,7 +1066,7 @@ func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No branches found") {
@@ -1075,7 +1074,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedMarkdown verifies the behavior of format protected markdown.
+// TestFormatProtectedMarkdown verifies FormatProtectedMarkdown.
 func TestFormatProtectedMarkdown(t *testing.T) {
 	md := FormatProtectedMarkdown(ProtectedOutput{
 		ID:               1,
@@ -1092,7 +1091,7 @@ func TestFormatProtectedMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedListMarkdown verifies the behavior of format protected list markdown.
+// TestFormatProtectedListMarkdown verifies FormatProtectedListMarkdown.
 func TestFormatProtectedListMarkdown(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{
 		Branches: []ProtectedOutput{
@@ -1108,7 +1107,7 @@ func TestFormatProtectedListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedListMarkdown_Empty verifies the behavior of format protected list markdown empty.
+// TestFormatProtectedListMarkdown_Empty verifies FormatProtectedListMarkdown when empty.
 func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{})
 	if !strings.Contains(md, "No protected branches found") {
@@ -1120,7 +1119,7 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 // List with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestBranchList_PaginationQueryParams verifies the behavior of branch list pagination query params.
+// TestBranchList_PaginationQueryParams verifies BranchList when pagination query params.
 func TestBranchList_PaginationQueryParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRepoBranches {
@@ -1153,7 +1152,7 @@ func TestBranchList_PaginationQueryParams(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools + CallAllThroughMCP
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
 // branchMockResp holds a canned response for a mock branch endpoint.
@@ -1163,8 +1162,8 @@ type branchMockResp struct {
 	pgHdr  *testutil.PaginationHeaders
 }
 
-// newBranchMCPSession is an internal helper for the branches package.
-func newBranchMCPSession(t *testing.T) *mcp.ClientSession {
+// newBranchSpecsByTool constructs branch specs by tool test fixtures.
+func newBranchSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	base := "/api/v4/projects/42/repository/branches"
@@ -1211,47 +1210,20 @@ func newBranchMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return branchSpecsByTool(t, ActionSpecs(client))
 }
 
-// requireToolSuccess calls the named MCP tool and fails the test if the
-// call returns an error or an IsError result with embedded text.
-func requireToolSuccess(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) {
+// requireBranchRouteSuccess returns branch route success test data or fails the test.
+func requireBranchRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      name,
-		Arguments: args,
-	})
+	result, err := specs[name].Route.Handler(t.Context(), args)
 	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
+		t.Fatalf("Route.Handler(%s) error: %v", name, err)
 	}
-	if !result.IsError {
-		return
+	if result == nil {
+		t.Fatalf("Route.Handler(%s) returned nil", name)
 	}
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-		}
-	}
-	t.Fatalf("CallTool(%s) returned IsError=true", name)
 }
 
 // ---------------------------------------------------------------------------
@@ -1365,9 +1337,9 @@ func TestBranchProtect_ForcePush_WithRestrictiveAccess(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newBranchMCPSession(t)
+// TestActionSpecs_CallAllRoutes validates branch routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	specs := newBranchSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -1387,7 +1359,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			requireToolSuccess(t, session, tt.name, tt.args)
+			requireBranchRouteSuccess(t, specs, tt.name, tt.args)
 		})
 	}
 }
@@ -1527,9 +1499,8 @@ func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchGet_EmbedsCanonicalResource asserts gitlab_branch_get attaches
-// an EmbeddedResource block with URI gitlab://project/{id}/branch/{name}.
-func TestBranchGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_BranchGetRoute verifies the canonical branch get route output.
+func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gitlab.example.com/p/-/tree/main","commit":{"id":"abc"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/branches/main") {
@@ -1538,7 +1509,28 @@ func TestBranchGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "branch_name": "main"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_branch_get", args, "gitlab://project/42/branch/main", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := branchSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "main"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.Name != "main" || out.CommitID != "abc" {
+		t.Fatalf("branch output = %#v, want name main and commit abc", out)
+	}
+}
+
+// branchSpecsByTool supports branch specs by tool assertions in branches tests.
+func branchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

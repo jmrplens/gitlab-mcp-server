@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -196,6 +198,14 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	return b.String()
 }
 
+func formatWaitResult(out WaitOutput) *mcp.CallToolResult {
+	result := toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail)
+	if out.TimedOut {
+		result.IsError = true
+	}
+	return result
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
@@ -203,5 +213,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatBridgeListMarkdown)
 	toolutil.RegisterMarkdown(FormatArtifactsMarkdown)
 	toolutil.RegisterMarkdown(FormatSingleArtifactMarkdown)
-	toolutil.RegisterMarkdown(FormatWaitMarkdown)
+	toolutil.RegisterMarkdownResult(formatWaitResult)
 }

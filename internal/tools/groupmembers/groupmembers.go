@@ -1,4 +1,3 @@
-// Package groupmembers provides MCP tool handlers for GitLab group member operations.
 package groupmembers
 
 import (
@@ -237,6 +236,14 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 	return nil
 }
 
+// removeMemberOutput removes member output and returns [toolutil.DeleteOutput].
+func removeMemberOutput(ctx context.Context, client *gitlabclient.Client, input RemoveInput) (toolutil.DeleteOutput, error) {
+	if err := RemoveMember(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group member."}, nil
+}
+
 // ShareGroup shares a group with another group.
 func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInput) (ShareOutput, error) {
 	if input.GroupID == "" {
@@ -297,6 +304,14 @@ func UnshareGroup(ctx context.Context, client *gitlabclient.Client, input Unshar
 	return nil
 }
 
+// unshareGroupOutput unshares group output and returns [toolutil.DeleteOutput].
+func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input UnshareInput) (toolutil.DeleteOutput, error) {
+	if err := UnshareGroup(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group share."}, nil
+}
+
 // ──────────────────────────────────────────────
 // Converters
 // ──────────────────────────────────────────────.
@@ -312,7 +327,7 @@ var groupAccessLevelNames = map[gl.AccessLevelValue]string{
 	gl.OwnerPermissions:         "Owner",
 }
 
-// accessLevelDescription is an internal helper for the groupmembers package.
+// accessLevelDescription returns the GitLab role label for an access level.
 func accessLevelDescription(level gl.AccessLevelValue) string {
 	if name, ok := groupAccessLevelNames[level]; ok {
 		return name
@@ -320,7 +335,7 @@ func accessLevelDescription(level gl.AccessLevelValue) string {
 	return "Unknown"
 }
 
-// convertMember is an internal helper for the groupmembers package.
+// convertMember maps a GitLab group member into the MCP output shape.
 func convertMember(m *gl.GroupMember) Output {
 	out := Output{
 		ID:                     m.ID,

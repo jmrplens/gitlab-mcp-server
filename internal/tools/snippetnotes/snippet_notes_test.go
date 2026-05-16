@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -536,97 +534,6 @@ func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	if !contains(md, "| 101 |") {
 		t.Error("missing note 101 row")
 	}
-}
-
-// RegisterTools tests.
-
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all Snippet Notes tools
-// without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallAllThroughMCP uses table-driven subtests to exercise every registered
-// Snippet Notes tool through a round-trip MCP client call and asserts success.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newSnippetNotesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_snippet_note_list", map[string]any{"project_id": testProjectID, "snippet_id": 1}},
-		{"gitlab_snippet_note_get", map[string]any{"project_id": testProjectID, "snippet_id": 1, "note_id": 100}},
-		{"gitlab_snippet_note_create", map[string]any{"project_id": testProjectID, "snippet_id": 1, "body": "test"}},
-		{"gitlab_snippet_note_update", map[string]any{"project_id": testProjectID, "snippet_id": 1, "note_id": 100, "body": "updated"}},
-		{"gitlab_snippet_note_delete", map[string]any{"project_id": testProjectID, "snippet_id": 1, "note_id": 100}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-func newSnippetNotesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && path == pathSnippetNotes:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSON+"]",
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		case r.Method == http.MethodGet && path == pathSnippetNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSON)
-		case r.Method == http.MethodPost && path == pathSnippetNotes:
-			testutil.RespondJSON(w, http.StatusCreated, noteJSON)
-		case r.Method == http.MethodPut && path == pathSnippetNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSON)
-		case r.Method == http.MethodDelete && path == pathSnippetNote100:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 func contains(s, substr string) bool {

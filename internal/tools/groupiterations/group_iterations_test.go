@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -477,9 +475,9 @@ func TestList_MultipleIterations(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies that RegisterTools registers
-// the tool and it can be called through MCP in-memory transport.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestIssueActionSpecs_CallRoute verifies that the group iteration canonical
+// route executes successfully through IssueActionSpecs.
+func TestIssueActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
@@ -488,29 +486,19 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := IssueActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(IssueActionSpecs) = %d, want 1", len(specs))
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := specs[0]
+	if spec.IndividualTool.Name != "gitlab_list_group_iterations" || spec.OwnerPackage != "groupiterations" {
+		t.Fatalf("unexpected ActionSpec: %+v", spec)
+	}
+	result, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "10"})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_group_iterations",
-		Arguments: map[string]any{"group_id": "10"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result.IsError {
-		t.Fatalf("CallTool returned tool error")
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
 	}
 }

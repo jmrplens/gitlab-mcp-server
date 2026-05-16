@@ -1,4 +1,3 @@
-// Package snippetdiscussions implements MCP tools for GitLab snippet discussion operations.
 package snippetdiscussions
 
 import (

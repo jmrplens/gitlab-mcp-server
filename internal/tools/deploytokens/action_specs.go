@@ -1,6 +1,8 @@
 package deploytokens
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -16,8 +18,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		deployTokenCreateSpec("deploy_token_create_project", toolutil.RouteAction(client, CreateProject), "gitlab_deploy_token_create_project"),
 		deployTokenCreateSpec("deploy_token_create_group", toolutil.RouteAction(client, CreateGroup), "gitlab_deploy_token_create_group"),
 		deployTokenDeleteProjectSpec(client),
-		deployTokenDeleteSpec("deploy_token_delete_group", toolutil.DestructiveVoidAction(client, DeleteGroup), "gitlab_deploy_token_delete_group"),
+		deployTokenDeleteSpec("deploy_token_delete_group", toolutil.DestructiveAction(client, DeleteGroupOutput), "gitlab_deploy_token_delete_group"),
 	}
+}
+
+// DeleteProjectOutput deletes a project deploy token and returns the canonical success message shape.
+func DeleteProjectOutput(ctx context.Context, client *gitlabclient.Client, input DeleteProjectInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteProject(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted project deploy token."}, nil
+}
+
+// DeleteGroupOutput deletes a group deploy token and returns the canonical success message shape.
+func DeleteGroupOutput(ctx context.Context, client *gitlabclient.Client, input DeleteGroupInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteGroup(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group deploy token."}, nil
 }
 
 func deployTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -55,7 +73,7 @@ func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSp
 	}
 	options.Destructive = true
 	options.Idempotent = true
-	return toolutil.NewActionSpec("deploy_token_delete_project", toolutil.DestructiveVoidAction(client, DeleteProject), options)
+	return toolutil.NewActionSpec("deploy_token_delete_project", toolutil.DestructiveAction(client, DeleteProjectOutput), options)
 }
 
 func deployTokenOptions(individualTool string) toolutil.ActionSpecOptions {

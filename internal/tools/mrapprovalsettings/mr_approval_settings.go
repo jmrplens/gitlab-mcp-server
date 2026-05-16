@@ -1,6 +1,3 @@
-// Package mrapprovalsettings implements MCP tool handlers for GitLab
-// merge request approval settings at project and group level.
-// It wraps the MergeRequestApprovalSettings API.
 package mrapprovalsettings
 
 import (

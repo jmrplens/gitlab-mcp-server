@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Environments, Deployments, Protected Environments, Freeze Periods
 > **Individual tools**: 23
-> **Meta-tools**: `gitlab_environment` (when `META_TOOLS=true`, default). Protected environment actions use `protected_*` prefix, freeze period actions use `freeze_*` prefix, deployment actions use `deployment_*` prefix.
+> **Meta-tools**: `gitlab_environment` (default `TOOL_SURFACE=meta` catalog). Protected environment actions use `protected_*` prefix, freeze period actions use `freeze_*` prefix, deployment actions use `deployment_*` prefix.
 > **GitLab API**: [Environments API](https://docs.gitlab.com/ee/api/environments.html) · [Deployments API](https://docs.gitlab.com/ee/api/deployments.html) · [Protected Environments API](https://docs.gitlab.com/ee/api/protected_environments.html) · [Freeze Periods API](https://docs.gitlab.com/ee/api/freeze_periods.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The environments and deployments domain covers the full lifecycle of GitLab environments, deployments, protected environment configurations, deploy freeze periods, and deployment merge request associations.
 
-When `META_TOOLS=true` (the default), the 23 individual tools below are consolidated into one meta-tool (`gitlab_environment`) that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, the 23 individual tools below are consolidated into one meta-tool (`gitlab_environment`) that dispatches by `action` parameter.
 
 ### Common Questions
 

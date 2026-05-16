@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 self-managed Enterprise/Premium individual tools or 1011 GitLab.com Enterprise/Premium tools, **32 base meta-tools** (47 self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 self-managed Enterprise/Premium individual tools or 1011 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (47 self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for **47 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**.
+In meta-tool mode (`TOOL_SURFACE=meta`, default), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 14 additional enterprise inline meta-tools for **47 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 
@@ -39,27 +39,29 @@ Meta-tools are **enabled by default**. New configurations should prefer the expl
 TOOL_SURFACE=meta
 ```
 
-The legacy boolean selector remains supported:
+The legacy boolean selector remains supported for one compatibility window, but new configuration should not use it:
 
 ```env
 META_TOOLS=true
 ```
 
-To switch from meta-tools to individual tools:
-
-```env
-META_TOOLS=false
-```
+To switch from meta-tools to individual tools, use the explicit selector:
 
 ```env
 TOOL_SURFACE=individual
+```
+
+The old `META_TOOLS=false` spelling still maps to `TOOL_SURFACE=individual` when `TOOL_SURFACE` is absent.
+
+```env
+META_TOOLS=false
 ```
 
 Meta-tools remain the default because they are the most broadly compatible consolidated surface.
 
 | Mode | Tool Count | Best For |
 | --- | ---: | --- |
-| Meta-tools | 32 base / 47 self-managed Enterprise/Premium / 48 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Meta-tools | 33 base / 47 self-managed Enterprise/Premium / 48 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
 | Individual tools | 863 CE / 1006 self-managed Enterprise/Premium / 1011 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
 
 ---
@@ -157,12 +159,13 @@ The consolidated surface reduces:
 
 Meta-tools are registered from the canonical action catalog built by `internal/tools.BuildActionCatalog()`.
 `RegisterAllMeta()` registers visible domain dispatchers from that catalog.
-Developers define route metadata through `ActionMap` and `ActionRoute`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, and result formatting.
+Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, aliases, usage hints, individual projection policy, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
+- `ActionSpec` — canonical action metadata, including the typed route, ownership, aliases, tags, usage hints, projection policy, result policies, and compatibility policy
+- `CatalogGroupSpec` — visible meta-tool group metadata and the ordered action set used to build the catalog
 - `ActionRoute` — pairs a handler with metadata-driven classification. Typed routes carry both `InputSchema` and `OutputSchema` so each action can expose exact params and result contracts
-- `ActionMap` — `map[string]ActionRoute` mapping action names to route definitions
 - `Route(fn)` / `DestructiveRoute(fn)` — legacy constructors for already-adapted handlers
 - `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
 - `MakeMetaHandler()` — creates action-dispatch handlers from route maps; successful results automatically enrich `structuredContent` with `next_steps` hints extracted from Markdown, while `isError` results omit structured content
@@ -187,7 +190,7 @@ sequenceDiagram
 
     User->>Meta: action=board_create, params={project_id, name}
     Meta->>Handler: Dispatch action
-    Handler->>Route: Lookup in ActionMap
+    Handler->>Route: Lookup in catalog action map
     Route->>Domain: Unmarshal typed params
     Domain->>GL: Create project board
     GL-->>Domain: Board response
@@ -284,7 +287,7 @@ If the MCP client supports elicitation, the server will ask for user confirmatio
 
 Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
 
-1. **MCP Resource** (recommended, available unless `CAPABILITY_SURFACE=minimal` is enabled) — read the per-action JSON Schema:
+1. **MCP Resource** (recommended with `CAPABILITY_SURFACE=full`) — read the per-action JSON Schema:
 
    ```text
    gitlab://schema/meta/{tool}/{action}
@@ -331,6 +334,8 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
    }
    ```
 
-2. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. See [env-reference.md](env-reference.md) for size/cost trade-offs.
+  These resources are omitted when `CAPABILITY_SURFACE=minimal` is enabled. In that low-token mode, Dynamic surfaces should use `gitlab_describe_tools` or `gitlab_find_action` for inline schemas; meta-tool callers can keep `CAPABILITY_SURFACE=full` or use the inlined schema modes below.
+
+1. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [env-reference.md](env-reference.md) for size/cost trade-offs.
 
 The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.

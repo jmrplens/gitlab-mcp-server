@@ -9,15 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-func TestStandalone_ExcludedToolName(t *testing.T) {
-	if !standaloneExcluded([]string{"gitlab_search_tools"}, "gitlab_search_tools") {
-		t.Fatal("standaloneExcluded() = false, want true for configured tool")
-	}
-	if standaloneExcluded([]string{"gitlab_search_tools"}, "gitlab_describe_tools") {
-		t.Fatal("standaloneExcluded() = true, want false for different tool")
-	}
-}
-
+// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies Standalone when add standalone routes respects read only and exclusions.
 func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
 		ReadOnly:     true,
@@ -38,6 +30,7 @@ func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.
 	}
 }
 
+// TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault verifies Standalone when add standalone routes adds discover by default.
 func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -53,6 +46,7 @@ func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	}
 }
 
+// TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil verifies Standalone when add standalone catalog creates catalog when nil.
 func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	catalog, err := AddStandaloneCatalog(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -66,6 +60,7 @@ func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	}
 }
 
+// TestStandalone_AddStandaloneRoutesPreservesExistingMappings verifies Standalone when add standalone routes preserves existing mappings.
 func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -86,6 +81,7 @@ func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	}
 }
 
+// TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups covers Standalone with table-driven subtests for add standalone catalog rejects duplicate standalone groups.
 func TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -119,6 +115,7 @@ func TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups(t *test
 	}
 }
 
+// seedStandaloneGroup seeds standalone group test fixtures.
 func seedStandaloneGroup(t *testing.T, toolName, actionName string) actioncatalog.Group {
 	t.Helper()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: toolName})

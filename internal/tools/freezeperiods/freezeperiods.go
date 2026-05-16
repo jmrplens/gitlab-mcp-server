@@ -1,4 +1,3 @@
-// Package freezeperiods implements MCP tools for GitLab deploy freeze period operations.
 package freezeperiods
 
 import (
@@ -174,6 +173,13 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 			"the freeze period may already be deleted \u2014 verify with gitlab_list_freeze_periods")
 	}
 	return nil
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted freeze period."}, nil
 }
 
 // Converters.

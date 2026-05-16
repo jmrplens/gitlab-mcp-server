@@ -1,5 +1,3 @@
-// Package groupvariables implements GitLab group-level CI/CD variable operations
-// including list, get, create, update, and delete.
 package groupvariables
 
 import (
@@ -298,6 +296,13 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 			"the variable may already be deleted \u2014 verify with gitlab_group_variable_list")
 	}
 	return nil
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group CI/CD variable."}, nil
 }
 
 // ---------- Formatters ----------.

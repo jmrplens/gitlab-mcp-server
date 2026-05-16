@@ -28,27 +28,41 @@ import (
 )
 
 const (
+	// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 	errExpCancelledNil = "expected error for canceled context, got nil"
-	errExpEmptyQuery   = "expected error for empty query, got nil"
-	errExpAPIFailure   = "expected error for API failure, got nil"
-	fmtLenBlobsWant1   = "len(Blobs) = %d, want 1"
-	pathSearchProject  = "/api/v4/projects/42/-/search"
-	pathSearchGroup    = "/api/v4/groups/7/-/search"
-	pathSearchGlobal   = "/api/v4/search"
-	queryScope         = "scope"
-	scopeBlobs         = "blobs"
-	testMRFixBugTitle  = "Fix bug"
-	testProjectSlug    = "my-project"
-	fmtTitleWant       = "Title = %q, want %q"
+	// errExpEmptyQuery identifies the err exp empty query constant used by this package.
+	errExpEmptyQuery = "expected error for empty query, got nil"
+	// errExpAPIFailure identifies the err exp API failure constant used by this package.
+	errExpAPIFailure = "expected error for API failure, got nil"
+	// fmtLenBlobsWant1 identifies the fmt len blobs want 1 constant used by this package.
+	fmtLenBlobsWant1 = "len(Blobs) = %d, want 1"
+	// pathSearchProject identifies the path search project constant used by this package.
+	pathSearchProject = "/api/v4/projects/42/-/search"
+	// pathSearchGroup identifies the path search group constant used by this package.
+	pathSearchGroup = "/api/v4/groups/7/-/search"
+	// pathSearchGlobal identifies the path search global constant used by this package.
+	pathSearchGlobal = "/api/v4/search"
+	// queryScope identifies the query scope constant used by this package.
+	queryScope = "scope"
+	// scopeBlobs identifies the scope blobs constant used by this package.
+	scopeBlobs = "blobs"
+	// testMRFixBugTitle identifies the test MR fix bug title constant used by this package.
+	testMRFixBugTitle = "Fix bug"
+	// testProjectSlug identifies the test project slug constant used by this package.
+	testProjectSlug = "my-project"
+	// fmtTitleWant identifies the fmt title want constant used by this package.
+	fmtTitleWant = "Title = %q, want %q"
 )
 
+// defaultPagination stores the package-level default pagination state.
 var defaultPagination = testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
 
+// unsupportedSearchSchemaInput defines parameters for the unsupported search schema operation.
 type unsupportedSearchSchemaInput struct {
 	Values map[int]string `json:"values"`
 }
 
-// TestSearchCode_ProjectScope verifies the behavior of search code project scope.
+// TestSearchCode_ProjectScope verifies SearchCode when project scope.
 func TestSearchCode_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject {
@@ -98,7 +112,7 @@ func TestSearchCode_SearchType(t *testing.T) {
 	}
 }
 
-// TestSearchCode_GlobalScope verifies the behavior of search code global scope.
+// TestSearchCode_GlobalScope verifies SearchCode when global scope.
 func TestSearchCode_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == scopeBlobs {
@@ -120,7 +134,7 @@ func TestSearchCode_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchCode_GroupScope verifies the behavior of search code group scope.
+// TestSearchCode_GroupScope verifies SearchCode when group scope.
 func TestSearchCode_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGroup && r.URL.Query().Get(queryScope) == scopeBlobs {
@@ -142,7 +156,7 @@ func TestSearchCode_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchCode_EmptyQuery verifies the behavior of search code empty query.
+// TestSearchCode_EmptyQuery verifies SearchCode when empty query.
 func TestSearchCode_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -153,7 +167,7 @@ func TestSearchCode_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestSearchCode_APIError verifies the behavior of search code a p i error.
+// TestSearchCode_APIError verifies SearchCode when API error.
 func TestSearchCode_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -164,7 +178,7 @@ func TestSearchCode_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchMerge_RequestsProjectScope verifies the behavior of search merge requests project scope.
+// TestSearchMerge_RequestsProjectScope verifies SearchMerge when requests project scope.
 func TestSearchMerge_RequestsProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "merge_requests" {
@@ -191,7 +205,7 @@ func TestSearchMerge_RequestsProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchMerge_RequestsGlobalScope verifies the behavior of search merge requests global scope.
+// TestSearchMerge_RequestsGlobalScope verifies SearchMerge when requests global scope.
 func TestSearchMerge_RequestsGlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "merge_requests" {
@@ -215,7 +229,7 @@ func TestSearchMerge_RequestsGlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchMergeRequests_EmptyQuery verifies the behavior of search merge requests empty query.
+// TestSearchMergeRequests_EmptyQuery verifies SearchMergeRequests when empty query.
 func TestSearchMergeRequests_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -226,7 +240,7 @@ func TestSearchMergeRequests_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestSearchCode_CancelledContext verifies the behavior of search code cancelled context.
+// TestSearchCode_CancelledContext verifies SearchCode when cancelled context.
 func TestSearchCode_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -238,7 +252,7 @@ func TestSearchCode_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSearchIssuesGlobal_Success verifies the behavior of search issues global success.
+// TestSearchIssuesGlobal_Success verifies SearchIssuesGlobal when success.
 func TestSearchIssuesGlobal_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "issues" {
@@ -264,7 +278,7 @@ func TestSearchIssuesGlobal_Success(t *testing.T) {
 	}
 }
 
-// TestSearchIssuesByProject_Success verifies the behavior of search issues by project success.
+// TestSearchIssuesByProject_Success verifies SearchIssuesByProject when success.
 func TestSearchIssuesByProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "issues" {
@@ -287,7 +301,7 @@ func TestSearchIssuesByProject_Success(t *testing.T) {
 	}
 }
 
-// TestSearchIssues_EmptyQuery verifies the behavior of search issues empty query.
+// TestSearchIssues_EmptyQuery verifies SearchIssues when empty query.
 func TestSearchIssues_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -298,7 +312,7 @@ func TestSearchIssues_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestSearchIssues_APIError verifies the behavior of search issues a p i error.
+// TestSearchIssues_APIError verifies SearchIssues when API error.
 func TestSearchIssues_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -309,7 +323,7 @@ func TestSearchIssues_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchIssues_CancelledContext verifies the behavior of search issues cancelled context.
+// TestSearchIssues_CancelledContext verifies SearchIssues when cancelled context.
 func TestSearchIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -325,7 +339,7 @@ func TestSearchIssues_CancelledContext(t *testing.T) {
 // Commits
 // ---------------------------------------------------------------------------.
 
-// TestSearchCommits_GlobalScope verifies the behavior of search commits global scope.
+// TestSearchCommits_GlobalScope verifies SearchCommits when global scope.
 func TestSearchCommits_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "commits" {
@@ -352,7 +366,7 @@ func TestSearchCommits_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchCommits_ProjectScope verifies the behavior of search commits project scope.
+// TestSearchCommits_ProjectScope verifies SearchCommits when project scope.
 func TestSearchCommits_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "commits" {
@@ -376,7 +390,7 @@ func TestSearchCommits_ProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchCommits_EmptyQuery verifies the behavior of search commits empty query.
+// TestSearchCommits_EmptyQuery verifies SearchCommits when empty query.
 func TestSearchCommits_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -387,7 +401,7 @@ func TestSearchCommits_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestSearchCommits_CancelledContext verifies the behavior of search commits cancelled context.
+// TestSearchCommits_CancelledContext verifies SearchCommits when cancelled context.
 func TestSearchCommits_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -403,7 +417,7 @@ func TestSearchCommits_CancelledContext(t *testing.T) {
 // Milestones
 // ---------------------------------------------------------------------------.
 
-// TestSearchMilestones_GlobalScope verifies the behavior of search milestones global scope.
+// TestSearchMilestones_GlobalScope verifies SearchMilestones when global scope.
 func TestSearchMilestones_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "milestones" {
@@ -428,7 +442,7 @@ func TestSearchMilestones_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchMilestones_ProjectScope verifies the behavior of search milestones project scope.
+// TestSearchMilestones_ProjectScope verifies SearchMilestones when project scope.
 func TestSearchMilestones_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "milestones" {
@@ -450,7 +464,7 @@ func TestSearchMilestones_ProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchMilestones_EmptyQuery verifies the behavior of search milestones empty query.
+// TestSearchMilestones_EmptyQuery verifies SearchMilestones when empty query.
 func TestSearchMilestones_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -465,7 +479,7 @@ func TestSearchMilestones_EmptyQuery(t *testing.T) {
 // Notes (project-scoped only)
 // ---------------------------------------------------------------------------.
 
-// TestSearchNotes_ProjectScope verifies the behavior of search notes project scope.
+// TestSearchNotes_ProjectScope verifies SearchNotes when project scope.
 func TestSearchNotes_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "notes" {
@@ -491,7 +505,7 @@ func TestSearchNotes_ProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchNotes_MissingProjectID verifies the behavior of search notes missing project i d.
+// TestSearchNotes_MissingProjectID verifies SearchNotes when missing project ID.
 func TestSearchNotes_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -502,7 +516,7 @@ func TestSearchNotes_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestSearchNotes_EmptyQuery verifies the behavior of search notes empty query.
+// TestSearchNotes_EmptyQuery verifies SearchNotes when empty query.
 func TestSearchNotes_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -517,7 +531,7 @@ func TestSearchNotes_EmptyQuery(t *testing.T) {
 // Projects
 // ---------------------------------------------------------------------------.
 
-// TestSearchProjects_GlobalScope verifies the behavior of search projects global scope.
+// TestSearchProjects_GlobalScope verifies SearchProjects when global scope.
 func TestSearchProjects_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "projects" {
@@ -543,7 +557,7 @@ func TestSearchProjects_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchProjects_GroupScope verifies the behavior of search projects group scope.
+// TestSearchProjects_GroupScope verifies SearchProjects when group scope.
 func TestSearchProjects_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGroup && r.URL.Query().Get(queryScope) == "projects" {
@@ -566,7 +580,7 @@ func TestSearchProjects_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchProjects_EmptyQuery verifies the behavior of search projects empty query.
+// TestSearchProjects_EmptyQuery verifies SearchProjects when empty query.
 func TestSearchProjects_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -581,7 +595,7 @@ func TestSearchProjects_EmptyQuery(t *testing.T) {
 // Snippets (global only)
 // ---------------------------------------------------------------------------.
 
-// TestSearchSnippets_GlobalScope verifies the behavior of search snippets global scope.
+// TestSearchSnippets_GlobalScope verifies SearchSnippets when global scope.
 func TestSearchSnippets_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "snippet_titles" {
@@ -610,7 +624,7 @@ func TestSearchSnippets_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchSnippets_EmptyQuery verifies the behavior of search snippets empty query.
+// TestSearchSnippets_EmptyQuery verifies SearchSnippets when empty query.
 func TestSearchSnippets_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -625,7 +639,7 @@ func TestSearchSnippets_EmptyQuery(t *testing.T) {
 // Users
 // ---------------------------------------------------------------------------.
 
-// TestSearchUsers_GlobalScope verifies the behavior of search users global scope.
+// TestSearchUsers_GlobalScope verifies SearchUsers when global scope.
 func TestSearchUsers_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "users" {
@@ -650,7 +664,7 @@ func TestSearchUsers_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchUsers_ProjectScope verifies the behavior of search users project scope.
+// TestSearchUsers_ProjectScope verifies SearchUsers when project scope.
 func TestSearchUsers_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "users" {
@@ -672,7 +686,7 @@ func TestSearchUsers_ProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchUsers_EmptyQuery verifies the behavior of search users empty query.
+// TestSearchUsers_EmptyQuery verifies SearchUsers when empty query.
 func TestSearchUsers_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -687,7 +701,7 @@ func TestSearchUsers_EmptyQuery(t *testing.T) {
 // Wiki Blobs
 // ---------------------------------------------------------------------------.
 
-// TestSearchWiki_GlobalScope verifies the behavior of search wiki global scope.
+// TestSearchWiki_GlobalScope verifies SearchWiki when global scope.
 func TestSearchWiki_GlobalScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "wiki_blobs" {
@@ -711,7 +725,7 @@ func TestSearchWiki_GlobalScope(t *testing.T) {
 	}
 }
 
-// TestSearchWiki_ProjectScope verifies the behavior of search wiki project scope.
+// TestSearchWiki_ProjectScope verifies SearchWiki when project scope.
 func TestSearchWiki_ProjectScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == "wiki_blobs" {
@@ -732,7 +746,7 @@ func TestSearchWiki_ProjectScope(t *testing.T) {
 	}
 }
 
-// TestSearchWiki_EmptyQuery verifies the behavior of search wiki empty query.
+// TestSearchWiki_EmptyQuery verifies SearchWiki when empty query.
 func TestSearchWiki_EmptyQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -743,7 +757,7 @@ func TestSearchWiki_EmptyQuery(t *testing.T) {
 	}
 }
 
-// TestSearchWiki_CancelledContext verifies the behavior of search wiki cancelled context.
+// TestSearchWiki_CancelledContext verifies SearchWiki when cancelled context.
 func TestSearchWiki_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -758,17 +772,21 @@ func TestSearchWiki_CancelledContext(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	errExpected    = "expected error"
-	fmtUnexpErr    = "unexpected error: %v"
+	// errExpected identifies the err expected constant used by this package.
+	errExpected = "expected error"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// errExpectedHdr identifies the err expected hdr constant used by this package.
 	errExpectedHdr = "expected header with count"
-	fmtLenWant1    = "len=%d, want 1"
+	// fmtLenWant1 identifies the fmt len want 1 constant used by this package.
+	fmtLenWant1 = "len=%d, want 1"
 )
 
 // ---------------------------------------------------------------------------
 // searchOpts helper
 // ---------------------------------------------------------------------------.
 
-// TestSearchOpts_Defaults verifies the behavior of search opts defaults.
+// TestSearchOpts_Defaults verifies SearchOpts when defaults.
 func TestSearchOpts_Defaults(t *testing.T) {
 	opts, err := searchOpts(0, 0, "", "")
 	if err != nil {
@@ -785,7 +803,7 @@ func TestSearchOpts_Defaults(t *testing.T) {
 	}
 }
 
-// TestSearchOpts_AllParams verifies the behavior of search opts all params.
+// TestSearchOpts_AllParams verifies SearchOpts when all params.
 func TestSearchOpts_AllParams(t *testing.T) {
 	opts, err := searchOpts(3, 50, "develop", "advanced")
 	if err != nil {
@@ -917,7 +935,7 @@ func TestSearchHandlers_InvalidSearchType_ReturnValidationError(t *testing.T) {
 // Group-scope tests (missing from search_test.go)
 // ---------------------------------------------------------------------------.
 
-// TestSearchMerge_RequestsGroupScope verifies the behavior of search merge requests group scope.
+// TestSearchMerge_RequestsGroupScope verifies SearchMerge when requests group scope.
 func TestSearchMerge_RequestsGroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "merge_requests" {
@@ -935,7 +953,7 @@ func TestSearchMerge_RequestsGroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchIssues_GroupScope verifies the behavior of search issues group scope.
+// TestSearchIssues_GroupScope verifies SearchIssues when group scope.
 func TestSearchIssues_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "issues" {
@@ -953,7 +971,7 @@ func TestSearchIssues_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchCommits_GroupScope verifies the behavior of search commits group scope.
+// TestSearchCommits_GroupScope verifies SearchCommits when group scope.
 func TestSearchCommits_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "commits" {
@@ -971,7 +989,7 @@ func TestSearchCommits_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchMilestones_GroupScope verifies the behavior of search milestones group scope.
+// TestSearchMilestones_GroupScope verifies SearchMilestones when group scope.
 func TestSearchMilestones_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "milestones" {
@@ -989,7 +1007,7 @@ func TestSearchMilestones_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchUsers_GroupScope verifies the behavior of search users group scope.
+// TestSearchUsers_GroupScope verifies SearchUsers when group scope.
 func TestSearchUsers_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "users" {
@@ -1007,7 +1025,7 @@ func TestSearchUsers_GroupScope(t *testing.T) {
 	}
 }
 
-// TestSearchWiki_GroupScope verifies the behavior of search wiki group scope.
+// TestSearchWiki_GroupScope verifies SearchWiki when group scope.
 func TestSearchWiki_GroupScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGroup && r.URL.Query().Get("scope") == "wiki_blobs" {
@@ -1029,7 +1047,7 @@ func TestSearchWiki_GroupScope(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestSearchMergeRequests_APIError verifies the behavior of search merge requests a p i error.
+// TestSearchMergeRequests_APIError verifies SearchMergeRequests when API error.
 func TestSearchMergeRequests_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1040,7 +1058,7 @@ func TestSearchMergeRequests_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchCommits_APIError verifies the behavior of search commits a p i error.
+// TestSearchCommits_APIError verifies SearchCommits when API error.
 func TestSearchCommits_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1051,7 +1069,7 @@ func TestSearchCommits_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchMilestones_APIError verifies the behavior of search milestones a p i error.
+// TestSearchMilestones_APIError verifies SearchMilestones when API error.
 func TestSearchMilestones_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1062,7 +1080,7 @@ func TestSearchMilestones_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchNotes_APIError verifies the behavior of search notes a p i error.
+// TestSearchNotes_APIError verifies SearchNotes when API error.
 func TestSearchNotes_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1073,7 +1091,7 @@ func TestSearchNotes_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchProjects_APIError verifies the behavior of search projects a p i error.
+// TestSearchProjects_APIError verifies SearchProjects when API error.
 func TestSearchProjects_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1084,7 +1102,7 @@ func TestSearchProjects_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchSnippets_APIError verifies the behavior of search snippets a p i error.
+// TestSearchSnippets_APIError verifies SearchSnippets when API error.
 func TestSearchSnippets_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1095,7 +1113,7 @@ func TestSearchSnippets_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchUsers_APIError verifies the behavior of search users a p i error.
+// TestSearchUsers_APIError verifies SearchUsers when API error.
 func TestSearchUsers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1106,7 +1124,7 @@ func TestSearchUsers_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchWiki_APIError verifies the behavior of search wiki a p i error.
+// TestSearchWiki_APIError verifies SearchWiki when API error.
 func TestSearchWiki_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -1121,7 +1139,7 @@ func TestSearchWiki_APIError(t *testing.T) {
 // Canceled context tests
 // ---------------------------------------------------------------------------.
 
-// TestSearchMergeRequests_CancelledCtx verifies the behavior of search merge requests cancelled ctx.
+// TestSearchMergeRequests_CancelledCtx verifies SearchMergeRequests when cancelled ctx.
 func TestSearchMergeRequests_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1133,7 +1151,7 @@ func TestSearchMergeRequests_CancelledCtx(t *testing.T) {
 	}
 }
 
-// TestSearchMilestones_CancelledCtx verifies the behavior of search milestones cancelled ctx.
+// TestSearchMilestones_CancelledCtx verifies SearchMilestones when cancelled ctx.
 func TestSearchMilestones_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1145,7 +1163,7 @@ func TestSearchMilestones_CancelledCtx(t *testing.T) {
 	}
 }
 
-// TestSearchNotes_CancelledCtx verifies the behavior of search notes cancelled ctx.
+// TestSearchNotes_CancelledCtx verifies SearchNotes when cancelled ctx.
 func TestSearchNotes_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1157,7 +1175,7 @@ func TestSearchNotes_CancelledCtx(t *testing.T) {
 	}
 }
 
-// TestSearchProjects_CancelledCtx verifies the behavior of search projects cancelled ctx.
+// TestSearchProjects_CancelledCtx verifies SearchProjects when cancelled ctx.
 func TestSearchProjects_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1169,7 +1187,7 @@ func TestSearchProjects_CancelledCtx(t *testing.T) {
 	}
 }
 
-// TestSearchSnippets_CancelledCtx verifies the behavior of search snippets cancelled ctx.
+// TestSearchSnippets_CancelledCtx verifies SearchSnippets when cancelled ctx.
 func TestSearchSnippets_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1181,7 +1199,7 @@ func TestSearchSnippets_CancelledCtx(t *testing.T) {
 	}
 }
 
-// TestSearchUsers_CancelledCtx verifies the behavior of search users cancelled ctx.
+// TestSearchUsers_CancelledCtx verifies SearchUsers when cancelled ctx.
 func TestSearchUsers_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1197,7 +1215,7 @@ func TestSearchUsers_CancelledCtx(t *testing.T) {
 // Code search with Ref parameter
 // ---------------------------------------------------------------------------.
 
-// TestSearchCode_WithRef verifies the behavior of search code with ref.
+// TestSearchCode_WithRef verifies SearchCode when with ref.
 func TestSearchCode_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "ref", "develop")
@@ -1216,7 +1234,7 @@ func TestSearchCode_WithRef(t *testing.T) {
 // Notes with nil fields
 // ---------------------------------------------------------------------------.
 
-// TestSearchNotes_NilAuthorAndDates verifies the behavior of search notes nil author and dates.
+// TestSearchNotes_NilAuthorAndDates verifies SearchNotes when nil author and dates.
 func TestSearchNotes_NilAuthorAndDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchProject && r.URL.Query().Get("scope") == "notes" {
@@ -1241,7 +1259,7 @@ func TestSearchNotes_NilAuthorAndDates(t *testing.T) {
 // Snippets with nil fields and ProjectID
 // ---------------------------------------------------------------------------.
 
-// TestSearchSnippets_NilAuthorAndDates verifies the behavior of search snippets nil author and dates.
+// TestSearchSnippets_NilAuthorAndDates verifies SearchSnippets when nil author and dates.
 func TestSearchSnippets_NilAuthorAndDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGlobal && r.URL.Query().Get("scope") == "snippet_titles" {
@@ -1266,7 +1284,7 @@ func TestSearchSnippets_NilAuthorAndDates(t *testing.T) {
 // Markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatCodeMarkdown_Empty verifies the behavior of format code markdown empty.
+// TestFormatCodeMarkdown_Empty verifies FormatCodeMarkdown when empty.
 func TestFormatCodeMarkdown_Empty(t *testing.T) {
 	s := FormatCodeMarkdown(CodeOutput{})
 	if !strings.Contains(s, "No code search results found") {
@@ -1274,7 +1292,7 @@ func TestFormatCodeMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCodeMarkdown_WithResults verifies the behavior of format code markdown with results.
+// TestFormatCodeMarkdown_WithResults verifies FormatCodeMarkdown when with results.
 func TestFormatCodeMarkdown_WithResults(t *testing.T) {
 	s := FormatCodeMarkdown(CodeOutput{
 		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10}},
@@ -1288,7 +1306,7 @@ func TestFormatCodeMarkdown_WithResults(t *testing.T) {
 	}
 }
 
-// TestFormatMRsMarkdown_Empty verifies the behavior of format m rs markdown empty.
+// TestFormatMRsMarkdown_Empty verifies FormatMRsMarkdown when empty.
 func TestFormatMRsMarkdown_Empty(t *testing.T) {
 	s := FormatMRsMarkdown(MergeRequestsOutput{})
 	if !strings.Contains(s, "No merge requests found") {
@@ -1296,7 +1314,7 @@ func TestFormatMRsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMRsMarkdown_WithResults verifies the behavior of format m rs markdown with results.
+// TestFormatMRsMarkdown_WithResults verifies FormatMRsMarkdown when with results.
 func TestFormatMRsMarkdown_WithResults(t *testing.T) {
 	s := FormatMRsMarkdown(MergeRequestsOutput{
 		MergeRequests: []mergerequests.Output{{IID: 5, Title: "Fix", State: "merged", SourceBranch: "fix", TargetBranch: "main"}},
@@ -1314,7 +1332,7 @@ func TestFormatMRsMarkdown_WithResults(t *testing.T) {
 // markdownForResult dispatch
 // ---------------------------------------------------------------------------.
 
-// TestMarkdownForResult_CodeOutput verifies the behavior of markdown for result code output.
+// TestMarkdownForResult_CodeOutput verifies MarkdownForResult when code output.
 func TestMarkdownForResult_CodeOutput(t *testing.T) {
 	result := markdownForResult(CodeOutput{})
 	if result == nil {
@@ -1322,7 +1340,7 @@ func TestMarkdownForResult_CodeOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_MROutput verifies the behavior of markdown for result m r output.
+// TestMarkdownForResult_MROutput verifies MarkdownForResult when MR output.
 func TestMarkdownForResult_MROutput(t *testing.T) {
 	result := markdownForResult(MergeRequestsOutput{})
 	if result == nil {
@@ -1330,7 +1348,7 @@ func TestMarkdownForResult_MROutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_Unknown verifies the behavior of markdown for result unknown.
+// TestMarkdownForResult_Unknown verifies MarkdownForResult when unknown.
 func TestMarkdownForResult_Unknown(t *testing.T) {
 	result := markdownForResult("unknown")
 	if result != nil {
@@ -1342,7 +1360,7 @@ func TestMarkdownForResult_Unknown(t *testing.T) {
 // New formatter tests: Issues
 // ---------------------------------------------------------------------------.
 
-// TestFormatIssuesMarkdown_Empty verifies the behavior of format issues markdown empty.
+// TestFormatIssuesMarkdown_Empty verifies FormatIssuesMarkdown when empty.
 func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 	s := FormatIssuesMarkdown(IssuesOutput{})
 	if !strings.Contains(s, "No issues found") {
@@ -1350,7 +1368,7 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdown_WithResults verifies the behavior of format issues markdown with results.
+// TestFormatIssuesMarkdown_WithResults verifies FormatIssuesMarkdown when with results.
 func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 	s := FormatIssuesMarkdown(IssuesOutput{
 		Issues:     []issues.Output{{IID: 3, Title: "Fix login", State: "opened", Author: "dev1", Labels: []string{"bug", "critical"}}},
@@ -1371,7 +1389,7 @@ func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Commits
 // ---------------------------------------------------------------------------.
 
-// TestFormatCommitsMarkdown_Empty verifies the behavior of format commits markdown empty.
+// TestFormatCommitsMarkdown_Empty verifies FormatCommitsMarkdown when empty.
 func TestFormatCommitsMarkdown_Empty(t *testing.T) {
 	s := FormatCommitsMarkdown(CommitsOutput{})
 	if !strings.Contains(s, "No commits found") {
@@ -1379,7 +1397,7 @@ func TestFormatCommitsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommitsMarkdown_WithResults verifies the behavior of format commits markdown with results.
+// TestFormatCommitsMarkdown_WithResults verifies FormatCommitsMarkdown when with results.
 func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
 	s := FormatCommitsMarkdown(CommitsOutput{
 		Commits:    []commits.Output{{ShortID: "abc123", Title: "Initial commit", AuthorName: "Dev", CommittedDate: "2026-01-01"}},
@@ -1397,7 +1415,7 @@ func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Milestones
 // ---------------------------------------------------------------------------.
 
-// TestFormatMilestonesMarkdown_Empty verifies the behavior of format milestones markdown empty.
+// TestFormatMilestonesMarkdown_Empty verifies FormatMilestonesMarkdown when empty.
 func TestFormatMilestonesMarkdown_Empty(t *testing.T) {
 	s := FormatMilestonesMarkdown(MilestonesOutput{})
 	if !strings.Contains(s, "No milestones found") {
@@ -1405,7 +1423,7 @@ func TestFormatMilestonesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMilestonesMarkdown_WithResults verifies the behavior of format milestones markdown with results.
+// TestFormatMilestonesMarkdown_WithResults verifies FormatMilestonesMarkdown when with results.
 func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
 	s := FormatMilestonesMarkdown(MilestonesOutput{
 		Milestones: []milestones.Output{{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-06-01"}},
@@ -1419,7 +1437,7 @@ func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
 	}
 }
 
-// TestFormatMilestonesMarkdown_NoDueDate verifies the behavior of format milestones markdown no due date.
+// TestFormatMilestonesMarkdown_NoDueDate verifies FormatMilestonesMarkdown when no due date.
 func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
 	s := FormatMilestonesMarkdown(MilestonesOutput{
 		Milestones: []milestones.Output{{IID: 2, Title: "v2.0", State: "active"}},
@@ -1434,7 +1452,7 @@ func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
 // New formatter tests: Notes
 // ---------------------------------------------------------------------------.
 
-// TestFormatNotesMarkdown_Empty verifies the behavior of format notes markdown empty.
+// TestFormatNotesMarkdown_Empty verifies FormatNotesMarkdown when empty.
 func TestFormatNotesMarkdown_Empty(t *testing.T) {
 	s := FormatNotesMarkdown(NotesOutput{})
 	if !strings.Contains(s, "No note search results found") {
@@ -1442,7 +1460,7 @@ func TestFormatNotesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatNotesMarkdown_WithResults verifies the behavior of format notes markdown with results.
+// TestFormatNotesMarkdown_WithResults verifies FormatNotesMarkdown when with results.
 func TestFormatNotesMarkdown_WithResults(t *testing.T) {
 	s := FormatNotesMarkdown(NotesOutput{
 		Notes:      []NoteOutput{{Author: "reviewer", NoteableType: "Issue", NoteableIID: 5, Body: "Looks good"}},
@@ -1463,7 +1481,7 @@ func TestFormatNotesMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Projects
 // ---------------------------------------------------------------------------.
 
-// TestFormatProjectsMarkdown_Empty verifies the behavior of format projects markdown empty.
+// TestFormatProjectsMarkdown_Empty verifies FormatProjectsMarkdown when empty.
 func TestFormatProjectsMarkdown_Empty(t *testing.T) {
 	s := FormatProjectsMarkdown(ProjectsOutput{})
 	if !strings.Contains(s, "No projects found") {
@@ -1471,7 +1489,7 @@ func TestFormatProjectsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatProjectsMarkdown_WithResults verifies the behavior of format projects markdown with results.
+// TestFormatProjectsMarkdown_WithResults verifies FormatProjectsMarkdown when with results.
 func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 	s := FormatProjectsMarkdown(ProjectsOutput{
 		Projects:   []projects.Output{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
@@ -1489,7 +1507,7 @@ func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Snippets
 // ---------------------------------------------------------------------------.
 
-// TestFormatSnippetsMarkdown_Empty verifies the behavior of format snippets markdown empty.
+// TestFormatSnippetsMarkdown_Empty verifies FormatSnippetsMarkdown when empty.
 func TestFormatSnippetsMarkdown_Empty(t *testing.T) {
 	s := FormatSnippetsMarkdown(SnippetsOutput{})
 	if !strings.Contains(s, "No snippets found") {
@@ -1497,7 +1515,7 @@ func TestFormatSnippetsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatSnippetsMarkdown_WithResults verifies the behavior of format snippets markdown with results.
+// TestFormatSnippetsMarkdown_WithResults verifies FormatSnippetsMarkdown when with results.
 func TestFormatSnippetsMarkdown_WithResults(t *testing.T) {
 	s := FormatSnippetsMarkdown(SnippetsOutput{
 		Snippets:   []SnippetOutput{{Title: "My snippet", FileName: "notes.md", Visibility: "private", Author: "dev1"}},
@@ -1515,7 +1533,7 @@ func TestFormatSnippetsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Users
 // ---------------------------------------------------------------------------.
 
-// TestFormatUsersMarkdown_Empty verifies the behavior of format users markdown empty.
+// TestFormatUsersMarkdown_Empty verifies FormatUsersMarkdown when empty.
 func TestFormatUsersMarkdown_Empty(t *testing.T) {
 	s := FormatUsersMarkdown(UsersOutput{})
 	if !strings.Contains(s, "No users found") {
@@ -1523,7 +1541,7 @@ func TestFormatUsersMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatUsersMarkdown_WithResults verifies the behavior of format users markdown with results.
+// TestFormatUsersMarkdown_WithResults verifies FormatUsersMarkdown when with results.
 func TestFormatUsersMarkdown_WithResults(t *testing.T) {
 	s := FormatUsersMarkdown(UsersOutput{
 		Users:      []UserOutput{{Username: "admin", Name: "Admin User", State: "active"}},
@@ -1541,7 +1559,7 @@ func TestFormatUsersMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Wiki
 // ---------------------------------------------------------------------------.
 
-// TestFormatWikiMarkdown_Empty verifies the behavior of format wiki markdown empty.
+// TestFormatWikiMarkdown_Empty verifies FormatWikiMarkdown when empty.
 func TestFormatWikiMarkdown_Empty(t *testing.T) {
 	s := FormatWikiMarkdown(WikiOutput{})
 	if !strings.Contains(s, "No wiki pages found") {
@@ -1549,7 +1567,7 @@ func TestFormatWikiMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatWikiMarkdown_WithResults verifies the behavior of format wiki markdown with results.
+// TestFormatWikiMarkdown_WithResults verifies FormatWikiMarkdown when with results.
 func TestFormatWikiMarkdown_WithResults(t *testing.T) {
 	s := FormatWikiMarkdown(WikiOutput{
 		WikiBlobs:  []WikiBlobOutput{{Title: "Home", Slug: "home", Format: "markdown"}},
@@ -1567,7 +1585,7 @@ func TestFormatWikiMarkdown_WithResults(t *testing.T) {
 // Helper tests
 // ---------------------------------------------------------------------------.
 
-// TestTruncateBody validates truncate body across multiple scenarios using table-driven subtests.
+// TestTruncateBody covers TruncateBody with table-driven subtests.
 func TestTruncateBody(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1590,7 +1608,7 @@ func TestTruncateBody(t *testing.T) {
 	}
 }
 
-// TestNoteableRef validates noteable ref across multiple scenarios using table-driven subtests.
+// TestNoteableRef covers NoteableRef with table-driven subtests.
 func TestNoteableRef(t *testing.T) {
 	tests := []struct {
 		nType string
@@ -1616,7 +1634,7 @@ func TestNoteableRef(t *testing.T) {
 // markdownForResult dispatch — new output types
 // ---------------------------------------------------------------------------.
 
-// TestMarkdownForResult_IssuesOutput verifies the behavior of markdown for result issues output.
+// TestMarkdownForResult_IssuesOutput verifies MarkdownForResult when issues output.
 func TestMarkdownForResult_IssuesOutput(t *testing.T) {
 	result := markdownForResult(IssuesOutput{})
 	if result == nil {
@@ -1624,7 +1642,7 @@ func TestMarkdownForResult_IssuesOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_CommitsOutput verifies the behavior of markdown for result commits output.
+// TestMarkdownForResult_CommitsOutput verifies MarkdownForResult when commits output.
 func TestMarkdownForResult_CommitsOutput(t *testing.T) {
 	result := markdownForResult(CommitsOutput{})
 	if result == nil {
@@ -1632,7 +1650,7 @@ func TestMarkdownForResult_CommitsOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_MilestonesOutput verifies the behavior of markdown for result milestones output.
+// TestMarkdownForResult_MilestonesOutput verifies MarkdownForResult when milestones output.
 func TestMarkdownForResult_MilestonesOutput(t *testing.T) {
 	result := markdownForResult(MilestonesOutput{})
 	if result == nil {
@@ -1640,7 +1658,7 @@ func TestMarkdownForResult_MilestonesOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_NotesOutput verifies the behavior of markdown for result notes output.
+// TestMarkdownForResult_NotesOutput verifies MarkdownForResult when notes output.
 func TestMarkdownForResult_NotesOutput(t *testing.T) {
 	result := markdownForResult(NotesOutput{})
 	if result == nil {
@@ -1648,7 +1666,7 @@ func TestMarkdownForResult_NotesOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_ProjectsOutput verifies the behavior of markdown for result projects output.
+// TestMarkdownForResult_ProjectsOutput verifies MarkdownForResult projects output.
 func TestMarkdownForResult_ProjectsOutput(t *testing.T) {
 	result := markdownForResult(ProjectsOutput{})
 	if result == nil {
@@ -1656,7 +1674,7 @@ func TestMarkdownForResult_ProjectsOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_SnippetsOutput verifies the behavior of markdown for result snippets output.
+// TestMarkdownForResult_SnippetsOutput verifies MarkdownForResult when snippets output.
 func TestMarkdownForResult_SnippetsOutput(t *testing.T) {
 	result := markdownForResult(SnippetsOutput{})
 	if result == nil {
@@ -1664,7 +1682,7 @@ func TestMarkdownForResult_SnippetsOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_UsersOutput verifies the behavior of markdown for result users output.
+// TestMarkdownForResult_UsersOutput verifies MarkdownForResult when users output.
 func TestMarkdownForResult_UsersOutput(t *testing.T) {
 	result := markdownForResult(UsersOutput{})
 	if result == nil {
@@ -1672,7 +1690,7 @@ func TestMarkdownForResult_UsersOutput(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_WikiOutput verifies the behavior of markdown for result wiki output.
+// TestMarkdownForResult_WikiOutput verifies MarkdownForResult when wiki output.
 func TestMarkdownForResult_WikiOutput(t *testing.T) {
 	result := markdownForResult(WikiOutput{})
 	if result == nil {
@@ -1681,37 +1699,46 @@ func TestMarkdownForResult_WikiOutput(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Registration tests
+// ActionSpecs tests
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for search actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != 10 {
+		t.Fatalf("len(ActionSpecs) = %d, want 10", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "search" {
+			t.Errorf("OwnerPackage for %s = %q, want search", spec.Name, spec.OwnerPackage)
+		}
+		if !spec.ReadOnly || !spec.Idempotent {
+			t.Errorf("%s should be read-only and idempotent", spec.Name)
+		}
+	}
 }
 
-// TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
+// TestRegisterMeta_NoPanic verifies RegisterMeta when no panic.
 func TestRegisterMeta_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterMeta(server, client)
+	registerSearchMetaForTest(t, server, client)
 }
 
-// TestRegisterTools_SearchTypeSchemaEnum verifies that every individual
-// search tool exposes search_type as a constrained enum in tools/list.
-func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_SearchTypeSchemaEnum verifies that every search route exposes
+// search_type as a constrained enum in its input schema.
+func TestActionSpecs_SearchTypeSchemaEnum(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	RegisterTools(server, client)
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
 
-	tools := listSearchTools(t, server)
 	for _, name := range []string{
 		"gitlab_search_code",
 		"gitlab_search_merge_requests",
@@ -1725,8 +1752,7 @@ func TestRegisterTools_SearchTypeSchemaEnum(t *testing.T) {
 		"gitlab_search_wiki",
 	} {
 		t.Run(name, func(t *testing.T) {
-			tool := findSearchTool(t, tools, name)
-			requireSearchTypeEnum(t, schemaMapFromAny(t, tool.InputSchema))
+			requireSearchTypeEnum(t, schemaMapFromAny(t, byTool[name].Route.InputSchema))
 		})
 	}
 }
@@ -1737,14 +1763,11 @@ func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, client)
-	})
-	routes := map[string]toolutil.ActionMap{"gitlab_search": searchMetaRoutesFromDefinitions(t, definitions)}
+	routes := searchActionSpecRoutes(t, client)
 
 	for _, action := range []string{"code", "merge_requests", "issues", "commits", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
 		t.Run(action, func(t *testing.T) {
-			schema, ok := toolutil.LookupMetaActionSchema(routes, "gitlab_search", action)
+			schema, ok := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{"gitlab_search": routes}, "gitlab_search", action)
 			if !ok {
 				t.Fatalf("missing gitlab_search/%s schema", action)
 			}
@@ -1759,46 +1782,39 @@ func TestRegisterMeta_UsesActionSpecs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		RegisterMeta(nil, client)
-	})
-	got := searchMetaRoutesFromDefinitions(t, definitions)
-	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
-	}
+	got := searchActionSpecRoutes(t, client)
+	want := ActionSpecs(client)
 
 	if len(got) != len(want) {
-		t.Fatalf("registered search route count = %d, want %d", len(got), len(want))
+		t.Fatalf("search route count = %d, want %d", len(got), len(want))
 	}
-	for actionName, wantRoute := range want {
-		t.Run(actionName, func(t *testing.T) {
-			gotRoute, ok := got[actionName]
+	for _, spec := range want {
+		t.Run(spec.Name, func(t *testing.T) {
+			gotRoute, ok := got[spec.Name]
 			if !ok {
-				t.Fatalf("registered meta routes missing %q", actionName)
+				t.Fatalf("search routes missing %q", spec.Name)
 			}
-			if gotRoute.Destructive != wantRoute.Destructive {
-				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			if gotRoute.Destructive != spec.Route.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, spec.Route.Destructive)
 			}
-			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+			if !reflect.DeepEqual(gotRoute.InputSchema, spec.Route.InputSchema) {
 				t.Fatal("input schema differs from ActionSpec projection")
 			}
-			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+			if !reflect.DeepEqual(gotRoute.OutputSchema, spec.Route.OutputSchema) {
 				t.Fatal("output schema differs from ActionSpec projection")
 			}
 		})
 	}
 }
 
-func searchMetaRoutesFromDefinitions(t *testing.T, definitions []toolutil.MetaToolDefinition) toolutil.ActionMap {
+// searchActionSpecRoutes supports search action spec routes assertions in search tests.
+func searchActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
 	t.Helper()
-	for _, definition := range definitions {
-		if definition.Name == "gitlab_search" {
-			return definition.Routes
-		}
+	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
 	}
-	t.Fatal("missing gitlab_search meta definition")
-	return nil
+	return routes
 }
 
 // TestSearchInputSchema_UnsupportedTypePanics verifies that unsupported schema
@@ -1835,36 +1851,7 @@ func TestSearchSchemaPanic_ErrorPanics(t *testing.T) {
 	searchSchemaPanic("marshal", errors.New("boom"))
 }
 
-func listSearchTools(t *testing.T, server *mcp.Server) []*mcp.Tool {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
-	tools, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
-	}
-	return tools.Tools
-}
-
-func findSearchTool(t *testing.T, tools []*mcp.Tool, name string) *mcp.Tool {
-	t.Helper()
-	for _, tool := range tools {
-		if tool.Name == name {
-			return tool
-		}
-	}
-	t.Fatalf("tool %q not found", name)
-	return nil
-}
-
+// schemaMapFromAny extracts schema map from any details for schema assertions.
 func schemaMapFromAny(t *testing.T, raw any) map[string]any {
 	t.Helper()
 	data, err := json.Marshal(raw)
@@ -1878,6 +1865,7 @@ func schemaMapFromAny(t *testing.T, raw any) map[string]any {
 	return schema
 }
 
+// requireSearchTypeEnum returns search type enum test data or fails the test.
 func requireSearchTypeEnum(t *testing.T, schema map[string]any) {
 	t.Helper()
 	properties, ok := schema["properties"].(map[string]any)
@@ -1905,9 +1893,8 @@ func requireSearchTypeEnum(t *testing.T, schema map[string]any) {
 // MCP round-trip
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTrip_AllSearchTools validates m c p round trip all search tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_AllSearchRoutes validates all search routes across multiple scenarios.
+func TestActionSpecs_AllSearchRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scope := r.URL.Query().Get("scope")
 		switch scope {
@@ -1935,18 +1922,7 @@ func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer session.Close()
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -1966,28 +1942,34 @@ func TestMCPRoundTrip_AllSearchTools(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tc.name,
-				Arguments: tc.args,
-			})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
 			}
-			if result.IsError {
-				t.Errorf("expected no error for %s", tc.name)
+			if result == nil {
+				t.Fatalf("nil result for %s", tc.name)
 			}
 		})
 	}
 }
 
-// TestMCPRound_TripMetaTool verifies the behavior of m c p round trip meta tool.
+// searchSpecsByTool supports search specs by tool assertions in search tests.
+func searchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
+}
+
+// TestMCPRound_TripMetaTool verifies MCPRound when trip meta tool.
 func TestMCPRound_TripMetaTool(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"basename":"f","data":"d","path":"f.go","filename":"f.go","ref":"main","startline":1,"project_id":1}]`, defaultPagination)
 	}))
-	RegisterMeta(server, client)
+	registerSearchMetaForTest(t, server, client)
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -2013,6 +1995,12 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 	if result.IsError {
 		t.Error("expected no error")
 	}
+}
+
+// registerSearchMetaForTest supports register search meta for test assertions in search tests.
+func registerSearchMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
+	t.Helper()
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_search", "Search GitLab by scope.", searchActionSpecRoutes(t, client), toolutil.IconSearch, markdownForResult)
 }
 
 // ---------------------------------------------------------------------------

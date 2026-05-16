@@ -1,15 +1,9 @@
-// register_test.go contains integration tests for the group relations export
-// tool closures in register.go. Tests exercise mutation error paths via an
-// in-memory MCP session with a mock GitLab API.
 package grouprelationsexport
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -17,9 +11,31 @@ import (
 
 const registerExportStatusJSON = `[{"relation":"labels","status":0,"batched":false,"batches_count":0,"error":""}]`
 
-// TestRegisterTools_CallThroughMCP verifies both group relations export tools can
-// be called through MCP in-memory transport, covering handler closures in register.go.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for group relations export actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "grouprelationsexport" {
+			t.Errorf("OwnerPackage for %s = %q, want grouprelationsexport", spec.Name, spec.OwnerPackage)
+		}
+		if spec.IndividualTool.Name == "" {
+			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
+		}
+	}
+	if !groupRelationsSpecsByTool(t, specs)["gitlab_list_group_relations_export_status"].ReadOnly {
+		t.Error("list status action should be read-only")
+	}
+}
+
+// TestActionSpecs_CallRoutes verifies both group relations export routes execute through the catalog.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -33,20 +49,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupRelationsSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -57,15 +60,24 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
+}
+
+func groupRelationsSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // TestFormatListExportStatusMarkdownString verifies the markdown formatter covers

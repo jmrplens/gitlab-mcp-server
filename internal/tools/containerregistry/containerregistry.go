@@ -56,7 +56,7 @@ type TagListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertRepository is an internal helper for the containerregistry package.
+// convertRepository maps a GitLab container registry repository into MCP output.
 func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
 	o := RepositoryOutput{
 		ID:        r.ID,
@@ -78,7 +78,7 @@ func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
 	return o
 }
 
-// convertTag is an internal helper for the containerregistry package.
+// convertTag maps a GitLab container registry tag into MCP output.
 func convertTag(t *gl.RegistryRepositoryTag) TagOutput {
 	o := TagOutput{
 		Name:          t.Name,
@@ -103,7 +103,7 @@ func convertTag(t *gl.RegistryRepositoryTag) TagOutput {
 // ListProjectRegistryRepositories
 // ---------------------------------------------------------------------------.
 
-// ListProjectInput represents the input for listing project registry repositories.
+// ListProjectInput selects a project registry repository page and optional tag metadata.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Tags      bool                 `json:"tags,omitempty" jsonschema:"Include tags in response"`
@@ -146,7 +146,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 // ListGroupRegistryRepositories
 // ---------------------------------------------------------------------------.
 
-// ListGroupInput represents the input for listing group registry repositories.
+// ListGroupInput selects a group registry repository page.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	Page    int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
@@ -181,7 +181,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 // GetSingleRegistryRepository
 // ---------------------------------------------------------------------------.
 
-// GetRepositoryInput represents the input for getting a single registry repository.
+// GetRepositoryInput identifies a registry repository by ID and optional tag metadata flags.
 type GetRepositoryInput struct {
 	RepositoryID int64 `json:"repository_id" jsonschema:"Registry repository ID,required"`
 	Tags         bool  `json:"tags,omitempty" jsonschema:"Include tags in response"`
@@ -213,7 +213,7 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 // DeleteRegistryRepository
 // ---------------------------------------------------------------------------.
 
-// DeleteRepositoryInput represents the input for deleting a registry repository.
+// DeleteRepositoryInput identifies the project-owned registry repository to delete.
 type DeleteRepositoryInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`
@@ -240,7 +240,7 @@ func DeleteRepository(ctx context.Context, client *gitlabclient.Client, input De
 // ListRegistryRepositoryTags
 // ---------------------------------------------------------------------------.
 
-// ListTagsInput represents the input for listing registry repository tags.
+// ListTagsInput selects a registry repository tag page.
 type ListTagsInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`
@@ -279,7 +279,7 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 // GetRegistryRepositoryTagDetail
 // ---------------------------------------------------------------------------.
 
-// GetTagInput represents the input for getting a registry tag detail.
+// GetTagInput identifies a single registry tag within a project repository.
 type GetTagInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`
@@ -310,7 +310,7 @@ func GetTag(ctx context.Context, client *gitlabclient.Client, input GetTagInput)
 // DeleteRegistryRepositoryTag
 // ---------------------------------------------------------------------------.
 
-// DeleteTagInput represents the input for deleting a single registry tag.
+// DeleteTagInput identifies the registry tag to delete.
 type DeleteTagInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`
@@ -341,7 +341,7 @@ func DeleteTag(ctx context.Context, client *gitlabclient.Client, input DeleteTag
 // DeleteRegistryRepositoryTags (bulk)
 // ---------------------------------------------------------------------------.
 
-// DeleteTagsBulkInput represents the input for bulk deleting registry tags.
+// DeleteTagsBulkInput defines the tag cleanup rule for a registry repository.
 type DeleteTagsBulkInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID    int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`

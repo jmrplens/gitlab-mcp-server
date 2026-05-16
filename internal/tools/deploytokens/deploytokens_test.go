@@ -11,15 +11,13 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ---------------------------------------------------------------------------
 // ListAll
 // ---------------------------------------------------------------------------.
 
-// TestListAll_Success verifies the behavior of list all success.
+// TestListAll_Success verifies ListAll when success.
 func TestListAll_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/deploy_tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +44,7 @@ func TestListAll_Success(t *testing.T) {
 // ListProject
 // ---------------------------------------------------------------------------.
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/deploy_tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +65,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies the behavior of list project missing project i d.
+// TestListProject_MissingProjectID verifies ListProject when missing project ID.
 func TestListProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
@@ -80,7 +78,7 @@ func TestListProject_MissingProjectID(t *testing.T) {
 // ListGroup
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_Success verifies the behavior of list group success.
+// TestListGroup_Success verifies ListGroup when success.
 func TestListGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/deploy_tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +99,7 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingGroupID verifies the behavior of list group missing group i d.
+// TestListGroup_MissingGroupID verifies ListGroup when missing group ID.
 func TestListGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroup(context.Background(), client, ListGroupInput{})
@@ -114,7 +112,7 @@ func TestListGroup_MissingGroupID(t *testing.T) {
 // GetProject
 // ---------------------------------------------------------------------------.
 
-// TestGetProject_Success verifies the behavior of get project success.
+// TestGetProject_Success verifies GetProject when success.
 func TestGetProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/deploy_tokens/2", func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +132,7 @@ func TestGetProject_Success(t *testing.T) {
 	}
 }
 
-// TestGetProject_MissingTokenID verifies the behavior of get project missing token i d.
+// TestGetProject_MissingTokenID verifies GetProject when missing token ID.
 func TestGetProject_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetProject(context.Background(), client, GetProjectInput{ProjectID: toolutil.StringOrInt("10")})
@@ -147,7 +145,7 @@ func TestGetProject_MissingTokenID(t *testing.T) {
 // GetGroup
 // ---------------------------------------------------------------------------.
 
-// TestGetGroup_Success verifies the behavior of get group success.
+// TestGetGroup_Success verifies GetGroup when success.
 func TestGetGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/deploy_tokens/3", func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +165,7 @@ func TestGetGroup_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroup_MissingTokenID verifies the behavior of get group missing token i d.
+// TestGetGroup_MissingTokenID verifies GetGroup when missing token ID.
 func TestGetGroup_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetGroup(context.Background(), client, GetGroupInput{GroupID: toolutil.StringOrInt("5")})
@@ -180,7 +178,7 @@ func TestGetGroup_MissingTokenID(t *testing.T) {
 // CreateProject
 // ---------------------------------------------------------------------------.
 
-// TestCreateProject_Success verifies the behavior of create project success.
+// TestCreateProject_Success verifies CreateProject when success.
 func TestCreateProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/deploy_tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +202,7 @@ func TestCreateProject_Success(t *testing.T) {
 	}
 }
 
-// TestCreateProject_MissingName verifies the behavior of create project missing name.
+// TestCreateProject_MissingName verifies CreateProject when missing name.
 func TestCreateProject_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProject(context.Background(), client, CreateProjectInput{
@@ -216,7 +214,7 @@ func TestCreateProject_MissingName(t *testing.T) {
 	}
 }
 
-// TestCreateProject_MissingScopes verifies the behavior of create project missing scopes.
+// TestCreateProject_MissingScopes verifies CreateProject when missing scopes.
 func TestCreateProject_MissingScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProject(context.Background(), client, CreateProjectInput{
@@ -232,7 +230,7 @@ func TestCreateProject_MissingScopes(t *testing.T) {
 // CreateGroup
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroup_Success verifies the behavior of create group success.
+// TestCreateGroup_Success verifies CreateGroup when success.
 func TestCreateGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/deploy_tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +254,7 @@ func TestCreateGroup_Success(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_MissingName verifies the behavior of create group missing name.
+// TestCreateGroup_MissingName verifies CreateGroup when missing name.
 func TestCreateGroup_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
@@ -272,7 +270,7 @@ func TestCreateGroup_MissingName(t *testing.T) {
 // DeleteProject
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProject_Success verifies the behavior of delete project success.
+// TestDeleteProject_Success verifies DeleteProject when success.
 func TestDeleteProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/deploy_tokens/2", func(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +290,7 @@ func TestDeleteProject_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_MissingTokenID verifies the behavior of delete project missing token i d.
+// TestDeleteProject_MissingTokenID verifies DeleteProject when missing token ID.
 func TestDeleteProject_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteProject(context.Background(), client, DeleteProjectInput{ProjectID: toolutil.StringOrInt("10")})
@@ -305,7 +303,7 @@ func TestDeleteProject_MissingTokenID(t *testing.T) {
 // DeleteGroup
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroup_Success verifies the behavior of delete group success.
+// TestDeleteGroup_Success verifies DeleteGroup when success.
 func TestDeleteGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/deploy_tokens/3", func(w http.ResponseWriter, r *http.Request) {
@@ -325,7 +323,7 @@ func TestDeleteGroup_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_MissingTokenID verifies the behavior of delete group missing token i d.
+// TestDeleteGroup_MissingTokenID verifies DeleteGroup when missing token ID.
 func TestDeleteGroup_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteGroup(context.Background(), client, DeleteGroupInput{GroupID: toolutil.StringOrInt("5")})
@@ -336,17 +334,20 @@ func TestDeleteGroup_MissingTokenID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ListAll — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListAll_APIError verifies the behavior of list all a p i error.
+// TestListAll_APIError verifies ListAll when API error.
 func TestListAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -357,7 +358,7 @@ func TestListAll_APIError(t *testing.T) {
 	}
 }
 
-// TestListAll_CancelledContext verifies the behavior of list all cancelled context.
+// TestListAll_CancelledContext verifies ListAll when cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -367,7 +368,7 @@ func TestListAll_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListAll_EmptyResult verifies the behavior of list all empty result.
+// TestListAll_EmptyResult verifies ListAll when empty result.
 func TestListAll_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -385,7 +386,7 @@ func TestListAll_EmptyResult(t *testing.T) {
 // ListProject — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies the behavior of list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -396,7 +397,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_CancelledContext verifies the behavior of list project cancelled context.
+// TestListProject_CancelledContext verifies ListProject when cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -406,7 +407,7 @@ func TestListProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProject_EmptyResult verifies the behavior of list project empty result.
+// TestListProject_EmptyResult verifies ListProject when empty result.
 func TestListProject_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/deploy_tokens" {
@@ -424,7 +425,7 @@ func TestListProject_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestListProject_WithPagination verifies the behavior of list project with pagination.
+// TestListProject_WithPagination verifies ListProject when with pagination.
 func TestListProject_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/deploy_tokens" {
@@ -453,7 +454,7 @@ func TestListProject_WithPagination(t *testing.T) {
 // ListGroup — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_APIError verifies the behavior of list group a p i error.
+// TestListGroup_APIError verifies ListGroup when API error.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -464,7 +465,7 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroup_CancelledContext verifies the behavior of list group cancelled context.
+// TestListGroup_CancelledContext verifies ListGroup when cancelled context.
 func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -474,7 +475,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListGroup_EmptyResult verifies the behavior of list group empty result.
+// TestListGroup_EmptyResult verifies ListGroup when empty result.
 func TestListGroup_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/5/deploy_tokens" {
@@ -492,7 +493,7 @@ func TestListGroup_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestListGroup_WithPagination verifies the behavior of list group with pagination.
+// TestListGroup_WithPagination verifies ListGroup when with pagination.
 func TestListGroup_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/5/deploy_tokens" {
@@ -521,7 +522,7 @@ func TestListGroup_WithPagination(t *testing.T) {
 // GetProject — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetProject_APIError verifies the behavior of get project a p i error.
+// TestGetProject_APIError verifies GetProject when API error.
 func TestGetProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -532,7 +533,7 @@ func TestGetProject_APIError(t *testing.T) {
 	}
 }
 
-// TestGetProject_MissingProjectID verifies the behavior of get project missing project i d.
+// TestGetProject_MissingProjectID verifies GetProject when missing project ID.
 func TestGetProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := GetProject(context.Background(), client, GetProjectInput{DeployTokenID: 1})
@@ -541,7 +542,7 @@ func TestGetProject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetProject_CancelledContext verifies the behavior of get project cancelled context.
+// TestGetProject_CancelledContext verifies GetProject when cancelled context.
 func TestGetProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -555,7 +556,7 @@ func TestGetProject_CancelledContext(t *testing.T) {
 // GetGroup — API error, missing group_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetGroup_APIError verifies the behavior of get group a p i error.
+// TestGetGroup_APIError verifies GetGroup when API error.
 func TestGetGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -566,7 +567,7 @@ func TestGetGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroup_MissingGroupID verifies the behavior of get group missing group i d.
+// TestGetGroup_MissingGroupID verifies GetGroup when missing group ID.
 func TestGetGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := GetGroup(context.Background(), client, GetGroupInput{DeployTokenID: 1})
@@ -575,7 +576,7 @@ func TestGetGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetGroup_CancelledContext verifies the behavior of get group cancelled context.
+// TestGetGroup_CancelledContext verifies GetGroup when cancelled context.
 func TestGetGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -590,7 +591,7 @@ func TestGetGroup_CancelledContext(t *testing.T) {
 //   fields (username, expires_at), invalid expires_at, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateProject_APIError verifies the behavior of create project a p i error.
+// TestCreateProject_APIError verifies CreateProject when API error.
 func TestCreateProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -603,7 +604,7 @@ func TestCreateProject_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateProject_MissingProjectID verifies the behavior of create project missing project i d.
+// TestCreateProject_MissingProjectID verifies CreateProject when missing project ID.
 func TestCreateProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateProject(context.Background(), client, CreateProjectInput{
@@ -614,7 +615,7 @@ func TestCreateProject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateProject_WithOptionalFields verifies the behavior of create project with optional fields.
+// TestCreateProject_WithOptionalFields verifies CreateProject when with optional fields.
 func TestCreateProject_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/10/deploy_tokens" {
@@ -646,7 +647,7 @@ func TestCreateProject_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestCreateProject_InvalidExpiresAt verifies the behavior of create project invalid expires at.
+// TestCreateProject_InvalidExpiresAt verifies CreateProject when invalid expires at.
 func TestCreateProject_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateProject(context.Background(), client, CreateProjectInput{
@@ -663,7 +664,7 @@ func TestCreateProject_InvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestCreateProject_CancelledContext verifies the behavior of create project cancelled context.
+// TestCreateProject_CancelledContext verifies CreateProject when cancelled context.
 func TestCreateProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -680,7 +681,7 @@ func TestCreateProject_CancelledContext(t *testing.T) {
 //   with optional fields, invalid expires_at, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroup_APIError verifies the behavior of create group a p i error.
+// TestCreateGroup_APIError verifies CreateGroup when API error.
 func TestCreateGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -693,7 +694,7 @@ func TestCreateGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_MissingGroupID verifies the behavior of create group missing group i d.
+// TestCreateGroup_MissingGroupID verifies CreateGroup when missing group ID.
 func TestCreateGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
@@ -704,7 +705,7 @@ func TestCreateGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_MissingScopes verifies the behavior of create group missing scopes.
+// TestCreateGroup_MissingScopes verifies CreateGroup when missing scopes.
 func TestCreateGroup_MissingScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
@@ -715,7 +716,7 @@ func TestCreateGroup_MissingScopes(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_WithOptionalFields verifies the behavior of create group with optional fields.
+// TestCreateGroup_WithOptionalFields verifies CreateGroup when with optional fields.
 func TestCreateGroup_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/5/deploy_tokens" {
@@ -744,7 +745,7 @@ func TestCreateGroup_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_InvalidExpiresAt verifies the behavior of create group invalid expires at.
+// TestCreateGroup_InvalidExpiresAt verifies CreateGroup when invalid expires at.
 func TestCreateGroup_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
@@ -761,7 +762,7 @@ func TestCreateGroup_InvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_CancelledContext verifies the behavior of create group cancelled context.
+// TestCreateGroup_CancelledContext verifies CreateGroup when cancelled context.
 func TestCreateGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -777,7 +778,7 @@ func TestCreateGroup_CancelledContext(t *testing.T) {
 // DeleteProject — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProject_APIError verifies the behavior of delete project a p i error.
+// TestDeleteProject_APIError verifies DeleteProject when API error.
 func TestDeleteProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -788,7 +789,7 @@ func TestDeleteProject_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_MissingProjectID verifies the behavior of delete project missing project i d.
+// TestDeleteProject_MissingProjectID verifies DeleteProject when missing project ID.
 func TestDeleteProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteProject(context.Background(), client, DeleteProjectInput{DeployTokenID: 1})
@@ -797,7 +798,7 @@ func TestDeleteProject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_CancelledContext verifies the behavior of delete project cancelled context.
+// TestDeleteProject_CancelledContext verifies DeleteProject when cancelled context.
 func TestDeleteProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -811,7 +812,7 @@ func TestDeleteProject_CancelledContext(t *testing.T) {
 // DeleteGroup — API error, missing group_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroup_APIError verifies the behavior of delete group a p i error.
+// TestDeleteGroup_APIError verifies DeleteGroup when API error.
 func TestDeleteGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -822,7 +823,7 @@ func TestDeleteGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_MissingGroupID verifies the behavior of delete group missing group i d.
+// TestDeleteGroup_MissingGroupID verifies DeleteGroup when missing group ID.
 func TestDeleteGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteGroup(context.Background(), client, DeleteGroupInput{DeployTokenID: 1})
@@ -831,7 +832,7 @@ func TestDeleteGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_CancelledContext verifies the behavior of delete group cancelled context.
+// TestDeleteGroup_CancelledContext verifies DeleteGroup when cancelled context.
 func TestDeleteGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -845,7 +846,7 @@ func TestDeleteGroup_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:        42,
@@ -875,7 +876,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoToken verifies the behavior of format output markdown no token.
+// TestFormatOutputMarkdown_NoToken verifies FormatOutputMarkdown when no token.
 func TestFormatOutputMarkdown_NoToken(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       1,
@@ -888,7 +889,7 @@ func TestFormatOutputMarkdown_NoToken(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoExpiresAt verifies the behavior of format output markdown no expires at.
+// TestFormatOutputMarkdown_NoExpiresAt verifies FormatOutputMarkdown when no expires at.
 func TestFormatOutputMarkdown_NoExpiresAt(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       1,
@@ -901,7 +902,7 @@ func TestFormatOutputMarkdown_NoExpiresAt(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_RevokedExpired verifies the behavior of format output markdown revoked expired.
+// TestFormatOutputMarkdown_RevokedExpired verifies FormatOutputMarkdown when revoked expired.
 func TestFormatOutputMarkdown_RevokedExpired(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       99,
@@ -924,7 +925,7 @@ func TestFormatOutputMarkdown_RevokedExpired(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithTokens verifies the behavior of format list markdown with tokens.
+// TestFormatListMarkdown_WithTokens verifies list output includes token rows and a Markdown table.
 func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	out := ListOutput{
 		DeployTokens: []Output{
@@ -938,7 +939,7 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	for _, want := range []string{
 		"## Deploy Tokens (2)",
 		"| ID |",
-		"|---|",
+		"| --- |",
 		"| 1 |",
 		"| 2 |",
 		"tok1",
@@ -954,7 +955,7 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies empty list output omits the table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No deploy tokens found") {
@@ -965,7 +966,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_ZeroTokens verifies the behavior of format list markdown zero tokens.
+// TestFormatListMarkdown_ZeroTokens verifies an explicit zero-token list uses the empty message.
 func TestFormatListMarkdown_ZeroTokens(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		DeployTokens: []Output{},
@@ -983,154 +984,10 @@ func TestFormatListMarkdown_ZeroTokens(t *testing.T) {
 // timeStr helper
 // ---------------------------------------------------------------------------.
 
-// TestTimeStr_NilInput verifies the behavior of time str nil input.
+// TestTimeStr_NilInput verifies TimeStr when nil input.
 func TestTimeStr_NilInput(t *testing.T) {
 	result := timeStr(nil)
 	if result != "" {
 		t.Errorf("expected empty string for nil time, got %q", result)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 9 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newDeployTokensMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list_all", "gitlab_deploy_token_list_all", map[string]any{}},
-		{"list_project", "gitlab_deploy_token_list_project", map[string]any{"project_id": "10"}},
-		{"list_group", "gitlab_deploy_token_list_group", map[string]any{"group_id": "5"}},
-		{"get_project", "gitlab_deploy_token_get_project", map[string]any{"project_id": "10", "deploy_token_id": 2}},
-		{"get_group", "gitlab_deploy_token_get_group", map[string]any{"group_id": "5", "deploy_token_id": 3}},
-		{"create_project", "gitlab_deploy_token_create_project", map[string]any{"project_id": "10", "name": "new-tok", "scopes": []string{"read_repository"}}},
-		{"create_group", "gitlab_deploy_token_create_group", map[string]any{"group_id": "5", "name": "grp-tok", "scopes": []string{"read_repository"}}},
-		{"delete_project", "gitlab_deploy_token_delete_project", map[string]any{"project_id": "10", "deploy_token_id": 2}},
-		{"delete_group", "gitlab_deploy_token_delete_group", map[string]any{"group_id": "5", "deploy_token_id": 3}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newDeployTokensMCPSession is an internal helper for the deploytokens package.
-func newDeployTokensMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	tokenJSON := `{"id":1,"name":"inst-token","username":"deployer","scopes":["read_repository"]}`
-	projTokenJSON := `{"id":2,"name":"proj-token","username":"deployer","scopes":["read_registry"]}`
-	grpTokenJSON := `{"id":3,"name":"grp-token","username":"deployer","scopes":["read_repository"]}`
-	createdProjJSON := `{"id":4,"name":"new-tok","username":"deployer","token":"secret123","scopes":["read_repository"]}`
-	createdGrpJSON := `{"id":5,"name":"grp-tok","username":"deployer","token":"secret456","scopes":["read_repository"]}`
-
-	handler := http.NewServeMux()
-
-	// List all instance deploy tokens
-	handler.HandleFunc("GET /api/v4/deploy_tokens", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+tokenJSON+`]`)
-	})
-
-	// List project deploy tokens
-	handler.HandleFunc("GET /api/v4/projects/10/deploy_tokens", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+projTokenJSON+`]`)
-	})
-
-	// List group deploy tokens
-	handler.HandleFunc("GET /api/v4/groups/5/deploy_tokens", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+grpTokenJSON+`]`)
-	})
-
-	// Get project deploy token
-	handler.HandleFunc("GET /api/v4/projects/10/deploy_tokens/2", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, projTokenJSON)
-	})
-
-	// Get group deploy token
-	handler.HandleFunc("GET /api/v4/groups/5/deploy_tokens/3", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, grpTokenJSON)
-	})
-
-	// Create project deploy token
-	handler.HandleFunc("POST /api/v4/projects/10/deploy_tokens", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, createdProjJSON)
-	})
-
-	// Create group deploy token
-	handler.HandleFunc("POST /api/v4/groups/5/deploy_tokens", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, createdGrpJSON)
-	})
-
-	// Delete project deploy token
-	handler.HandleFunc("DELETE /api/v4/projects/10/deploy_tokens/2", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Delete group deploy token
-	handler.HandleFunc("DELETE /api/v4/groups/5/deploy_tokens/3", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

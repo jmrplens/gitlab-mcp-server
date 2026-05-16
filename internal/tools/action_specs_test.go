@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -18,7 +19,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
+// TestCollectedActionSpecs_ProjectIntoActionCatalog covers CollectedActionSpecs with table-driven subtests for project into action catalog.
+func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 	testCases := []struct {
 		name       string
 		client     *gitlabclient.Client
@@ -31,44 +33,30 @@ func TestCollectedActionSpecs_MigratedMetaToolParity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			captured := toolutil.CaptureMetaToolDefinitions(func() {
-				registerAllMetaGroups(nil, tc.client, tc.enterprise)
-			})
-			capturedByTool := make(map[string]toolutil.MetaToolDefinition, len(captured))
-			for _, definition := range captured {
-				capturedByTool[definition.Name] = definition
+			catalog, catalogErr := BuildActionCatalog(tc.client, ActionCatalogOptions{Enterprise: tc.enterprise})
+			if catalogErr != nil {
+				t.Fatalf("BuildActionCatalog() error = %v", catalogErr)
 			}
 
-			specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(tc.client, tc.enterprise))
-			if err != nil {
-				t.Fatalf("actionSpecGroupsByTool() error = %v", err)
-			}
-
-			toolNames := make([]string, 0, len(capturedByTool))
-			for toolName := range capturedByTool {
-				toolNames = append(toolNames, toolName)
-			}
-			sort.Strings(toolNames)
-
-			for _, toolName := range toolNames {
-				t.Run(toolName, func(t *testing.T) {
-					definition := capturedByTool[toolName]
-					specs, ok := specsByTool[toolName]
+			for _, specGroup := range CollectActionSpecs(tc.client, tc.enterprise) {
+				t.Run(specGroup.ToolName, func(t *testing.T) {
+					catalogGroup, ok := catalog.Group(specGroup.ToolName)
 					if !ok {
-						t.Fatalf("collected action specs missing %s", toolName)
+						t.Fatalf("catalog missing group %s", specGroup.ToolName)
 					}
-					specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specs)
+					specRoutes, routeErr := toolutil.ActionSpecsToMapWithError(specGroup.Actions)
 					if routeErr != nil {
 						t.Fatalf("ActionSpecsToMapWithError() error = %v", routeErr)
 					}
-					assertActionRouteParity(t, toolName, definition.Routes, specRoutes)
-					assertSpecProjectionParity(t, toolName, specs)
+					assertActionRouteParity(t, specGroup.ToolName, specRoutes, catalogGroup.ActionMap())
+					assertSpecProjectionParity(t, specGroup.ToolName, specGroup.Actions)
 				})
 			}
 		})
 	}
 }
 
+// TestCollectedActionSpecs_KnownGuidancePreserved covers CollectedActionSpecs with table-driven subtests for known guidance preserved.
 func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(newGitLabDotComClient(t), true))
 	if err != nil {
@@ -102,6 +90,80 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 	}
 }
 
+// TestCollectedActionSpecs_DeclareCatalogOwnership verifies CollectedActionSpecs when declare catalog ownership.
+func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
+	owners := sourceToolPackageNames(t)
+	owners["tools"] = struct{}{}
+	var missingGroupOwners []string
+	var unknownGroupOwners []string
+	var missingActionOwners []string
+	var unknownActionOwners []string
+
+	for _, group := range CollectActionSpecs(newGitLabDotComClient(t), true) {
+		groupOwner := strings.TrimSpace(group.OwnerPackage)
+		if groupOwner == "" {
+			missingGroupOwners = append(missingGroupOwners, group.ToolName)
+		} else if _, ok := owners[groupOwner]; !ok {
+			unknownGroupOwners = append(unknownGroupOwners, fmt.Sprintf("%s owner %s", group.ToolName, groupOwner))
+		}
+		for _, spec := range group.Actions {
+			actionOwner := strings.TrimSpace(spec.OwnerPackage)
+			if actionOwner == "" {
+				missingActionOwners = append(missingActionOwners, group.ToolName+"."+spec.Name)
+				continue
+			}
+			if _, ok := owners[actionOwner]; !ok {
+				unknownActionOwners = append(unknownActionOwners, fmt.Sprintf("%s.%s owner %s", group.ToolName, spec.Name, actionOwner))
+			}
+		}
+	}
+
+	if len(missingGroupOwners)+len(unknownGroupOwners)+len(missingActionOwners)+len(unknownActionOwners) > 0 {
+		sort.Strings(missingGroupOwners)
+		sort.Strings(unknownGroupOwners)
+		sort.Strings(missingActionOwners)
+		sort.Strings(unknownActionOwners)
+		t.Fatalf("catalog ownership drift:\nmissing group owners: %v\nunknown group owners: %v\nmissing action owners: %v\nunknown action owners: %v", missingGroupOwners, unknownGroupOwners, missingActionOwners, unknownActionOwners)
+	}
+}
+
+// TestCollectedActionSpecs_ClassifySamplingUtility verifies CollectedActionSpecs when classify sampling utility.
+func TestCollectedActionSpecs_ClassifySamplingUtility(t *testing.T) {
+	var analyzeGroup ActionSpecGroup
+	for _, group := range CollectActionSpecs(nil, false) {
+		if group.ToolName == "gitlab_analyze" {
+			analyzeGroup = group
+			break
+		}
+	}
+	if analyzeGroup.ToolName == "" {
+		t.Fatal("CollectActionSpecs() missing gitlab_analyze")
+	}
+	if analyzeGroup.SurfaceKind != actioncatalog.SurfaceKindSamplingUtility {
+		t.Fatalf("gitlab_analyze surface kind = %q, want %q", analyzeGroup.SurfaceKind, actioncatalog.SurfaceKindSamplingUtility)
+	}
+	if !slices.Contains(analyzeGroup.CapabilityRequirements, "sampling") {
+		t.Fatalf("gitlab_analyze capability requirements = %#v, want sampling", analyzeGroup.CapabilityRequirements)
+	}
+}
+
+// sourceToolPackageNames supports source tool package names assertions in tools tests.
+func sourceToolPackageNames(t *testing.T) map[string]struct{} {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	owners := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			owners[entry.Name()] = struct{}{}
+		}
+	}
+	return owners
+}
+
+// TestActionSpecSurfacePolicy_MetadataProjectsPerSurface verifies ActionSpecSurfacePolicy when metadata projects per surface.
 func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	openWorldOverride := false
 	handlerCalled := false
@@ -268,6 +330,7 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	}
 }
 
+// TestIndividualToolProjection_RepresentativeDomainParity verifies IndividualToolProjection when representative domain parity.
 func TestIndividualToolProjection_RepresentativeDomainParity(t *testing.T) {
 	session := newMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -305,6 +368,7 @@ func TestIndividualToolProjection_RepresentativeDomainParity(t *testing.T) {
 	}
 }
 
+// TestIndividualToolProjection_GoldenSnapshotParity verifies IndividualToolProjection when golden snapshot parity.
 func TestIndividualToolProjection_GoldenSnapshotParity(t *testing.T) {
 	goldenPath := filepath.Join("testdata", "tools_individual.json")
 	goldenData, err := os.ReadFile(goldenPath)
@@ -357,6 +421,7 @@ func TestIndividualToolProjection_GoldenSnapshotParity(t *testing.T) {
 	compareSnapshotSlices(t, goldenPath, wantSnapshots, projectedSnapshots)
 }
 
+// TestIndividualToolMetadata_CatalogBackedCoverage verifies IndividualToolMetadata when catalog backed coverage.
 func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	session := newMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -371,7 +436,7 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	specNames := make(map[string]string)
 	duplicateSpecNames := make([]string, 0)
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.IndividualTool.Name)
 			if name == "" {
 				t.Fatalf("%s.%s missing individual tool name", group.ToolName, spec.Name)
@@ -409,6 +474,7 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	}
 }
 
+// TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection verifies IndividualToolMetadata when source registration uses action spec projection.
 func TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -444,6 +510,8 @@ func TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection(t *te
 	}
 }
 
+// standaloneIndividualToolExceptions lists manually registered tools that do not
+// belong to a GitLab API action catalog group.
 var standaloneIndividualToolExceptions = map[string]string{
 	"gitlab_discover_project":           "dynamic standalone project discovery helper",
 	"gitlab_interactive_issue_create":   "elicitation standalone multi-step workflow",
@@ -453,21 +521,27 @@ var standaloneIndividualToolExceptions = map[string]string{
 	"gitlab_server_status":              "server diagnostic helper outside the GitLab API catalog",
 }
 
+// manualRegistrationExceptions allows the few package-level registration files
+// that intentionally stay outside ordinary GitLab API action projection.
 var manualRegistrationExceptions = map[string]string{
 	filepath.Join("dynamic", "register.go"):      "dynamic catalog search/describe/execute tools are generated from the canonical catalog surface, not individual GitLab API tools",
 	filepath.Join("serverupdate", "register.go"): "server auto-update tools use *autoupdate.Updater and are registered from cmd/server/main.go outside RegisterAll",
 }
 
+// sharedIndividualToolSpecNames records individual tool names that are projected
+// from more than one canonical action for compatibility.
 var sharedIndividualToolSpecNames = map[string]string{
 	"gitlab_commit_list":      "shared by gitlab_repository.commit_list and gitlab_repository.file_history",
 	"gitlab_issue_list_group": "shared by gitlab_group.issues and gitlab_issue.list_group",
 	"gitlab_user_current":     "shared by gitlab_user.current and gitlab_user.me",
 }
 
+// individualSpecsByToolNameMap groups canonical specs by projected individual
+// tool name.
 func individualSpecsByToolNameMap(groups []ActionSpecGroup) map[string][]toolutil.ActionSpec {
 	byName := make(map[string][]toolutil.ActionSpec)
 	for _, group := range groups {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.IndividualTool.Name)
 			if name != "" {
 				byName[name] = append(byName[name], spec)
@@ -477,6 +551,8 @@ func individualSpecsByToolNameMap(groups []ActionSpecGroup) map[string][]tooluti
 	return byName
 }
 
+// compareSnapshotSlices compares expected and projected tool snapshots and
+// reports only non-allowlisted drift.
 func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 	t.Helper()
 	sortToolSnapshots(want)
@@ -523,6 +599,7 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 	}
 }
 
+// schemaDiffMessage formats a stable JSON schema diff for snapshot failures.
 func schemaDiffMessage(t *testing.T, name string, want, got json.RawMessage) string {
 	t.Helper()
 	wantJSON, wantErr := normalizedSchemaJSON(want)
@@ -536,6 +613,8 @@ func schemaDiffMessage(t *testing.T, name string, want, got json.RawMessage) str
 	return "CHANGED " + name + " inputSchema:\n  old: " + string(wantJSON) + "\n  new: " + string(gotJSON)
 }
 
+// appendStaleProjectionGapDiffs reports allowlisted projection gaps that no
+// longer appear in the generated snapshot.
 func appendStaleProjectionGapDiffs(diffs *[]string, kind string, known map[string]string, observed map[string]struct{}) {
 	for name := range known {
 		if _, ok := observed[name]; !ok {
@@ -544,12 +623,14 @@ func appendStaleProjectionGapDiffs(diffs *[]string, kind string, known map[strin
 	}
 }
 
+// sortToolSnapshots orders projected tool snapshots by name before comparison.
 func sortToolSnapshots(snapshots []toolSnapshot) {
 	sort.SliceStable(snapshots, func(left, right int) bool {
 		return snapshots[left].Name < snapshots[right].Name
 	})
 }
 
+// annotationsEqual reports whether projected MCP annotations match exactly.
 func annotationsEqual(t *testing.T, name string, want, got *mcp.ToolAnnotations) bool {
 	t.Helper()
 	wantJSON, err := json.Marshal(want)
@@ -563,6 +644,8 @@ func annotationsEqual(t *testing.T, name string, want, got *mcp.ToolAnnotations)
 	return string(wantJSON) == string(gotJSON)
 }
 
+// schemaJSONEqual reports whether two JSON schemas are equal after normalizing
+// unstable field order.
 func schemaJSONEqual(t *testing.T, name string, want, got json.RawMessage) bool {
 	t.Helper()
 	wantJSON, wantErr := normalizedSchemaJSON(want)
@@ -576,6 +659,7 @@ func schemaJSONEqual(t *testing.T, name string, want, got json.RawMessage) bool 
 	return string(wantJSON) == string(gotJSON)
 }
 
+// normalizedSchemaJSON normalizes schema JSON for stable test assertions.
 func normalizedSchemaJSON(raw json.RawMessage) ([]byte, error) {
 	if len(raw) == 0 {
 		return nil, nil
@@ -588,6 +672,8 @@ func normalizedSchemaJSON(raw json.RawMessage) ([]byte, error) {
 	return json.Marshal(value)
 }
 
+// normalizeSchemaValue recursively sorts JSON Schema `required` arrays so
+// comparisons ignore map iteration order.
 func normalizeSchemaValue(key string, value any) {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -616,10 +702,15 @@ func normalizeSchemaValue(key string, value any) {
 	}
 }
 
+// knownIndividualProjectionAnnotationGaps tracks accepted annotation parity gaps
+// until their source packages are migrated.
 var knownIndividualProjectionAnnotationGaps = map[string]string{}
 
+// knownIndividualProjectionSchemaGaps tracks accepted schema parity gaps until
+// their source packages are migrated.
 var knownIndividualProjectionSchemaGaps = map[string]string{}
 
+// assertActionRouteParity checks action route parity invariants for tests.
 func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes toolutil.ActionMap) {
 	t.Helper()
 	if len(specRoutes) != len(captured) {
@@ -642,6 +733,7 @@ func assertActionRouteParity(t *testing.T, toolName string, captured, specRoutes
 	}
 }
 
+// assertSpecProjectionParity checks spec projection parity invariants for tests.
 func assertSpecProjectionParity(t *testing.T, toolName string, specs []toolutil.ActionSpec) {
 	t.Helper()
 	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{ToolName: toolName}, specs)
@@ -668,6 +760,7 @@ func assertSpecProjectionParity(t *testing.T, toolName string, specs []toolutil.
 	}
 }
 
+// assertGuidanceKeys checks guidance keys invariants for tests.
 func assertGuidanceKeys(t *testing.T, toolName, actionName string, guidance map[string]toolutil.ParameterGuidance, want []string) {
 	t.Helper()
 	got := make([]string, 0, len(guidance))
@@ -682,6 +775,7 @@ func assertGuidanceKeys(t *testing.T, toolName, actionName string, guidance map[
 	}
 }
 
+// assertProjectedToolParity checks projected tool parity invariants for tests.
 func assertProjectedToolParity(t *testing.T, toolName, actionName string, actual, projected *mcp.Tool) {
 	t.Helper()
 	if projected.Name != actual.Name {
@@ -703,6 +797,7 @@ func assertProjectedToolParity(t *testing.T, toolName, actionName string, actual
 	assertToolIconsParity(t, toolName, actionName, actual.Icons, projected.Icons)
 }
 
+// assertProjectedToolAnnotations checks projected tool annotations invariants for tests.
 func assertProjectedToolAnnotations(t *testing.T, toolName, actionName string, projected *mcp.ToolAnnotations) {
 	t.Helper()
 	if projected == nil {
@@ -719,6 +814,7 @@ func assertProjectedToolAnnotations(t *testing.T, toolName, actionName string, p
 	}
 }
 
+// assertToolIconsParity checks tool icons parity invariants for tests.
 func assertToolIconsParity(t *testing.T, toolName, actionName string, actual, projected []mcp.Icon) {
 	t.Helper()
 	if len(projected) != len(actual) {
@@ -731,6 +827,8 @@ func assertToolIconsParity(t *testing.T, toolName, actionName string, actual, pr
 	}
 }
 
+// missingRouteNames returns canonical action names absent from the projected
+// route map.
 func missingRouteNames(want, got toolutil.ActionMap) []string {
 	missing := make([]string, 0)
 	for actionName := range want {

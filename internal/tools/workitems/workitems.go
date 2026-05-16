@@ -1,11 +1,3 @@
-// Package workitems implements MCP tool handlers for GitLab Work Items.
-// It wraps the WorkItemsService from client-go v2.
-//
-// NOTE: The Work Items API is experimental and may introduce breaking changes
-// even between minor GitLab versions.
-//
-// The package also registers MCP tools and renders Markdown summaries for work
-// item responses.
 package workitems
 
 import (
@@ -64,7 +56,7 @@ func mapStatusToID(s string) gl.WorkItemStatusID {
 	}
 }
 
-// workItemToItem is an internal helper for the workitems package.
+// workItemToItem maps work item to item between API and evaluator models.
 func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 	item := WorkItemItem{
 		ID:           wi.ID,

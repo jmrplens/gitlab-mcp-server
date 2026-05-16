@@ -13,22 +13,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// messageJSON identifies the message JSON constant used by this package.
 const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
 
 const (
+	// pathBroadcastMessages identifies the path broadcast messages constant used by this package.
 	pathBroadcastMessages = "/api/v4/broadcast_messages"
+	// pathBroadcastMessage1 identifies the path broadcast message 1 constant used by this package.
 	pathBroadcastMessage1 = "/api/v4/broadcast_messages/1"
-	testMessageText       = "System maintenance tonight"
-	testBannerType        = "banner"
-	testMessage           = "Test"
-	fmtExpErrMentionID    = "expected error to mention 'id', got: %v"
+	// testMessageText identifies the test message text constant used by this package.
+	testMessageText = "System maintenance tonight"
+	// testBannerType identifies the test banner type constant used by this package.
+	testBannerType = "banner"
+	// testMessage identifies the test message constant used by this package.
+	testMessage = "Test"
+	// fmtExpErrMentionID identifies the fmt exp err mention ID constant used by this package.
+	fmtExpErrMentionID = "expected error to mention 'id', got: %v"
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodGet {
@@ -53,7 +62,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -65,7 +74,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodGet {
@@ -87,7 +96,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodPost {
@@ -110,7 +119,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_WithTimes verifies the behavior of create with times.
+// TestCreate_WithTimes verifies Create when with times.
 func TestCreate_WithTimes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodPost {
@@ -130,7 +139,7 @@ func TestCreate_WithTimes(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidStartsAt verifies the behavior of create invalid starts at.
+// TestCreate_InvalidStartsAt verifies Create when invalid starts at.
 func TestCreate_InvalidStartsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -145,7 +154,7 @@ func TestCreate_InvalidStartsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodPut {
@@ -167,7 +176,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodDelete {
@@ -183,7 +192,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -195,7 +204,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Messages: []MessageItem{
@@ -212,7 +221,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Messages: []MessageItem{}}
 	result := FormatListMarkdown(out)
@@ -222,7 +231,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMessageMarkdown verifies the behavior of format message markdown.
+// TestFormatMessageMarkdown verifies FormatMessageMarkdown.
 func TestFormatMessageMarkdown(t *testing.T) {
 	item := MessageItem{
 		ID: 1, Message: testMessage, BroadcastType: testBannerType,
@@ -238,7 +247,7 @@ func TestFormatMessageMarkdown(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidID verifies the behavior of get invalid i d.
+// TestGet_InvalidID verifies Get when invalid ID.
 func TestGet_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -253,7 +262,7 @@ func TestGet_InvalidID(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidID verifies the behavior of update invalid i d.
+// TestUpdate_InvalidID verifies Update when invalid ID.
 func TestUpdate_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -268,7 +277,7 @@ func TestUpdate_InvalidID(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidID verifies the behavior of delete invalid i d.
+// TestDelete_InvalidID verifies Delete when invalid ID.
 func TestDelete_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -285,13 +294,14 @@ func TestDelete_InvalidID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -306,7 +316,7 @@ func TestGet_APIError(t *testing.T) {
 // Create — API error, invalid ends_at
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -317,7 +327,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidEndsAt verifies the behavior of create invalid ends at.
+// TestCreate_InvalidEndsAt verifies Create when invalid ends at.
 func TestCreate_InvalidEndsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -331,7 +341,7 @@ func TestCreate_InvalidEndsAt(t *testing.T) {
 	}
 }
 
-// TestCreate_WithAllOptionalFields verifies the behavior of create with all optional fields.
+// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +386,7 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // Update — API error, invalid starts_at, invalid ends_at, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -387,7 +397,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidStartsAt verifies the behavior of update invalid starts at.
+// TestUpdate_InvalidStartsAt verifies Update when invalid starts at.
 func TestUpdate_InvalidStartsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -401,7 +411,7 @@ func TestUpdate_InvalidStartsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidEndsAt verifies the behavior of update invalid ends at.
+// TestUpdate_InvalidEndsAt verifies Update when invalid ends at.
 func TestUpdate_InvalidEndsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -415,7 +425,7 @@ func TestUpdate_InvalidEndsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -450,7 +460,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Formatters — message with TargetPath and EndsAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatMessageMarkdown_WithOptionalFields verifies the behavior of format message markdown with optional fields.
+// TestFormatMessageMarkdown_WithOptionalFields verifies FormatMessageMarkdown when with optional fields.
 func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 	item := MessageItem{
 		ID:            2,
@@ -474,26 +484,35 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for broadcast message actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := broadcastMessageSpecsByTool(t, specs)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_broadcast_message"].Route.Destructive {
+		t.Fatal("gitlab_delete_broadcast_message should be destructive")
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip for all tools
+// ActionSpecs — all routes
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newBroadcastMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates broadcast message routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newBroadcastRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -509,31 +528,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newBroadcastMCPSession is an internal helper for the broadcastmessages package.
-func newBroadcastMCPSession(t *testing.T) *mcp.ClientSession {
+// newBroadcastRouteSpecs constructs broadcast route specs test fixtures.
+func newBroadcastRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	msgJSON := `{"id":1,"message":"Hello","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","active":true,"broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
@@ -560,23 +571,22 @@ func newBroadcastMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return broadcastMessageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// broadcastMessageSpecsByTool supports broadcast message specs by tool assertions in broadcastmessages tests.
+func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }

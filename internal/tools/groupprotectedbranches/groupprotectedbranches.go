@@ -1,5 +1,3 @@
-// Package groupprotectedbranches implements MCP tool handlers for GitLab
-// group-level protected branch operations.
 package groupprotectedbranches
 
 import (

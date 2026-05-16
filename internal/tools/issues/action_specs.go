@@ -1,6 +1,9 @@
 package issues
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,13 +12,13 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		issueCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_issue_create"),
-		issueReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_issue_get"),
+		issueReadSpec("get", toolutil.RouteAction(client, getWithEmbeddedResource), "gitlab_issue_get"),
 		issueReadSpec("get_by_id", toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
 		issueReadSpec("list", toolutil.RouteAction(client, List), "gitlab_issue_list"),
 		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
 		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
 		issueUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_issue_update"),
-		issueDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_issue_delete"),
+		issueDeleteSpec("delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_delete"),
 		issueUpdateSpec("reorder", toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
 		issueUpdateSpec("move", toolutil.RouteAction(client, Move), "gitlab_issue_move"),
 		issueUpdateSpec("subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_issue_subscribe"),
@@ -30,6 +33,23 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueReadSpec("mrs_closing", toolutil.RouteAction(client, ListMRsClosing), "gitlab_issue_mrs_closing"),
 		issueReadSpec("mrs_related", toolutil.RouteAction(client, ListMRsRelated), "gitlab_issue_mrs_related"),
 	}
+}
+
+type getOutput struct {
+	Output
+}
+
+func getWithEmbeddedResource(ctx context.Context, client *gitlabclient.Client, input GetInput) (getOutput, error) {
+	out, err := Get(ctx, client, input)
+	return getOutput{Output: out}, err
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("issue #%d from project %s", input.IssueIID, input.ProjectID))
+	return out, nil
 }
 
 // GroupActionSpecs returns canonical specs for issue actions exposed through the group meta-tool.

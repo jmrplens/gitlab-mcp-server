@@ -4,25 +4,28 @@
 package applications
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -51,7 +54,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -63,7 +66,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate verifies the behavior of create.
+// TestCreate verifies Create.
 func TestCreate(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -101,7 +104,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -113,7 +116,7 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_ValidationError verifies the behavior of delete validation error.
+// TestDelete_ValidationError verifies Delete when validation error.
 func TestDelete_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called")
@@ -126,7 +129,7 @@ func TestDelete_ValidationError(t *testing.T) {
 	}
 }
 
-// TestDelete verifies the behavior of delete.
+// TestDelete verifies Delete.
 func TestDelete(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications/3" {
@@ -144,7 +147,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -156,7 +159,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Applications: []ApplicationItem{
@@ -172,7 +175,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Applications: nil}
 	md := FormatListMarkdown(out)
@@ -181,7 +184,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCreateMarkdown verifies the behavior of format create markdown.
+// TestFormatCreateMarkdown verifies FormatCreateMarkdown.
 func TestFormatCreateMarkdown(t *testing.T) {
 	out := CreateOutput{ApplicationItem: ApplicationItem{
 		ID: 2, ApplicationName: "New", ApplicationID: "aid-2", Secret: "sec", CallbackURL: "http://cb", Confidential: false,
@@ -201,7 +204,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 // List — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
@@ -229,7 +232,7 @@ func TestList_WithPagination(t *testing.T) {
 // Create — with confidential flag
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithConfidential verifies the behavior of create with confidential.
+// TestCreate_WithConfidential verifies Create when with confidential.
 func TestCreate_WithConfidential(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodPost {
@@ -257,25 +260,27 @@ func TestCreate_WithConfidential(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies application action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "applications" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_Trip validates m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	session := newApplicationsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates all application canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newApplicationsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -291,26 +296,24 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// TestMCPRound_Trip_ErrorPaths verifies that API errors inside RegisterTools
-// handlers are returned as IsError results via MCP. Each subtest calls a tool
-// backed by a mock that returns 500, exercising the if err != nil branches.
-func TestMCPRound_Trip_ErrorPaths(t *testing.T) {
-	session := newErrorMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRouteErrors verifies application canonical route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
+	specByTool := newErrorRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -326,43 +329,28 @@ func TestMCPRound_Trip_ErrorPaths(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
 			}
 		})
 	}
 }
 
-func newErrorMCPSession(t *testing.T) *mcp.ClientSession {
+// newErrorRouteSpecs constructs error route specs test fixtures.
+func newErrorRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return applicationSpecsByTool(client)
 }
 
-// newApplicationsMCPSession is an internal helper for the applications package.
-func newApplicationsMCPSession(t *testing.T) *mcp.ClientSession {
+// newApplicationsRouteSpecs constructs applications route specs test fixtures.
+func newApplicationsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -377,22 +365,15 @@ func newApplicationsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return applicationSpecsByTool(client)
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// applicationSpecsByTool supports application specs by tool assertions in applications tests.
+func applicationSpecsByTool(client *gitlabclient.Client) map[string]toolutil.ActionSpec {
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }

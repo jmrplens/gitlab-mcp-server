@@ -1,5 +1,3 @@
-// Package markdown implements the MCP tool handler for rendering
-// GitLab-flavored markdown. It wraps the MarkdownService from client-go v2.
 package markdown
 
 import (

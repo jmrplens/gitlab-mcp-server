@@ -44,8 +44,11 @@ func TestGenerateEntry_VSCode(t *testing.T) {
 	if _, hasURL := env["GITLAB_URL"]; hasURL {
 		t.Error("GITLAB_URL should not be in env (it's in envFile)")
 	}
-	if env["META_TOOLS"] != "true" {
-		t.Error("META_TOOLS should be in env")
+	if env["TOOL_SURFACE"] != "meta" {
+		t.Error("TOOL_SURFACE should be in env")
+	}
+	if _, hasMetaTools := env["META_TOOLS"]; hasMetaTools {
+		t.Error("META_TOOLS should not be in generated client env")
 	}
 }
 
@@ -302,7 +305,7 @@ func TestMergeServerEntry_JSONC(t *testing.T) {
 }
 
 // TestEnvMap_Defaults verifies envMap omits optional environment variables
-// (GITLAB_SKIP_TLS_VERIFY, META_TOOLS, YOLO_MODE, LOG_LEVEL) when their
+// (GITLAB_SKIP_TLS_VERIFY, TOOL_SURFACE, YOLO_MODE, LOG_LEVEL) when their
 // values match the defaults.
 func TestEnvMap_Defaults(t *testing.T) {
 	cfg := ServerConfig{
@@ -323,6 +326,9 @@ func TestEnvMap_Defaults(t *testing.T) {
 	}
 	if _, ok := env["META_TOOLS"]; ok {
 		t.Error("META_TOOLS should not be set when false")
+	}
+	if _, ok := env["TOOL_SURFACE"]; ok {
+		t.Error("TOOL_SURFACE should not be set when no explicit surface is provided")
 	}
 	if _, ok := env["YOLO_MODE"]; ok {
 		t.Error("YOLO_MODE should not be set when false")
@@ -420,7 +426,7 @@ func TestEnvMap_AllFlagsEnabled(t *testing.T) {
 		"GITLAB_URL":             "https://example.com",
 		"GITLAB_TOKEN":           "tok",
 		"GITLAB_SKIP_TLS_VERIFY": "true",
-		"META_TOOLS":             "true",
+		"TOOL_SURFACE":           "meta",
 		"AUTO_UPDATE":            "true",
 		"YOLO_MODE":              "true",
 		"LOG_LEVEL":              "debug",
@@ -647,8 +653,11 @@ func TestEnvMapPreferences_NoSecrets(t *testing.T) {
 		}
 	}
 
-	if env["META_TOOLS"] != "true" {
-		t.Error("missing META_TOOLS")
+	if env["TOOL_SURFACE"] != "meta" {
+		t.Error("missing TOOL_SURFACE")
+	}
+	if _, hasMetaTools := env["META_TOOLS"]; hasMetaTools {
+		t.Error("META_TOOLS should not be in generated client env")
 	}
 	if env["LOG_LEVEL"] != "debug" {
 		t.Error("missing LOG_LEVEL")

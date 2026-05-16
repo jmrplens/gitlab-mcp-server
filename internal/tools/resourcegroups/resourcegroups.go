@@ -1,4 +1,3 @@
-// Package resourcegroups implements MCP tools for GitLab resource groups.
 package resourcegroups
 
 import (
@@ -18,7 +17,7 @@ type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 }
 
-// ResourceGroupItem holds data for resourcegroups operations.
+// ResourceGroupItem holds resource group item data for the resourcegroups package.
 type ResourceGroupItem struct {
 	toolutil.HintableOutput
 	ID          int64  `json:"id"`
@@ -90,7 +89,7 @@ type ListUpcomingJobsInput struct {
 	Key       string               `json:"key" jsonschema:"Resource group key,required"`
 }
 
-// JobItem holds data for resourcegroups operations.
+// JobItem holds job item data for the resourcegroups package.
 type JobItem struct {
 	ID     int64  `json:"id"`
 	Name   string `json:"name"`

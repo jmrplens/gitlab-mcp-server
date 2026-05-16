@@ -11,19 +11,20 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
+	// pathInstanceVars identifies the path instance vars constant used by this package.
 	pathInstanceVars = "/api/v4/admin/ci/variables"
-	pathVar1         = "/api/v4/admin/ci/variables/MY_VAR"
-	varJSON          = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"raw":false,"description":"Test var"}`
+	// pathVar1 identifies the path var 1 constant used by this package.
+	pathVar1 = "/api/v4/admin/ci/variables/MY_VAR"
+	// varJSON identifies the var JSON constant used by this package.
+	varJSON = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"raw":false,"description":"Test var"}`
 )
 
 // ---------- List ----------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathInstanceVars {
@@ -49,7 +50,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathInstanceVars {
@@ -71,7 +72,7 @@ func TestList_EmptyResult(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
@@ -93,7 +94,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingKey verifies the behavior of get missing key.
+// TestGet_MissingKey verifies Get when missing key.
 func TestGet_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -107,7 +108,7 @@ func TestGet_MissingKey(t *testing.T) {
 
 // ---------- Create ----------.
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathInstanceVars {
@@ -126,7 +127,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingKey verifies the behavior of create missing key.
+// TestCreate_MissingKey verifies Create when missing key.
 func TestCreate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -138,7 +139,7 @@ func TestCreate_MissingKey(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingValue verifies the behavior of create missing value.
+// TestCreate_MissingValue verifies Create when missing value.
 func TestCreate_MissingValue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -152,7 +153,7 @@ func TestCreate_MissingValue(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
@@ -171,7 +172,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingKey verifies the behavior of update missing key.
+// TestUpdate_MissingKey verifies Update when missing key.
 func TestUpdate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -185,7 +186,7 @@ func TestUpdate_MissingKey(t *testing.T) {
 
 // ---------- Delete ----------.
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathVar1 {
@@ -201,7 +202,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingKey verifies the behavior of delete missing key.
+// TestDelete_MissingKey verifies Delete when missing key.
 func TestDelete_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -215,7 +216,7 @@ func TestDelete_MissingKey(t *testing.T) {
 
 // ---------- Formatters ----------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	v := Output{
 		Key:          "MY_VAR",
@@ -238,7 +239,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MaskedValue verifies the behavior of format output markdown masked value.
+// TestFormatOutputMarkdown_MaskedValue verifies FormatOutputMarkdown when masked value.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	v := Output{
 		Key:          "SECRET_VAR",
@@ -255,7 +256,7 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -263,7 +264,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -284,7 +285,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No instance CI/CD variables found") {
@@ -294,17 +295,20 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error, with pagination parameters, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableList_APIError verifies the behavior of instance variable list a p i error.
+// TestInstanceVariableList_APIError verifies InstanceVariableList when API error.
 func TestInstanceVariableList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -315,7 +319,7 @@ func TestInstanceVariableList_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableList_WithPagination verifies the behavior of instance variable list with pagination.
+// TestInstanceVariableList_WithPagination verifies InstanceVariableList when with pagination.
 func TestInstanceVariableList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables" && r.Method == http.MethodGet {
@@ -351,7 +355,7 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableList_CancelledContext verifies the behavior of instance variable list cancelled context.
+// TestInstanceVariableList_CancelledContext verifies InstanceVariableList when cancelled context.
 func TestInstanceVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -365,7 +369,7 @@ func TestInstanceVariableList_CancelledContext(t *testing.T) {
 // Get — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableGet_APIError verifies the behavior of instance variable get a p i error.
+// TestInstanceVariableGet_APIError verifies InstanceVariableGet when API error.
 func TestInstanceVariableGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -376,7 +380,7 @@ func TestInstanceVariableGet_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableGet_CancelledContext verifies the behavior of instance variable get cancelled context.
+// TestInstanceVariableGet_CancelledContext verifies InstanceVariableGet when cancelled context.
 func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -390,7 +394,7 @@ func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 // Create — API error, all optional fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableCreate_APIError verifies the behavior of instance variable create a p i error.
+// TestInstanceVariableCreate_APIError verifies InstanceVariableCreate when API error.
 func TestInstanceVariableCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -401,7 +405,7 @@ func TestInstanceVariableCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableCreate_AllOptionalFields verifies the behavior of instance variable create all optional fields.
+// TestInstanceVariableCreate_AllOptionalFields verifies InstanceVariableCreate when all optional fields.
 func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables" && r.Method == http.MethodPost {
@@ -441,7 +445,7 @@ func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableCreate_CancelledContext verifies the behavior of instance variable create cancelled context.
+// TestInstanceVariableCreate_CancelledContext verifies InstanceVariableCreate when cancelled context.
 func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -455,7 +459,7 @@ func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 // Update — API error, all optional fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableUpdate_APIError verifies the behavior of instance variable update a p i error.
+// TestInstanceVariableUpdate_APIError verifies InstanceVariableUpdate when API error.
 func TestInstanceVariableUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -466,7 +470,7 @@ func TestInstanceVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableUpdate_AllOptionalFields verifies the behavior of instance variable update all optional fields.
+// TestInstanceVariableUpdate_AllOptionalFields verifies InstanceVariableUpdate when all optional fields.
 func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -500,7 +504,7 @@ func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableUpdate_CancelledContext verifies the behavior of instance variable update cancelled context.
+// TestInstanceVariableUpdate_CancelledContext verifies InstanceVariableUpdate when cancelled context.
 func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -514,7 +518,7 @@ func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 // Delete — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableDelete_APIError verifies the behavior of instance variable delete a p i error.
+// TestInstanceVariableDelete_APIError verifies InstanceVariableDelete when API error.
 func TestInstanceVariableDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -525,7 +529,7 @@ func TestInstanceVariableDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableDelete_CancelledContext verifies the behavior of instance variable delete cancelled context.
+// TestInstanceVariableDelete_CancelledContext verifies InstanceVariableDelete when cancelled context.
 func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -539,7 +543,7 @@ func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown — full unmasked, no description
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_FullUnmasked verifies the behavior of format output markdown full unmasked.
+// TestFormatOutputMarkdown_FullUnmasked verifies FormatOutputMarkdown when full unmasked.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:          "DB_HOST",
@@ -566,7 +570,7 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies the behavior of format output markdown no description.
+// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown when no description.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:          "SIMPLE",
@@ -586,7 +590,7 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // FormatListMarkdown — with variables, escapes table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies the behavior of format list markdown with variables.
+// TestFormatListMarkdown_WithVariables verifies FormatListMarkdown when with variables.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -611,7 +615,7 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies the behavior of format list markdown escapes table cells.
+// TestFormatListMarkdown_EscapesTableCells verifies FormatListMarkdown when escapes table cells.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -623,128 +627,4 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	if strings.Contains(md, "| MY|VAR |") {
 		t.Errorf("pipe in key should be escaped:\n%s", md)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 5 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newInstanceVariablesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_instance_variable_list", map[string]any{}},
-		{"get", "gitlab_instance_variable_get", map[string]any{"key": "MY_VAR"}},
-		{"create", "gitlab_instance_variable_create", map[string]any{
-			"key": "NEW_VAR", "value": "new-val",
-			"description": "", "variable_type": "",
-			"protected": false, "masked": false, "raw": false,
-		}},
-		{"update", "gitlab_instance_variable_update", map[string]any{
-			"key": "MY_VAR", "value": "updated-val",
-			"description": "", "variable_type": "",
-			"protected": false, "masked": false, "raw": false,
-		}},
-		{"delete", "gitlab_instance_variable_delete", map[string]any{"key": "MY_VAR"}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newInstanceVariablesMCPSession is an internal helper for the instancevariables package.
-func newInstanceVariablesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	variableJSON := `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"raw":false,"description":"Test var"}`
-
-	handler := http.NewServeMux()
-
-	// List instance variables
-	handler.HandleFunc("GET /api/v4/admin/ci/variables", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+variableJSON+`]`)
-	})
-
-	// Get instance variable
-	handler.HandleFunc("GET /api/v4/admin/ci/variables/MY_VAR", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, variableJSON)
-	})
-
-	// Create instance variable
-	handler.HandleFunc("POST /api/v4/admin/ci/variables", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"key":"NEW_VAR","value":"new-val","variable_type":"env_var","protected":false,"masked":false,"raw":false,"description":""}`)
-	})
-
-	// Update instance variable
-	handler.HandleFunc("PUT /api/v4/admin/ci/variables/MY_VAR", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"key":"MY_VAR","value":"updated-val","variable_type":"env_var","protected":false,"masked":false,"raw":false,"description":""}`)
-	})
-
-	// Delete instance variable
-	handler.HandleFunc("DELETE /api/v4/admin/ci/variables/MY_VAR", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

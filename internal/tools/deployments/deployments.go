@@ -1,6 +1,3 @@
-// Package deployments implements MCP tool handlers for GitLab deployment
-// operations including list, get, create, update, and delete.
-// It wraps the Deployments service from client-go v2.
 package deployments
 
 import (

@@ -1,5 +1,3 @@
-// Package protectedenvs implements GitLab protected environment operations
-// including list, get, protect, update, and unprotect.
 package protectedenvs
 
 import (

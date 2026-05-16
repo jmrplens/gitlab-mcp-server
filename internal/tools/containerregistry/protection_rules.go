@@ -31,7 +31,7 @@ type ProtectionRuleListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertProtectionRule is an internal helper for the containerregistry package.
+// convertProtectionRule maps a GitLab container registry protection rule into MCP output.
 func convertProtectionRule(r *gl.ContainerRegistryProtectionRule) ProtectionRuleOutput {
 	return ProtectionRuleOutput{
 		ID:                          r.ID,
@@ -46,7 +46,7 @@ func convertProtectionRule(r *gl.ContainerRegistryProtectionRule) ProtectionRule
 // ListContainerRegistryProtectionRules
 // ---------------------------------------------------------------------------.
 
-// ListProtectionRulesInput represents the input for listing protection rules.
+// ListProtectionRulesInput selects the project whose registry protection rules are listed.
 type ListProtectionRulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 }
@@ -73,7 +73,7 @@ func ListProtectionRules(ctx context.Context, client *gitlabclient.Client, input
 // CreateContainerRegistryProtectionRule
 // ---------------------------------------------------------------------------.
 
-// CreateProtectionRuleInput represents the input for creating a protection rule.
+// CreateProtectionRuleInput defines the repository path pattern and access thresholds for a new rule.
 type CreateProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryPathPattern       string               `json:"repository_path_pattern" jsonschema:"Repository path pattern (e.g. my-project/my-image*),required"`
@@ -113,7 +113,7 @@ func CreateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 // UpdateContainerRegistryProtectionRule
 // ---------------------------------------------------------------------------.
 
-// UpdateProtectionRuleInput represents the input for updating a protection rule.
+// UpdateProtectionRuleInput identifies a registry protection rule and the fields to change.
 type UpdateProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RuleID                      int64                `json:"rule_id" jsonschema:"Protection rule ID,required"`
@@ -155,7 +155,7 @@ func UpdateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 // DeleteContainerRegistryProtectionRule
 // ---------------------------------------------------------------------------.
 
-// DeleteProtectionRuleInput represents the input for deleting a protection rule.
+// DeleteProtectionRuleInput identifies the registry protection rule to delete.
 type DeleteProtectionRuleInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RuleID    int64                `json:"rule_id" jsonschema:"Protection rule ID,required"`

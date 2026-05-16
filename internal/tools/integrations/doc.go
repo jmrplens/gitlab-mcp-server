@@ -4,4 +4,8 @@
 // list, get, and delete integrations by slug, while integration-specific tools
 // handle configuration details such as Jira settings. The package also provides
 // Markdown rendering for project integration responses.
+//
+// The package wraps the GitLab Integrations API:
+//
+//   - https://docs.gitlab.com/api/integrations/
 package integrations

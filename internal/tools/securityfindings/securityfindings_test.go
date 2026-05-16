@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -481,41 +479,31 @@ func TestFormatLocation(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_MCPRoundTrip verifies that RegisterTools successfully
-// registers the gitlab_list_security_findings tool and it can be invoked.
-func TestRegisterTools_MCPRoundTrip(t *testing.T) {
+// TestActionSpecs_CallRoute verifies that the security findings canonical route
+// executes successfully through ActionSpecs.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/api/graphql", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"pipeline":{"securityReportFindings":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	spec := specs[0]
+	if spec.IndividualTool.Name != "gitlab_list_security_findings" || spec.OwnerPackage != "securityfindings" {
+		t.Fatalf("unexpected ActionSpec: %+v", spec)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_list_security_findings",
-		Arguments: map[string]any{
-			"project_path": "group/project",
-			"pipeline_iid": "42",
-		},
+	result, err := spec.Route.Handler(t.Context(), map[string]any{
+		"project_path": "group/project",
+		"pipeline_iid": "42",
 	})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result.IsError {
-		t.Fatal("expected no error from CallTool")
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
 	}
 }
 

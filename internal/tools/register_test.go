@@ -41,11 +41,13 @@ const (
 	fmtListToolsErr = "ListTools() error: %v"
 )
 
+// registerMetaSourceFile holds register meta source file data for the tools package.
 type registerMetaSourceFile struct {
 	path    string
 	content string
 }
 
+// readRegisterMetaSources supports read register meta sources assertions in tools tests.
 func readRegisterMetaSources(t *testing.T) []registerMetaSourceFile {
 	t.Helper()
 
@@ -76,6 +78,7 @@ func readRegisterMetaSources(t *testing.T) []registerMetaSourceFile {
 	return sources
 }
 
+// readRegisterMetaSource supports read register meta source assertions in tools tests.
 func readRegisterMetaSource(t *testing.T) string {
 	t.Helper()
 
@@ -228,8 +231,8 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 32 base, 47 with enterprise.
-// Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
+// the expected number of meta-tools: 33 base, 47 with enterprise.
+// Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
 // tools that cannot be folded into action+params meta-tools (they require
 // multi-round MCP elicitation/create exchanges with the client).
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
@@ -243,7 +246,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 32
+		const expectedTools = 33
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -299,6 +302,7 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 	}
 }
 
+// toolNamesFromServer supports tool names from server assertions in tools tests.
 func toolNamesFromServer(t *testing.T, server *mcp.Server) []string {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1511,79 +1515,18 @@ func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
 	}
 }
 
-// knownExceptions lists sub-packages that are NOT registered via RegisterAll
-// in register.go because they have a different constructor signature.
-// Each entry must document WHY it is an exception.
-var knownExceptions = map[string]string{
-	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
-	// it is registered in cmd/server/main.go.
-	"adminspecs":    "infrastructure package for gitlab_admin catalog metadata, not an MCP tool package",
-	"actioncatalog": "infrastructure package for catalog metadata, not an MCP tool package",
-	"dynamic":       "registered in cmd/server/main.go from the canonical action catalog",
-	"serverupdate":  "registered in cmd/server/main.go with *autoupdate.Updater",
-	"testdata":      "contains test data, not a tool package",
-}
-
-// TestAllSubPackagesRegistered verifies that every sub-directory under
-// internal/tools/ has a corresponding RegisterTools call in register.go.
-// Sub-packages listed in knownExceptions are allowed to be absent from
-// register.go if they are registered elsewhere.
-func TestAllSubPackagesRegistered(t *testing.T) {
-	// 1. Discover all sub-directories (= sub-packages).
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	var subDirs []string
-	for _, e := range entries {
-		if e.IsDir() {
-			subDirs = append(subDirs, e.Name())
-		}
-	}
-	if len(subDirs) == 0 {
-		t.Fatal("no sub-directories found — test may be running from wrong directory")
-	}
-
-	// 2. Parse register.go to extract all {pkg}.RegisterTools( calls.
+// TestRegisterAllDoesNotUseDomainRegisterTools verifies the root individual
+// runtime is catalog-backed and cannot regress to per-domain RegisterTools loops.
+func TestRegisterAllDoesNotUseDomainRegisterTools(t *testing.T) {
 	src, err := os.ReadFile("register.go")
 	if err != nil {
 		t.Fatalf("ReadFile register.go: %v", err)
 	}
-	re := regexp.MustCompile(`\b(\w+)\.RegisterTools\(`)
-	matches := re.FindAllStringSubmatch(string(src), -1)
-
-	registered := make(map[string]bool)
-	for _, m := range matches {
-		registered[m[1]] = true
-	}
-
-	// 3. Check that every sub-directory is registered or is a known exception.
-	var missing []string
-	for _, dir := range subDirs {
-		if registered[dir] {
-			continue
-		}
-		if _, ok := knownExceptions[dir]; ok {
-			continue
-		}
-		missing = append(missing, dir)
-	}
-
-	if len(missing) > 0 {
-		t.Errorf("sub-packages not registered in register.go (and not in knownExceptions):\n  %s",
-			strings.Join(missing, "\n  "))
-		t.Log("If a sub-package has a different constructor, add it to knownExceptions with a reason.")
-	}
-
-	// 4. Verify known exceptions actually exist as directories.
-	for pkg, reason := range knownExceptions {
-		if _, statErr := os.Stat(pkg); os.IsNotExist(statErr) {
-			t.Errorf("knownExceptions entry %q (%s) does not exist as a sub-directory — remove it", pkg, reason)
+	for _, forbidden := range []string{".RegisterTools(", "registerAllLegacy", "legacyIndividualToolDescriptions", "listToolsForDescriptionCapture"} {
+		if strings.Contains(string(src), forbidden) {
+			t.Fatalf("register.go contains %q; RegisterAll must remain catalog-backed", forbidden)
 		}
 	}
-
-	t.Logf("verified %d sub-packages: %d in register.go, %d known exceptions",
-		len(subDirs), len(registered), len(knownExceptions))
 }
 
 // TestAllMarkdownFormattersRegistered verifies that every sub-package with a
@@ -1680,7 +1623,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 	}
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
 				validTools[name] = true
 			}
@@ -1740,7 +1683,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 		}
 	}
 	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Specs {
+		for _, spec := range group.Actions {
 			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
 				validActions[actionName] = true
 			}
@@ -1904,8 +1847,10 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
 	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
 	"unshare": {}, "disable_project": {}, "import_from_file": {},
-	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
+	"group_member_unshare": {},
+	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
+	"transfer": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the
@@ -1924,84 +1869,19 @@ func isExactMatchException(action string) bool {
 func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	// routeEntry captures a single action definition found in source code.
 	type routeEntry struct {
-		file        string
-		line        int
+		id          string
 		action      string
 		destructive bool
 	}
 
-	// Regex patterns for register_meta*.go files (lowercase wrappers, no package prefix).
-	reMetaMapDestructive := regexp.MustCompile(
-		`"(\w+)":\s+destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
-	reMetaMapNonDestructive := regexp.MustCompile(
-		`"(\w+)":\s+route(?:Action|VoidAction|ActionWithRequest)\b`)
-	reMetaAssignDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|ActionWithRequest|Action|VoidAction)\b`)
-	reMetaAssignNonDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*route(?:Action|VoidAction|ActionWithRequest)\b`)
-
-	// Regex patterns for sub-package register.go files (toolutil. prefix).
-	reSubDestructive := regexp.MustCompile(
-		`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
-	reSubNonDestructive := regexp.MustCompile(
-		`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
-
 	var allRoutes []routeEntry
-
-	// Scan register_meta*.go files for inline route definitions.
-	for _, sourceFile := range readRegisterMetaSources(t) {
-		metaLines := strings.Split(sourceFile.content, "\n")
-		for i, line := range metaLines {
-			lineNum := i + 1
-			for _, re := range []*regexp.Regexp{reMetaMapDestructive, reMetaAssignDestructive} {
-				for _, m := range re.FindAllStringSubmatch(line, -1) {
-					allRoutes = append(allRoutes, routeEntry{
-						file: sourceFile.path, line: lineNum,
-						action: m[1], destructive: true,
-					})
-				}
-			}
-			for _, re := range []*regexp.Regexp{reMetaMapNonDestructive, reMetaAssignNonDestructive} {
-				for _, m := range re.FindAllStringSubmatch(line, -1) {
-					allRoutes = append(allRoutes, routeEntry{
-						file: sourceFile.path, line: lineNum,
-						action: m[1], destructive: false,
-					})
-				}
-			}
-		}
-	}
-
-	// Scan sub-package register.go files.
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		lines := strings.Split(string(src), "\n")
-		for i, line := range lines {
-			lineNum := i + 1
-			for _, m := range reSubDestructive.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: regPath, line: lineNum,
-					action: m[1], destructive: true,
-				})
-			}
-			for _, m := range reSubNonDestructive.FindAllStringSubmatch(line, -1) {
-				allRoutes = append(allRoutes, routeEntry{
-					file: regPath, line: lineNum,
-					action: m[1], destructive: false,
-				})
-			}
-		}
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	for _, action := range catalog.Actions() {
+		allRoutes = append(allRoutes, routeEntry{
+			id:          string(action.ID),
+			action:      action.Name,
+			destructive: action.Route.Destructive,
+		})
 	}
 
 	if len(allRoutes) == 0 {
@@ -2043,8 +1923,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 1: Action with destructive keyword MUST be marked destructive.
 		if hasDestructiveKw && !r.destructive {
-			t.Errorf("%s:%d action %q contains destructive keyword but uses non-destructive wrapper",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q contains destructive keyword but is non-destructive", r.id, r.action)
 			failures++
 		}
 
@@ -2052,15 +1931,13 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		// UNLESS it also contains a destructive keyword or is a known exception.
 		_, isKnownException := knownNonKeywordDestructive[r.action]
 		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
-			t.Errorf("%s:%d action %q contains safe keyword but uses destructive wrapper",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q contains safe keyword but is destructive", r.id, r.action)
 			failures++
 		}
 
 		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
 		if r.destructive && !hasDestructiveKw && !isKnownException {
-			t.Errorf("%s:%d action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive",
-				r.file, r.line, r.action)
+			t.Errorf("%s action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive", r.id, r.action)
 			failures++
 		}
 	}
@@ -2334,7 +2211,7 @@ func auditMetaToolMetadata(tool *mcp.Tool) (annOK, enumOK bool, actionCount int)
 
 // ---------- Individual tool metadata audit ----------.
 
-// TestMetadataAudit_ToolNamingConvention verifies the behavior of metadata audit tool naming convention.
+// TestMetadataAudit_ToolNamingConvention verifies MetadataAudit when tool naming convention.
 func TestMetadataAudit_ToolNamingConvention(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2354,7 +2231,7 @@ func TestMetadataAudit_ToolNamingConvention(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_ToolDescriptions verifies the behavior of metadata audit tool descriptions.
+// TestMetadataAudit_ToolDescriptions verifies MetadataAudit when tool descriptions.
 func TestMetadataAudit_ToolDescriptions(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2376,7 +2253,7 @@ func TestMetadataAudit_ToolDescriptions(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_ToolAnnotations verifies the behavior of metadata audit tool annotations.
+// TestMetadataAudit_ToolAnnotations verifies MetadataAudit when tool annotations.
 func TestMetadataAudit_ToolAnnotations(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2391,7 +2268,7 @@ func TestMetadataAudit_ToolAnnotations(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_ToolAnnotationOperationType verifies the behavior of metadata audit tool annotation operation type.
+// TestMetadataAudit_ToolAnnotationOperationType verifies MetadataAudit when tool annotation operation type.
 func TestMetadataAudit_ToolAnnotationOperationType(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2406,7 +2283,7 @@ func TestMetadataAudit_ToolAnnotationOperationType(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_ToolInputSchema verifies the behavior of metadata audit tool input schema.
+// TestMetadataAudit_ToolInputSchema verifies MetadataAudit when tool input schema.
 func TestMetadataAudit_ToolInputSchema(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2437,7 +2314,7 @@ func TestMetadataAudit_ToolInputSchema(t *testing.T) {
 
 // ---------- Meta-tool metadata audit ----------.
 
-// TestMetadataAudit_MetaToolNaming verifies the behavior of metadata audit meta tool naming.
+// TestMetadataAudit_MetaToolNaming verifies MetadataAudit when meta tool naming.
 func TestMetadataAudit_MetaToolNaming(t *testing.T) {
 	session := newMetaMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -2454,7 +2331,7 @@ func TestMetadataAudit_MetaToolNaming(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_MetaToolDescriptions verifies the behavior of metadata audit meta tool descriptions.
+// TestMetadataAudit_MetaToolDescriptions verifies MetadataAudit when meta tool descriptions.
 func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 	session := newMetaMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -2479,7 +2356,7 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_MetaToolAnnotations verifies the behavior of metadata audit meta tool annotations.
+// TestMetadataAudit_MetaToolAnnotations verifies MetadataAudit when meta tool annotations.
 func TestMetadataAudit_MetaToolAnnotations(t *testing.T) {
 	session := newMetaMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -2504,7 +2381,7 @@ func TestMetadataAudit_MetaToolAnnotations(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_MetaToolActionEnum verifies the behavior of metadata audit meta tool action enum.
+// TestMetadataAudit_MetaToolActionEnum verifies MetadataAudit when meta tool action enum.
 func TestMetadataAudit_MetaToolActionEnum(t *testing.T) {
 	session := newMetaMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -2521,7 +2398,7 @@ func TestMetadataAudit_MetaToolActionEnum(t *testing.T) {
 
 // ---------- Cross-validation ----------.
 
-// TestMetadataAudit_NoDuplicateToolNames verifies the behavior of metadata audit no duplicate tool names.
+// TestMetadataAudit_NoDuplicateToolNames verifies MetadataAudit when no duplicate tool names.
 func TestMetadataAudit_NoDuplicateToolNames(t *testing.T) {
 	session := newMCPSession(t, auditHandler())
 	result, err := session.ListTools(context.Background(), nil)
@@ -2540,7 +2417,7 @@ func TestMetadataAudit_NoDuplicateToolNames(t *testing.T) {
 	}
 }
 
-// TestMetadataAudit_NoDuplicateMetaToolNames verifies the behavior of metadata audit no duplicate meta tool names.
+// TestMetadataAudit_NoDuplicateMetaToolNames verifies MetadataAudit when no duplicate meta tool names.
 func TestMetadataAudit_NoDuplicateMetaToolNames(t *testing.T) {
 	session := newMetaMCPSession(t, auditHandler(), true)
 	result, err := session.ListTools(context.Background(), nil)
@@ -2609,7 +2486,7 @@ func TestMetadataAudit_Report(t *testing.T) {
 	}
 }
 
-// boolMark is an internal helper for the tools package.
+// boolMark supports bool mark assertions in tools tests.
 func boolMark(b bool) string {
 	if b {
 		return "✓"
@@ -3856,7 +3733,7 @@ const (
 
 // ----------- Branch context/error tests -----------.
 
-// TestBranchProtect_ContextCancelled verifies the behavior of branch protect context cancelled.
+// TestBranchProtect_ContextCancelled verifies BranchProtect when context cancelled.
 func TestBranchProtect_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -3869,7 +3746,7 @@ func TestBranchProtect_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_APIError verifies the behavior of branch protect a p i error.
+// TestBranchProtect_APIError verifies BranchProtect when API error.
 func TestBranchProtect_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -3881,7 +3758,7 @@ func TestBranchProtect_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_AllowForcePush verifies the behavior of branch protect allow force push.
+// TestBranchProtect_AllowForcePush verifies BranchProtect when allow force push.
 func TestBranchProtect_AllowForcePush(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusCreated, `{"id":1,"name":"main","push_access_levels":[{"access_level":40}],"merge_access_levels":[{"access_level":40}],"allow_force_push":true}`)
@@ -3900,7 +3777,7 @@ func TestBranchProtect_AllowForcePush(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_ContextCancelled verifies the behavior of branch unprotect context cancelled.
+// TestBranchUnprotect_ContextCancelled verifies BranchUnprotect when context cancelled.
 func TestBranchUnprotect_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -3913,7 +3790,7 @@ func TestBranchUnprotect_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestBranchCreate_ContextCancelled verifies the behavior of branch create context cancelled.
+// TestBranchCreate_ContextCancelled verifies BranchCreate when context cancelled.
 func TestBranchCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -3926,7 +3803,7 @@ func TestBranchCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestBranchList_ContextCancelled verifies the behavior of branch list context cancelled.
+// TestBranchList_ContextCancelled verifies BranchList when context cancelled.
 func TestBranchList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -3939,7 +3816,7 @@ func TestBranchList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchesList_ContextCancelled verifies the behavior of protected branches list context cancelled.
+// TestProtectedBranchesList_ContextCancelled verifies ProtectedBranchesList when context cancelled.
 func TestProtectedBranchesList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -3952,7 +3829,7 @@ func TestProtectedBranchesList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestBranchList_APIError verifies the behavior of branch list a p i error.
+// TestBranchList_APIError verifies BranchList when API error.
 func TestBranchList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, `{"message":"500 Server Error"}`)
@@ -3964,7 +3841,7 @@ func TestBranchList_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchesList_APIError verifies the behavior of protected branches list a p i error.
+// TestProtectedBranchesList_APIError verifies ProtectedBranchesList when API error.
 func TestProtectedBranchesList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -3978,7 +3855,7 @@ func TestProtectedBranchesList_APIError(t *testing.T) {
 
 // ----------- Tag context/error tests -----------.
 
-// TestTagCreate_ContextCancelled verifies the behavior of tag create context cancelled.
+// TestTagCreate_ContextCancelled verifies TagCreate when context cancelled.
 func TestTagCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -3991,7 +3868,7 @@ func TestTagCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestTagDelete_ContextCancelled verifies the behavior of tag delete context cancelled.
+// TestTagDelete_ContextCancelled verifies TagDelete when context cancelled.
 func TestTagDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -4004,7 +3881,7 @@ func TestTagDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestTagList_ContextCancelled verifies the behavior of tag list context cancelled.
+// TestTagList_ContextCancelled verifies TagList when context cancelled.
 func TestTagList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4017,7 +3894,7 @@ func TestTagList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestTagList_APIError verifies the behavior of tag list a p i error.
+// TestTagList_APIError verifies TagList when API error.
 func TestTagList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4031,7 +3908,7 @@ func TestTagList_APIError(t *testing.T) {
 
 // ----------- Release context/error tests -----------.
 
-// TestReleaseCreate_ContextCancelled verifies the behavior of release create context cancelled.
+// TestReleaseCreate_ContextCancelled verifies ReleaseCreate when context cancelled.
 func TestReleaseCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4044,7 +3921,7 @@ func TestReleaseCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseGet_ContextCancelled verifies the behavior of release get context cancelled.
+// TestReleaseGet_ContextCancelled verifies ReleaseGet when context cancelled.
 func TestReleaseGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4057,7 +3934,7 @@ func TestReleaseGet_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseUpdate_ContextCancelled verifies the behavior of release update context cancelled.
+// TestReleaseUpdate_ContextCancelled verifies ReleaseUpdate when context cancelled.
 func TestReleaseUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4070,7 +3947,7 @@ func TestReleaseUpdate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseDelete_ContextCancelled verifies the behavior of release delete context cancelled.
+// TestReleaseDelete_ContextCancelled verifies ReleaseDelete when context cancelled.
 func TestReleaseDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -4083,7 +3960,7 @@ func TestReleaseDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseList_ContextCancelled verifies the behavior of release list context cancelled.
+// TestReleaseList_ContextCancelled verifies ReleaseList when context cancelled.
 func TestReleaseList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4096,7 +3973,7 @@ func TestReleaseList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseGet_APIError verifies the behavior of release get a p i error.
+// TestReleaseGet_APIError verifies ReleaseGet when API error.
 func TestReleaseGet_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4108,7 +3985,7 @@ func TestReleaseGet_APIError(t *testing.T) {
 	}
 }
 
-// TestReleaseDelete_APIError verifies the behavior of release delete a p i error.
+// TestReleaseDelete_APIError verifies ReleaseDelete when API error.
 func TestReleaseDelete_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4120,7 +3997,7 @@ func TestReleaseDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestReleaseUpdate_APIError verifies the behavior of release update a p i error.
+// TestReleaseUpdate_APIError verifies ReleaseUpdate when API error.
 func TestReleaseUpdate_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4132,7 +4009,7 @@ func TestReleaseUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestReleaseList_APIError verifies the behavior of release list a p i error.
+// TestReleaseList_APIError verifies ReleaseList when API error.
 func TestReleaseList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -4146,7 +4023,7 @@ func TestReleaseList_APIError(t *testing.T) {
 
 // ----------- Release Link context/error tests -----------.
 
-// TestReleaseLinkCreate_ContextCancelled verifies the behavior of release link create context cancelled.
+// TestReleaseLinkCreate_ContextCancelled verifies ReleaseLinkCreate when context cancelled.
 func TestReleaseLinkCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4159,7 +4036,7 @@ func TestReleaseLinkCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkDelete_ContextCancelled verifies the behavior of release link delete context cancelled.
+// TestReleaseLinkDelete_ContextCancelled verifies ReleaseLinkDelete when context cancelled.
 func TestReleaseLinkDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -4172,7 +4049,7 @@ func TestReleaseLinkDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkList_ContextCancelled verifies the behavior of release link list context cancelled.
+// TestReleaseLinkList_ContextCancelled verifies ReleaseLinkList when context cancelled.
 func TestReleaseLinkList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4185,7 +4062,7 @@ func TestReleaseLinkList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkDelete_APIError verifies the behavior of release link delete a p i error.
+// TestReleaseLinkDelete_APIError verifies ReleaseLinkDelete when API error.
 func TestReleaseLinkDelete_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4197,7 +4074,7 @@ func TestReleaseLinkDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkList_APIError verifies the behavior of release link list a p i error.
+// TestReleaseLinkList_APIError verifies ReleaseLinkList when API error.
 func TestReleaseLinkList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4211,7 +4088,7 @@ func TestReleaseLinkList_APIError(t *testing.T) {
 
 // ----------- MR context/error tests -----------.
 
-// TestMRCreate_ContextCancelled verifies the behavior of m r create context cancelled.
+// TestMRCreate_ContextCancelled verifies MRCreate when context cancelled.
 func TestMRCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4224,7 +4101,7 @@ func TestMRCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRGet_ContextCancelled verifies the behavior of m r get context cancelled.
+// TestMRGet_ContextCancelled verifies MRGet when context cancelled.
 func TestMRGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4237,7 +4114,7 @@ func TestMRGet_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRList_ContextCancelled verifies the behavior of m r list context cancelled.
+// TestMRList_ContextCancelled verifies MRList when context cancelled.
 func TestMRList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4250,7 +4127,7 @@ func TestMRList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRUpdate_ContextCancelled verifies the behavior of m r update context cancelled.
+// TestMRUpdate_ContextCancelled verifies MRUpdate when context cancelled.
 func TestMRUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4263,7 +4140,7 @@ func TestMRUpdate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRMerge_ContextCancelled verifies the behavior of m r merge context cancelled.
+// TestMRMerge_ContextCancelled verifies MRMerge when context cancelled.
 func TestMRMerge_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4276,7 +4153,7 @@ func TestMRMerge_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRApprove_ContextCancelled verifies the behavior of m r approve context cancelled.
+// TestMRApprove_ContextCancelled verifies MRApprove when context cancelled.
 func TestMRApprove_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4289,7 +4166,7 @@ func TestMRApprove_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRUnapprove_ContextCancelled verifies the behavior of m r unapprove context cancelled.
+// TestMRUnapprove_ContextCancelled verifies MRUnapprove when context cancelled.
 func TestMRUnapprove_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4302,7 +4179,7 @@ func TestMRUnapprove_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRApprove_APIError verifies the behavior of m r approve a p i error.
+// TestMRApprove_APIError verifies MRApprove when API error.
 func TestMRApprove_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -4314,7 +4191,7 @@ func TestMRApprove_APIError(t *testing.T) {
 	}
 }
 
-// TestMRUnapprove_APIError verifies the behavior of m r unapprove a p i error.
+// TestMRUnapprove_APIError verifies MRUnapprove when API error.
 func TestMRUnapprove_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -4326,7 +4203,7 @@ func TestMRUnapprove_APIError(t *testing.T) {
 	}
 }
 
-// TestMRUpdate_APIError verifies the behavior of m r update a p i error.
+// TestMRUpdate_APIError verifies MRUpdate when API error.
 func TestMRUpdate_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4338,7 +4215,7 @@ func TestMRUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestMRMerge_APIError verifies the behavior of m r merge a p i error.
+// TestMRMerge_APIError verifies MRMerge when API error.
 func TestMRMerge_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusMethodNotAllowed, `{"message":"405 Method Not Allowed - cannot merge"}`)
@@ -4350,7 +4227,7 @@ func TestMRMerge_APIError(t *testing.T) {
 	}
 }
 
-// TestMRList_APIError verifies the behavior of m r list a p i error.
+// TestMRList_APIError verifies MRList when API error.
 func TestMRList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4364,7 +4241,7 @@ func TestMRList_APIError(t *testing.T) {
 
 // ----------- MR Notes context/error tests -----------.
 
-// TestMRNoteCreate_ContextCancelled verifies the behavior of m r note create context cancelled.
+// TestMRNoteCreate_ContextCancelled verifies MRNoteCreate when context cancelled.
 func TestMRNoteCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4377,7 +4254,7 @@ func TestMRNoteCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRNotesList_ContextCancelled verifies the behavior of m r notes list context cancelled.
+// TestMRNotesList_ContextCancelled verifies MRNotesList when context cancelled.
 func TestMRNotesList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4390,7 +4267,7 @@ func TestMRNotesList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRNoteUpdate_ContextCancelled verifies the behavior of m r note update context cancelled.
+// TestMRNoteUpdate_ContextCancelled verifies MRNoteUpdate when context cancelled.
 func TestMRNoteUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4403,7 +4280,7 @@ func TestMRNoteUpdate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRNoteDelete_ContextCancelled verifies the behavior of m r note delete context cancelled.
+// TestMRNoteDelete_ContextCancelled verifies MRNoteDelete when context cancelled.
 func TestMRNoteDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -4416,7 +4293,7 @@ func TestMRNoteDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRNoteUpdate_APIError verifies the behavior of m r note update a p i error.
+// TestMRNoteUpdate_APIError verifies MRNoteUpdate when API error.
 func TestMRNoteUpdate_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4428,7 +4305,7 @@ func TestMRNoteUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestMRNoteDelete_APIError verifies the behavior of m r note delete a p i error.
+// TestMRNoteDelete_APIError verifies MRNoteDelete when API error.
 func TestMRNoteDelete_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4440,7 +4317,7 @@ func TestMRNoteDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestMRNotesList_APIError verifies the behavior of m r notes list a p i error.
+// TestMRNotesList_APIError verifies MRNotesList when API error.
 func TestMRNotesList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4454,7 +4331,7 @@ func TestMRNotesList_APIError(t *testing.T) {
 
 // ----------- MR Discussion context/error tests -----------.
 
-// TestMRDiscussionCreate_ContextCancelled verifies the behavior of m r discussion create context cancelled.
+// TestMRDiscussionCreate_ContextCancelled verifies MRDiscussionCreate when context cancelled.
 func TestMRDiscussionCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4467,7 +4344,7 @@ func TestMRDiscussionCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionResolve_ContextCancelled verifies the behavior of m r discussion resolve context cancelled.
+// TestMRDiscussionResolve_ContextCancelled verifies MRDiscussionResolve when context cancelled.
 func TestMRDiscussionResolve_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4480,7 +4357,7 @@ func TestMRDiscussionResolve_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionReply_ContextCancelled verifies the behavior of m r discussion reply context cancelled.
+// TestMRDiscussionReply_ContextCancelled verifies MRDiscussionReply when context cancelled.
 func TestMRDiscussionReply_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4493,7 +4370,7 @@ func TestMRDiscussionReply_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionList_ContextCancelled verifies the behavior of m r discussion list context cancelled.
+// TestMRDiscussionList_ContextCancelled verifies MRDiscussionList when context cancelled.
 func TestMRDiscussionList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4506,7 +4383,7 @@ func TestMRDiscussionList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionResolve_APIError verifies the behavior of m r discussion resolve a p i error.
+// TestMRDiscussionResolve_APIError verifies MRDiscussionResolve when API error.
 func TestMRDiscussionResolve_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4518,7 +4395,7 @@ func TestMRDiscussionResolve_APIError(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionReply_APIError verifies the behavior of m r discussion reply a p i error.
+// TestMRDiscussionReply_APIError verifies MRDiscussionReply when API error.
 func TestMRDiscussionReply_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4530,7 +4407,7 @@ func TestMRDiscussionReply_APIError(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionList_APIError verifies the behavior of m r discussion list a p i error.
+// TestMRDiscussionList_APIError verifies MRDiscussionList when API error.
 func TestMRDiscussionList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4542,7 +4419,7 @@ func TestMRDiscussionList_APIError(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionCreate_APIError verifies the behavior of m r discussion create a p i error.
+// TestMRDiscussionCreate_APIError verifies MRDiscussionCreate when API error.
 func TestMRDiscussionCreate_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -4556,7 +4433,7 @@ func TestMRDiscussionCreate_APIError(t *testing.T) {
 
 // ----------- MR Changes context/error tests -----------.
 
-// TestMRChangesGet_ContextCancelled verifies the behavior of m r changes get context cancelled.
+// TestMRChangesGet_ContextCancelled verifies MRChangesGet when context cancelled.
 func TestMRChangesGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4571,7 +4448,7 @@ func TestMRChangesGet_ContextCancelled(t *testing.T) {
 
 // ----------- Commit context/error tests -----------.
 
-// TestCommitCreate_ContextCancelled verifies the behavior of commit create context cancelled.
+// TestCommitCreate_ContextCancelled verifies CommitCreate when context cancelled.
 func TestCommitCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4586,7 +4463,7 @@ func TestCommitCreate_ContextCancelled(t *testing.T) {
 
 // ----------- File context/error tests -----------.
 
-// TestFileGet_ContextCancelled verifies the behavior of file get context cancelled.
+// TestFileGet_ContextCancelled verifies FileGet when context cancelled.
 func TestFileGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4601,7 +4478,7 @@ func TestFileGet_ContextCancelled(t *testing.T) {
 
 // ----------- Repository context/error tests -----------.
 
-// TestProjectGet_ContextCancelled verifies the behavior of project get context cancelled.
+// TestProjectGet_ContextCancelled verifies ProjectGet when context cancelled.
 func TestProjectGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4614,7 +4491,7 @@ func TestProjectGet_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProjectList_ContextCancelled verifies the behavior of project list context cancelled.
+// TestProjectList_ContextCancelled verifies ProjectList when context cancelled.
 func TestProjectList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -4627,7 +4504,7 @@ func TestProjectList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProjectDelete_ContextCancelled verifies the behavior of project delete context cancelled.
+// TestProjectDelete_ContextCancelled verifies ProjectDelete when context cancelled.
 func TestProjectDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -4640,7 +4517,7 @@ func TestProjectDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProjectUpdate_ContextCancelled verifies the behavior of project update context cancelled.
+// TestProjectUpdate_ContextCancelled verifies ProjectUpdate when context cancelled.
 func TestProjectUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4653,7 +4530,7 @@ func TestProjectUpdate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestProjectUpdate_APIError verifies the behavior of project update a p i error.
+// TestProjectUpdate_APIError verifies ProjectUpdate when API error.
 func TestProjectUpdate_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4665,7 +4542,7 @@ func TestProjectUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectList_APIError verifies the behavior of project list a p i error.
+// TestProjectList_APIError verifies ProjectList when API error.
 func TestProjectList_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, `{"message":"500 Error"}`)
@@ -4677,7 +4554,7 @@ func TestProjectList_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectGet_APIError verifies the behavior of project get a p i error.
+// TestProjectGet_APIError verifies ProjectGet when API error.
 func TestProjectGet_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusNotFound, jsonNotFound)
@@ -4689,7 +4566,7 @@ func TestProjectGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectDelete_APIError verifies the behavior of project delete a p i error.
+// TestProjectDelete_APIError verifies ProjectDelete when API error.
 func TestProjectDelete_APIError(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
@@ -4703,7 +4580,7 @@ func TestProjectDelete_APIError(t *testing.T) {
 
 // ----------- Metatool additional tests -----------.
 
-// TestUnmarshalParams_InvalidJSON verifies the behavior of unmarshal params invalid j s o n.
+// TestUnmarshalParams_InvalidJSON verifies UnmarshalParams when invalid JSON.
 func TestUnmarshalParams_InvalidJSON(t *testing.T) {
 	params := map[string]any{
 		"project_id": make(chan int),
@@ -4714,7 +4591,7 @@ func TestUnmarshalParams_InvalidJSON(t *testing.T) {
 	}
 }
 
-// TestWrapActionUnmarshal_Error verifies the behavior of wrap action unmarshal error.
+// TestWrapActionUnmarshal_Error verifies WrapActionUnmarshal when error.
 func TestWrapActionUnmarshal_Error(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
@@ -4727,7 +4604,7 @@ func TestWrapActionUnmarshal_Error(t *testing.T) {
 	}
 }
 
-// TestWrapVoidActionUnmarshal_Error verifies the behavior of wrap void action unmarshal error.
+// TestWrapVoidActionUnmarshal_Error verifies WrapVoidActionUnmarshal when error.
 func TestWrapVoidActionUnmarshal_Error(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)

@@ -1,9 +1,3 @@
-// Package groupserviceaccounts tests validate all MCP tool handlers for GitLab
-// group service account operations: List, Create, Update, Delete, ListPATs,
-// CreatePAT, and RevokePAT. Tests cover success paths, input validation, API
-// errors, optional fields, pagination, time formatting, and all markdown
-// formatters (FormatOutputMarkdown, FormatListMarkdown, FormatPATOutputMarkdown,
-// FormatListPATMarkdown, plus the markdown.go registry formatters).
 package groupserviceaccounts
 
 import (

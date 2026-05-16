@@ -9,12 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestMark verifies the behavior of mark.
+// TestMark verifies Mark.
 func TestMark(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/admin/migrations/20240115100000/mark" {
@@ -41,7 +39,7 @@ func TestMark(t *testing.T) {
 	}
 }
 
-// TestMark_Error verifies the behavior of mark error.
+// TestMark_Error verifies Mark when error.
 func TestMark_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -53,7 +51,7 @@ func TestMark_Error(t *testing.T) {
 	}
 }
 
-// TestMark_VersionValidation validates mark version validation across multiple scenarios using table-driven subtests.
+// TestMark_VersionValidation covers Mark with table-driven subtests for version validation.
 func TestMark_VersionValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when version is invalid")
@@ -81,7 +79,7 @@ func TestMark_VersionValidation(t *testing.T) {
 	}
 }
 
-// TestFormatMarkMarkdown verifies the behavior of format mark markdown.
+// TestFormatMarkMarkdown verifies FormatMarkMarkdown.
 func TestFormatMarkMarkdown(t *testing.T) {
 	md := FormatMarkMarkdown(MarkOutput{Status: "marked", Version: 20240115100000})
 	if !strings.Contains(md, "marked") {
@@ -94,77 +92,47 @@ func TestFormatMarkMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestRegisterTools_NoPanic_Coverage verifies the behavior of cov register tools no panic (from coverage_test.go).
-func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies database migration action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].OwnerPackage != "dbmigrations" || specs[0].IndividualTool.Name != "gitlab_mark_migration" {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
 }
 
-// TestMCPRound_Trip_Coverage verifies the behavior of cov m c p round trip (from coverage_test.go).
-func TestMCPRound_Trip_Coverage(t *testing.T) {
+// TestActionSpecs_CallRoute verifies the database migration canonical route.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := ActionSpecs(client)[0]
+	res, err := spec.Route.Handler(t.Context(), map[string]any{"version": int64(20240115100000)})
 	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_mark_migration",
-		Arguments: map[string]any{"version": float64(20240115100000)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
 }
 
-// TestMCPRoundTrip_MarkError validates the register.go error path for
-// gitlab_mark_migration when the GitLab API returns 500.
-func TestMCPRoundTrip_MarkError(t *testing.T) {
+// TestActionSpecs_CallRouteError validates the database migration route error path.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_mark_migration",
-		Arguments: map[string]any{"version": float64(99999)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true for API error")
+	spec := ActionSpecs(client)[0]
+	if _, err := spec.Route.Handler(t.Context(), map[string]any{"version": int64(99999)}); err == nil {
+		t.Fatal("expected route error")
 	}
 }

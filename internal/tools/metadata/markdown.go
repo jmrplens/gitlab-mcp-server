@@ -11,7 +11,7 @@ import (
 func FormatGetMarkdown(out GetOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## GitLab Metadata\n\n")
-	sb.WriteString("| Property | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&sb, "| Version | %s |\n", toolutil.EscapeMdTableCell(out.Version))
 	fmt.Fprintf(&sb, "| Revision | %s |\n", toolutil.EscapeMdTableCell(out.Revision))
 	fmt.Fprintf(&sb, "| Enterprise | %v |\n", out.Enterprise)

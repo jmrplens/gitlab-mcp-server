@@ -11,7 +11,7 @@ import (
 func FormatGetMarkdown(out GetOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Application Statistics\n\n")
-	sb.WriteString("| Metric | Count |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Count"))
 	fmt.Fprintf(&sb, "| Active Users | %d |\n", out.ActiveUsers)
 	fmt.Fprintf(&sb, "| Users | %d |\n", out.Users)
 	fmt.Fprintf(&sb, "| Projects | %d |\n", out.Projects)

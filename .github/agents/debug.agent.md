@@ -91,7 +91,7 @@ You are in debug mode. Your primary objective is to systematically identify, ana
 
 ### MCP Server Debugging
 
-- **Tool not found**: Check `register.go` and `register_meta.go` for registration
+- **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and surface selector (`TOOL_SURFACE`)
 - **JSON schema mismatch**: Verify `jsonschema` struct tags match expected input
 - **Context cancellation**: Ensure all API calls use `ctx` parameter
 - **Error wrapping chain**: Use `errors.Is()` and `errors.As()` to diagnose wrapped errors

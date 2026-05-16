@@ -13,8 +13,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatPublishDirMarkdown_WithPublishedFiles verifies that
@@ -168,205 +166,47 @@ func TestFormatFileListMarkdown_LongSHA(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errNoReachAPI identifies the err no reach API constant used by this package.
 const errNoReachAPI = "should not reach API"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 const (
-	pathPutPkg1         = "PUT /api/v4/projects/1/packages/generic/my-pkg/1.0.0/app.tar.gz"
-	hdrContentType      = "Content-Type"
-	mimeOctetStream     = "application/octet-stream"
+	// pathPutPkg1 identifies the path put pkg 1 constant used by this package.
+	pathPutPkg1 = "PUT /api/v4/projects/1/packages/generic/my-pkg/1.0.0/app.tar.gz"
+	// hdrContentType identifies the hdr content type constant used by this package.
+	hdrContentType = "Content-Type"
+	// mimeOctetStream identifies the mime octet stream constant used by this package.
+	mimeOctetStream = "application/octet-stream"
+	// fmtExpPkgVersionErr identifies the fmt exp pkg version err constant used by this package.
 	fmtExpPkgVersionErr = "expected package_version error, got: %v"
-	pathTmpOutBin       = "/tmp/out.bin"
-	fmtExpProjectIDErr  = "expected project_id error, got: %v"
-	testCtxCancelled    = "context canceled"
-	fmtExpCtxCancelErr  = "expected context canceled error, got: %v"
-	pathAPIPkgs1        = "/api/v4/projects/1/packages"
-	testFileDataBin     = "data.bin"
-	testPkgTestPkg      = "test-pkg"
-	testFileAppBin      = "app.bin"
-	testFileOutBin      = "out.bin"
-	fmtExpCtxCancelGot  = "expected context canceled, got: %v"
-	fmtCallToolErr      = "CallTool error: %v"
-	msgCallToolIsError  = "CallTool returned IsError=true"
+	// pathTmpOutBin identifies the path tmp out bin constant used by this package.
+	pathTmpOutBin = "/tmp/out.bin"
+	// fmtExpProjectIDErr identifies the fmt exp project ID err constant used by this package.
+	fmtExpProjectIDErr = "expected project_id error, got: %v"
+	// testCtxCancelled identifies the test ctx cancelled constant used by this package.
+	testCtxCancelled = "context canceled"
+	// fmtExpCtxCancelErr identifies the fmt exp ctx cancel err constant used by this package.
+	fmtExpCtxCancelErr = "expected context canceled error, got: %v"
+	// pathAPIPkgs1 identifies the path API pkgs 1 constant used by this package.
+	pathAPIPkgs1 = "/api/v4/projects/1/packages"
+	// testFileAppBin identifies the test file app bin constant used by this package.
+	testFileAppBin = "app.bin"
+	// testFileOutBin identifies the test file out bin constant used by this package.
+	testFileOutBin = "out.bin"
+	// fmtExpCtxCancelGot identifies the fmt exp ctx cancel got constant used by this package.
+	fmtExpCtxCancelGot = "expected context canceled, got: %v"
 )
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip for all registered tools
-// ---------------------------------------------------------------------------.
-
-// newPackagesMCPSession is an internal helper for the packages package.
-func newPackagesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	// Publish (PUT) — exact file route for single-file tests.
-	handler.HandleFunc(pathPutPkg1, func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{
-			"id": 1, "package_id": 10, "file_name": "app.tar.gz",
-			"size": 1024, "file_sha256": "abc", "file_md5": "md5",
-			"file_sha1": "sha1", "file_store": 1,
-			"created_at": "2026-01-01T00:00:00Z"
-		}`)
-	})
-
-	// Publish (PUT) — catch-all for publish_directory uploads.
-	handler.HandleFunc("PUT /api/v4/projects/1/packages/generic/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{
-			"id": 2, "package_id": 10, "file_name": "test.bin",
-			"size": 4, "file_sha256": "def", "file_md5": "md5",
-			"file_sha1": "sha1", "file_store": 1
-		}`)
-	})
-
-	// Download (GET)
-	handler.HandleFunc("GET /api/v4/projects/1/packages/generic/my-pkg/1.0.0/app.tar.gz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set(hdrContentType, mimeOctetStream)
-		w.Write([]byte("file-data"))
-	})
-
-	// List packages
-	handler.HandleFunc("GET /api/v4/projects/1/packages", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default"}]`)
-	})
-
-	// List package files
-	handler.HandleFunc("GET /api/v4/projects/1/packages/10/package_files", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":20,"package_id":10,"file_name":"app.tar.gz","size":1024,"file_sha256":"abc"}]`)
-	})
-
-	// Delete package
-	handler.HandleFunc("DELETE /api/v4/projects/1/packages/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Delete package file
-	handler.HandleFunc("DELETE /api/v4/projects/1/packages/10/package_files/20", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Release link for publish_and_link
-	handler.HandleFunc("POST /api/v4/projects/1/releases/v1.0.0/assets/links", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{
-			"id": 50, "name": "app.tar.gz",
-			"url": "https://example.com/pkg", "link_type": "package", "external": true
-		}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// assertCallToolSuccess validates that a CallTool invocation succeeded without errors.
-func assertCallToolSuccess(t *testing.T, result *mcp.CallToolResult, err error, toolName string) {
-	t.Helper()
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", toolName, err)
-	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", toolName, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", toolName)
-	}
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newPackagesMCPSession(t)
-	ctx := context.Background()
-
-	content64 := base64.StdEncoding.EncodeToString([]byte("test-data"))
-	outDir := t.TempDir()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"publish", "gitlab_package_publish", map[string]any{
-			"project_id": "1", "package_name": testPackageName, "package_version": "1.0.0",
-			"file_name": testFileName, "content_base64": content64,
-		}},
-		{"download", "gitlab_package_download", map[string]any{
-			"project_id": "1", "package_name": testPackageName, "package_version": "1.0.0",
-			"file_name": testFileName, "output_path": filepath.Join(outDir, "dl.bin"),
-		}},
-		{"list", "gitlab_package_list", map[string]any{"project_id": "1"}},
-		{"file_list", "gitlab_package_file_list", map[string]any{"project_id": "1", "package_id": "10"}},
-		{"delete", "gitlab_package_delete", map[string]any{"project_id": "1", "package_id": "10"}},
-		{"file_delete", "gitlab_package_file_delete", map[string]any{"project_id": "1", "package_id": "10", "package_file_id": "20"}},
-		{"publish_and_link", "gitlab_package_publish_and_link", map[string]any{
-			"project_id": "1", "package_name": testPackageName, "package_version": "1.0.0",
-			"file_name": testFileName, "content_base64": content64, "tag_name": "v1.0.0",
-		}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			assertCallToolSuccess(t, result, err, tt.tool)
-		})
-	}
-
-	// publish_directory needs a temp dir with a file, handled separately.
-	t.Run("publish_directory", func(t *testing.T) {
-		pubDir := t.TempDir()
-		os.WriteFile(filepath.Join(pubDir, "test.bin"), []byte("data"), 0644)
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: "gitlab_package_publish_directory",
-			Arguments: map[string]any{
-				"project_id":      "1",
-				"package_name":    testPackageName,
-				"package_version": "1.0.0",
-				"directory_path":  pubDir,
-			},
-		})
-		assertCallToolSuccess(t, result, err, "gitlab_package_publish_directory")
-	})
-}
 
 // ---------------------------------------------------------------------------
 // Publish — missing package_version
 // ---------------------------------------------------------------------------.
 
-// TestPublish_MissingVersion verifies the behavior of publish missing version.
+// TestPublish_MissingVersion verifies Publish when missing version.
 func TestPublish_MissingVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -386,7 +226,7 @@ func TestPublish_MissingVersion(t *testing.T) {
 // Publish — invalid file name (starts with ~)
 // ---------------------------------------------------------------------------.
 
-// TestPublish_InvalidFileName verifies the behavior of publish invalid file name.
+// TestPublish_InvalidFileName verifies Publish when invalid file name.
 func TestPublish_InvalidFileName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -407,7 +247,7 @@ func TestPublish_InvalidFileName(t *testing.T) {
 // Publish — invalid base64 content
 // ---------------------------------------------------------------------------.
 
-// TestPublish_InvalidBase64 verifies the behavior of publish invalid base64.
+// TestPublish_InvalidBase64 verifies Publish when invalid base 64.
 func TestPublish_InvalidBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -428,7 +268,7 @@ func TestPublish_InvalidBase64(t *testing.T) {
 // Download — missing required fields
 // ---------------------------------------------------------------------------.
 
-// TestDownload_MissingProjectID verifies the behavior of download missing project i d.
+// TestDownload_MissingProjectID verifies Download when missing project ID.
 func TestDownload_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -444,7 +284,7 @@ func TestDownload_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDownload_MissingPackageName verifies the behavior of download missing package name.
+// TestDownload_MissingPackageName verifies Download when missing package name.
 func TestDownload_MissingPackageName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -460,7 +300,7 @@ func TestDownload_MissingPackageName(t *testing.T) {
 	}
 }
 
-// TestDownload_MissingVersion verifies the behavior of download missing version.
+// TestDownload_MissingVersion verifies Download when missing version.
 func TestDownload_MissingVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -476,7 +316,7 @@ func TestDownload_MissingVersion(t *testing.T) {
 	}
 }
 
-// TestDownload_MissingFileName verifies the behavior of download missing file name.
+// TestDownload_MissingFileName verifies Download when missing file name.
 func TestDownload_MissingFileName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -496,7 +336,7 @@ func TestDownload_MissingFileName(t *testing.T) {
 // List — API error, context canceled, with sort/order_by/version filters
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -507,7 +347,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_ContextCancelled verifies the behavior of list context cancelled.
+// TestList_ContextCancelled verifies List when context cancelled.
 func TestList_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -519,7 +359,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestList_WithSortAndOrderBy verifies the behavior of list with sort and order by.
+// TestList_WithSortAndOrderBy verifies List when with sort and order by.
 func TestList_WithSortAndOrderBy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathAPIPkgs1 {
@@ -580,7 +420,7 @@ func TestList_WithEmptyPackage(t *testing.T) {
 // FileList — API error, context canceled, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestFileList_APIError verifies the behavior of file list a p i error.
+// TestFileList_APIError verifies FileList when API error.
 func TestFileList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -591,7 +431,7 @@ func TestFileList_APIError(t *testing.T) {
 	}
 }
 
-// TestFileList_ContextCancelled verifies the behavior of file list context cancelled.
+// TestFileList_ContextCancelled verifies FileList when context cancelled.
 func TestFileList_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -603,7 +443,7 @@ func TestFileList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestFileList_MissingProjectID verifies the behavior of file list missing project i d.
+// TestFileList_MissingProjectID verifies FileList when missing project ID.
 func TestFileList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -642,7 +482,7 @@ func TestFileList_WithCreatedAt(t *testing.T) {
 // Delete — API error, context canceled
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -653,7 +493,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_ContextCancelled verifies the behavior of delete context cancelled.
+// TestDelete_ContextCancelled verifies Delete when context cancelled.
 func TestDelete_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -669,7 +509,7 @@ func TestDelete_ContextCancelled(t *testing.T) {
 // FileDelete — API error, context canceled, missing project_id, missing package_id
 // ---------------------------------------------------------------------------.
 
-// TestFileDelete_APIError verifies the behavior of file delete a p i error.
+// TestFileDelete_APIError verifies FileDelete when API error.
 func TestFileDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -680,7 +520,7 @@ func TestFileDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestFileDelete_ContextCancelled verifies the behavior of file delete context cancelled.
+// TestFileDelete_ContextCancelled verifies FileDelete when context cancelled.
 func TestFileDelete_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -692,7 +532,7 @@ func TestFileDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestFileDelete_MissingProjectID verifies the behavior of file delete missing project i d.
+// TestFileDelete_MissingProjectID verifies FileDelete when missing project ID.
 func TestFileDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -703,7 +543,7 @@ func TestFileDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestFileDelete_MissingPackageID verifies the behavior of file delete missing package i d.
+// TestFileDelete_MissingPackageID verifies FileDelete when missing package ID.
 func TestFileDelete_MissingPackageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -718,7 +558,7 @@ func TestFileDelete_MissingPackageID(t *testing.T) {
 // PublishDirectory — missing project_id, invalid package name, nonexistent dir
 // ---------------------------------------------------------------------------.
 
-// TestPublishDirectory_MissingProjectID verifies the behavior of publish directory missing project i d.
+// TestPublishDirectory_MissingProjectID verifies PublishDirectory when missing project ID.
 func TestPublishDirectory_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -733,7 +573,7 @@ func TestPublishDirectory_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPublishDirectory_InvalidPackageName verifies the behavior of publish directory invalid package name.
+// TestPublishDirectory_InvalidPackageName verifies PublishDirectory when invalid package name.
 func TestPublishDirectory_InvalidPackageName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -749,7 +589,7 @@ func TestPublishDirectory_InvalidPackageName(t *testing.T) {
 	}
 }
 
-// TestPublishDirectory_MissingVersion verifies the behavior of publish directory missing version.
+// TestPublishDirectory_MissingVersion verifies PublishDirectory when missing version.
 func TestPublishDirectory_MissingVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -764,7 +604,7 @@ func TestPublishDirectory_MissingVersion(t *testing.T) {
 	}
 }
 
-// TestPublishDirectory_NonexistentDir verifies the behavior of publish directory nonexistent dir.
+// TestPublishDirectory_NonexistentDir verifies PublishDirectory when nonexistent dir.
 func TestPublishDirectory_NonexistentDir(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -784,7 +624,7 @@ func TestPublishDirectory_NonexistentDir(t *testing.T) {
 // streamDownloadPackageFile — context canceled
 // ---------------------------------------------------------------------------.
 
-// TestStreamDownload_ContextCancelled verifies the behavior of stream download context cancelled.
+// TestStreamDownload_ContextCancelled verifies StreamDownload when context cancelled.
 func TestStreamDownload_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -813,7 +653,7 @@ func TestStreamDownload_ContextCancelled(t *testing.T) {
 // streamDownloadPackageFile — successful download
 // ---------------------------------------------------------------------------.
 
-// TestStreamDownload_Success verifies the behavior of stream download success.
+// TestStreamDownload_Success verifies StreamDownload when success.
 func TestStreamDownload_Success(t *testing.T) {
 	fileData := []byte("streaming-download-content")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -848,7 +688,7 @@ func TestStreamDownload_Success(t *testing.T) {
 // streamDownloadPackageFile — API error on Do()
 // ---------------------------------------------------------------------------.
 
-// TestStreamDownload_APIError verifies the behavior of stream download a p i error.
+// TestStreamDownload_APIError verifies StreamDownload when API error.
 func TestStreamDownload_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -871,7 +711,7 @@ func TestStreamDownload_APIError(t *testing.T) {
 // Publish — both file_path and content_base64
 // ---------------------------------------------------------------------------.
 
-// TestPublish_BothFileAndBase64 verifies the behavior of publish both file and base64.
+// TestPublish_BothFileAndBase64 verifies Publish when both file and base 64.
 func TestPublish_BothFileAndBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -893,7 +733,7 @@ func TestPublish_BothFileAndBase64(t *testing.T) {
 // Publish — neither file_path nor content_base64
 // ---------------------------------------------------------------------------.
 
-// TestPublish_NeitherFileNorBase64 verifies the behavior of publish neither file nor base64.
+// TestPublish_NeitherFileNorBase64 verifies Publish when neither file nor base 64.
 func TestPublish_NeitherFileNorBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -913,7 +753,7 @@ func TestPublish_NeitherFileNorBase64(t *testing.T) {
 // Publish — API error on publish call
 // ---------------------------------------------------------------------------.
 
-// TestPublish_APIError verifies the behavior of publish a p i error.
+// TestPublish_APIError verifies Publish when API error.
 func TestPublish_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -934,7 +774,7 @@ func TestPublish_APIError(t *testing.T) {
 // Publish — context canceled
 // ---------------------------------------------------------------------------.
 
-// TestPublish_ContextCancelled verifies the behavior of publish context cancelled.
+// TestPublish_ContextCancelled verifies Publish when context cancelled.
 func TestPublish_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -956,7 +796,7 @@ func TestPublish_ContextCancelled(t *testing.T) {
 // Publish — file_path with small file
 // ---------------------------------------------------------------------------.
 
-// TestPublish_FilePathSmallFile verifies the behavior of publish file path small file.
+// TestPublish_FilePathSmallFile verifies Publish when file path small file.
 func TestPublish_FilePathSmallFile(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "small.bin")
 	if err := os.WriteFile(tmpFile, []byte("small-data"), 0644); err != nil {
@@ -999,7 +839,7 @@ func TestPublish_FilePathSmallFile(t *testing.T) {
 // Publish — invalid package name
 // ---------------------------------------------------------------------------.
 
-// TestPublish_InvalidPackageName verifies the behavior of publish invalid package name.
+// TestPublish_InvalidPackageName verifies Publish when invalid package name.
 func TestPublish_InvalidPackageName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -1020,7 +860,7 @@ func TestPublish_InvalidPackageName(t *testing.T) {
 // Publish — missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestPublish_MissingProjectID verifies the behavior of publish missing project i d.
+// TestPublish_MissingProjectID verifies Publish when missing project ID.
 func TestPublish_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -1040,7 +880,7 @@ func TestPublish_MissingProjectID(t *testing.T) {
 // List — with package_name and package_type filter
 // ---------------------------------------------------------------------------.
 
-// TestList_WithNameAndTypeFilter verifies the behavior of list with name and type filter.
+// TestList_WithNameAndTypeFilter verifies List when with name and type filter.
 func TestList_WithNameAndTypeFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathAPIPkgs1 {
@@ -1084,7 +924,7 @@ func TestList_WithNameAndTypeFilter(t *testing.T) {
 // PublishDirectory — empty dir (no matching files)
 // ---------------------------------------------------------------------------.
 
-// TestPublishDirectory_EmptyDir verifies the behavior of publish directory empty dir.
+// TestPublishDirectory_EmptyDir verifies PublishDirectory when empty dir.
 func TestPublishDirectory_EmptyDir(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -1105,7 +945,7 @@ func TestPublishDirectory_EmptyDir(t *testing.T) {
 // Publish — file_path with nonexistent file
 // ---------------------------------------------------------------------------.
 
-// TestPublish_FilePathNonexistent verifies the behavior of publish file path nonexistent.
+// TestPublish_FilePathNonexistent verifies Publish when file path nonexistent.
 func TestPublish_FilePathNonexistent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)

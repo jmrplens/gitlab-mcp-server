@@ -1,5 +1,3 @@
-// Package orbit implements MCP tools for GitLab Orbit, the experimental
-// GitLab.com Knowledge Graph API.
 package orbit
 
 import (

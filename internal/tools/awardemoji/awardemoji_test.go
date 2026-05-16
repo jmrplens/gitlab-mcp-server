@@ -10,37 +10,53 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errNoReachAPI identifies the err no reach API constant used by this package.
 const errNoReachAPI = "should not reach API"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testProjectID identifies the test project ID constant used by this package.
 const testProjectID = "my-project"
 
 const (
-	testEmojiThumbsup     = "thumbsup"
-	testEmojiStar         = "star"
-	fmtExpected1Emoji     = "expected 1 emoji, got %d"
-	testFieldIID          = "iid"
-	testFieldIssueIID     = "issue_iid"
-	testFieldMRIID        = "merge_request_iid"
-	testFieldSnippetID    = "snippet_id"
-	testFieldAwardID      = "award_id"
-	testFieldNoteID       = "note_id"
-	testPathAPIProjects   = "/api/v4/projects/"
-	fmtNameWantThumbsup   = "name = %q, want thumbsup"
+	// testEmojiThumbsup identifies the test emoji thumbsup constant used by this package.
+	testEmojiThumbsup = "thumbsup"
+	// testEmojiStar identifies the test emoji star constant used by this package.
+	testEmojiStar = "star"
+	// fmtExpected1Emoji identifies the fmt expected 1 emoji constant used by this package.
+	fmtExpected1Emoji = "expected 1 emoji, got %d"
+	// testFieldIssueIID identifies the test field issue IID constant used by this package.
+	testFieldIssueIID = "issue_iid"
+	// testFieldMRIID identifies the test field mriid constant used by this package.
+	testFieldMRIID = "merge_request_iid"
+	// testFieldSnippetID identifies the test field snippet ID constant used by this package.
+	testFieldSnippetID = "snippet_id"
+	// testFieldAwardID identifies the test field award ID constant used by this package.
+	testFieldAwardID = "award_id"
+	// testFieldNoteID identifies the test field note ID constant used by this package.
+	testFieldNoteID = "note_id"
+	// testPathAPIProjects identifies the test path API projects constant used by this package.
+	testPathAPIProjects = "/api/v4/projects/"
+	// fmtNameWantThumbsup identifies the fmt name want thumbsup constant used by this package.
+	fmtNameWantThumbsup = "name = %q, want thumbsup"
+	// testErrEmptyProjectID identifies the test err empty project ID constant used by this package.
 	testErrEmptyProjectID = "expected error for empty project_id"
 )
 
 // Issue award emoji tests.
 
-// TestListIssueAwardEmoji_Success verifies the behavior of list issue award emoji success.
+// TestListIssueAwardEmoji_Success verifies ListIssueAwardEmoji when success.
 func TestListIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji" {
@@ -67,7 +83,7 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_ValidationError verifies the behavior of list issue award emoji validation error.
+// TestListIssueAwardEmoji_ValidationError verifies ListIssueAwardEmoji when validation error.
 func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -82,7 +98,7 @@ func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Success verifies the behavior of get issue award emoji success.
+// TestGetIssueAwardEmoji_Success verifies GetIssueAwardEmoji when success.
 func TestGetIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji/10" {
@@ -107,7 +123,7 @@ func TestGetIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Success verifies the behavior of create issue award emoji success.
+// TestCreateIssueAwardEmoji_Success verifies CreateIssueAwardEmoji when success.
 func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -135,7 +151,7 @@ func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_ValidationError verifies the behavior of create issue award emoji validation error.
+// TestCreateIssueAwardEmoji_ValidationError verifies CreateIssueAwardEmoji when validation error.
 func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -151,7 +167,7 @@ func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Success verifies the behavior of delete issue award emoji success.
+// TestDeleteIssueAwardEmoji_Success verifies DeleteIssueAwardEmoji when success.
 func TestDeleteIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -173,7 +189,7 @@ func TestDeleteIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_APIError verifies the behavior of delete issue award emoji a p i error.
+// TestDeleteIssueAwardEmoji_APIError verifies DeleteIssueAwardEmoji when API error.
 func TestDeleteIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -191,7 +207,7 @@ func TestDeleteIssueAwardEmoji_APIError(t *testing.T) {
 
 // Issue note award emoji tests.
 
-// TestListIssueNoteAwardEmoji_Success verifies the behavior of list issue note award emoji success.
+// TestListIssueNoteAwardEmoji_Success verifies ListIssueNoteAwardEmoji when success.
 func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/notes/5/award_emoji" {
@@ -216,7 +232,7 @@ func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_Success verifies the behavior of delete issue note award emoji success.
+// TestDeleteIssueNoteAwardEmoji_Success verifies DeleteIssueNoteAwardEmoji when success.
 func TestDeleteIssueNoteAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/notes/5/award_emoji/20" {
@@ -238,7 +254,7 @@ func TestDeleteIssueNoteAwardEmoji_Success(t *testing.T) {
 
 // MR award emoji tests.
 
-// TestListMRAwardEmoji_Success verifies the behavior of list m r award emoji success.
+// TestListMRAwardEmoji_Success verifies ListMRAwardEmoji when success.
 func TestListMRAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/merge_requests/3/award_emoji" {
@@ -262,7 +278,7 @@ func TestListMRAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_ValidationError verifies the behavior of create m r award emoji validation error.
+// TestCreateMRAwardEmoji_ValidationError verifies CreateMRAwardEmoji when validation error.
 func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -280,7 +296,7 @@ func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 
 // Snippet award emoji tests.
 
-// TestListSnippetAwardEmoji_Success verifies the behavior of list snippet award emoji success.
+// TestListSnippetAwardEmoji_Success verifies ListSnippetAwardEmoji when success.
 func TestListSnippetAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/snippets/7/award_emoji" {
@@ -306,7 +322,7 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatListMarkdownString_WithEmoji verifies the behavior of format list markdown string with emoji.
+// TestFormatListMarkdownString_WithEmoji verifies FormatListMarkdownString when with emoji.
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
@@ -329,7 +345,7 @@ func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{}}
 	md := FormatListMarkdownString(out)
@@ -338,7 +354,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies the behavior of format markdown string.
+// TestFormatMarkdownString verifies FormatMarkdownString.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:        10,
@@ -360,7 +376,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{}}
 	result := FormatListMarkdown(out)
@@ -369,12 +385,12 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// contains is an internal helper for the awardemoji package.
+// contains reports whether contains.
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && containsHelper(s, substr))
 }
 
-// containsHelper is an internal helper for the awardemoji package.
+// containsHelper reports whether contains helper.
 func containsHelper(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
@@ -386,7 +402,7 @@ func containsHelper(s, substr string) bool {
 
 // Int64 validation tests.
 
-// assertErrContains is an internal helper for the awardemoji package.
+// assertErrContains checks err contains invariants for tests.
 func assertErrContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -397,7 +413,7 @@ func assertErrContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestListIssueAwardEmoji_InvalidIID verifies the behavior of list issue award emoji invalid i i d.
+// TestListIssueAwardEmoji_InvalidIID verifies ListIssueAwardEmoji when invalid IID.
 func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -408,7 +424,7 @@ func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldIssueIID)
 }
 
-// TestGetIssueAwardEmoji_InvalidIDs verifies the behavior of get issue award emoji invalid i ds.
+// TestGetIssueAwardEmoji_InvalidIDs verifies GetIssueAwardEmoji when invalid IDs.
 func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -419,7 +435,7 @@ func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateIssueAwardEmoji_InvalidIID verifies the behavior of create issue award emoji invalid i i d.
+// TestCreateIssueAwardEmoji_InvalidIID verifies CreateIssueAwardEmoji when invalid IID.
 func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -428,7 +444,7 @@ func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldIssueIID)
 }
 
-// TestDeleteIssueAwardEmoji_InvalidIDs verifies the behavior of delete issue award emoji invalid i ds.
+// TestDeleteIssueAwardEmoji_InvalidIDs verifies DeleteIssueAwardEmoji when invalid IDs.
 func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -439,7 +455,7 @@ func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListIssueNoteAwardEmoji_InvalidIDs verifies the behavior of list issue note award emoji invalid i ds.
+// TestListIssueNoteAwardEmoji_InvalidIDs verifies ListIssueNoteAwardEmoji when invalid IDs.
 func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -450,7 +466,7 @@ func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetIssueNoteAwardEmoji_InvalidIDs verifies the behavior of get issue note award emoji invalid i ds.
+// TestGetIssueNoteAwardEmoji_InvalidIDs verifies GetIssueNoteAwardEmoji when invalid IDs.
 func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -463,7 +479,7 @@ func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateIssueNoteAwardEmoji_InvalidIDs verifies the behavior of create issue note award emoji invalid i ds.
+// TestCreateIssueNoteAwardEmoji_InvalidIDs verifies CreateIssueNoteAwardEmoji when invalid IDs.
 func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -474,7 +490,7 @@ func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteIssueNoteAwardEmoji_InvalidIDs verifies the behavior of delete issue note award emoji invalid i ds.
+// TestDeleteIssueNoteAwardEmoji_InvalidIDs verifies DeleteIssueNoteAwardEmoji when invalid IDs.
 func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -487,7 +503,7 @@ func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListMRAwardEmoji_InvalidIID verifies the behavior of list m r award emoji invalid i i d.
+// TestListMRAwardEmoji_InvalidIID verifies ListMRAwardEmoji when invalid IID.
 func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -496,7 +512,7 @@ func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldMRIID)
 }
 
-// TestGetMRAwardEmoji_InvalidIDs verifies the behavior of get m r award emoji invalid i ds.
+// TestGetMRAwardEmoji_InvalidIDs verifies GetMRAwardEmoji when invalid IDs.
 func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -507,7 +523,7 @@ func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateMRAwardEmoji_InvalidIID verifies the behavior of create m r award emoji invalid i i d.
+// TestCreateMRAwardEmoji_InvalidIID verifies CreateMRAwardEmoji when invalid IID.
 func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -516,7 +532,7 @@ func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldMRIID)
 }
 
-// TestDeleteMRAwardEmoji_InvalidIDs verifies the behavior of delete m r award emoji invalid i ds.
+// TestDeleteMRAwardEmoji_InvalidIDs verifies DeleteMRAwardEmoji when invalid IDs.
 func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -527,7 +543,7 @@ func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListMRNoteAwardEmoji_InvalidIDs verifies the behavior of list m r note award emoji invalid i ds.
+// TestListMRNoteAwardEmoji_InvalidIDs verifies ListMRNoteAwardEmoji when invalid IDs.
 func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -538,7 +554,7 @@ func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetMRNoteAwardEmoji_InvalidIDs verifies the behavior of get m r note award emoji invalid i ds.
+// TestGetMRNoteAwardEmoji_InvalidIDs verifies GetMRNoteAwardEmoji when invalid IDs.
 func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -551,7 +567,7 @@ func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateMRNoteAwardEmoji_InvalidIDs verifies the behavior of create m r note award emoji invalid i ds.
+// TestCreateMRNoteAwardEmoji_InvalidIDs verifies CreateMRNoteAwardEmoji when invalid IDs.
 func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -562,7 +578,7 @@ func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteMRNoteAwardEmoji_InvalidIDs verifies the behavior of delete m r note award emoji invalid i ds.
+// TestDeleteMRNoteAwardEmoji_InvalidIDs verifies DeleteMRNoteAwardEmoji when invalid IDs.
 func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -575,7 +591,7 @@ func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListSnippetAwardEmoji_InvalidIID verifies the behavior of list snippet award emoji invalid i i d.
+// TestListSnippetAwardEmoji_InvalidIID verifies ListSnippetAwardEmoji when invalid IID.
 func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -584,7 +600,7 @@ func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldSnippetID)
 }
 
-// TestGetSnippetAwardEmoji_InvalidIDs verifies the behavior of get snippet award emoji invalid i ds.
+// TestGetSnippetAwardEmoji_InvalidIDs verifies GetSnippetAwardEmoji when invalid IDs.
 func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -595,7 +611,7 @@ func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateSnippetAwardEmoji_InvalidIID verifies the behavior of create snippet award emoji invalid i i d.
+// TestCreateSnippetAwardEmoji_InvalidIID verifies CreateSnippetAwardEmoji when invalid IID.
 func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -604,7 +620,7 @@ func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldSnippetID)
 }
 
-// TestDeleteSnippetAwardEmoji_InvalidIDs verifies the behavior of delete snippet award emoji invalid i ds.
+// TestDeleteSnippetAwardEmoji_InvalidIDs verifies DeleteSnippetAwardEmoji when invalid IDs.
 func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -615,7 +631,7 @@ func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListSnippetNoteAwardEmoji_InvalidIDs verifies the behavior of list snippet note award emoji invalid i ds.
+// TestListSnippetNoteAwardEmoji_InvalidIDs verifies ListSnippetNoteAwardEmoji when invalid IDs.
 func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -626,7 +642,7 @@ func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetSnippetNoteAwardEmoji_InvalidIDs verifies the behavior of get snippet note award emoji invalid i ds.
+// TestGetSnippetNoteAwardEmoji_InvalidIDs verifies GetSnippetNoteAwardEmoji when invalid IDs.
 func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -639,7 +655,7 @@ func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateSnippetNoteAwardEmoji_InvalidIDs verifies the behavior of create snippet note award emoji invalid i ds.
+// TestCreateSnippetNoteAwardEmoji_InvalidIDs verifies CreateSnippetNoteAwardEmoji when invalid IDs.
 func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -650,7 +666,7 @@ func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteSnippetNoteAwardEmoji_InvalidIDs verifies the behavior of delete snippet note award emoji invalid i ds.
+// TestDeleteSnippetNoteAwardEmoji_InvalidIDs verifies DeleteSnippetNoteAwardEmoji when invalid IDs.
 func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -665,33 +681,37 @@ func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedValidation identifies the err expected validation constant used by this package.
 const errExpectedValidation = "expected validation error"
 
+// covEmojiJSON identifies the cov emoji JSON constant used by this package.
 const covEmojiJSON = `[{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2026-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}]`
+
+// covEmojiSingle identifies the cov emoji single constant used by this package.
 const covEmojiSingle = `{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2026-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}`
 
-// covBadHandler is an internal helper for the awardemoji package.
+// covBadHandler supports cov bad handler assertions in awardemoji tests.
 func covBadHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
 	})
 }
 
-// covOKList is an internal helper for the awardemoji package.
+// covOKList supports cov ok list assertions in awardemoji tests.
 func covOKList() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
 	})
 }
 
-// covOKSingle is an internal helper for the awardemoji package.
+// covOKSingle supports cov ok single assertions in awardemoji tests.
 func covOKSingle() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covEmojiSingle)
 	})
 }
 
-// covOKDelete is an internal helper for the awardemoji package.
+// covOKDelete supports cov ok delete assertions in awardemoji tests.
 func covOKDelete() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -700,7 +720,7 @@ func covOKDelete() http.Handler {
 
 // ======================== Issue Emoji ========================.
 
-// TestListIssueAwardEmoji_Validation verifies the behavior of cov list issue award emoji validation.
+// TestListIssueAwardEmoji_Validation verifies ListIssueAwardEmoji when validation.
 func TestListIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{})
@@ -709,7 +729,7 @@ func TestListIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_APIError verifies the behavior of cov list issue award emoji a p i error.
+// TestListIssueAwardEmoji_APIError verifies ListIssueAwardEmoji when API error.
 func TestListIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
@@ -718,7 +738,7 @@ func TestListIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_Success_Cov verifies the behavior of cov list issue award emoji success.
+// TestListIssueAwardEmoji_Success_Cov verifies ListIssueAwardEmoji when success cov.
 func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
@@ -730,7 +750,7 @@ func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Validation verifies the behavior of cov get issue award emoji validation.
+// TestGetIssueAwardEmoji_Validation verifies GetIssueAwardEmoji when validation.
 func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{})
@@ -739,7 +759,7 @@ func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_APIError verifies the behavior of cov get issue award emoji a p i error.
+// TestGetIssueAwardEmoji_APIError verifies GetIssueAwardEmoji when API error.
 func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -748,7 +768,7 @@ func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Success_Cov verifies the behavior of cov get issue award emoji success.
+// TestGetIssueAwardEmoji_Success_Cov verifies GetIssueAwardEmoji when success cov.
 func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
 	out, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -760,7 +780,7 @@ func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Validation verifies the behavior of cov create issue award emoji validation.
+// TestCreateIssueAwardEmoji_Validation verifies CreateIssueAwardEmoji when validation.
 func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{})
@@ -769,7 +789,7 @@ func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_APIError verifies the behavior of cov create issue award emoji a p i error.
+// TestCreateIssueAwardEmoji_APIError verifies CreateIssueAwardEmoji when API error.
 func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
@@ -778,7 +798,7 @@ func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Success_Cov verifies the behavior of cov create issue award emoji success.
+// TestCreateIssueAwardEmoji_Success_Cov verifies CreateIssueAwardEmoji when success cov.
 func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
 	out, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
@@ -790,7 +810,7 @@ func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Validation verifies the behavior of cov delete issue award emoji validation.
+// TestDeleteIssueAwardEmoji_Validation verifies DeleteIssueAwardEmoji when validation.
 func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{})
@@ -799,7 +819,7 @@ func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_APIError_Cov verifies the behavior of cov delete issue award emoji API error.
+// TestDeleteIssueAwardEmoji_APIError_Cov verifies DeleteIssueAwardEmoji when API error cov.
 func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -808,7 +828,7 @@ func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Success_Cov verifies the behavior of cov delete issue award emoji success.
+// TestDeleteIssueAwardEmoji_Success_Cov verifies DeleteIssueAwardEmoji when success cov.
 func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKDelete())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -819,7 +839,7 @@ func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 
 // ======================== Issue Note Emoji ========================.
 
-// TestListIssueNoteAwardEmoji_Validation verifies the behavior of cov list issue note award emoji validation.
+// TestListIssueNoteAwardEmoji_Validation verifies ListIssueNoteAwardEmoji when validation.
 func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{})
@@ -828,7 +848,7 @@ func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueNoteAwardEmoji_APIError verifies the behavior of cov list issue note award emoji a p i error.
+// TestListIssueNoteAwardEmoji_APIError verifies ListIssueNoteAwardEmoji when API error.
 func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -837,7 +857,7 @@ func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueNoteAwardEmoji_Success_Cov verifies the behavior of cov list issue note award emoji success.
+// TestListIssueNoteAwardEmoji_Success_Cov verifies ListIssueNoteAwardEmoji when success cov.
 func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -849,7 +869,7 @@ func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetIssueNoteAwardEmoji_Validation verifies the behavior of cov get issue note award emoji validation.
+// TestGetIssueNoteAwardEmoji_Validation verifies GetIssueNoteAwardEmoji when validation.
 func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{})
@@ -858,7 +878,7 @@ func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueNoteAwardEmoji_APIError verifies the behavior of cov get issue note award emoji a p i error.
+// TestGetIssueNoteAwardEmoji_APIError verifies GetIssueNoteAwardEmoji when API error.
 func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -867,7 +887,7 @@ func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateIssueNoteAwardEmoji_Validation verifies the behavior of cov create issue note award emoji validation.
+// TestCreateIssueNoteAwardEmoji_Validation verifies CreateIssueNoteAwardEmoji when validation.
 func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{})
@@ -876,7 +896,7 @@ func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateIssueNoteAwardEmoji_APIError verifies the behavior of cov create issue note award emoji a p i error.
+// TestCreateIssueNoteAwardEmoji_APIError verifies CreateIssueNoteAwardEmoji when API error.
 func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -885,7 +905,7 @@ func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_Validation verifies the behavior of cov delete issue note award emoji validation.
+// TestDeleteIssueNoteAwardEmoji_Validation verifies DeleteIssueNoteAwardEmoji when validation.
 func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{})
@@ -894,7 +914,7 @@ func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_APIError verifies the behavior of cov delete issue note award emoji a p i error.
+// TestDeleteIssueNoteAwardEmoji_APIError verifies DeleteIssueNoteAwardEmoji when API error.
 func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -905,7 +925,7 @@ func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== MR Emoji ========================.
 
-// TestListMRAwardEmoji_Validation verifies the behavior of cov list m r award emoji validation.
+// TestListMRAwardEmoji_Validation verifies ListMRAwardEmoji when validation.
 func TestListMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{})
@@ -914,7 +934,7 @@ func TestListMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRAwardEmoji_APIError verifies the behavior of cov list m r award emoji a p i error.
+// TestListMRAwardEmoji_APIError verifies ListMRAwardEmoji when API error.
 func TestListMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
@@ -923,7 +943,7 @@ func TestListMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRAwardEmoji_Success_Cov verifies the behavior of cov list MR award emoji success.
+// TestListMRAwardEmoji_Success_Cov verifies ListMRAwardEmoji when success cov.
 func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
@@ -935,7 +955,7 @@ func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetMRAwardEmoji_Validation verifies the behavior of cov get m r award emoji validation.
+// TestGetMRAwardEmoji_Validation verifies GetMRAwardEmoji when validation.
 func TestGetMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{})
@@ -944,7 +964,7 @@ func TestGetMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRAwardEmoji_APIError verifies the behavior of cov get m r award emoji a p i error.
+// TestGetMRAwardEmoji_APIError verifies GetMRAwardEmoji when API error.
 func TestGetMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -953,7 +973,7 @@ func TestGetMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_Validation verifies the behavior of cov create m r award emoji validation.
+// TestCreateMRAwardEmoji_Validation verifies CreateMRAwardEmoji when validation.
 func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{})
@@ -962,7 +982,7 @@ func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_APIError verifies the behavior of cov create m r award emoji a p i error.
+// TestCreateMRAwardEmoji_APIError verifies CreateMRAwardEmoji when API error.
 func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: 1, Name: "x"})
@@ -971,7 +991,7 @@ func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMRAwardEmoji_Validation verifies the behavior of cov delete m r award emoji validation.
+// TestDeleteMRAwardEmoji_Validation verifies DeleteMRAwardEmoji when validation.
 func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{})
@@ -980,7 +1000,7 @@ func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteMRAwardEmoji_APIError verifies the behavior of cov delete m r award emoji a p i error.
+// TestDeleteMRAwardEmoji_APIError verifies DeleteMRAwardEmoji when API error.
 func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -991,7 +1011,7 @@ func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 
 // ======================== MR Note Emoji ========================.
 
-// TestListMRNoteAwardEmoji_Validation verifies the behavior of cov list m r note award emoji validation.
+// TestListMRNoteAwardEmoji_Validation verifies ListMRNoteAwardEmoji when validation.
 func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{})
@@ -1000,7 +1020,7 @@ func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRNoteAwardEmoji_APIError verifies the behavior of cov list m r note award emoji a p i error.
+// TestListMRNoteAwardEmoji_APIError verifies ListMRNoteAwardEmoji when API error.
 func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -1009,7 +1029,7 @@ func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMRNoteAwardEmoji_Validation verifies the behavior of cov get m r note award emoji validation.
+// TestGetMRNoteAwardEmoji_Validation verifies GetMRNoteAwardEmoji when validation.
 func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{})
@@ -1018,7 +1038,7 @@ func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRNoteAwardEmoji_APIError verifies the behavior of cov get m r note award emoji a p i error.
+// TestGetMRNoteAwardEmoji_APIError verifies GetMRNoteAwardEmoji when API error.
 func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1027,7 +1047,7 @@ func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateMRNoteAwardEmoji_Validation verifies the behavior of cov create m r note award emoji validation.
+// TestCreateMRNoteAwardEmoji_Validation verifies CreateMRNoteAwardEmoji when validation.
 func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{})
@@ -1036,7 +1056,7 @@ func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateMRNoteAwardEmoji_APIError verifies the behavior of cov create m r note award emoji a p i error.
+// TestCreateMRNoteAwardEmoji_APIError verifies CreateMRNoteAwardEmoji when API error.
 func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -1045,7 +1065,7 @@ func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMRNoteAwardEmoji_Validation verifies the behavior of cov delete m r note award emoji validation.
+// TestDeleteMRNoteAwardEmoji_Validation verifies DeleteMRNoteAwardEmoji when validation.
 func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{})
@@ -1054,7 +1074,7 @@ func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteMRNoteAwardEmoji_APIError verifies the behavior of cov delete m r note award emoji a p i error.
+// TestDeleteMRNoteAwardEmoji_APIError verifies DeleteMRNoteAwardEmoji when API error.
 func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1065,7 +1085,7 @@ func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Snippet Emoji ========================.
 
-// TestListSnippetAwardEmoji_Validation verifies the behavior of cov list snippet award emoji validation.
+// TestListSnippetAwardEmoji_Validation verifies ListSnippetAwardEmoji when validation.
 func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{})
@@ -1074,7 +1094,7 @@ func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListSnippetAwardEmoji_APIError verifies the behavior of cov list snippet award emoji a p i error.
+// TestListSnippetAwardEmoji_APIError verifies ListSnippetAwardEmoji when API error.
 func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{ProjectID: "p", IID: 1})
@@ -1083,7 +1103,7 @@ func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSnippetAwardEmoji_Validation verifies the behavior of cov get snippet award emoji validation.
+// TestGetSnippetAwardEmoji_Validation verifies GetSnippetAwardEmoji when validation.
 func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{})
@@ -1092,7 +1112,7 @@ func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetSnippetAwardEmoji_APIError verifies the behavior of cov get snippet award emoji a p i error.
+// TestGetSnippetAwardEmoji_APIError verifies GetSnippetAwardEmoji when API error.
 func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1101,7 +1121,7 @@ func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetAwardEmoji_Validation verifies the behavior of cov create snippet award emoji validation.
+// TestCreateSnippetAwardEmoji_Validation verifies CreateSnippetAwardEmoji when validation.
 func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{})
@@ -1110,7 +1130,7 @@ func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetAwardEmoji_APIError verifies the behavior of cov create snippet award emoji a p i error.
+// TestCreateSnippetAwardEmoji_APIError verifies CreateSnippetAwardEmoji when API error.
 func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{ProjectID: "p", IID: 1, Name: "x"})
@@ -1119,7 +1139,7 @@ func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetAwardEmoji_Validation verifies the behavior of cov delete snippet award emoji validation.
+// TestDeleteSnippetAwardEmoji_Validation verifies DeleteSnippetAwardEmoji when validation.
 func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{})
@@ -1128,7 +1148,7 @@ func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetAwardEmoji_APIError verifies the behavior of cov delete snippet award emoji a p i error.
+// TestDeleteSnippetAwardEmoji_APIError verifies DeleteSnippetAwardEmoji when API error.
 func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1139,7 +1159,7 @@ func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Snippet Note Emoji ========================.
 
-// TestListSnippetNoteAwardEmoji_Validation verifies the behavior of cov list snippet note award emoji validation.
+// TestListSnippetNoteAwardEmoji_Validation verifies ListSnippetNoteAwardEmoji when validation.
 func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{})
@@ -1148,7 +1168,7 @@ func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListSnippetNoteAwardEmoji_APIError verifies the behavior of cov list snippet note award emoji a p i error.
+// TestListSnippetNoteAwardEmoji_APIError verifies ListSnippetNoteAwardEmoji when API error.
 func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -1157,7 +1177,7 @@ func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSnippetNoteAwardEmoji_Validation verifies the behavior of cov get snippet note award emoji validation.
+// TestGetSnippetNoteAwardEmoji_Validation verifies GetSnippetNoteAwardEmoji when validation.
 func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{})
@@ -1166,7 +1186,7 @@ func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetSnippetNoteAwardEmoji_APIError verifies the behavior of cov get snippet note award emoji a p i error.
+// TestGetSnippetNoteAwardEmoji_APIError verifies GetSnippetNoteAwardEmoji when API error.
 func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1175,7 +1195,7 @@ func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetNoteAwardEmoji_Validation verifies the behavior of cov create snippet note award emoji validation.
+// TestCreateSnippetNoteAwardEmoji_Validation verifies CreateSnippetNoteAwardEmoji when validation.
 func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{})
@@ -1184,7 +1204,7 @@ func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetNoteAwardEmoji_APIError verifies the behavior of cov create snippet note award emoji a p i error.
+// TestCreateSnippetNoteAwardEmoji_APIError verifies CreateSnippetNoteAwardEmoji when API error.
 func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -1193,7 +1213,7 @@ func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetNoteAwardEmoji_Validation verifies the behavior of cov delete snippet note award emoji validation.
+// TestDeleteSnippetNoteAwardEmoji_Validation verifies DeleteSnippetNoteAwardEmoji when validation.
 func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{})
@@ -1202,7 +1222,7 @@ func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetNoteAwardEmoji_APIError verifies the behavior of cov delete snippet note award emoji a p i error.
+// TestDeleteSnippetNoteAwardEmoji_APIError verifies DeleteSnippetNoteAwardEmoji when API error.
 func TestDeleteSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1213,7 +1233,7 @@ func TestDeleteSnippetNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Formatters ========================.
 
-// TestFormatListMarkdown_Empty_Cov verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty_Cov verifies FormatListMarkdown when empty cov.
 func TestFormatListMarkdown_Empty_Cov(t *testing.T) {
 	res := FormatListMarkdown(ListOutput{})
 	if res == nil {
@@ -1221,7 +1241,7 @@ func TestFormatListMarkdown_Empty_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty_Cov verifies the behavior of cov format list markdown string empty.
+// TestFormatListMarkdownString_Empty_Cov verifies FormatListMarkdownString when empty cov.
 func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No award emoji found") {
@@ -1229,7 +1249,7 @@ func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithEmoji_Cov verifies the behavior of cov format list markdown string with emoji.
+// TestFormatListMarkdownString_WithEmoji_Cov verifies FormatListMarkdownString when with emoji cov.
 func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{{ID: 1, Name: "thumbsup", Username: "alice"}}}
 	md := FormatListMarkdownString(out)
@@ -1238,7 +1258,7 @@ func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Wrapper verifies the behavior of cov format markdown wrapper.
+// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	res := FormatMarkdown(Output{Name: "thumbsup"})
 	if res == nil {
@@ -1246,7 +1266,7 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_NoCreatedAt verifies the behavior of cov format markdown string no created at.
+// TestFormatMarkdownString_NoCreatedAt verifies FormatMarkdownString when no created at.
 func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice"})
 	if strings.Contains(md, "Created") {
@@ -1254,7 +1274,7 @@ func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_WithCreatedAt verifies the behavior of cov format markdown string with created at.
+// TestFormatMarkdownString_WithCreatedAt verifies FormatMarkdownString when with created at.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice", CreatedAt: "2026-06-01T10:00:00Z"})
 	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2026") {
@@ -1262,23 +1282,37 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// ======================== Register ========================.
+// ======================== Action Specs ========================.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies canonical metadata for all award emoji actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	RegisterTools(server, client)
+	specs := allAwardEmojiActionSpecs(client)
+	byTool := awardEmojiSpecsByTool(t, specs)
+
+	if len(specs) != 24 {
+		t.Fatalf("len(ActionSpecs) = %d, want 24", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "awardemoji" {
+			t.Fatalf("OwnerPackage for %s = %q, want awardemoji", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// ======================== MCP Round-trip ========================.
-
-// TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_CallAllRoutes validates all award emoji routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusOK, covEmojiSingle)
 			return
 		}
 		path := r.URL.Path
@@ -1290,115 +1324,86 @@ func TestMCPRound_Trip(t *testing.T) {
 		}
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	tests := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_list", map[string]any{"project_id": "p", "iid": 1}},
-		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_list", map[string]any{"project_id": "p", "iid": 1, "note_id": 1}},
-		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_list", map[string]any{"project_id": "p", "issue_iid": 1}},
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_list", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_list", map[string]any{"project_id": "p", "merge_request_iid": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_list", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_list", map[string]any{"project_id": "p", "snippet_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_list", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
 			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
+				t.Fatalf("Route.Handler(%s) returned nil", tc.name)
 			}
 		})
 	}
 }
 
-// TestMCPRound_Trip_NotFound validates that get tools return NotFoundResult
-// when the GitLab API responds with 404, covering the register.go 404 paths.
-func TestMCPRound_Trip_NotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound validates get routes preserve NotFoundResult details.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	getTools := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
 	}
 	for _, tc := range getTools {
 		t.Run(tc.name+"_404", func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, callErr)
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 			}
-			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
+			if _, ok := res.(awardEmojiNotFoundOutput); !ok {
+				t.Fatalf("result type = %T, want awardEmojiNotFoundOutput", res)
 			}
-			if !res.IsError {
-				t.Errorf("expected IsError=true for 404 on %s", tc.name)
+			toolResult := toolutil.MarkdownForResult(res)
+			if toolResult == nil || !toolResult.IsError {
+				t.Fatalf("expected MarkdownForResult to return an error CallToolResult for %s", tc.name)
 			}
 		})
 	}
@@ -1445,9 +1450,8 @@ func TestCreateAPIErrors(t *testing.T) {
 	})
 }
 
-// TestMCPRound_Trip_CreateErrors validates the register.go create error paths
-// via MCP round-trip where the GitLab API returns 500.
-func TestMCPRound_Trip_CreateErrors(t *testing.T) {
+// TestActionSpecs_CreateErrors validates create routes return API errors.
+func TestActionSpecs_CreateErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -1457,46 +1461,104 @@ func TestMCPRound_Trip_CreateErrors(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
 	createTools := []struct {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
 	}
 	for _, tc := range createTools {
 		t.Run(tc.name, func(t *testing.T) {
-			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-			if callErr != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, callErr)
-			}
-			if res == nil {
-				t.Fatalf("nil result for %s", tc.name)
-			}
-			if !res.IsError {
-				t.Errorf("expected IsError=true for create error on %s", tc.name)
+			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
 			}
 		})
 	}
+}
+
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, byTool[tt.name], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test award emoji destructive confirmation.",
+				Icons:       toolutil.IconLabel,
+			})
+
+			st, ct := mcp.NewInMemoryTransports()
+			ctx := context.Background()
+			serverSession, err := server.Connect(ctx, st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+				ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "decline"}, nil
+				},
+			})
+			session, connectErr := mcpClient.Connect(ctx, ct, nil)
+			if connectErr != nil {
+				t.Fatalf("client connect: %v", connectErr)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("expected non-nil result for declined confirmation on %s", tt.name)
+			}
+		})
+	}
+}
+
+// allAwardEmojiActionSpecs supports all award emoji action specs assertions in awardemoji tests.
+func allAwardEmojiActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+	return append(specs, SnippetActionSpecs(client)...)
+}
+
+// awardEmojiSpecsByTool supports award emoji specs by tool assertions in awardemoji tests.
+func awardEmojiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
 }

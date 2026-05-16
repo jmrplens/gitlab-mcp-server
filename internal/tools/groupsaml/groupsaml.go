@@ -1,4 +1,3 @@
-// Package groupsaml implements MCP tool handlers for GitLab group SAML link operations.
 package groupsaml
 
 import (

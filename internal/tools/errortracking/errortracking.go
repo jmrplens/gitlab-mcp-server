@@ -1,4 +1,3 @@
-// Package errortracking implements MCP tools for GitLab Error Tracking operations.
 package errortracking
 
 import (
@@ -165,6 +164,13 @@ func DeleteClientKey(ctx context.Context, client *gitlabclient.Client, input Del
 			"requires Maintainer role; verify key_id with gitlab_list_error_tracking_client_keys; deletion is irreversible \u2014 SDK clients using the key will stop receiving events")
 	}
 	return nil
+}
+
+func deleteClientKeyOutput(ctx context.Context, client *gitlabclient.Client, input DeleteClientKeyInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteClientKey(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted error tracking client key."}, nil
 }
 
 // formatters.

@@ -15,22 +15,34 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/elicitation"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
-	fmtErrWantErr             = "error = %v, want %v"
-	actionAccept              = "accept"
-	keyConfirmed              = "confirmed"
-	msgDeleteProject          = "Delete project?"
-	keyProjectID              = "project_id"
+	// fmtErrWantErr identifies the fmt err want err constant used by this package.
+	fmtErrWantErr = "error = %v, want %v"
+	// actionAccept identifies the action accept constant used by this package.
+	actionAccept = "accept"
+	// keyConfirmed identifies the key confirmed constant used by this package.
+	keyConfirmed = "confirmed"
+	// msgDeleteProject identifies the msg delete project constant used by this package.
+	msgDeleteProject = "Delete project?"
+	// keyProjectID identifies the key project ID constant used by this package.
+	keyProjectID = "project_id"
+	// fmtErrWantProjectIDValErr identifies the fmt err want project ID val err constant used by this package.
 	fmtErrWantProjectIDValErr = "error = %v, want project_id validation error"
-	testIssueTitle            = "Test Issue"
-	testMRFeatureTitle        = "feat: new feature"
-	testRelease10Name         = "Release 1.0"
-	testNewProjectName        = "new-project"
-	testTagV100               = "v1.0.0"
+	// testIssueTitle identifies the test issue title constant used by this package.
+	testIssueTitle = "Test Issue"
+	// testMRFeatureTitle identifies the test MR feature title constant used by this package.
+	testMRFeatureTitle = "feat: new feature"
+	// testRelease10Name identifies the test release 10 name constant used by this package.
+	testRelease10Name = "Release 1.0"
+	// testNewProjectName identifies the test new project name constant used by this package.
+	testNewProjectName = "new-project"
+	// testTagV100 identifies the test tag v 100 constant used by this package.
+	testTagV100 = "v1.0.0"
 )
 
 // CancelledResult / UnsupportedResult tests.
@@ -519,7 +531,7 @@ func setupElicitationSession(t *testing.T, ctx context.Context, handler func(con
 // parseCSVLabels — edge cases
 // ---------------------------------------------------------------------------.
 
-// TestParseCSVLabels_Empty verifies the behavior of cov parse c s v labels empty.
+// TestParseCSVLabels_Empty verifies ParseCSVLabels when empty.
 func TestParseCSVLabels_Empty(t *testing.T) {
 	got := parseCSVLabels("")
 	if got != nil {
@@ -527,7 +539,7 @@ func TestParseCSVLabels_Empty(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_SingleLabel verifies the behavior of cov parse c s v labels single label.
+// TestParseCSVLabels_SingleLabel verifies ParseCSVLabels when single label.
 func TestParseCSVLabels_SingleLabel(t *testing.T) {
 	got := parseCSVLabels("bug")
 	if len(got) != 1 || got[0] != "bug" {
@@ -535,7 +547,7 @@ func TestParseCSVLabels_SingleLabel(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_Multiple verifies the behavior of cov parse c s v labels multiple.
+// TestParseCSVLabels_Multiple verifies ParseCSVLabels when multiple.
 func TestParseCSVLabels_Multiple(t *testing.T) {
 	got := parseCSVLabels("bug, feature , docs")
 	if len(got) != 3 {
@@ -546,7 +558,7 @@ func TestParseCSVLabels_Multiple(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_TrailingComma verifies the behavior of cov parse c s v labels trailing comma.
+// TestParseCSVLabels_TrailingComma verifies ParseCSVLabels when trailing comma.
 func TestParseCSVLabels_TrailingComma(t *testing.T) {
 	got := parseCSVLabels("bug, ,, feature,")
 	if len(got) != 2 {
@@ -561,7 +573,7 @@ func TestParseCSVLabels_TrailingComma(t *testing.T) {
 // buildMRSummary — all options
 // ---------------------------------------------------------------------------.
 
-// TestBuildMRSummary_Full validates cov build m r summary full across multiple scenarios using table-driven subtests.
+// TestBuildMRSummary_Full covers BuildMRSummary with table-driven subtests for full.
 func TestBuildMRSummary_Full(t *testing.T) {
 	removeSource := true
 	squash := true
@@ -594,7 +606,7 @@ func TestBuildMRSummary_Full(t *testing.T) {
 	}
 }
 
-// TestBuildMRSummary_Minimal verifies the behavior of cov build m r summary minimal.
+// TestBuildMRSummary_Minimal verifies BuildMRSummary when minimal.
 func TestBuildMRSummary_Minimal(t *testing.T) {
 	s := buildMRSummary(mrSummaryParams{
 		ProjectID:    "42",
@@ -616,7 +628,7 @@ func TestBuildMRSummary_Minimal(t *testing.T) {
 	}
 }
 
-// TestBuildMRSummary_RemoveSourceFalse verifies the behavior of cov build m r summary remove source false.
+// TestBuildMRSummary_RemoveSourceFalse verifies BuildMRSummary when remove source false.
 func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 	removeSource := false
 	squash := false
@@ -637,30 +649,42 @@ func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools no-panic
+// Catalog surface projection no-panic
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestCatalogSurface_NoPanic verifies elicitation specs can be projected as MCP tools.
+func TestCatalogSurface_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+			Description:  spec.IndividualTool.Description,
+			Icons:        toolutil.IconConfig,
+			FormatResult: FormatResult,
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
 // MCP round-trip — without elicitation (covers unsupported path in register.go)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripNoElicitation validates cov m c p round trip no elicitation across multiple scenarios using table-driven subtests.
+// TestMCPRound_TripNoElicitation covers MCPRound with table-driven subtests for trip no elicitation.
 func TestMCPRound_TripNoElicitation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+			Description:  spec.IndividualTool.Description,
+			Icons:        toolutil.IconConfig,
+			FormatResult: FormatResult,
+		})
+	}
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -702,7 +726,7 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 // MCP round-trip — with elicitation (covers success path for issue create)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTripIssueCreate_WithElicitation verifies the behavior of cov m c p round trip issue create with elicitation.
+// TestMCPRoundTripIssueCreate_WithElicitation verifies MCPRoundTripIssueCreate when with elicitation.
 func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
@@ -715,7 +739,13 @@ func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_issue_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -764,14 +794,20 @@ func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 // MCP round-trip — with elicitation, validation error (empty project_id)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTripIssueCreate_ValidationError verifies the behavior of cov m c p round trip issue create validation error.
+// TestMCPRoundTripIssueCreate_ValidationError verifies MCPRoundTripIssueCreate when validation error.
 func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(client))
+	spec := byTool["gitlab_interactive_issue_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -802,7 +838,7 @@ func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 // MR cancel at source branch prompt
 // ---------------------------------------------------------------------------.
 
-// TestMRCreate_UserCancelsSourceBranch verifies the behavior of cov m r create user cancels source branch.
+// TestMRCreate_UserCancelsSourceBranch verifies MRCreate when user cancels source branch.
 func TestMRCreate_UserCancelsSourceBranch(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -825,7 +861,7 @@ func TestMRCreate_UserCancelsSourceBranch(t *testing.T) {
 // Release cancel at tag name prompt
 // ---------------------------------------------------------------------------.
 
-// TestReleaseCreate_UserCancelsTagName verifies the behavior of cov release create user cancels tag name.
+// TestReleaseCreate_UserCancelsTagName verifies ReleaseCreate when user cancels tag name.
 func TestReleaseCreate_UserCancelsTagName(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -848,7 +884,7 @@ func TestReleaseCreate_UserCancelsTagName(t *testing.T) {
 // Project cancel at name prompt
 // ---------------------------------------------------------------------------.
 
-// TestProjectCreate_UserCancelsName verifies the behavior of cov project create user cancels name.
+// TestProjectCreate_UserCancelsName verifies ProjectCreate when user cancels name.
 func TestProjectCreate_UserCancelsName(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -868,7 +904,7 @@ func TestProjectCreate_UserCancelsName(t *testing.T) {
 // Issue user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestIssueCreate_UserCancelsConfirmation verifies the behavior of cov issue create user cancels confirmation.
+// TestIssueCreate_UserCancelsConfirmation verifies IssueCreate when user cancels confirmation.
 func TestIssueCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -895,7 +931,7 @@ func TestIssueCreate_UserCancelsConfirmation(t *testing.T) {
 // MR user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestMRCreate_UserCancelsConfirmation verifies the behavior of cov m r create user cancels confirmation.
+// TestMRCreate_UserCancelsConfirmation verifies MRCreate when user cancels confirmation.
 func TestMRCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -925,7 +961,7 @@ func TestMRCreate_UserCancelsConfirmation(t *testing.T) {
 // Release user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestReleaseCreate_UserCancelsConfirmation verifies the behavior of cov release create user cancels confirmation.
+// TestReleaseCreate_UserCancelsConfirmation verifies ReleaseCreate when user cancels confirmation.
 func TestReleaseCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -951,7 +987,7 @@ func TestReleaseCreate_UserCancelsConfirmation(t *testing.T) {
 // Issue create with confidential=true in flow
 // ---------------------------------------------------------------------------.
 
-// TestIssueCreate_Confidential verifies the behavior of cov issue create confidential.
+// TestIssueCreate_Confidential verifies IssueCreate when confidential.
 func TestIssueCreate_Confidential(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
@@ -1322,7 +1358,13 @@ func TestMCPRoundTripMRCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_mr_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1382,7 +1424,13 @@ func TestMCPRoundTripReleaseCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_release_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
@@ -1440,7 +1488,13 @@ func TestMCPRoundTripProjectCreate_WithElicitation(t *testing.T) {
 	gitlabClient := testutil.NewTestClient(t, mux)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, gitlabClient)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(gitlabClient))
+	spec := byTool["gitlab_interactive_project_create"]
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description:  spec.IndividualTool.Description,
+		Icons:        toolutil.IconConfig,
+		FormatResult: FormatResult,
+	})
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()

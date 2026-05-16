@@ -4,18 +4,15 @@
 package bulkimports
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestStartMigration verifies the behavior of start migration.
+// TestStartMigration verifies StartMigration.
 func TestStartMigration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/bulk_imports" {
@@ -65,7 +62,7 @@ func TestStartMigration(t *testing.T) {
 	}
 }
 
-// TestStartMigration_Error verifies that StartMigration handles the error scenario correctly.
+// TestStartMigration_Error verifies StartMigration when error.
 func TestStartMigration_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -81,7 +78,7 @@ func TestStartMigration_Error(t *testing.T) {
 	}
 }
 
-// TestFormatStartMigrationMarkdown verifies the behavior of format start migration markdown.
+// TestFormatStartMigrationMarkdown verifies FormatStartMigrationMarkdown.
 func TestFormatStartMigrationMarkdown(t *testing.T) {
 	out := MigrationOutput{
 		ID:          1,
@@ -107,7 +104,7 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 // StartMigration — with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestStartMigration_WithOptionalFields verifies the behavior of start migration with optional fields.
+// TestStartMigration_WithOptionalFields verifies StartMigration when with optional fields.
 func TestStartMigration_WithOptionalFields(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/bulk_imports" && r.Method == http.MethodPost {
@@ -154,7 +151,7 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 // FormatStartMigrationMarkdown — with failures
 // ---------------------------------------------------------------------------.
 
-// TestFormatStartMigrationMarkdown_WithFailures verifies the behavior of format start migration markdown with failures.
+// TestFormatStartMigrationMarkdown_WithFailures verifies FormatStartMigrationMarkdown when with failures.
 func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 	out := MigrationOutput{
 		ID:          2,
@@ -175,22 +172,11 @@ func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip
-// ---------------------------------------------------------------------------.
-
-// TestMCPRound_Trip verifies the behavior of m c p round trip.
-func TestMCPRound_Trip(t *testing.T) {
+// TestActionSpecs_StartMigrationRoute verifies start migration route execution.
+func TestActionSpecs_StartMigrationRoute(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/bulk_imports", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -204,95 +190,51 @@ func TestMCPRound_Trip(t *testing.T) {
 		}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := bulkImportSpecsByTool(t, handler)
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_start_bulk_import",
-		Arguments: map[string]any{
-			"url":          "https://source.gitlab.com",
-			"access_token": "glpat-test",
-			"entities": []any{
-				map[string]any{
-					"source_type":           "group_entity",
-					"source_full_path":      "source-group",
-					"destination_slug":      "dest-group",
-					"destination_namespace": "dest-ns",
-				},
+	result, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
+		"url":          "https://source.gitlab.com",
+		"access_token": "glpat-test",
+		"entities": []any{
+			map[string]any{
+				"source_type":           "group_entity",
+				"source_full_path":      "source-group",
+				"destination_slug":      "dest-group",
+				"destination_namespace": "dest-ns",
 			},
 		},
 	})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result.IsError {
-		t.Fatal("CallTool returned IsError=true")
+	if result == nil {
+		t.Fatal("Route.Handler returned nil")
 	}
 }
 
-// TestMCPRound_TripAPIError verifies the register handler returns an error
-// when the StartMigration API call fails.
-func TestMCPRound_TripAPIError(t *testing.T) {
+// TestActionSpecs_StartMigrationAPIError verifies start migration route errors.
+func TestActionSpecs_StartMigrationAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := bulkImportSpecsByTool(t, handler)
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_start_bulk_import",
-		Arguments: map[string]any{
-			"url":          "https://source.gitlab.com",
-			"access_token": "glpat-test",
-			"entities": []any{
-				map[string]any{
-					"source_type":           "group_entity",
-					"source_full_path":      "source-group",
-					"destination_slug":      "dest-group",
-					"destination_namespace": "dest-ns",
-				},
+	_, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
+		"url":          "https://source.gitlab.com",
+		"access_token": "glpat-test",
+		"entities": []any{
+			map[string]any{
+				"source_type":           "group_entity",
+				"source_full_path":      "source-group",
+				"destination_slug":      "dest-group",
+				"destination_namespace": "dest-ns",
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected error result from API failure")
+	if err == nil {
+		t.Fatal("expected error from API failure")
 	}
 }
 

@@ -1,5 +1,3 @@
-// Package attestations implements GitLab build attestation operations for projects
-// including list and download.
 package attestations
 
 import (

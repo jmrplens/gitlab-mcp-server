@@ -11,23 +11,30 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
+// pathMRContextCommits identifies the path MR context commits constant used by this package.
 const pathMRContextCommits = "/api/v4/projects/1/merge_requests/10/context_commits"
 
+// testCommitSHA identifies the test commit SHA constant used by this package.
 const testCommitSHA = "abc123"
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -57,7 +64,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -72,7 +79,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -84,7 +91,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -114,7 +121,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -130,7 +137,7 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -152,7 +159,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -168,7 +175,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -180,7 +187,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Commits: []CommitItem{
@@ -202,7 +209,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 // MRIID required-field validation
 // ---------------------------------------------------------------------------.
 
-// assertContains is an internal helper for the mrcontextcommits package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -213,7 +220,7 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation validates m r i i d required validation across multiple scenarios using table-driven subtests.
+// TestMRIIDRequired_Validation covers MRIIDRequired with table-driven subtests for validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when merge_request_iid is missing")
@@ -248,7 +255,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 // List — CreatedAt branch + canceled context
 // ---------------------------------------------------------------------------.
 
-// TestList_WithCreatedAt verifies the behavior of list with created at.
+// TestList_WithCreatedAt verifies List when with created at.
 func TestList_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -268,7 +275,7 @@ func TestList_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -285,7 +292,7 @@ func TestList_CancelledContext(t *testing.T) {
 // Create — CreatedAt branch + canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithCreatedAt verifies the behavior of create with created at.
+// TestCreate_WithCreatedAt verifies Create when with created at.
 func TestCreate_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -309,7 +316,7 @@ func TestCreate_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -330,7 +337,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 // Delete — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -351,7 +358,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // FormatListMarkdown — content validation
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_ContentValidation verifies the behavior of format list markdown content validation.
+// TestFormatListMarkdown_ContentValidation verifies FormatListMarkdown when content validation.
 func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 	out := ListOutput{
 		Commits: []CommitItem{
@@ -389,13 +396,32 @@ func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRegisterTools_CallAllThroughMCP — full MCP roundtrip for all 3 tools
+// ActionSpecs route execution for all context commit tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMRContextCommitsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_Metadata verifies canonical metadata for MR context commit actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := newMRContextCommitsSpecsByTool(t)
+
+	if len(byTool) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(byTool))
+	}
+	if !byTool["gitlab_list_mr_context_commits"].ReadOnly || !byTool["gitlab_list_mr_context_commits"].Idempotent {
+		t.Error("list action should be read-only and idempotent")
+	}
+	if !byTool["gitlab_delete_mr_context_commits"].Destructive || !byTool["gitlab_delete_mr_context_commits"].Idempotent {
+		t.Error("delete action should be destructive and idempotent")
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "mrcontextcommits" {
+			t.Errorf("OwnerPackage for %s = %q, want mrcontextcommits", spec.Name, spec.OwnerPackage)
+		}
+	}
+}
+
+// TestActionSpecs_CallAllRoutes validates all MR context commit routes.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newMRContextCommitsSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -408,20 +434,12 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
 		})
 	}
@@ -431,8 +449,8 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// newMRContextCommitsMCPSession is an internal helper for the mrcontextcommits package.
-func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
+// newMRContextCommitsSpecsByTool constructs MR context commits specs by tool test fixtures.
+func newMRContextCommitsSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	const commitsJSON = `[
@@ -457,24 +475,12 @@ func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
 		}
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
 
 // TestList_EmptyProjectID verifies that List returns an error when project_id
@@ -513,39 +519,21 @@ func TestDelete_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_DeleteError validates the register.go error path for
-// the delete tool via MCP round-trip against a 403 backend.
-func TestMCPRoundTrip_DeleteError(t *testing.T) {
+// TestActionSpecs_DeleteError validates the delete route error path against a 403 backend.
+func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	byTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		byTool[spec.IndividualTool.Name] = spec
 	}
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_mr_context_commits",
-		Arguments: map[string]any{"project_id": "p", "merge_request_iid": 1, "commits": []any{"abc"}},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true")
+	_, err := byTool["gitlab_delete_mr_context_commits"].Route.Handler(t.Context(), map[string]any{"project_id": "p", "merge_request_iid": int64(1), "commits": []any{"abc"}})
+	if err == nil {
+		t.Error("expected delete route error")
 	}
 }

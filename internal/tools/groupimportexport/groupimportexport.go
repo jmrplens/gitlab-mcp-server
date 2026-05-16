@@ -1,7 +1,3 @@
-// Package groupimportexport implements MCP tool handlers for the GitLab
-// Group Import/Export API. It wraps the GroupImportExportService from
-// client-go v2 to schedule group exports, download export archives,
-// and import groups from file archives.
 package groupimportexport
 
 import (

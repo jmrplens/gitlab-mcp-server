@@ -1,5 +1,3 @@
-// Package securitysettings implements GitLab project and group security settings
-// operations including get and update for secret push protection.
 package securitysettings
 
 import (

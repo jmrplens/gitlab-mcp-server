@@ -4,8 +4,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type branchNotFoundOutput struct {
+	Identifier string
+}
+
+func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Branch", out.Identifier,
+		"Use gitlab_branch_list with project_id to list available branches",
+		"Verify the branch name is spelled correctly (case-sensitive)",
+	)
+}
 
 // FormatOutputMarkdown renders a single branch as a Markdown summary.
 func FormatOutputMarkdown(br Output) string {
@@ -94,6 +107,7 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatBranchNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatProtectedMarkdown)

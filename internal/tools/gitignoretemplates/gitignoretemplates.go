@@ -1,4 +1,3 @@
-// Package gitignoretemplates implements MCP tools for GitLab Gitignore Templates API.
 package gitignoretemplates
 
 import (

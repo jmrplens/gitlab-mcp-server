@@ -13,17 +13,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ListProject
 // ---------------------------------------------------------------------------.
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies the behavior of list project missing project i d.
+// TestListProject_MissingProjectID verifies ListProject when missing project ID.
 func TestListProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
@@ -63,7 +63,7 @@ func TestListProject_MissingProjectID(t *testing.T) {
 // ListGroup
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_Success verifies the behavior of list group success.
+// TestListGroup_Success verifies ListGroup when success.
 func TestListGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingGroupID verifies the behavior of list group missing group i d.
+// TestListGroup_MissingGroupID verifies ListGroup when missing group ID.
 func TestListGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroup(context.Background(), client, ListGroupInput{})
@@ -97,7 +97,7 @@ func TestListGroup_MissingGroupID(t *testing.T) {
 // RequestProject
 // ---------------------------------------------------------------------------.
 
-// TestRequestProject_Success verifies the behavior of request project success.
+// TestRequestProject_Success verifies RequestProject when success.
 func TestRequestProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +120,7 @@ func TestRequestProject_Success(t *testing.T) {
 	}
 }
 
-// TestRequestProject_MissingProjectID verifies the behavior of request project missing project i d.
+// TestRequestProject_MissingProjectID verifies RequestProject when missing project ID.
 func TestRequestProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RequestProject(context.Background(), client, RequestProjectInput{})
@@ -133,7 +133,7 @@ func TestRequestProject_MissingProjectID(t *testing.T) {
 // RequestGroup
 // ---------------------------------------------------------------------------.
 
-// TestRequestGroup_Success verifies the behavior of request group success.
+// TestRequestGroup_Success verifies RequestGroup when success.
 func TestRequestGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +156,7 @@ func TestRequestGroup_Success(t *testing.T) {
 	}
 }
 
-// TestRequestGroup_MissingGroupID verifies the behavior of request group missing group i d.
+// TestRequestGroup_MissingGroupID verifies RequestGroup when missing group ID.
 func TestRequestGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RequestGroup(context.Background(), client, RequestGroupInput{})
@@ -169,7 +169,7 @@ func TestRequestGroup_MissingGroupID(t *testing.T) {
 // ApproveProject
 // ---------------------------------------------------------------------------.
 
-// TestApproveProject_Success verifies the behavior of approve project success.
+// TestApproveProject_Success verifies ApproveProject when success.
 func TestApproveProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/access_requests/1/approve", func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +194,7 @@ func TestApproveProject_Success(t *testing.T) {
 	}
 }
 
-// TestApproveProject_MissingUserID verifies the behavior of approve project missing user i d.
+// TestApproveProject_MissingUserID verifies ApproveProject when missing user ID.
 func TestApproveProject_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ApproveProject(context.Background(), client, ApproveProjectInput{
@@ -209,7 +209,7 @@ func TestApproveProject_MissingUserID(t *testing.T) {
 // ApproveGroup
 // ---------------------------------------------------------------------------.
 
-// TestApproveGroup_Success verifies the behavior of approve group success.
+// TestApproveGroup_Success verifies ApproveGroup when success.
 func TestApproveGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/access_requests/2/approve", func(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +230,7 @@ func TestApproveGroup_Success(t *testing.T) {
 	}
 }
 
-// TestApproveGroup_MissingUserID verifies the behavior of approve group missing user i d.
+// TestApproveGroup_MissingUserID verifies ApproveGroup when missing user ID.
 func TestApproveGroup_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ApproveGroup(context.Background(), client, ApproveGroupInput{
@@ -245,7 +245,7 @@ func TestApproveGroup_MissingUserID(t *testing.T) {
 // DenyProject
 // ---------------------------------------------------------------------------.
 
-// TestDenyProject_Success verifies the behavior of deny project success.
+// TestDenyProject_Success verifies DenyProject when success.
 func TestDenyProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/access_requests/1", func(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +265,7 @@ func TestDenyProject_Success(t *testing.T) {
 	}
 }
 
-// TestDenyProject_MissingUserID verifies the behavior of deny project missing user i d.
+// TestDenyProject_MissingUserID verifies DenyProject when missing user ID.
 func TestDenyProject_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DenyProject(context.Background(), client, DenyProjectInput{
@@ -280,7 +280,7 @@ func TestDenyProject_MissingUserID(t *testing.T) {
 // DenyGroup
 // ---------------------------------------------------------------------------.
 
-// TestDenyGroup_Success verifies the behavior of deny group success.
+// TestDenyGroup_Success verifies DenyGroup when success.
 func TestDenyGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/access_requests/2", func(w http.ResponseWriter, r *http.Request) {
@@ -300,7 +300,7 @@ func TestDenyGroup_Success(t *testing.T) {
 	}
 }
 
-// TestDenyGroup_MissingUserID verifies the behavior of deny group missing user i d.
+// TestDenyGroup_MissingUserID verifies DenyGroup when missing user ID.
 func TestDenyGroup_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DenyGroup(context.Background(), client, DenyGroupInput{
@@ -313,13 +313,14 @@ func TestDenyGroup_MissingUserID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // ListProject — API error, pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies the behavior of list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -332,7 +333,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_PaginationParams verifies the behavior of list project pagination params.
+// TestListProject_PaginationParams verifies ListProject when pagination params.
 func TestListProject_PaginationParams(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -365,7 +366,7 @@ func TestListProject_PaginationParams(t *testing.T) {
 // ListGroup — API error, pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_APIError verifies the behavior of list group a p i error.
+// TestListGroup_APIError verifies ListGroup when API error.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -378,7 +379,7 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroup_PaginationParams verifies the behavior of list group pagination params.
+// TestListGroup_PaginationParams verifies ListGroup when pagination params.
 func TestListGroup_PaginationParams(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/10/access_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +412,7 @@ func TestListGroup_PaginationParams(t *testing.T) {
 // RequestProject — API error
 // ---------------------------------------------------------------------------.
 
-// TestRequestProject_APIError verifies the behavior of request project a p i error.
+// TestRequestProject_APIError verifies RequestProject when API error.
 func TestRequestProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -428,7 +429,7 @@ func TestRequestProject_APIError(t *testing.T) {
 // RequestGroup — API error
 // ---------------------------------------------------------------------------.
 
-// TestRequestGroup_APIError verifies the behavior of request group a p i error.
+// TestRequestGroup_APIError verifies RequestGroup when API error.
 func TestRequestGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -445,7 +446,7 @@ func TestRequestGroup_APIError(t *testing.T) {
 // ApproveProject — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestApproveProject_APIError verifies the behavior of approve project a p i error.
+// TestApproveProject_APIError verifies ApproveProject when API error.
 func TestApproveProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -459,7 +460,7 @@ func TestApproveProject_APIError(t *testing.T) {
 	}
 }
 
-// TestApproveProject_MissingProjectID verifies the behavior of approve project missing project i d.
+// TestApproveProject_MissingProjectID verifies ApproveProject when missing project ID.
 func TestApproveProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ApproveProject(context.Background(), client, ApproveProjectInput{
@@ -474,7 +475,7 @@ func TestApproveProject_MissingProjectID(t *testing.T) {
 // ApproveGroup — API error, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestApproveGroup_APIError verifies the behavior of approve group a p i error.
+// TestApproveGroup_APIError verifies ApproveGroup when API error.
 func TestApproveGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -488,7 +489,7 @@ func TestApproveGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestApproveGroup_MissingGroupID verifies the behavior of approve group missing group i d.
+// TestApproveGroup_MissingGroupID verifies ApproveGroup when missing group ID.
 func TestApproveGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ApproveGroup(context.Background(), client, ApproveGroupInput{
@@ -499,7 +500,7 @@ func TestApproveGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestApproveGroup_WithAccessLevel verifies the behavior of approve group with access level.
+// TestApproveGroup_WithAccessLevel verifies ApproveGroup when with access level.
 func TestApproveGroup_WithAccessLevel(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/10/access_requests/2/approve", func(w http.ResponseWriter, _ *http.Request) {
@@ -525,7 +526,7 @@ func TestApproveGroup_WithAccessLevel(t *testing.T) {
 // DenyProject — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDenyProject_APIError verifies the behavior of deny project a p i error.
+// TestDenyProject_APIError verifies DenyProject when API error.
 func TestDenyProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -539,7 +540,7 @@ func TestDenyProject_APIError(t *testing.T) {
 	}
 }
 
-// TestDenyProject_MissingProjectID verifies the behavior of deny project missing project i d.
+// TestDenyProject_MissingProjectID verifies DenyProject when missing project ID.
 func TestDenyProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DenyProject(context.Background(), client, DenyProjectInput{
@@ -554,7 +555,7 @@ func TestDenyProject_MissingProjectID(t *testing.T) {
 // DenyGroup — API error, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestDenyGroup_APIError verifies the behavior of deny group a p i error.
+// TestDenyGroup_APIError verifies DenyGroup when API error.
 func TestDenyGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -568,7 +569,7 @@ func TestDenyGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestDenyGroup_MissingGroupID verifies the behavior of deny group missing group i d.
+// TestDenyGroup_MissingGroupID verifies DenyGroup when missing group ID.
 func TestDenyGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DenyGroup(context.Background(), client, DenyGroupInput{
@@ -583,7 +584,7 @@ func TestDenyGroup_MissingGroupID(t *testing.T) {
 // convertAccessRequest — with date fields populated
 // ---------------------------------------------------------------------------.
 
-// TestConvertAccessRequest_WithDates verifies the behavior of convert access request with dates.
+// TestConvertAccessRequest_WithDates verifies ConvertAccessRequest when with dates.
 func TestConvertAccessRequest_WithDates(t *testing.T) {
 	// gl.AccessRequest uses *time.Time for CreatedAt and RequestedAt
 	now := testTime(t, "2026-06-15T10:30:00Z")
@@ -609,7 +610,7 @@ func TestConvertAccessRequest_WithDates(t *testing.T) {
 	}
 }
 
-// TestConvertAccessRequest_WithoutDates verifies the behavior of convert access request without dates.
+// TestConvertAccessRequest_WithoutDates verifies ConvertAccessRequest when without dates.
 func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 	ar := mockAccessRequest(2, "bob", "Bob", "approved", 20)
 	out := convertAccessRequest(ar)
@@ -629,7 +630,7 @@ func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 // FormatOutputMarkdown — all fields, minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:          1,
@@ -659,7 +660,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	out := Output{
 		ID:          5,
@@ -685,7 +686,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown — with items, empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithItems verifies the behavior of format list markdown with items.
+// TestFormatListMarkdown_WithItems verifies FormatListMarkdown when with items.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		AccessRequests: []Output{
@@ -708,7 +709,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{}
 	md := FormatListMarkdown(out)
@@ -724,30 +725,30 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for access request actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := accessRequestSpecsByTool(t, specs)
+
+	if len(specs) != 8 {
+		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "accessrequests" {
+			t.Fatalf("OwnerPackage for %s = %q, want accessrequests", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 8 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newAccessRequestsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates all access request routes through the canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newAccessRequestRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -766,31 +767,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newAccessRequestsMCPSession is an internal helper for the accessrequests package.
-func newAccessRequestsMCPSession(t *testing.T) *mcp.ClientSession {
+// newAccessRequestRouteSpecs constructs access request route specs test fixtures.
+func newAccessRequestRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	arJSON := `{"id":1,"username":"alice","name":"Alice","state":"pending","access_level":30}`
@@ -839,31 +832,24 @@ func newAccessRequestsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return accessRequestSpecsByTool(t, ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// accessRequestSpecsByTool supports access request specs by tool assertions in accessrequests tests.
+func accessRequestSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return byTool
 }
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------.
 
-// testTime is an internal helper for the accessrequests package.
+// testTime supports test time assertions in accessrequests tests.
 func testTime(t *testing.T, value string) *time.Time {
 	t.Helper()
 	parsed, err := time.Parse(time.RFC3339, value)
@@ -873,7 +859,7 @@ func testTime(t *testing.T, value string) *time.Time {
 	return &parsed
 }
 
-// mockAccessRequest is an internal helper for the accessrequests package.
+// mockAccessRequest supports mock access request assertions in accessrequests tests.
 func mockAccessRequest(id int64, username, name, state string, level int) *gl.AccessRequest {
 	return &gl.AccessRequest{
 		ID:          id,

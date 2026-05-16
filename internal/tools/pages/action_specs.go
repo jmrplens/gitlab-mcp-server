@@ -1,6 +1,9 @@
 package pages
 
 import (
+	"context"
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -10,14 +13,30 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		pagesReadSpec("pages_get", toolutil.RouteAction(client, GetPages), "gitlab_pages_get"),
 		pagesUpdateSpec("pages_update", toolutil.RouteAction(client, UpdatePages), "gitlab_pages_update"),
-		pagesDeleteSpec("pages_unpublish", toolutil.DestructiveVoidAction(client, UnpublishPages), "gitlab_pages_unpublish"),
+		pagesDeleteSpec("pages_unpublish", toolutil.DestructiveAction(client, unpublishOutput), "gitlab_pages_unpublish"),
 		pagesReadSpec("pages_domain_list_all", toolutil.RouteAction(client, ListAllDomains), "gitlab_pages_domain_list_all"),
 		pagesReadSpec("pages_domain_list", toolutil.RouteAction(client, ListDomains), "gitlab_pages_domain_list"),
 		pagesReadSpec("pages_domain_get", toolutil.RouteAction(client, GetDomain), "gitlab_pages_domain_get"),
 		pagesCreateSpec("pages_domain_create", toolutil.RouteAction(client, CreateDomain), "gitlab_pages_domain_create"),
 		pagesUpdateSpec("pages_domain_update", toolutil.RouteAction(client, UpdateDomain), "gitlab_pages_domain_update"),
-		pagesDeleteSpec("pages_domain_delete", toolutil.DestructiveVoidAction(client, DeleteDomain), "gitlab_pages_domain_delete"),
+		pagesDeleteSpec("pages_domain_delete", toolutil.DestructiveAction(client, deleteDomainOutput), "gitlab_pages_domain_delete"),
 	}
+}
+
+func unpublishOutput(ctx context.Context, client *gitlabclient.Client, input UnpublishPagesInput) (toolutil.DeleteOutput, error) {
+	if err := UnpublishPages(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("pages")
+	return out, nil
+}
+
+func deleteDomainOutput(ctx context.Context, client *gitlabclient.Client, input DeleteDomainInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteDomain(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("pages domain %s", input.Domain))
+	return out, nil
 }
 
 func pagesReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

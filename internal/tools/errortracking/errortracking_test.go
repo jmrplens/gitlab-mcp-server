@@ -4,21 +4,20 @@
 package errortracking
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestGetSettings verifies the behavior of get settings.
+// TestGetSettings verifies GetSettings.
 func TestGetSettings(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/settings" || r.Method != http.MethodGet {
@@ -42,7 +41,7 @@ func TestGetSettings(t *testing.T) {
 	}
 }
 
-// TestGetSettings_Error verifies the behavior of get settings error.
+// TestGetSettings_Error verifies GetSettings when error.
 func TestGetSettings_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -53,7 +52,7 @@ func TestGetSettings_Error(t *testing.T) {
 	}
 }
 
-// TestEnableDisable verifies the behavior of enable disable.
+// TestEnableDisable verifies EnableDisable.
 func TestEnableDisable(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/settings" || r.Method != http.MethodPatch {
@@ -73,7 +72,7 @@ func TestEnableDisable(t *testing.T) {
 	}
 }
 
-// TestEnableDisable_Error verifies the behavior of enable disable error.
+// TestEnableDisable_Error verifies EnableDisable when error.
 func TestEnableDisable_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -84,7 +83,7 @@ func TestEnableDisable_Error(t *testing.T) {
 	}
 }
 
-// TestListClientKeys verifies the behavior of list client keys.
+// TestListClientKeys verifies ListClientKeys.
 func TestListClientKeys(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys" || r.Method != http.MethodGet {
@@ -105,7 +104,7 @@ func TestListClientKeys(t *testing.T) {
 	}
 }
 
-// TestListClientKeys_Error verifies the behavior of list client keys error.
+// TestListClientKeys_Error verifies ListClientKeys when error.
 func TestListClientKeys_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -116,7 +115,7 @@ func TestListClientKeys_Error(t *testing.T) {
 	}
 }
 
-// TestCreateClientKey verifies the behavior of create client key.
+// TestCreateClientKey verifies CreateClientKey.
 func TestCreateClientKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys" || r.Method != http.MethodPost {
@@ -134,7 +133,7 @@ func TestCreateClientKey(t *testing.T) {
 	}
 }
 
-// TestCreateClientKey_Error verifies the behavior of create client key error.
+// TestCreateClientKey_Error verifies CreateClientKey when error.
 func TestCreateClientKey_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -145,7 +144,7 @@ func TestCreateClientKey_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey verifies the behavior of delete client key.
+// TestDeleteClientKey verifies DeleteClientKey.
 func TestDeleteClientKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys/10" || r.Method != http.MethodDelete {
@@ -160,7 +159,7 @@ func TestDeleteClientKey(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey_Error verifies the behavior of delete client key error.
+// TestDeleteClientKey_Error verifies DeleteClientKey when error.
 func TestDeleteClientKey_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -171,7 +170,7 @@ func TestDeleteClientKey_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey_InvalidKeyID verifies the behavior of delete client key invalid key i d.
+// TestDeleteClientKey_InvalidKeyID verifies DeleteClientKey when invalid key ID.
 func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -189,7 +188,7 @@ func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 	}
 }
 
-// TestFormatSettingsMarkdown verifies the behavior of format settings markdown.
+// TestFormatSettingsMarkdown verifies FormatSettingsMarkdown.
 func TestFormatSettingsMarkdown(t *testing.T) {
 	out := SettingsOutput{Active: true, ProjectName: "test", SentryExternalURL: "https://sentry.io", Integrated: false}
 	md := FormatSettingsMarkdown(out)
@@ -198,7 +197,7 @@ func TestFormatSettingsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListKeysMarkdown verifies the behavior of format list keys markdown.
+// TestFormatListKeysMarkdown verifies FormatListKeysMarkdown.
 func TestFormatListKeysMarkdown(t *testing.T) {
 	out := ListClientKeysOutput{Keys: []ClientKeyItem{{ID: 1, Active: true, PublicKey: "pk", SentryDsn: "dsn"}}}
 	md := FormatListKeysMarkdown(out)
@@ -214,15 +213,17 @@ func TestFormatListKeysMarkdown(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
+	// covSettingsJSON identifies the cov settings JSON constant used by this package.
 	covSettingsJSON = `{"active":true,"project_name":"proj","sentry_external_url":"https://sentry.io","api_url":"https://sentry.io/api","integrated":true}`
-	covKeyJSON      = `{"id":1,"active":true,"public_key":"pk-abc","sentry_dsn":"https://dsn"}`
+	// covKeyJSON identifies the cov key JSON constant used by this package.
+	covKeyJSON = `{"id":1,"active":true,"public_key":"pk-abc","sentry_dsn":"https://dsn"}`
 )
 
 // ---------------------------------------------------------------------------
 // ListClientKeys — pagination branch (Page > 0, PerPage > 0)
 // ---------------------------------------------------------------------------.
 
-// TestListClientKeys_WithPagination verifies the behavior of cov list client keys with pagination.
+// TestListClientKeys_WithPagination verifies ListClientKeys when with pagination.
 func TestListClientKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/error_tracking/client_keys" && r.Method == http.MethodGet {
@@ -248,7 +249,7 @@ func TestListClientKeys_WithPagination(t *testing.T) {
 // FormatKeyMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatKeyMarkdown verifies the behavior of cov format key markdown.
+// TestFormatKeyMarkdown verifies FormatKeyMarkdown.
 func TestFormatKeyMarkdown(t *testing.T) {
 	md := FormatKeyMarkdown(ClientKeyItem{ID: 42, Active: true, PublicKey: "pk-123", SentryDsn: "https://dsn.example.com"})
 	for _, want := range []string{
@@ -264,7 +265,7 @@ func TestFormatKeyMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatKeyMarkdown_Inactive verifies the behavior of cov format key markdown inactive.
+// TestFormatKeyMarkdown_Inactive verifies FormatKeyMarkdown when inactive.
 func TestFormatKeyMarkdown_Inactive(t *testing.T) {
 	md := FormatKeyMarkdown(ClientKeyItem{ID: 7, Active: false, PublicKey: "pk-xyz", SentryDsn: "dsn2"})
 	if !strings.Contains(md, "**Active**: false") {
@@ -276,7 +277,7 @@ func TestFormatKeyMarkdown_Inactive(t *testing.T) {
 // FormatListKeysMarkdown — empty keys branch
 // ---------------------------------------------------------------------------.
 
-// TestFormatListKeysMarkdown_Empty verifies the behavior of cov format list keys markdown empty.
+// TestFormatListKeysMarkdown_Empty verifies FormatListKeysMarkdown when empty.
 func TestFormatListKeysMarkdown_Empty(t *testing.T) {
 	md := FormatListKeysMarkdown(ListClientKeysOutput{Keys: []ClientKeyItem{}})
 	if !strings.Contains(md, "No client keys found") {
@@ -287,7 +288,7 @@ func TestFormatListKeysMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListKeysMarkdown_NilKeys verifies the behavior of cov format list keys markdown nil keys.
+// TestFormatListKeysMarkdown_NilKeys verifies FormatListKeysMarkdown when nil keys.
 func TestFormatListKeysMarkdown_NilKeys(t *testing.T) {
 	md := FormatListKeysMarkdown(ListClientKeysOutput{})
 	if !strings.Contains(md, "No client keys found") {
@@ -299,7 +300,7 @@ func TestFormatListKeysMarkdown_NilKeys(t *testing.T) {
 // FormatSettingsMarkdown — minimal fields (no ProjectName, no SentryExternalURL)
 // ---------------------------------------------------------------------------.
 
-// TestFormatSettingsMarkdown_MinimalFields verifies the behavior of cov format settings markdown minimal fields.
+// TestFormatSettingsMarkdown_MinimalFields verifies FormatSettingsMarkdown when minimal fields.
 func TestFormatSettingsMarkdown_MinimalFields(t *testing.T) {
 	md := FormatSettingsMarkdown(SettingsOutput{Active: false, Integrated: true})
 	if !strings.Contains(md, "**Active**: false") {
@@ -312,189 +313,3 @@ func TestFormatSettingsMarkdown_MinimalFields(t *testing.T) {
 		t.Error("should not contain Sentry URL when empty")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 5 tools (success paths)
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewErrorTrackingMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get_settings", "gitlab_get_error_tracking_settings", map[string]any{"project_id": "1"}},
-		{"enable_disable", "gitlab_enable_disable_error_tracking", map[string]any{"project_id": "1", "active": true, "integrated": true}},
-		{"list_client_keys", "gitlab_list_error_tracking_client_keys", map[string]any{"project_id": "1", "page": 1, "per_page": 20}},
-		{"create_client_key", "gitlab_create_error_tracking_client_key", map[string]any{"project_id": "1"}},
-		{"delete_client_key", "gitlab_delete_error_tracking_client_key", map[string]any{"project_id": "1", "key_id": 10}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 5 tools (error paths)
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_ErrorPathsThroughMCP validates cov register tools error paths through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_ErrorPathsThroughMCP(t *testing.T) {
-	session := covNewErrorTrackingErrorMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get_settings_err", "gitlab_get_error_tracking_settings", map[string]any{"project_id": "1"}},
-		{"enable_disable_err", "gitlab_enable_disable_error_tracking", map[string]any{"project_id": "1", "active": true, "integrated": true}},
-		{"list_client_keys_err", "gitlab_list_error_tracking_client_keys", map[string]any{"project_id": "1", "page": 1, "per_page": 20}},
-		{"create_client_key_err", "gitlab_create_error_tracking_client_key", map[string]any{"project_id": "1"}},
-		{"delete_client_key_err", "gitlab_delete_error_tracking_client_key", map[string]any{"project_id": "1", "key_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
-			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (success)
-// ---------------------------------------------------------------------------.
-
-// covNewErrorTrackingMCPSession is an internal helper for the errortracking package.
-func covNewErrorTrackingMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/error_tracking/settings", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
-	})
-
-	handler.HandleFunc("PATCH /api/v4/projects/1/error_tracking/settings", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
-	})
-
-	handler.HandleFunc("GET /api/v4/projects/1/error_tracking/client_keys", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+covKeyJSON+`]`)
-	})
-
-	handler.HandleFunc("POST /api/v4/projects/1/error_tracking/client_keys", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, covKeyJSON)
-	})
-
-	handler.HandleFunc("DELETE /api/v4/projects/1/error_tracking/client_keys/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (error paths)
-// ---------------------------------------------------------------------------.
-
-// covNewErrorTrackingErrorMCPSession is an internal helper for the errortracking package.
-func covNewErrorTrackingErrorMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.

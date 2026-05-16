@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Runners & Resource Groups
 > **Individual tools**: 22
-> **Meta-tools**: `gitlab_runner`, `gitlab_resource_group` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_runner`, `gitlab_resource_group` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Runners API](https://docs.gitlab.com/ee/api/runners.html), [Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The runners domain covers CI/CD runner management (listing, registration, configuration, removal, token management) and resource groups (listing, editing process modes, viewing upcoming jobs). Runners can be scoped to instances, groups, or projects.
 
-When `META_TOOLS=true` (the default), the 22 individual tools below are consolidated into two meta-tools: `gitlab_runner` (18 actions) and `gitlab_resource_group` (4 actions).
+With the default `TOOL_SURFACE=meta` catalog, the 22 individual tools below are consolidated into two meta-tools: `gitlab_runner` (18 actions) and `gitlab_resource_group` (4 actions).
 
 ### Common Questions
 

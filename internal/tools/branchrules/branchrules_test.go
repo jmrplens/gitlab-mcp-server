@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -513,11 +511,8 @@ func TestFormatStatusChecksSummary(t *testing.T) {
 	}
 }
 
-// TestMCPRoundTrip_RegisterTools validates the RegisterTools wiring
-// via MCP round-trip with a mock GraphQL backend. It verifies that
-// the handler closure in register.go is fully exercised including
-// List, LogToolCallAll, and WithHints on the success path.
-func TestMCPRoundTrip_RegisterTools(t *testing.T) {
+// TestActionSpecs_CallRoute verifies the canonical branch rule route executes successfully.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondGraphQL(w, http.StatusOK, `{
@@ -531,84 +526,38 @@ func TestMCPRoundTrip_RegisterTools(t *testing.T) {
 		},
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
 
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	res, err := specs[0].Route.Handler(t.Context(), map[string]any{"project_path": "my-group/my-project"})
 	if err != nil {
-		t.Fatalf("connect: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_branch_rules",
-		Arguments: map[string]any{"project_path": "my-group/my-project"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res == nil {
-		t.Fatal("nil result")
-	}
-	if res.IsError {
-		t.Fatalf("unexpected error result: %v", res.Content)
-	}
-	if len(res.Content) == 0 {
-		t.Fatal("expected non-empty content")
-	}
-	text, ok := res.Content[0].(*mcp.TextContent)
+	out, ok := res.(ListOutput)
 	if !ok {
-		t.Fatalf("expected *mcp.TextContent, got %T", res.Content[0])
+		t.Fatalf("Route.Handler returned %T, want ListOutput", res)
 	}
-	if !strings.Contains(text.Text, "main") {
-		t.Error("response should contain 'main' branch rule")
+	if len(out.Rules) != 1 {
+		t.Fatalf("len(Rules) = %d, want 1", len(out.Rules))
+	}
+	if out.Rules[0].Name != "main" {
+		t.Fatalf("Rules[0].Name = %q, want main", out.Rules[0].Name)
 	}
 }
 
-// TestMCPRoundTrip_RegisterTools_Error validates the error path in the
-// RegisterTools handler closure when List returns an error (missing
-// project_path).
-func TestMCPRoundTrip_RegisterTools_Error(t *testing.T) {
-	handler := graphqlMux(map[string]http.HandlerFunc{
-		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondGraphQL(w, http.StatusOK, `{
-				"project": {
-					"branchRules": {
-						"nodes": [],
-						"pageInfo": {"hasNextPage": false, "endCursor": ""}
-					}
-				}
-			}`)
-		},
-	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
+// TestActionSpecs_CallRouteError verifies the canonical route returns handler errors.
+func TestActionSpecs_CallRouteError(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
 	}
 
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_list_branch_rules",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res == nil {
-		t.Fatal("nil result")
+	_, err := specs[0].Route.Handler(t.Context(), map[string]any{})
+	if err == nil {
+		t.Fatal("expected route error, got nil")
 	}
 }

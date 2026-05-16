@@ -4,7 +4,6 @@
 package repositorysubmodules
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// sampleGitmodules identifies the sample gitmodules constant used by this package.
 const sampleGitmodules = `[submodule "dsp_up_spi_common_module"]
 	path = dsp_up_spi_common_module
 	url = git@gitlab.example.com:hardware/dsp/common-modules.git
@@ -32,8 +32,7 @@ const sampleGitmodules = `[submodule "dsp_up_spi_common_module"]
 
 // parseGitmodules unit tests.
 
-// TestParseGitmodules_Success validates parse gitmodules across multiple scenarios using table-driven subtests
-// for the success case.
+// TestParseGitmodules_Success covers ParseGitmodules with table-driven subtests for success.
 func TestParseGitmodules_Success(t *testing.T) {
 	entries := parseGitmodules(sampleGitmodules)
 	if len(entries) != 4 {
@@ -69,7 +68,7 @@ func TestParseGitmodules_Success(t *testing.T) {
 	}
 }
 
-// TestParseGitmodules_Empty verifies that ParseGitmodules handles the empty scenario correctly.
+// TestParseGitmodules_Empty verifies ParseGitmodules when empty.
 func TestParseGitmodules_Empty(t *testing.T) {
 	entries := parseGitmodules("")
 	if len(entries) != 0 {
@@ -77,7 +76,7 @@ func TestParseGitmodules_Empty(t *testing.T) {
 	}
 }
 
-// TestParseGitmodules_HTTPSUrl verifies that ParseGitmodules handles the h t t p s url scenario correctly.
+// TestParseGitmodules_HTTPSUrl verifies ParseGitmodules when HTTPS URL.
 func TestParseGitmodules_HTTPSUrl(t *testing.T) {
 	content := `[submodule "lib"]
 	path = lib
@@ -92,7 +91,7 @@ func TestParseGitmodules_HTTPSUrl(t *testing.T) {
 	}
 }
 
-// TestParseGitmodules_SSHUrl verifies that ParseGitmodules handles the s s h url scenario correctly.
+// TestParseGitmodules_SSHUrl verifies ParseGitmodules when SSH URL.
 func TestParseGitmodules_SSHUrl(t *testing.T) {
 	content := `[submodule "lib"]
 	path = lib
@@ -109,7 +108,7 @@ func TestParseGitmodules_SSHUrl(t *testing.T) {
 
 // resolveProjectPath unit tests.
 
-// TestResolveProjectPath validates resolve project path across multiple scenarios using table-driven subtests.
+// TestResolveProjectPath covers ResolveProjectPath with table-driven subtests.
 func TestResolveProjectPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -136,7 +135,7 @@ func TestResolveProjectPath(t *testing.T) {
 
 // parentDir unit tests.
 
-// TestParentDir validates parent dir across multiple scenarios using table-driven subtests.
+// TestParentDir covers ParentDir with table-driven subtests.
 func TestParentDir(t *testing.T) {
 	tests := []struct {
 		path string
@@ -159,7 +158,7 @@ func TestParentDir(t *testing.T) {
 
 // List integration tests.
 
-// TestList_Success verifies that List handles the success scenario correctly.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -231,7 +230,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_NoGitmodules verifies that List handles the no gitmodules scenario correctly.
+// TestList_NoGitmodules verifies List when no gitmodules.
 func TestList_NoGitmodules(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -245,7 +244,7 @@ func TestList_NoGitmodules(t *testing.T) {
 	}
 }
 
-// TestList_EmptyProjectID verifies that List handles the empty project i d scenario correctly.
+// TestList_EmptyProjectID verifies List when empty project ID.
 func TestList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -256,7 +255,7 @@ func TestList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List handles the cancelled context scenario correctly.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -270,7 +269,7 @@ func TestList_CancelledContext(t *testing.T) {
 
 // FormatListMarkdown tests.
 
-// TestFormatListMarkdown_WithEntries verifies that FormatListMarkdown handles the with entries scenario correctly.
+// TestFormatListMarkdown_WithEntries verifies FormatListMarkdown when with entries.
 func TestFormatListMarkdown_WithEntries(t *testing.T) {
 	out := ListOutput{
 		Submodules: []SubmoduleEntry{
@@ -294,7 +293,7 @@ func TestFormatListMarkdown_WithEntries(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies that FormatListMarkdown handles the empty scenario correctly.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	r := FormatListMarkdown(ListOutput{Submodules: []SubmoduleEntry{}, Count: 0})
 	if r == nil {
@@ -309,45 +308,22 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// RegisterTools includes new tools.
+// ActionSpecs includes all repository submodule tools.
 
-// TestRegisterTools_IncludesNewTools verifies that RegisterTools handles the includes new tools scenario correctly.
-func TestRegisterTools_IncludesNewTools(t *testing.T) {
+// TestActionSpecs_IncludesTools verifies that ActionSpecs exposes all repository submodule tools.
+func TestActionSpecs_IncludesTools(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	defer session.Close()
-
-	tools, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatalf("ListTools error: %v", err)
-	}
-
-	toolNames := make(map[string]bool)
-	for _, tool := range tools.Tools {
-		toolNames[tool.Name] = true
-	}
+	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
 
 	for _, name := range []string{
 		"gitlab_list_repository_submodules",
 		"gitlab_read_repository_submodule_file",
 		"gitlab_update_repository_submodule",
 	} {
-		if !toolNames[name] {
-			t.Errorf("expected tool %q to be registered", name)
+		if _, ok := byTool[name]; !ok {
+			t.Errorf("expected tool %q in ActionSpecs", name)
 		}
 	}
 }

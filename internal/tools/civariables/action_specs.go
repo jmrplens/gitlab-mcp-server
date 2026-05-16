@@ -1,6 +1,8 @@
 package civariables
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		ciVariableReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_ci_variable_get"),
 		ciVariableCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_ci_variable_create"),
 		ciVariableUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_ci_variable_update"),
-		ciVariableDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_ci_variable_delete"),
+		ciVariableDeleteSpec("delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_ci_variable_delete"),
 	}
 }
 
@@ -47,4 +49,12 @@ func ciVariableOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "civariables",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+}
+
+// DeleteOutput deletes a CI/CD variable and returns the canonical success message shape.
+func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted CI/CD variable."}, nil
 }

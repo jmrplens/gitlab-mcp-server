@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
 > **Individual tools**: 56
-> **Meta-tool**: `gitlab_merge_request` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_merge_request` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, changes/diffs, and context commits.
 
-When `META_TOOLS=true` (the default), all 44 individual tools below are consolidated into a single `gitlab_merge_request` meta-tool that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 44 individual tools below are consolidated into a single `gitlab_merge_request` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

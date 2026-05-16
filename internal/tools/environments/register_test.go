@@ -1,6 +1,5 @@
-// register_test.go contains integration tests for the environment tool closures
-// in register.go. Tests exercise mutation error paths via an in-memory MCP
-// session with a mock GitLab API.
+// register_test.go contains route and catalog-surface tests for behavior that
+// used to live in register.go: mutation errors, not-found output, and destructive confirmation.
 package environments
 
 import (
@@ -11,11 +10,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_MutationErrors covers the error branches in register.go:
-// get (404 → NotFoundResult), delete (500), create/update/stop (500).
-func TestRegisterTools_MutationErrors(t *testing.T) {
+// TestActionSpecs_MutationErrors covers route error branches:
+// get (404 -> not-found output), delete, create, update, and stop failures.
+func TestActionSpecs_MutationErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -26,52 +26,53 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	_, _ = server.Connect(ctx, st, nil)
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := environmentSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
-		name string
-		args map[string]any
+		name        string
+		args        map[string]any
+		expectError bool
 	}{
-		{"gitlab_environment_get", map[string]any{"project_id": "42", "environment_id": 999}},
-		{"gitlab_environment_create", map[string]any{"project_id": "42", "name": "staging"}},
-		{"gitlab_environment_update", map[string]any{"project_id": "42", "environment_id": 1, "name": "staging-v2"}},
-		{"gitlab_environment_stop", map[string]any{"project_id": "42", "environment_id": 1}},
-		{"gitlab_environment_delete", map[string]any{"project_id": "42", "environment_id": 1}},
+		{"gitlab_environment_get", map[string]any{"project_id": "42", "environment_id": 999}, false},
+		{"gitlab_environment_create", map[string]any{"project_id": "42", "name": "staging"}, true},
+		{"gitlab_environment_update", map[string]any{"project_id": "42", "environment_id": 1, "name": "staging-v2"}, true},
+		{"gitlab_environment_stop", map[string]any{"project_id": "42", "environment_id": 1}, true},
+		{"gitlab_environment_delete", map[string]any{"project_id": "42", "environment_id": 1}, true},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			result, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error from %s", tt.name)
+				}
+				return
 			}
-			if result == nil || !result.IsError {
-				t.Errorf("expected error result from %s", tt.name)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
+			}
+			if _, ok := result.(environmentNotFoundOutput); !ok {
+				t.Fatalf("result type = %T, want environmentNotFoundOutput", result)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the environment delete handler when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
+// confirmation for environment delete when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_environment_delete" {
+			toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{Description: "Test environment destructive confirmation.", Icons: toolutil.IconEnvironment})
+		}
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -83,7 +84,10 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_environment_delete",

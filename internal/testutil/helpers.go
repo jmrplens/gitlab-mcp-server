@@ -3,6 +3,13 @@
 // pagination header utilities used across all domain tool test files.
 // It also includes helpers for GraphQL test responses and assertions for
 // embedded MCP resource content.
+//
+// # HTTP Test Pattern
+//
+// Most tool tests create an httptest server with package-specific routing,
+// build a GitLab client with [NewTestClient], then call the handler directly.
+// Response helpers keep JSON, pagination headers, and GraphQL envelopes
+// consistent across domain packages.
 package testutil
 
 import (

@@ -166,7 +166,7 @@ For handlers that need different hints per status code, use a `switch` over `IsH
 For "get" handlers, HTTP 404 errors are intercepted **before** the standard error flow and returned as structured, informational results instead of opaque Go errors. This improves the LLM experience: instead of a raw error, the assistant receives an `IsError: true` result with a human-readable explanation and domain-specific next-step hints.
 
 ```go
-// In register.go handler closures:
+// In a catalog route wrapper for the get action:
 out, err := Get(ctx, client, input)
 if err != nil && toolutil.IsHTTPStatus(err, 404) {
     toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, nil) // nil → INFO log

@@ -1,4 +1,3 @@
-// Package applications implements MCP tools for GitLab Applications API.
 package applications
 
 import (

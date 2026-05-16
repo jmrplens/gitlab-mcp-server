@@ -10,17 +10,17 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // CI Lint Project
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_Success verifies the behavior of c i lint project success.
+// TestCILintProject_Success verifies CILintProject when success.
 func TestCILintProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -56,7 +56,7 @@ func TestCILintProject_Success(t *testing.T) {
 	}
 }
 
-// TestCILintProject_Invalid verifies the behavior of c i lint project invalid.
+// TestCILintProject_Invalid verifies CILintProject when invalid.
 func TestCILintProject_Invalid(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -86,7 +86,7 @@ func TestCILintProject_Invalid(t *testing.T) {
 	}
 }
 
-// TestCILintProject_WithOptions verifies the behavior of c i lint project with options.
+// TestCILintProject_WithOptions verifies CILintProject when with options.
 func TestCILintProject_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -115,7 +115,7 @@ func TestCILintProject_WithOptions(t *testing.T) {
 	}
 }
 
-// TestCILintProject_MissingProjectID verifies the behavior of c i lint project missing project i d.
+// TestCILintProject_MissingProjectID verifies CILintProject when missing project ID.
 func TestCILintProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintProject(context.Background(), client, ProjectInput{})
@@ -124,7 +124,7 @@ func TestCILintProject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCILintProject_CancelledContext verifies the behavior of c i lint project cancelled context.
+// TestCILintProject_CancelledContext verifies CILintProject when cancelled context.
 func TestCILintProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -138,7 +138,7 @@ func TestCILintProject_CancelledContext(t *testing.T) {
 // CI Lint (Namespace)
 // ---------------------------------------------------------------------------.
 
-// TestCILint_Success verifies the behavior of c i lint success.
+// TestCILint_Success verifies CILint when success.
 func TestCILint_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodPost {
@@ -166,7 +166,7 @@ func TestCILint_Success(t *testing.T) {
 	}
 }
 
-// TestCILint_InvalidYAML verifies the behavior of c i lint invalid y a m l.
+// TestCILint_InvalidYAML verifies CILint when invalid YAML.
 func TestCILint_InvalidYAML(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodPost {
@@ -197,7 +197,7 @@ func TestCILint_InvalidYAML(t *testing.T) {
 	}
 }
 
-// TestCILint_MissingProjectID verifies the behavior of c i lint missing project i d.
+// TestCILint_MissingProjectID verifies CILint when missing project ID.
 func TestCILint_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{Content: "stages: [build]"})
@@ -206,7 +206,7 @@ func TestCILint_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCILint_MissingContent verifies the behavior of c i lint missing content.
+// TestCILint_MissingContent verifies CILint when missing content.
 func TestCILint_MissingContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{ProjectID: "123"})
@@ -215,7 +215,7 @@ func TestCILint_MissingContent(t *testing.T) {
 	}
 }
 
-// TestCILint_EmptyContent verifies the behavior of c i lint empty content.
+// TestCILint_EmptyContent verifies CILint when empty content.
 func TestCILint_EmptyContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{ProjectID: "123", Content: "   "})
@@ -224,7 +224,7 @@ func TestCILint_EmptyContent(t *testing.T) {
 	}
 }
 
-// TestCILint_CancelledContext verifies the behavior of c i lint cancelled context.
+// TestCILint_CancelledContext verifies CILint when cancelled context.
 func TestCILint_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -237,8 +237,11 @@ func TestCILint_CancelledContext(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	mdHeadingWarnings   = "### Warnings"
-	mdHeadingIncludes   = "### Includes"
+	// mdHeadingWarnings identifies the md heading warnings constant used by this package.
+	mdHeadingWarnings = "### Warnings"
+	// mdHeadingIncludes identifies the md heading includes constant used by this package.
+	mdHeadingIncludes = "### Includes"
+	// mdHeadingMergedYAML identifies the md heading merged YAML constant used by this package.
 	mdHeadingMergedYAML = "### Merged YAML"
 )
 
@@ -246,7 +249,7 @@ const (
 // LintProject — API error
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_APIError verifies the behavior of c i lint project a p i error.
+// TestCILintProject_APIError verifies CILintProject when API error.
 func TestCILintProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -261,7 +264,7 @@ func TestCILintProject_APIError(t *testing.T) {
 // LintProject — all optional fields (DryRunRef, Ref)
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_AllOptionalFields verifies the behavior of c i lint project all optional fields.
+// TestCILintProject_AllOptionalFields verifies CILintProject when all optional fields.
 func TestCILintProject_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/ci/lint" && r.Method == http.MethodGet {
@@ -307,7 +310,7 @@ func TestCILintProject_AllOptionalFields(t *testing.T) {
 // LintContent — API error
 // ---------------------------------------------------------------------------.
 
-// TestCILintContent_APIError verifies the behavior of c i lint content a p i error.
+// TestCILintContent_APIError verifies CILintContent when API error.
 func TestCILintContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -325,7 +328,7 @@ func TestCILintContent_APIError(t *testing.T) {
 // LintContent — all optional fields (DryRun, IncludeJobs, Ref)
 // ---------------------------------------------------------------------------.
 
-// TestCILintContent_AllOptionalFields verifies the behavior of c i lint content all optional fields.
+// TestCILintContent_AllOptionalFields verifies CILintContent when all optional fields.
 func TestCILintContent_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/99/ci/lint" && r.Method == http.MethodPost {
@@ -365,7 +368,7 @@ func TestCILintContent_AllOptionalFields(t *testing.T) {
 // toOutput — empty includes slice
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_EmptyIncludes verifies the behavior of to output empty includes.
+// TestToOutput_EmptyIncludes verifies ToOutput includes for empty.
 func TestToOutput_EmptyIncludes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/ci/lint" && r.Method == http.MethodGet {
@@ -394,7 +397,7 @@ func TestToOutput_EmptyIncludes(t *testing.T) {
 // FormatOutputMarkdown — valid with all sections
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_ValidAllSections verifies the behavior of format output markdown valid all sections.
+// TestFormatOutputMarkdown_ValidAllSections verifies FormatOutputMarkdown when valid all sections.
 func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:      true,
@@ -434,7 +437,7 @@ func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 // FormatOutputMarkdown — invalid with errors
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_InvalidWithErrors verifies the behavior of format output markdown invalid with errors.
+// TestFormatOutputMarkdown_InvalidWithErrors verifies FormatOutputMarkdown when invalid with errors.
 func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:  false,
@@ -467,7 +470,7 @@ func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 // FormatOutputMarkdown — empty output (all defaults)
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	// Zero-value Output has Valid=false, which produces the Invalid header
@@ -480,7 +483,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // FormatOutputMarkdown — valid but empty content returns empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage verifies the behavior of format output markdown valid no content returns minimal message.
+// TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage verifies FormatOutputMarkdown returns minimal message for valid no content.
 func TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage(t *testing.T) {
 	md := FormatOutputMarkdown(Output{Valid: true})
 	if md == "" {
@@ -495,7 +498,7 @@ func TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage(t *testing.T) 
 // FormatOutputMarkdown — only merged yaml
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyMergedYaml verifies the behavior of format output markdown only merged yaml.
+// TestFormatOutputMarkdown_OnlyMergedYaml verifies FormatOutputMarkdown when only merged YAML.
 func TestFormatOutputMarkdown_OnlyMergedYaml(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:      true,
@@ -516,7 +519,7 @@ func TestFormatOutputMarkdown_OnlyMergedYaml(t *testing.T) {
 // FormatOutputMarkdown — only includes
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyIncludes verifies the behavior of format output markdown only includes.
+// TestFormatOutputMarkdown_OnlyIncludes verifies FormatOutputMarkdown includes for only.
 func TestFormatOutputMarkdown_OnlyIncludes(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid: true,
@@ -536,7 +539,7 @@ func TestFormatOutputMarkdown_OnlyIncludes(t *testing.T) {
 // FormatOutputMarkdown — only warnings
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyWarnings verifies the behavior of format output markdown only warnings.
+// TestFormatOutputMarkdown_OnlyWarnings verifies FormatOutputMarkdown when only warnings.
 func TestFormatOutputMarkdown_OnlyWarnings(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:    true,
@@ -554,7 +557,7 @@ func TestFormatOutputMarkdown_OnlyWarnings(t *testing.T) {
 // FormatOutputMarkdown — only errors (invalid)
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyErrors verifies the behavior of format output markdown only errors.
+// TestFormatOutputMarkdown_OnlyErrors verifies FormatOutputMarkdown when only errors.
 func TestFormatOutputMarkdown_OnlyErrors(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:  false,
@@ -572,7 +575,7 @@ func TestFormatOutputMarkdown_OnlyErrors(t *testing.T) {
 // FormatOutputMarkdown — includes with special characters in table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_IncludesSpecialChars verifies the behavior of format output markdown includes special chars.
+// TestFormatOutputMarkdown_IncludesSpecialChars verifies FormatOutputMarkdown includes special chars.
 func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid: true,
@@ -590,26 +593,27 @@ func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
+// TestActionSpecs_CallAllRoutes validates all CI lint canonical routes across table-driven subtests.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	lintResult := `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"stages:\n  - build","includes":[]}`
 
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 2 tools
-// ---------------------------------------------------------------------------.
+	handler := http.NewServeMux()
+	handler.HandleFunc("GET /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, lintResult)
+	})
+	handler.HandleFunc("POST /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, lintResult)
+	})
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCILintMCPSession(t)
-	ctx := context.Background()
+	client := testutil.NewTestClient(t, handler)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -628,75 +632,17 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolCallSuccess(t, session, ctx, tt.tool, tt.args)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
+			}
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			}
 		})
 	}
-}
-
-// assertToolCallSuccess calls an MCP tool and fails the test if it returns an error.
-func assertToolCallSuccess(t *testing.T, session *mcp.ClientSession, ctx context.Context, tool string, args map[string]any) {
-	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      tool,
-		Arguments: args,
-	})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", tool, err)
-	}
-	if result.IsError {
-		t.Fatalf("CallTool(%s) returned error: %s", tool, extractErrorText(result))
-	}
-}
-
-// extractErrorText returns the first text content from an MCP error result.
-func extractErrorText(result *mcp.CallToolResult) string {
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			return tc.Text
-		}
-	}
-	return "IsError=true (no text content)"
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newCILintMCPSession is an internal helper for the cilint package.
-func newCILintMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	lintResult := `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"stages:\n  - build","includes":[]}`
-
-	handler := http.NewServeMux()
-
-	// Lint project CI config (GET)
-	handler.HandleFunc("GET /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, lintResult)
-	})
-
-	// Lint content (POST)
-	handler.HandleFunc("POST /api/v4/projects/1/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, lintResult)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

@@ -1,4 +1,3 @@
-// Package licensetemplates implements MCP tools for GitLab License Templates API.
 package licensetemplates
 
 import (
@@ -95,7 +94,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	return GetOutput{LicenseItem: licenseFromGL(l)}, nil
 }
 
-// licenseFromGL is an internal helper for the licensetemplates package.
+// licenseFromGL maps license from gl between API and evaluator models.
 func licenseFromGL(l *gl.LicenseTemplate) LicenseItem {
 	return LicenseItem{
 		Key:         l.Key,

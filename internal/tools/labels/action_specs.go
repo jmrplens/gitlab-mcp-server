@@ -1,6 +1,10 @@
 package labels
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -9,7 +13,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		labelReadSpec("label_list", toolutil.RouteAction(client, List), "gitlab_label_list"),
-		labelReadSpec("label_get", toolutil.RouteAction(client, Get), "gitlab_label_get"),
+		labelReadSpec("label_get", labelGetRoute(client), "gitlab_label_get"),
 		labelCreateSpec("label_create", toolutil.RouteAction(client, Create), "gitlab_label_create"),
 		labelUpdateSpec("label_update", toolutil.RouteAction(client, Update), "gitlab_label_update"),
 		labelDeleteSpec("label_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_label_delete"),
@@ -17,6 +21,21 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		labelUpdateSpec("label_unsubscribe", toolutil.RouteVoidAction(client, Unsubscribe), "gitlab_label_unsubscribe"),
 		labelUpdateSpec("label_promote", toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
 	}
+}
+
+func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			labelID, _ := input["label_id"].(string)
+			projectID, _ := input["project_id"].(string)
+			return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s", labelID, projectID)}, nil
+		}
+		return result, err
+	}
+	return route
 }
 
 func labelReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

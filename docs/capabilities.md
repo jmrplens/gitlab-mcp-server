@@ -49,6 +49,14 @@ handling, progress handling, and the `gitlab://workspace/roots` resource, but
 omits optional prompts, static GitLab resources, workflow guides, and
 meta-schema resources.
 
+The configuration intentionally has only two modes today. `full` is the broad
+compatibility surface; `minimal` is the low-token surface for Dynamic clients
+that can use `gitlab_describe_tools` or `gitlab_find_action` for schemas inline.
+The latest token audit measured shared resources plus prompts at about 18.2k
+tokens in full mode and about 184 tokens in minimal mode. Intermediate modes
+such as schemas-only or resources-only are not exposed because they add another
+configuration branch without improving the recommended Dynamic low-token path.
+
 The Go SDK debounces list-changed notifications (10 ms window) and sends
 them automatically when `AddTool`, `AddResource`, `AddPrompt`, or their
 `Remove*` counterparts are invoked at runtime — no manual emission is

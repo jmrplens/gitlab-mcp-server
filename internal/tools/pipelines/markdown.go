@@ -4,8 +4,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+type pipelineNotFoundOutput struct {
+	Identifier string
+}
+
+func formatPipelineNotFound(out pipelineNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Pipeline", out.Identifier,
+		"Use gitlab_pipeline_list with project_id to list pipelines",
+		"Verify the pipeline_id is correct for this project",
+	)
+}
 
 // FormatListMarkdown renders a paginated list of pipelines as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
@@ -177,11 +190,20 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	return b.String()
 }
 
+func formatWaitResult(out WaitOutput) *mcp.CallToolResult {
+	result := toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail)
+	if out.TimedOut {
+		result.IsError = true
+	}
+	return result
+}
+
 func init() {
+	toolutil.RegisterMarkdownResult(formatPipelineNotFound)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailMarkdown)
 	toolutil.RegisterMarkdown(FormatVariablesMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportSummaryMarkdown)
-	toolutil.RegisterMarkdown(FormatWaitMarkdown)
+	toolutil.RegisterMarkdownResult(formatWaitResult)
 }

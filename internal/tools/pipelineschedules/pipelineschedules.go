@@ -1,6 +1,3 @@
-// Package pipelineschedules implements MCP tool handlers for GitLab pipeline
-// schedule operations including list, get, create, update, delete, run, and
-// schedule variable management via the PipelineSchedules API.
 package pipelineschedules
 
 import (

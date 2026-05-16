@@ -15,27 +15,37 @@ import (
 )
 
 const (
+	// providerAnthropic identifies the provider anthropic constant used by this package.
 	providerAnthropic = "anthropic"
-	providerGoogle    = "google"
-	providerOpenAI    = "openai"
-	providerQwen      = "qwen"
+	// providerGoogle identifies the provider google constant used by this package.
+	providerGoogle = "google"
+	// providerOpenAI identifies the provider OpenAI constant used by this package.
+	providerOpenAI = "openai"
+	// providerQwen identifies the provider qwen constant used by this package.
+	providerQwen = "qwen"
 
+	// openAIChatAPI identifies the OpenAI chat API constant used by this package.
 	openAIChatAPI = "https://api.openai.com/v1/chat/completions"
-	qwenChatAPI   = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+	// qwenChatAPI identifies the qwen chat API constant used by this package.
+	qwenChatAPI = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+	// geminiAPIBase identifies the gemini API base constant used by this package.
 	geminiAPIBase = "https://generativelanguage.googleapis.com/v1beta/models/"
 
+	// headerContentType identifies the header content type constant used by this package.
 	headerContentType = "Content-Type"
-	contentTypeJSON   = "application/json"
-	headerGoogleAuth  = "x-goog-api-key"
+	// contentTypeJSON identifies the content type JSON constant used by this package.
+	contentTypeJSON = "application/json"
+	// headerGoogleAuth identifies the header google auth constant used by this package.
+	headerGoogleAuth = "x-goog-api-key"
 )
 
-// modelSpec holds data for main operations.
+// modelSpec holds model spec data for the main package.
 type modelSpec struct {
 	Provider string
 	Model    string
 }
 
-// String performs the string operation on modelSpec.
+// String returns the display label for modelSpec.
 func (s modelSpec) String() string {
 	if s.Provider == "" {
 		return s.Model
@@ -43,7 +53,7 @@ func (s modelSpec) String() string {
 	return s.Provider + ":" + s.Model
 }
 
-// modelProviderRequest holds data for main operations.
+// modelProviderRequest captures model-provider model provider request data.
 type modelProviderRequest struct {
 	Model       string
 	MaxTokens   int
@@ -59,7 +69,7 @@ type modelProvider interface {
 	callOnce(ctx context.Context, client *http.Client, apiKey string, request modelProviderRequest) (modelResponse, bool, error)
 }
 
-// resolveModelSpecs resolves model specs using the GitLab API and returns [[]modelSpec].
+// resolveModelSpecs resolves model specs and returns [[]modelSpec].
 func resolveModelSpecs(opts options) ([]modelSpec, error) {
 	source := strings.TrimSpace(opts.Model)
 	if source == "" {
@@ -93,7 +103,7 @@ func resolveModelSpecs(opts options) ([]modelSpec, error) {
 	return specs, nil
 }
 
-// parseModelSpec performs the parse model spec operation using the GitLab API and returns [modelSpec].
+// parseModelSpec handles parse model spec and returns [modelSpec].
 func parseModelSpec(raw string) (modelSpec, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -120,7 +130,7 @@ func parseModelSpec(raw string) (modelSpec, error) {
 	}
 }
 
-// modelReportLabel is an internal helper for the main package.
+// modelReportLabel prepares model report label for model-provider evaluation.
 func modelReportLabel(specs []modelSpec) string {
 	labels := make([]string, 0, len(specs))
 	for _, spec := range specs {
@@ -129,7 +139,7 @@ func modelReportLabel(specs []modelSpec) string {
 	return strings.Join(labels, ",")
 }
 
-// apiKeyForModelProvider performs the api key for model provider operation using the GitLab API and returns [string].
+// apiKeyForModelProvider handles API key for model provider and returns [string].
 func apiKeyForModelProvider(provider string) (string, error) {
 	keyNames := map[string][]string{
 		providerAnthropic: {"ANTHROPIC_API_KEY"},
@@ -149,7 +159,7 @@ func apiKeyForModelProvider(provider string) (string, error) {
 	return "", fmt.Errorf("%s is required in the environment or .env for provider %s", strings.Join(keyNames, " or "), provider)
 }
 
-// modelProviderFor is an internal helper for the main package.
+// modelProviderFor prepares model provider for for model-provider evaluation.
 func modelProviderFor(provider string) modelProvider {
 	switch provider {
 	case providerGoogle:
@@ -163,7 +173,7 @@ func modelProviderFor(provider string) modelProvider {
 	}
 }
 
-// qwenEndpoint is an internal helper for the main package.
+// qwenEndpoint prepares qwen endpoint for model-provider evaluation.
 func qwenEndpoint() string {
 	if endpoint := strings.TrimSpace(os.Getenv("QWEN_CHAT_COMPLETIONS_URL")); endpoint != "" {
 		return endpoint
@@ -174,10 +184,10 @@ func qwenEndpoint() string {
 	return qwenChatAPI
 }
 
-// anthropicProvider holds data for main operations.
+// anthropicProvider models the Anthropic anthropic provider payload.
 type anthropicProvider struct{}
 
-// callOnce performs the call once operation on anthropicProvider.
+// callOnce sends one model request through anthropicProvider and reports whether failures are retryable.
 func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiKey string, request modelProviderRequest) (modelResponse, bool, error) {
 	payload := anthropicRequest{
 		Model:       request.Model,
@@ -218,7 +228,7 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	return out, false, nil
 }
 
-// openAIProvider holds data for main operations.
+// openAIProvider models the OpenAI-compatible OpenAI provider payload.
 type openAIProvider struct {
 	endpoint        string
 	name            string
@@ -226,7 +236,7 @@ type openAIProvider struct {
 	disableThinking bool
 }
 
-// openAIRequest holds data for main operations.
+// openAIRequest models the OpenAI-compatible OpenAI request payload.
 type openAIRequest struct {
 	Model               string          `json:"model"`
 	Temperature         float64         `json:"temperature"`
@@ -238,13 +248,13 @@ type openAIRequest struct {
 	Messages            []openAIMessage `json:"messages"`
 }
 
-// openAITool holds data for main operations.
+// openAITool models the OpenAI-compatible OpenAI tool payload.
 type openAITool struct {
 	Type     string         `json:"type"`
 	Function openAIFunction `json:"function"`
 }
 
-// openAIFunction holds data for main operations.
+// openAIFunction models the OpenAI-compatible OpenAI function payload.
 type openAIFunction struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -252,7 +262,7 @@ type openAIFunction struct {
 	Strict      *bool  `json:"strict,omitempty"`
 }
 
-// openAIMessage holds data for main operations.
+// openAIMessage models the OpenAI-compatible OpenAI message payload.
 type openAIMessage struct {
 	Role       string           `json:"role"`
 	Content    string           `json:"content,omitempty"`
@@ -260,20 +270,20 @@ type openAIMessage struct {
 	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
 }
 
-// openAIToolCall holds data for main operations.
+// openAIToolCall models the OpenAI-compatible OpenAI tool call payload.
 type openAIToolCall struct {
 	ID       string             `json:"id"`
 	Type     string             `json:"type"`
 	Function openAIFunctionCall `json:"function"`
 }
 
-// openAIFunctionCall holds data for main operations.
+// openAIFunctionCall models the OpenAI-compatible OpenAI function call payload.
 type openAIFunctionCall struct {
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"`
 }
 
-// openAIResponse holds data for main operations.
+// openAIResponse models the OpenAI-compatible OpenAI response payload.
 type openAIResponse struct {
 	Choices []struct {
 		Message openAIMessage `json:"message"`
@@ -288,7 +298,7 @@ type openAIResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// callOnce performs the call once operation on openAIProvider.
+// callOnce sends one model request through openAIProvider and reports whether failures are retryable.
 func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKey string, request modelProviderRequest) (modelResponse, bool, error) {
 	payload := openAIRequest{
 		Model:       request.Model,
@@ -347,7 +357,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	}, false, nil
 }
 
-// openAITools is an internal helper for the main package.
+// openAITools resolves OpenAI tools for evaluator execution.
 func openAITools(tools []modelTool) []openAITool {
 	out := make([]openAITool, 0, len(tools))
 	for _, tool := range tools {
@@ -357,6 +367,7 @@ func openAITools(tools []modelTool) []openAITool {
 	return out
 }
 
+// openAIToolSchema derives OpenAI tool schema from tool schema metadata.
 func openAIToolSchema(tool modelTool) any {
 	schema, ok := tool.InputSchema.(map[string]any)
 	if !ok || tool.Name != dynamicExecuteTool {
@@ -369,6 +380,7 @@ func openAIToolSchema(tool modelTool) any {
 	return updated
 }
 
+// cloneOpenAISchema derives clone OpenAI schema from tool schema metadata.
 func cloneOpenAISchema(schema map[string]any) map[string]any {
 	data, err := json.Marshal(schema)
 	if err != nil {
@@ -383,6 +395,7 @@ func cloneOpenAISchema(schema map[string]any) map[string]any {
 	return cloned
 }
 
+// deepCloneMap clones map without sharing mutable maps.
 func deepCloneMap(input map[string]any) map[string]any {
 	if input == nil {
 		return nil
@@ -394,6 +407,7 @@ func deepCloneMap(input map[string]any) map[string]any {
 	return cloned
 }
 
+// deepCloneAny clones any without sharing mutable maps.
 func deepCloneAny(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -409,6 +423,7 @@ func deepCloneAny(value any) any {
 	}
 }
 
+// addOpenAIExecuteParamHints builds add OpenAI execute param hints for retry and repair feedback.
 func addOpenAIExecuteParamHints(schema map[string]any) {
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -434,6 +449,7 @@ func addOpenAIExecuteParamHints(schema map[string]any) {
 	}
 }
 
+// openAICommonExecuteParams derives OpenAI common execute params from task and schema inputs.
 func openAICommonExecuteParams() map[string]any {
 	stringParam := map[string]any{"type": "string"}
 	integerParam := map[string]any{"type": "integer"}
@@ -476,6 +492,7 @@ func openAICommonExecuteParams() map[string]any {
 	}
 }
 
+// requiredWithNames returns required with names names for provider schemas.
 func requiredWithNames(raw any, names ...string) []string {
 	seen := map[string]bool{}
 	var required []string
@@ -504,7 +521,7 @@ func requiredWithNames(raw any, names ...string) []string {
 	return required
 }
 
-// openAIMessages is an internal helper for the main package.
+// openAIMessages builds OpenAI messages for retry and repair feedback.
 func openAIMessages(request modelProviderRequest) []openAIMessage {
 	out := []openAIMessage{{Role: "system", Content: request.System}}
 	for _, message := range request.Messages {
@@ -518,7 +535,7 @@ func openAIMessages(request modelProviderRequest) []openAIMessage {
 	return out
 }
 
-// openAIAssistantMessage is an internal helper for the main package.
+// openAIAssistantMessage builds OpenAI assistant message for retry and repair feedback.
 func openAIAssistantMessage(message modelMessage) openAIMessage {
 	assistant := openAIMessage{Role: "assistant"}
 	var text []string
@@ -540,7 +557,7 @@ func openAIAssistantMessage(message modelMessage) openAIMessage {
 	return assistant
 }
 
-// openAIUserOrToolMessages is an internal helper for the main package.
+// openAIUserOrToolMessages builds OpenAI user or tool messages for retry and repair feedback.
 func openAIUserOrToolMessages(message modelMessage) []openAIMessage {
 	var out []openAIMessage
 	var text []string
@@ -560,7 +577,7 @@ func openAIUserOrToolMessages(message modelMessage) []openAIMessage {
 	return out
 }
 
-// openAIToolUseBlocks performs the open a i tool use blocks operation using the GitLab API and returns [[]modelContentBlock].
+// openAIToolUseBlocks coordinates OpenAI tool use blocks and returns [[]modelContentBlock].
 func openAIToolUseBlocks(message openAIMessage) ([]modelContentBlock, error) {
 	blocks := make([]modelContentBlock, 0, len(message.ToolCalls))
 	for _, call := range message.ToolCalls {
@@ -577,7 +594,7 @@ func openAIToolUseBlocks(message openAIMessage) ([]modelContentBlock, error) {
 	return blocks, nil
 }
 
-// parseOpenAIToolArguments performs the parse open a i tool arguments operation using the GitLab API and returns [map[string]any].
+// parseOpenAIToolArguments coordinates parse OpenAI tool arguments and returns [map[string]any].
 func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	input := map[string]any{}
 	if err := json.Unmarshal([]byte(arguments), &input); err == nil {
@@ -618,10 +635,10 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	return input, nil
 }
 
-// googleProvider holds data for main operations.
+// googleProvider models the Google Gemini Google provider payload.
 type googleProvider struct{}
 
-// googleRequest holds data for main operations.
+// googleRequest models the Google Gemini Google request payload.
 type googleRequest struct {
 	SystemInstruction googleContent    `json:"system_instruction"`
 	Contents          []googleContent  `json:"contents"`
@@ -633,13 +650,13 @@ type googleRequest struct {
 	} `json:"generation_config"`
 }
 
-// googleContent holds data for main operations.
+// googleContent models the Google Gemini Google content payload.
 type googleContent struct {
 	Role  string       `json:"role,omitempty"`
 	Parts []googlePart `json:"parts"`
 }
 
-// googlePart holds data for main operations.
+// googlePart models the Google Gemini Google part payload.
 type googlePart struct {
 	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
 	Text             string                  `json:"text,omitempty"`
@@ -647,7 +664,7 @@ type googlePart struct {
 	FunctionResponse *googleFunctionResponse `json:"functionResponse,omitempty"`
 }
 
-// googleFunctionCall holds data for main operations.
+// googleFunctionCall models the Google Gemini Google function call payload.
 type googleFunctionCall struct {
 	Name    string
 	Args    map[string]any
@@ -655,7 +672,7 @@ type googleFunctionCall struct {
 	ID      string
 }
 
-// UnmarshalJSON performs the unmarshal j s o n operation on *googleFunctionCall.
+// UnmarshalJSON decodes googleFunctionCall from the provider JSON shape.
 func (c *googleFunctionCall) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		Name string          `json:"name"`
@@ -675,7 +692,7 @@ func (c *googleFunctionCall) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(raw.Args, &c.Args)
 }
 
-// MarshalJSON performs the marshal j s o n operation on googleFunctionCall.
+// MarshalJSON encodes googleFunctionCall into the JSON shape expected by the provider.
 func (c googleFunctionCall) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Name string         `json:"name"`
@@ -684,33 +701,33 @@ func (c googleFunctionCall) MarshalJSON() ([]byte, error) {
 	}{Name: c.Name, Args: c.Args, ID: c.ID})
 }
 
-// googleFunctionResponse holds data for main operations.
+// googleFunctionResponse models the Google Gemini Google function response payload.
 type googleFunctionResponse struct {
 	ID       string         `json:"id,omitempty"`
 	Name     string         `json:"name"`
 	Response map[string]any `json:"response"`
 }
 
-// googleTool holds data for main operations.
+// googleTool models the Google Gemini Google tool payload.
 type googleTool struct {
 	FunctionDeclarations []googleFunctionDeclaration `json:"function_declarations"`
 }
 
-// googleFunctionDeclaration holds data for main operations.
+// googleFunctionDeclaration models the Google Gemini Google function declaration payload.
 type googleFunctionDeclaration struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Parameters  any    `json:"parameters"`
 }
 
-// googleToolConfig holds data for main operations.
+// googleToolConfig models the Google Gemini Google tool config payload.
 type googleToolConfig struct {
 	FunctionCallingConfig struct {
 		Mode string `json:"mode"`
 	} `json:"function_calling_config"`
 }
 
-// googleResponse holds data for main operations.
+// googleResponse models the Google Gemini Google response payload.
 type googleResponse struct {
 	Candidates []struct {
 		Content       googleContent `json:"content"`
@@ -732,7 +749,7 @@ type googleResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// callOnce performs the call once operation on googleProvider.
+// callOnce sends one model request through googleProvider and reports whether failures are retryable.
 func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey string, request modelProviderRequest) (modelResponse, bool, error) {
 	payload := googleRequest{
 		SystemInstruction: googleContent{Parts: []googlePart{{Text: request.System}}},
@@ -784,7 +801,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	}, false, nil
 }
 
-// googleEmptyResponseError is an internal helper for the main package.
+// googleEmptyResponseError prepares google empty response error for model-provider evaluation.
 func googleEmptyResponseError(decoded googleResponse, summary string) error {
 	parts := []string{"google response contained " + summary}
 	if len(decoded.Candidates) > 0 {
@@ -807,7 +824,7 @@ func googleEmptyResponseError(decoded googleResponse, summary string) error {
 	return errors.New(strings.Join(parts, "; "))
 }
 
-// googleFunctionDeclarations is an internal helper for the main package.
+// googleFunctionDeclarations prepares google function declarations for model-provider evaluation.
 func googleFunctionDeclarations(tools []modelTool) []googleFunctionDeclaration {
 	out := make([]googleFunctionDeclaration, 0, len(tools))
 	for _, tool := range tools {
@@ -816,7 +833,7 @@ func googleFunctionDeclarations(tools []modelTool) []googleFunctionDeclaration {
 	return out
 }
 
-// googleFunctionCallingMode is an internal helper for the main package.
+// googleFunctionCallingMode prepares google function calling mode for model-provider evaluation.
 func googleFunctionCallingMode() string {
 	mode := strings.ToUpper(strings.TrimSpace(os.Getenv("EVAL_GOOGLE_FUNCTION_MODE")))
 	switch mode {
@@ -827,7 +844,7 @@ func googleFunctionCallingMode() string {
 	}
 }
 
-// googleContents is an internal helper for the main package.
+// googleContents prepares google contents for model-provider evaluation.
 func googleContents(messages []modelMessage) []googleContent {
 	out := make([]googleContent, 0, len(messages))
 	callNames := map[string]string{}
@@ -859,7 +876,7 @@ func googleContents(messages []modelMessage) []googleContent {
 	return out
 }
 
-// googleFunctionResponsePayload is an internal helper for the main package.
+// googleFunctionResponsePayload prepares google function response payload for model-provider evaluation.
 func googleFunctionResponsePayload(block modelContentBlock) map[string]any {
 	response := map[string]any{"is_error": block.IsError}
 	var parsed any
@@ -879,7 +896,7 @@ func googleFunctionResponsePayload(block modelContentBlock) map[string]any {
 	return response
 }
 
-// googleToolUseBlocks is an internal helper for the main package.
+// googleToolUseBlocks prepares google tool use blocks for model-provider evaluation.
 func googleToolUseBlocks(content googleContent) []modelContentBlock {
 	blocks := googleContentBlocks(content)
 	out := make([]modelContentBlock, 0, len(blocks))
@@ -891,7 +908,7 @@ func googleToolUseBlocks(content googleContent) []modelContentBlock {
 	return out
 }
 
-// googleContentBlocks is an internal helper for the main package.
+// googleContentBlocks prepares google content blocks for model-provider evaluation.
 func googleContentBlocks(content googleContent) []modelContentBlock {
 	blocks := make([]modelContentBlock, 0, len(content.Parts))
 	for index, part := range content.Parts {
@@ -910,12 +927,12 @@ func googleContentBlocks(content googleContent) []modelContentBlock {
 	return blocks
 }
 
-// sanitizeGoogleSchema is an internal helper for the main package.
+// sanitizeGoogleSchema sanitizes google schema for provider compatibility.
 func sanitizeGoogleSchema(value any) any {
 	return sanitizeGoogleSchemaValue(value)
 }
 
-// sanitizeGoogleSchemaValue is an internal helper for the main package.
+// sanitizeGoogleSchemaValue sanitizes google schema value for provider compatibility.
 func sanitizeGoogleSchemaValue(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -944,7 +961,7 @@ func sanitizeGoogleSchemaValue(value any) any {
 	}
 }
 
-// sanitizeGoogleSchemaProperties is an internal helper for the main package.
+// sanitizeGoogleSchemaProperties sanitizes google schema properties for provider compatibility.
 func sanitizeGoogleSchemaProperties(value any) any {
 	properties, ok := value.(map[string]any)
 	if !ok {
@@ -957,7 +974,7 @@ func sanitizeGoogleSchemaProperties(value any) any {
 	return out
 }
 
-// sanitizeGoogleSchemaType is an internal helper for the main package.
+// sanitizeGoogleSchemaType sanitizes google schema type for provider compatibility.
 func sanitizeGoogleSchemaType(value any) any {
 	values, ok := value.([]any)
 	if !ok {
@@ -972,7 +989,7 @@ func sanitizeGoogleSchemaType(value any) any {
 	return value
 }
 
-// doModelRequest is an internal helper for the main package.
+// doModelRequest prepares do model request for model-provider evaluation.
 func doModelRequest(client *http.Client, req *http.Request, provider string) (body []byte, status int, retry bool, err error) {
 	resp, err := client.Do(req) // #nosec G704 -- provider URLs come from explicit evaluator configuration, not model-generated input.
 	if err != nil {

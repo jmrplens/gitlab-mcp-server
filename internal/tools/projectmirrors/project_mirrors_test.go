@@ -10,19 +10,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
-	testProjectID    = "myproject"
-	pathMirrors      = "/api/v4/projects/myproject/remote_mirrors"
-	pathMirror42     = "/api/v4/projects/myproject/remote_mirrors/42"
-	pathMirrorKey42  = "/api/v4/projects/myproject/remote_mirrors/42/public_key"
+	// testProjectID identifies the test project ID constant used by this package.
+	testProjectID = "myproject"
+	// pathMirrors identifies the path mirrors constant used by this package.
+	pathMirrors = "/api/v4/projects/myproject/remote_mirrors"
+	// pathMirror42 identifies the path mirror 42 constant used by this package.
+	pathMirror42 = "/api/v4/projects/myproject/remote_mirrors/42"
+	// pathMirrorKey42 identifies the path mirror key 42 constant used by this package.
+	pathMirrorKey42 = "/api/v4/projects/myproject/remote_mirrors/42/public_key"
+	// pathMirrorSync42 identifies the path mirror sync 42 constant used by this package.
 	pathMirrorSync42 = "/api/v4/projects/myproject/remote_mirrors/42/sync"
 
+	// mirrorJSON identifies the mirror JSON constant used by this package.
 	mirrorJSON = `{
 		"id": 42,
 		"enabled": true,
@@ -38,6 +42,7 @@ const (
 		"last_update_started_at": "2026-03-10T08:59:00Z"
 	}`
 
+	// mirrorWithHostKeysJSON identifies the mirror with host keys JSON constant used by this package.
 	mirrorWithHostKeysJSON = `{
 		"id": 42,
 		"enabled": true,
@@ -54,9 +59,11 @@ const (
 		"host_keys": [{"fingerprint_sha256": "SHA256:abc123def456"}]
 	}`
 
+	// publicKeyJSON identifies the public key JSON constant used by this package.
 	publicKeyJSON = `{"public_key": "ssh-rsa AAAAB3..."}`
 )
 
+// TestRedactMirrorURL_RemovesEmbeddedCredentials verifies RedactMirrorURL when removes embedded credentials.
 func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
 	got := redactMirrorURL("https://user:token@example.com/group/repo.git")
 	if got != "https://redacted@example.com/group/repo.git" {
@@ -64,6 +71,7 @@ func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
 	}
 }
 
+// TestRedactMirrorError_RemovesEmbeddedCredentials verifies RedactMirrorError when removes embedded credentials.
 func TestRedactMirrorError_RemovesEmbeddedCredentials(t *testing.T) {
 	err := redactMirrorError(errors.New("mirror failed for https://user:secret-token@example.com/group/repo.git"))
 	if err == nil {
@@ -181,6 +189,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_RedactsCredentialsInOutput verifies Get when redacts credentials in output.
 func TestGet_RedactsCredentialsInOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
@@ -721,136 +730,6 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 }
 
-// RegisterTools tests.
-
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all Project Mirrors tools
-// without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestRegisterTools_CallAllThroughMCP uses table-driven subtests to exercise every registered
-// Project Mirrors tool through a round-trip MCP client call and asserts success.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newMirrorsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_project_mirrors", map[string]any{"project_id": testProjectID}},
-		{"gitlab_get_project_mirror", map[string]any{"project_id": testProjectID, "mirror_id": 42}},
-		{"gitlab_get_project_mirror_public_key", map[string]any{"project_id": testProjectID, "mirror_id": 42}},
-		{"gitlab_add_project_mirror", map[string]any{"project_id": testProjectID, "url": "https://example.com/repo.git"}},
-		{"gitlab_edit_project_mirror", map[string]any{"project_id": testProjectID, "mirror_id": 42}},
-		{"gitlab_delete_project_mirror", map[string]any{"project_id": testProjectID, "mirror_id": 42}},
-		{"gitlab_force_push_mirror_update", map[string]any{"project_id": testProjectID, "mirror_id": 42}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction decline path
-// in gitlab_delete_project_mirror register handler.
-func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_project_mirror",
-		Arguments: map[string]any{"project_id": "myproject", "mirror_id": float64(42)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
-	}
-}
-
-// TestMCPRoundTrip_ErrorPaths covers error return paths through register.go
-// for delete and force_push_mirror_update when the backend returns 500.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "accept"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_delete_project_mirror", map[string]any{"project_id": "myproject", "mirror_id": float64(42)}},
-		{"gitlab_force_push_mirror_update", map[string]any{"project_id": "myproject", "mirror_id": float64(42)}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, toolErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if toolErr != nil {
-				t.Fatalf("unexpected transport error: %v", toolErr)
-			}
-			if result == nil || !result.IsError {
-				t.Fatal("expected error result for 500 backend")
-			}
-		})
-	}
-}
-
 // TestGet_APIError covers the API error path in Get.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -917,55 +796,12 @@ func TestForcePushUpdate_APIError(t *testing.T) {
 	}
 }
 
-func newMirrorsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && path == pathMirrors:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+mirrorJSON+"]",
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		case r.Method == http.MethodGet && path == pathMirrorKey42:
-			testutil.RespondJSON(w, http.StatusOK, publicKeyJSON)
-		case r.Method == http.MethodGet && path == pathMirror42:
-			testutil.RespondJSON(w, http.StatusOK, mirrorJSON)
-		case r.Method == http.MethodPost && path == pathMirrors:
-			testutil.RespondJSON(w, http.StatusCreated, mirrorJSON)
-		case r.Method == http.MethodPut && path == pathMirror42:
-			testutil.RespondJSON(w, http.StatusOK, mirrorJSON)
-		case r.Method == http.MethodDelete && path == pathMirror42:
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost && path == pathMirrorSync42:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
+// contains reports whether contains.
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && containsSubstring(s, substr)
 }
 
+// containsSubstring reports whether contains substring.
 func containsSubstring(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {

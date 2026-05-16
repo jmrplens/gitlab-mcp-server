@@ -15,18 +15,26 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testApprovalRulesPath identifies the test approval rules path constant used by this package.
 const testApprovalRulesPath = "/api/v4/projects/42/merge_requests/1/approval_rules"
+
+// fmtNameWant identifies the fmt name want constant used by this package.
 const fmtNameWant = "Name = %q, want %q"
+
+// testSecurityTeam identifies the test security team constant used by this package.
 const testSecurityTeam = "Security Team"
+
+// testUpdatedRule identifies the test updated rule constant used by this package.
 const testUpdatedRule = "Updated Rule"
 
 // ---------------------------------------------------------------------------
 // mrApprovalState tests
 // ---------------------------------------------------------------------------.
 
-// TestMRApprovalState_Success verifies the behavior of m r approval state success.
+// TestMRApprovalState_Success verifies MRApprovalState when success.
 func TestMRApprovalState_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_state" && r.Method == http.MethodGet {
@@ -83,7 +91,7 @@ func TestMRApprovalState_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalState_EmptyRules verifies the behavior of m r approval state empty rules.
+// TestMRApprovalState_EmptyRules verifies MRApprovalState when empty rules.
 func TestMRApprovalState_EmptyRules(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_state" {
@@ -108,7 +116,7 @@ func TestMRApprovalState_EmptyRules(t *testing.T) {
 	}
 }
 
-// TestMRApprovalState_MissingProjectID verifies the behavior of m r approval state missing project i d.
+// TestMRApprovalState_MissingProjectID verifies MRApprovalState when missing project ID.
 func TestMRApprovalState_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -123,7 +131,7 @@ func TestMRApprovalState_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMRApprovalStateServer_Error verifies the behavior of m r approval state server error.
+// TestMRApprovalStateServer_Error verifies MRApprovalStateServer when error.
 func TestMRApprovalStateServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -138,7 +146,7 @@ func TestMRApprovalStateServer_Error(t *testing.T) {
 	}
 }
 
-// TestMRApprovalState_CancelledContext verifies the behavior of m r approval state cancelled context.
+// TestMRApprovalState_CancelledContext verifies MRApprovalState when cancelled context.
 func TestMRApprovalState_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -159,7 +167,7 @@ func TestMRApprovalState_CancelledContext(t *testing.T) {
 // mrApprovalRules tests
 // ---------------------------------------------------------------------------.
 
-// approvalRuleExpected holds data for mrapprovals operations.
+// approvalRuleExpected holds approval rule expected data for the mrapprovals package.
 type approvalRuleExpected struct {
 	id                int64
 	name              string
@@ -170,7 +178,7 @@ type approvalRuleExpected struct {
 	eligibleCount     int
 }
 
-// assertApprovalRule is an internal helper for the mrapprovals package.
+// assertApprovalRule checks approval rule invariants for tests.
 func assertApprovalRule(t *testing.T, r RuleOutput, exp approvalRuleExpected) {
 	t.Helper()
 	if r.ID != exp.id {
@@ -196,7 +204,7 @@ func assertApprovalRule(t *testing.T, r RuleOutput, exp approvalRuleExpected) {
 	}
 }
 
-// TestMRApprovalRules_Success validates m r approval rules success across multiple scenarios using table-driven subtests.
+// TestMRApprovalRules_Success covers MRApprovalRules with table-driven subtests for success.
 func TestMRApprovalRules_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testApprovalRulesPath && r.Method == http.MethodGet {
@@ -251,7 +259,7 @@ func TestMRApprovalRules_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRules_Empty verifies the behavior of m r approval rules empty.
+// TestMRApprovalRules_Empty verifies MRApprovalRules when empty.
 func TestMRApprovalRules_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testApprovalRulesPath {
@@ -273,7 +281,7 @@ func TestMRApprovalRules_Empty(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRules_MissingProjectID verifies the behavior of m r approval rules missing project i d.
+// TestMRApprovalRules_MissingProjectID verifies MRApprovalRules when missing project ID.
 func TestMRApprovalRules_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -288,7 +296,7 @@ func TestMRApprovalRules_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRulesServer_Error verifies the behavior of m r approval rules server error.
+// TestMRApprovalRulesServer_Error verifies MRApprovalRulesServer when error.
 func TestMRApprovalRulesServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -303,7 +311,7 @@ func TestMRApprovalRulesServer_Error(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRules_CancelledContext verifies the behavior of m r approval rules cancelled context.
+// TestMRApprovalRules_CancelledContext verifies MRApprovalRules when cancelled context.
 func TestMRApprovalRules_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -324,7 +332,7 @@ func TestMRApprovalRules_CancelledContext(t *testing.T) {
 // approvalRuleToOutput converter tests
 // ---------------------------------------------------------------------------.
 
-// TestApprovalRuleToOutput_NilUsers verifies the behavior of approval rule to output nil users.
+// TestApprovalRuleToOutput_NilUsers verifies ApprovalRuleToOutput when nil users.
 func TestApprovalRuleToOutput_NilUsers(t *testing.T) {
 	rule := RuleToOutput(&gl.MergeRequestApprovalRule{
 		ID:                1,
@@ -343,7 +351,7 @@ func TestApprovalRuleToOutput_NilUsers(t *testing.T) {
 	}
 }
 
-// TestApprovalRuleToOutput_MultipleUsers verifies the behavior of approval rule to output multiple users.
+// TestApprovalRuleToOutput_MultipleUsers verifies ApprovalRuleToOutput when multiple users.
 func TestApprovalRuleToOutput_MultipleUsers(t *testing.T) {
 	rule := RuleToOutput(&gl.MergeRequestApprovalRule{
 		ID:                5,
@@ -372,7 +380,7 @@ func TestApprovalRuleToOutput_MultipleUsers(t *testing.T) {
 	}
 }
 
-// TestApprovalRuleToOutputSkips_NilEntries verifies the behavior of approval rule to output skips nil entries.
+// TestApprovalRuleToOutputSkips_NilEntries verifies ApprovalRuleToOutputSkips when nil entries.
 func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 	rule := RuleToOutput(&gl.MergeRequestApprovalRule{
 		ApprovedBy:        []*gl.BasicUser{nil, {Name: "Valid"}},
@@ -390,6 +398,7 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 // Config (GetConfiguration) tests
 // ---------------------------------------------------------------------------.
 
+// configResponse identifies the config response constant used by this package.
 const configResponse = `{
 	"id": 1, "iid": 10, "project_id": 42, "title": "Test MR", "state": "opened",
 	"approved": true, "approvals_required": 2, "approvals_left": 0,
@@ -399,7 +408,7 @@ const configResponse = `{
 	"suggested_approvers": [{"name": "Bob"}]
 }`
 
-// TestMRApprovalConfig_Success verifies the behavior of m r approval config success.
+// TestMRApprovalConfig_Success verifies MRApprovalConfig when success.
 func TestMRApprovalConfig_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/10/approvals" {
@@ -436,7 +445,7 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalConfig_MissingProject verifies the behavior of m r approval config missing project.
+// TestMRApprovalConfig_MissingProject verifies MRApprovalConfig when missing project.
 func TestMRApprovalConfig_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -451,7 +460,7 @@ func TestMRApprovalConfig_MissingProject(t *testing.T) {
 // Reset (ResetApprovalsOfMergeRequest) tests
 // ---------------------------------------------------------------------------.
 
-// TestMRApprovalReset_Success verifies the behavior of m r approval reset success.
+// TestMRApprovalReset_Success verifies MRApprovalReset when success.
 func TestMRApprovalReset_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/reset_approvals" {
@@ -467,7 +476,7 @@ func TestMRApprovalReset_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalReset_MissingProject verifies the behavior of m r approval reset missing project.
+// TestMRApprovalReset_MissingProject verifies MRApprovalReset when missing project.
 func TestMRApprovalReset_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -482,6 +491,7 @@ func TestMRApprovalReset_MissingProject(t *testing.T) {
 // CreateRule tests
 // ---------------------------------------------------------------------------.
 
+// ruleResponse identifies the rule response constant used by this package.
 const ruleResponse = `{
 	"id": 5, "name": "Security Team", "rule_type": "regular",
 	"report_type": "", "section": "",
@@ -491,7 +501,7 @@ const ruleResponse = `{
 	"users": [{"name": "Alice"}], "groups": [{"name": "Security"}]
 }`
 
-// TestMRApprovalRuleCreate_Success verifies the behavior of m r approval rule create success.
+// TestMRApprovalRuleCreate_Success verifies MRApprovalRuleCreate when success.
 func TestMRApprovalRuleCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == testApprovalRulesPath {
@@ -529,7 +539,7 @@ func TestMRApprovalRuleCreate_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleCreate_MissingName verifies the behavior of m r approval rule create missing name.
+// TestMRApprovalRuleCreate_MissingName verifies MRApprovalRuleCreate when missing name.
 func TestMRApprovalRuleCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -540,7 +550,7 @@ func TestMRApprovalRuleCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleCreate_MissingProject verifies the behavior of m r approval rule create missing project.
+// TestMRApprovalRuleCreate_MissingProject verifies MRApprovalRuleCreate when missing project.
 func TestMRApprovalRuleCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -555,7 +565,7 @@ func TestMRApprovalRuleCreate_MissingProject(t *testing.T) {
 // UpdateRule tests
 // ---------------------------------------------------------------------------.
 
-// TestMRApprovalRuleUpdate_Success verifies the behavior of m r approval rule update success.
+// TestMRApprovalRuleUpdate_Success verifies MRApprovalRuleUpdate when success.
 func TestMRApprovalRuleUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
@@ -584,7 +594,7 @@ func TestMRApprovalRuleUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleUpdate_MissingRuleID verifies the behavior of m r approval rule update missing rule i d.
+// TestMRApprovalRuleUpdate_MissingRuleID verifies MRApprovalRuleUpdate when missing rule ID.
 func TestMRApprovalRuleUpdate_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -595,7 +605,7 @@ func TestMRApprovalRuleUpdate_MissingRuleID(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleUpdate_MissingProject verifies the behavior of m r approval rule update missing project.
+// TestMRApprovalRuleUpdate_MissingProject verifies MRApprovalRuleUpdate when missing project.
 func TestMRApprovalRuleUpdate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -610,7 +620,7 @@ func TestMRApprovalRuleUpdate_MissingProject(t *testing.T) {
 // DeleteRule tests
 // ---------------------------------------------------------------------------.
 
-// TestMRApprovalRuleDelete_Success verifies the behavior of m r approval rule delete success.
+// TestMRApprovalRuleDelete_Success verifies MRApprovalRuleDelete when success.
 func TestMRApprovalRuleDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
@@ -626,7 +636,7 @@ func TestMRApprovalRuleDelete_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleDelete_MissingRuleID verifies the behavior of m r approval rule delete missing rule i d.
+// TestMRApprovalRuleDelete_MissingRuleID verifies MRApprovalRuleDelete when missing rule ID.
 func TestMRApprovalRuleDelete_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -637,7 +647,7 @@ func TestMRApprovalRuleDelete_MissingRuleID(t *testing.T) {
 	}
 }
 
-// TestMRApprovalRuleDelete_MissingProject verifies the behavior of m r approval rule delete missing project.
+// TestMRApprovalRuleDelete_MissingProject verifies MRApprovalRuleDelete when missing project.
 func TestMRApprovalRuleDelete_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -652,7 +662,7 @@ func TestMRApprovalRuleDelete_MissingProject(t *testing.T) {
 // int64 validation tests
 // ---------------------------------------------------------------------------.
 
-// assertErrContains is an internal helper for the mrapprovals package.
+// assertErrContains checks err contains invariants for tests.
 func assertErrContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -663,7 +673,7 @@ func assertErrContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation verifies the behavior of m r i i d required validation.
+// TestMRIIDRequired_Validation verifies MRIIDRequired when validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("API should not be called when MRIID is 0")
@@ -704,7 +714,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 	})
 }
 
-// TestApprovalRuleIDRequired_Validation verifies the behavior of approval rule i d required validation.
+// TestApprovalRuleIDRequired_Validation verifies ApprovalRuleIDRequired when validation.
 func TestApprovalRuleIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("API should not be called when ApprovalRuleID is 0")

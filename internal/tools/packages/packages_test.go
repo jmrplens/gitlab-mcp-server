@@ -20,18 +20,28 @@ import (
 )
 
 const (
-	pathPackagePublish  = "/api/v4/projects/42/packages/generic/my-pkg/1.0.0/app.tar.gz"
+	// pathPackagePublish identifies the path package publish constant used by this package.
+	pathPackagePublish = "/api/v4/projects/42/packages/generic/my-pkg/1.0.0/app.tar.gz"
+	// pathPackageDownload identifies the path package download constant used by this package.
 	pathPackageDownload = "/api/v4/projects/42/packages/generic/my-pkg/1.0.0/app.tar.gz"
-	pathPackageList     = "/api/v4/projects/42/packages"
+	// pathPackageList identifies the path package list constant used by this package.
+	pathPackageList = "/api/v4/projects/42/packages"
+	// pathPackageFileList identifies the path package file list constant used by this package.
 	pathPackageFileList = "/api/v4/projects/42/packages/10/package_files"
-	pathPackageDelete   = "/api/v4/projects/42/packages/10"
-	pathFileDelete      = "/api/v4/projects/42/packages/10/package_files/20"
+	// pathPackageDelete identifies the path package delete constant used by this package.
+	pathPackageDelete = "/api/v4/projects/42/packages/10"
+	// pathFileDelete identifies the path file delete constant used by this package.
+	pathFileDelete = "/api/v4/projects/42/packages/10/package_files/20"
 
-	testPackageName   = "my-pkg"
-	testFileName      = "app.tar.gz"
+	// testPackageName identifies the test package name constant used by this package.
+	testPackageName = "my-pkg"
+	// testFileName identifies the test file name constant used by this package.
+	testFileName = "app.tar.gz"
+	// testBase64Content identifies the test base 64 content constant used by this package.
 	testBase64Content = "dGVzdA=="
 )
 
+// publishResponseJSON identifies the publish response JSON constant used by this package.
 const publishResponseJSON = `{
 	"id": 1,
 	"package_id": 10,
@@ -45,7 +55,7 @@ const publishResponseJSON = `{
 	"updated_at": "2026-06-01T11:00:00Z"
 }`
 
-// TestPackagePublishBase64_Success verifies the behavior of package publish base64 success.
+// TestPackagePublishBase64_Success verifies PackagePublishBase64 when success.
 func TestPackagePublishBase64_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathPackagePublish {
@@ -98,7 +108,7 @@ func TestPackagePublishBase64_Success(t *testing.T) {
 	}
 }
 
-// TestPackagePublishFilePath_Success verifies the behavior of package publish file path success.
+// TestPackagePublishFilePath_Success verifies PackagePublishFilePath when success.
 func TestPackagePublishFilePath_Success(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "testpkg.bin")
 	if err := os.WriteFile(tmpFile, []byte("binary-file-content"), 0644); err != nil {
@@ -140,7 +150,7 @@ func TestPackagePublishFilePath_Success(t *testing.T) {
 	}
 }
 
-// TestPackagePublishBothParams_Error verifies the behavior of package publish both params error.
+// TestPackagePublishBothParams_Error verifies PackagePublishBothParams when error.
 func TestPackagePublishBothParams_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -159,7 +169,7 @@ func TestPackagePublishBothParams_Error(t *testing.T) {
 	}
 }
 
-// TestPackagePublishNeitherParams_Error verifies the behavior of package publish neither params error.
+// TestPackagePublishNeitherParams_Error verifies PackagePublishNeitherParams when error.
 func TestPackagePublishNeitherParams_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -176,7 +186,7 @@ func TestPackagePublishNeitherParams_Error(t *testing.T) {
 	}
 }
 
-// TestPackagePublish_InvalidPackageName verifies the behavior of package publish invalid package name.
+// TestPackagePublish_InvalidPackageName verifies PackagePublish when invalid package name.
 func TestPackagePublish_InvalidPackageName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -194,7 +204,7 @@ func TestPackagePublish_InvalidPackageName(t *testing.T) {
 	}
 }
 
-// TestPackagePublish_MissingProjectID verifies the behavior of package publish missing project i d.
+// TestPackagePublish_MissingProjectID verifies PackagePublish when missing project ID.
 func TestPackagePublish_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -211,7 +221,7 @@ func TestPackagePublish_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPackagePublish_ContextCancelled verifies the behavior of package publish context cancelled.
+// TestPackagePublish_ContextCancelled verifies PackagePublish when context cancelled.
 func TestPackagePublish_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -231,7 +241,7 @@ func TestPackagePublish_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestPackageDownload_Success verifies the behavior of package download success.
+// TestPackageDownload_Success verifies PackageDownload when success.
 func TestPackageDownload_Success(t *testing.T) {
 	fileContent := []byte("downloaded-binary-data")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +287,7 @@ func TestPackageDownload_Success(t *testing.T) {
 	}
 }
 
-// TestPackageDownload_MissingOutputPath verifies the behavior of package download missing output path.
+// TestPackageDownload_MissingOutputPath verifies PackageDownload when missing output path.
 func TestPackageDownload_MissingOutputPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -294,7 +304,7 @@ func TestPackageDownload_MissingOutputPath(t *testing.T) {
 	}
 }
 
-// TestPackageDownload_ContextCancelled verifies the behavior of package download context cancelled.
+// TestPackageDownload_ContextCancelled verifies PackageDownload when context cancelled.
 func TestPackageDownload_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -314,7 +324,7 @@ func TestPackageDownload_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestPackageList_Success verifies the behavior of package list success.
+// TestPackageList_Success verifies PackageList when success.
 func TestPackageList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageList {
@@ -422,7 +432,7 @@ func TestPackagePipelineToOutput_NilPipeline_ReturnsNil(t *testing.T) {
 	}
 }
 
-// TestPackageList_WithFilters verifies the behavior of package list with filters.
+// TestPackageList_WithFilters verifies PackageList when with filters.
 func TestPackageList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageList {
@@ -452,7 +462,7 @@ func TestPackageList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestPackageList_MissingProjectID verifies the behavior of package list missing project i d.
+// TestPackageList_MissingProjectID verifies PackageList when missing project ID.
 func TestPackageList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -464,7 +474,7 @@ func TestPackageList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPackageFileList_Success verifies the behavior of package file list success.
+// TestPackageFileList_Success verifies PackageFileList when success.
 func TestPackageFileList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageFileList {
@@ -509,7 +519,7 @@ func TestPackageFileList_Success(t *testing.T) {
 	}
 }
 
-// TestPackageFileList_MissingPackageID verifies the behavior of package file list missing package i d.
+// TestPackageFileList_MissingPackageID verifies PackageFileList when missing package ID.
 func TestPackageFileList_MissingPackageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -523,7 +533,7 @@ func TestPackageFileList_MissingPackageID(t *testing.T) {
 	}
 }
 
-// TestPackageDelete_Success verifies the behavior of package delete success.
+// TestPackageDelete_Success verifies PackageDelete when success.
 func TestPackageDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathPackageDelete {
@@ -542,7 +552,7 @@ func TestPackageDelete_Success(t *testing.T) {
 	}
 }
 
-// TestPackageDelete_MissingProjectID verifies the behavior of package delete missing project i d.
+// TestPackageDelete_MissingProjectID verifies PackageDelete when missing project ID.
 func TestPackageDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -556,7 +566,7 @@ func TestPackageDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPackageDelete_MissingPackageID verifies the behavior of package delete missing package i d.
+// TestPackageDelete_MissingPackageID verifies PackageDelete when missing package ID.
 func TestPackageDelete_MissingPackageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -570,7 +580,7 @@ func TestPackageDelete_MissingPackageID(t *testing.T) {
 	}
 }
 
-// TestPackageFileDelete_Success verifies the behavior of package file delete success.
+// TestPackageFileDelete_Success verifies PackageFileDelete when success.
 func TestPackageFileDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathFileDelete {
@@ -590,7 +600,7 @@ func TestPackageFileDelete_Success(t *testing.T) {
 	}
 }
 
-// TestPackageFileDelete_MissingFileID verifies the behavior of package file delete missing file i d.
+// TestPackageFileDelete_MissingFileID verifies PackageFileDelete when missing file ID.
 func TestPackageFileDelete_MissingFileID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -605,7 +615,7 @@ func TestPackageFileDelete_MissingFileID(t *testing.T) {
 	}
 }
 
-// TestPackagePublish_APIError verifies the behavior of package publish a p i error.
+// TestPackagePublish_APIError verifies PackagePublish when API error.
 func TestPackagePublish_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -642,7 +652,7 @@ func TestPackageDelete403_Maintainer(t *testing.T) {
 	}
 }
 
-// TestPtrString verifies the behavior of ptr string.
+// TestPtrString verifies PtrString.
 func TestPtrString(t *testing.T) {
 	if ptrString("") != nil {
 		t.Error("ptrString empty should return nil")

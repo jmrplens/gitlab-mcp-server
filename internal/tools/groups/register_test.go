@@ -1,6 +1,4 @@
-// register_test.go contains integration tests for the group tool closures
-// in register.go. Tests cover ConfirmAction early-return paths, NotFoundResult
-// branches, and API error propagation via an in-memory MCP session.
+// register_test.go contains catalog and direct route regression tests for group actions.
 package groups
 
 import (
@@ -14,18 +12,26 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterTools_ConfirmDeclined covers the ConfirmAction early-return
+// TestCatalogSurface_ConfirmDeclined covers the confirmation early-return
 // branches in group delete and webhook delete handlers when the user declines.
-func TestRegisterTools_ConfirmDeclined(t *testing.T) {
+func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
+	for _, toolName := range []string{"gitlab_group_delete", "gitlab_group_hook_delete"} {
+		toolutil.RegisterSurfaceToolFromSpec(server, byTool[toolName], toolutil.SurfaceToolRegisterOptions{
+			Description: "Test group destructive confirmation.",
+			Icons:       toolutil.IconGroup,
+		})
+	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -37,7 +43,10 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
 	}
-	t.Cleanup(func() { session.Close() })
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
 
 	tools := []struct {
 		name string
@@ -48,9 +57,9 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
+			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if callErr != nil {
+				t.Fatalf("CallTool error: %v", callErr)
 			}
 			if result == nil {
 				t.Fatal("expected non-nil result for declined confirmation")
@@ -59,38 +68,21 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_GetNotFound covers the NotFoundResult branch in the
-// gitlab_group_get handler when the API returns 404.
-func TestRegisterTools_GetNotFound(t *testing.T) {
+// TestActionSpecs_GetNotFound covers the not-found branch in the gitlab_group_get route.
+func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	result, err := byTool["gitlab_group_get"].Route.Handler(t.Context(), map[string]any{"group_id": "999"})
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_group_get",
-		Arguments: map[string]any{"group_id": "999"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Fatal("expected IsError result for 404")
+	if _, ok := result.(groupNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want groupNotFoundOutput", result)
 	}
 }
 
@@ -127,28 +119,14 @@ func TestMemberToOutput_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_ErrorPaths covers the error branches in RegisterTools
-// closures for tools that wrap API errors (non-destructive and non-404 paths).
-func TestRegisterTools_ErrorPaths(t *testing.T) {
+// TestActionSpecs_ErrorPaths covers route error propagation for non-404 API errors.
+func TestActionSpecs_ErrorPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -171,12 +149,8 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatal("expected IsError result for server error response")
+			if _, err := byTool[tt.name].Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatal("expected route error for server error response")
 			}
 		})
 	}

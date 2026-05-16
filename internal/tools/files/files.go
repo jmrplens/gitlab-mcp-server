@@ -1,6 +1,3 @@
-// Package files implements MCP tool handlers for GitLab repository file
-// operations including get, create, update, delete, blame, metadata, and raw
-// content retrieval. It wraps the RepositoryFiles service from client-go v2.
 package files
 
 import (
@@ -262,6 +259,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return enrichFileInfoOutput(ctx, client, string(input.ProjectID), info.FilePath, info.Branch), nil
 }
 
+// enrichFileInfoOutput adds commit metadata when GitLab exposes it for the file.
 func enrichFileInfoOutput(ctx context.Context, client *gitlabclient.Client, projectID, filePath, branch string) FileInfoOutput {
 	output := FileInfoOutput{FilePath: filePath, Branch: branch}
 	if client == nil || projectID == "" || filePath == "" || branch == "" {
@@ -410,7 +408,7 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	return BlameOutput{FilePath: input.FilePath, Ranges: out}, nil
 }
 
-// minLen is an internal helper for the files package.
+// minLen returns the smaller of two lengths for bounded content previews.
 func minLen(a, b int) int {
 	if a < b {
 		return a

@@ -1,7 +1,3 @@
-// Package terraformstates implements MCP tools for GitLab Terraform state management.
-//
-// The package registers MCP tools and renders Markdown summaries for Terraform
-// state and version responses.
 package terraformstates
 
 import (

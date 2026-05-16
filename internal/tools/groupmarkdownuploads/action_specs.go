@@ -9,8 +9,8 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupUploadReadSpec("group_upload_list", toolutil.RouteAction(client, List), "gitlab_list_group_markdown_uploads"),
-		groupUploadDeleteSpec("group_upload_delete_by_id", toolutil.DestructiveVoidAction(client, DeleteByID), "gitlab_delete_group_markdown_upload_by_id"),
-		groupUploadDeleteSpec("group_upload_delete_by_secret", toolutil.DestructiveVoidAction(client, DeleteBySecretAndFilename), "gitlab_delete_group_markdown_upload_by_secret"),
+		groupUploadDeleteSpec("group_upload_delete_by_id", toolutil.DestructiveAction(client, deleteByIDOutput), "gitlab_delete_group_markdown_upload_by_id"),
+		groupUploadDeleteSpec("group_upload_delete_by_secret", toolutil.DestructiveAction(client, deleteBySecretAndFilenameOutput), "gitlab_delete_group_markdown_upload_by_secret"),
 	}
 }
 

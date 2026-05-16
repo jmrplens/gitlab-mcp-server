@@ -7,7 +7,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// FormatAgentsListMarkdown performs the format agents list markdown operation for the clusteragents package.
+// FormatAgentsListMarkdown renders cluster agents as a compact Markdown table.
 func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Cluster Agents\n\n")
@@ -16,7 +16,7 @@ func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 		sb.WriteString("No cluster agents found.\n")
 		return sb.String()
 	}
-	sb.WriteString("| ID | Name |\n|----|------|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name"))
 	for _, a := range out.Agents {
 		fmt.Fprintf(&sb, "| %d | %s |\n", a.ID, toolutil.EscapeMdTableCell(a.Name))
 	}
@@ -25,7 +25,7 @@ func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 	return sb.String()
 }
 
-// FormatAgentMarkdown performs the format agent markdown operation for the clusteragents package.
+// FormatAgentMarkdown renders a single cluster agent summary.
 func FormatAgentMarkdown(a AgentItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Cluster Agent\n\n- **ID**: %d\n- **Name**: %s\n", a.ID, a.Name)
@@ -33,7 +33,7 @@ func FormatAgentMarkdown(a AgentItem) string {
 	return b.String()
 }
 
-// FormatTokensListMarkdown performs the format tokens list markdown operation for the clusteragents package.
+// FormatTokensListMarkdown renders cluster agent tokens as a compact Markdown table.
 func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Agent Tokens\n\n")
@@ -42,7 +42,7 @@ func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 		sb.WriteString("No agent tokens found.\n")
 		return sb.String()
 	}
-	sb.WriteString("| ID | Name | Status |\n|----|------|--------|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status"))
 	for _, t := range out.Tokens {
 		fmt.Fprintf(&sb, "| %d | %s | %s |\n", t.ID, toolutil.EscapeMdTableCell(t.Name), t.Status)
 	}
@@ -51,7 +51,7 @@ func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 	return sb.String()
 }
 
-// FormatTokenMarkdown performs the format token markdown operation for the clusteragents package.
+// FormatTokenMarkdown renders a single cluster agent token summary.
 func FormatTokenMarkdown(t AgentTokenItem) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Agent Token\n\n- **ID**: %d\n- **Name**: %s\n- **Status**: %s\n", t.ID, t.Name, t.Status)

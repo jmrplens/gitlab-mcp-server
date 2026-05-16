@@ -1,31 +1,31 @@
-// Package groupreleases register_test exercises all RegisterTools closures
-// via MCP in-memory transport.
 package groupreleases
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const registerReleasesJSON = `[{"tag_name":"v1.0","description":"Release","name":"v1.0","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","_links":{"self":"https://gl.example.com"}}]`
 
-// TestRegisterTools_NoPanic verifies RegisterTools registers all tools without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies group release action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].OwnerPackage != "groupreleases" || !specs[0].ReadOnly || !specs[0].Idempotent {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
 }
 
-// TestRegisterTools_CallThroughMCP verifies the group release list tool can
-// be called through MCP in-memory transport.
-func TestRegisterTools_CallThroughMCP(t *testing.T) {
+// TestActionSpecs_CallRoute verifies the group release list route executes successfully.
+func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -35,29 +35,17 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_group_release_list",
-		Arguments: map[string]any{"group_id": "42"},
-	})
+	result, err := specByTool["gitlab_group_release_list"].Route.Handler(t.Context(), map[string]any{"group_id": "42"})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("Route.Handler error: %v", err)
 	}
 	if result == nil {
-		t.Fatal("CallTool returned nil")
+		t.Fatal("Route.Handler returned nil")
 	}
 }

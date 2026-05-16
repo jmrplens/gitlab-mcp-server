@@ -9,24 +9,32 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
-	errExpAPIFailure      = "expected error for API failure, got nil"
-	pathCurrentUser       = "/api/v4/user"
-	pathListUsers         = "/api/v4/users"
-	pathGetUser           = "/api/v4/users/42"
-	pathGetUserStatus     = "/api/v4/users/42/status"
-	pathSetUserStatus     = "/api/v4/user/status"
-	pathListSSHKeys       = "/api/v4/user/keys"
-	pathListEmails        = "/api/v4/user/emails"
-	pathContribEvents     = "/api/v4/users/42/events"
+	// errExpAPIFailure identifies the err exp API failure constant used by this package.
+	errExpAPIFailure = "expected error for API failure, got nil"
+	// pathCurrentUser identifies the path current user constant used by this package.
+	pathCurrentUser = "/api/v4/user"
+	// pathListUsers identifies the path list users constant used by this package.
+	pathListUsers = "/api/v4/users"
+	// pathGetUser identifies the path get user constant used by this package.
+	pathGetUser = "/api/v4/users/42"
+	// pathGetUserStatus identifies the path get user status constant used by this package.
+	pathGetUserStatus = "/api/v4/users/42/status"
+	// pathSetUserStatus identifies the path set user status constant used by this package.
+	pathSetUserStatus = "/api/v4/user/status"
+	// pathListSSHKeys identifies the path list SSH keys constant used by this package.
+	pathListSSHKeys = "/api/v4/user/keys"
+	// pathListEmails identifies the path list emails constant used by this package.
+	pathListEmails = "/api/v4/user/emails"
+	// pathContribEvents identifies the path contrib events constant used by this package.
+	pathContribEvents = "/api/v4/users/42/events"
+	// pathAssociationsCount identifies the path associations count constant used by this package.
 	pathAssociationsCount = "/api/v4/users/42/associations_count"
 )
 
-// TestCurrent_Success verifies the behavior of current success.
+// TestCurrent_Success verifies Current when success.
 func TestCurrent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathCurrentUser {
@@ -70,7 +78,7 @@ func TestCurrent_Success(t *testing.T) {
 	}
 }
 
-// TestCurrent_APIError verifies the behavior of current a p i error.
+// TestCurrent_APIError verifies Current when API error.
 func TestCurrent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -82,7 +90,7 @@ func TestCurrent_APIError(t *testing.T) {
 	}
 }
 
-// TestCurrent_CancelledContext verifies the behavior of current cancelled context.
+// TestCurrent_CancelledContext verifies Current when cancelled context.
 func TestCurrent_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -98,7 +106,7 @@ func TestCurrent_CancelledContext(t *testing.T) {
 
 // List Users.
 
-// TestList_UsersSuccess verifies the behavior of list users success.
+// TestList_UsersSuccess verifies List when users success.
 func TestList_UsersSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListUsers {
@@ -123,7 +131,7 @@ func TestList_UsersSuccess(t *testing.T) {
 	}
 }
 
-// TestList_UsersAPIError verifies the behavior of list users a p i error.
+// TestList_UsersAPIError verifies List when users API error.
 func TestList_UsersAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -137,7 +145,7 @@ func TestList_UsersAPIError(t *testing.T) {
 
 // Get User.
 
-// TestGet_UserSuccess verifies the behavior of get user success.
+// TestGet_UserSuccess verifies Get when user success.
 func TestGet_UserSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
@@ -161,7 +169,7 @@ func TestGet_UserSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_UserValidation verifies the behavior of get user validation.
+// TestGet_UserValidation verifies Get when user validation.
 func TestGet_UserValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -173,7 +181,7 @@ func TestGet_UserValidation(t *testing.T) {
 	}
 }
 
-// TestGet_UserAPIError verifies the behavior of get user a p i error.
+// TestGet_UserAPIError verifies Get when user API error.
 func TestGet_UserAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -187,7 +195,7 @@ func TestGet_UserAPIError(t *testing.T) {
 
 // Get User Status.
 
-// TestGet_UserStatusSuccess verifies the behavior of get user status success.
+// TestGet_UserStatusSuccess verifies Get when user status success.
 func TestGet_UserStatusSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetUserStatus {
@@ -214,7 +222,7 @@ func TestGet_UserStatusSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_UserStatusValidation verifies the behavior of get user status validation.
+// TestGet_UserStatusValidation verifies Get when user status validation.
 func TestGet_UserStatusValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -228,7 +236,7 @@ func TestGet_UserStatusValidation(t *testing.T) {
 
 // Set User Status.
 
-// TestSetUserStatus_Success verifies the behavior of set user status success.
+// TestSetUserStatus_Success verifies SetUserStatus when success.
 func TestSetUserStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathSetUserStatus {
@@ -256,7 +264,7 @@ func TestSetUserStatus_Success(t *testing.T) {
 	}
 }
 
-// TestSetUserStatus_APIError verifies the behavior of set user status a p i error.
+// TestSetUserStatus_APIError verifies SetUserStatus when API error.
 func TestSetUserStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -270,7 +278,7 @@ func TestSetUserStatus_APIError(t *testing.T) {
 
 // List SSH Keys.
 
-// TestListSSHKeys_Success verifies the behavior of list s s h keys success.
+// TestListSSHKeys_Success verifies ListSSHKeys when success.
 func TestListSSHKeys_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListSSHKeys {
@@ -295,7 +303,7 @@ func TestListSSHKeys_Success(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_APIError verifies the behavior of list s s h keys a p i error.
+// TestListSSHKeys_APIError verifies ListSSHKeys when API error.
 func TestListSSHKeys_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -309,7 +317,7 @@ func TestListSSHKeys_APIError(t *testing.T) {
 
 // List Emails.
 
-// TestListEmails_Success verifies the behavior of list emails success.
+// TestListEmails_Success verifies ListEmails when success.
 func TestListEmails_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListEmails {
@@ -337,7 +345,7 @@ func TestListEmails_Success(t *testing.T) {
 	}
 }
 
-// TestListEmails_APIError verifies the behavior of list emails a p i error.
+// TestListEmails_APIError verifies ListEmails when API error.
 func TestListEmails_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -351,7 +359,7 @@ func TestListEmails_APIError(t *testing.T) {
 
 // Contribution Events.
 
-// TestListContributionEvents_Success verifies the behavior of list contribution events success.
+// TestListContributionEvents_Success verifies ListContributionEvents when success.
 func TestListContributionEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathContribEvents {
@@ -376,7 +384,7 @@ func TestListContributionEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_Validation verifies the behavior of list contribution events validation.
+// TestListContributionEvents_Validation verifies ListContributionEvents when validation.
 func TestListContributionEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -388,7 +396,7 @@ func TestListContributionEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_APIError verifies the behavior of list contribution events a p i error.
+// TestListContributionEvents_APIError verifies ListContributionEvents when API error.
 func TestListContributionEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -402,7 +410,7 @@ func TestListContributionEvents_APIError(t *testing.T) {
 
 // Associations Count.
 
-// TestGetAssociationsCount_Success verifies the behavior of get associations count success.
+// TestGetAssociationsCount_Success verifies GetAssociationsCount when success.
 func TestGetAssociationsCount_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathAssociationsCount {
@@ -432,7 +440,7 @@ func TestGetAssociationsCount_Success(t *testing.T) {
 	}
 }
 
-// TestGetAssociationsCount_Validation verifies the behavior of get associations count validation.
+// TestGetAssociationsCount_Validation verifies GetAssociationsCount when validation.
 func TestGetAssociationsCount_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -444,7 +452,7 @@ func TestGetAssociationsCount_Validation(t *testing.T) {
 	}
 }
 
-// TestGetAssociationsCount_APIError verifies the behavior of get associations count a p i error.
+// TestGetAssociationsCount_APIError verifies GetAssociationsCount when API error.
 func TestGetAssociationsCount_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -458,17 +466,20 @@ func TestGetAssociationsCount_APIError(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // Current — canceled context (already in users_test.go), extra field coverage
 // ---------------------------------------------------------------------------.
 
-// TestCurrent_FullFields verifies the behavior of current full fields.
+// TestCurrent_FullFields verifies Current when full fields.
 func TestCurrent_FullFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user" {
@@ -569,7 +580,7 @@ func TestCurrent_FullFields(t *testing.T) {
 // List — canceled context, pagination, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestList_UsersCancelledContext verifies the behavior of list users cancelled context.
+// TestList_UsersCancelledContext verifies List when users cancelled context.
 func TestList_UsersCancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -583,7 +594,7 @@ func TestList_UsersCancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_UsersWithPagination verifies the behavior of list users with pagination.
+// TestList_UsersWithPagination verifies List when users with pagination.
 func TestList_UsersWithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users" {
@@ -615,7 +626,7 @@ func TestList_UsersWithPagination(t *testing.T) {
 	}
 }
 
-// TestList_UsersAllOptionalFilters verifies the behavior of list users all optional filters.
+// TestList_UsersAllOptionalFilters verifies List when users all optional filters.
 func TestList_UsersAllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users" {
@@ -657,7 +668,7 @@ func TestList_UsersAllOptionalFilters(t *testing.T) {
 	}
 }
 
-// TestList_UsersEmptyResult verifies the behavior of list users empty result.
+// TestList_UsersEmptyResult verifies List when users empty result.
 func TestList_UsersEmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users" {
@@ -680,7 +691,7 @@ func TestList_UsersEmptyResult(t *testing.T) {
 // Get — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_UserCancelledContext verifies the behavior of get user cancelled context.
+// TestGet_UserCancelledContext verifies Get when user cancelled context.
 func TestGet_UserCancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -698,7 +709,7 @@ func TestGet_UserCancelledContext(t *testing.T) {
 // GetStatus — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_UserStatusAPIError verifies the behavior of get user status a p i error.
+// TestGet_UserStatusAPIError verifies Get when user status API error.
 func TestGet_UserStatusAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -710,7 +721,7 @@ func TestGet_UserStatusAPIError(t *testing.T) {
 	}
 }
 
-// TestGet_UserStatusCancelledContext verifies the behavior of get user status cancelled context.
+// TestGet_UserStatusCancelledContext verifies Get when user status cancelled context.
 func TestGet_UserStatusCancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -724,7 +735,7 @@ func TestGet_UserStatusCancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_UserStatusWithClearAt verifies the behavior of get user status with clear at.
+// TestGet_UserStatusWithClearAt verifies Get when user status with clear at.
 func TestGet_UserStatusWithClearAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/status" {
@@ -756,7 +767,7 @@ func TestGet_UserStatusWithClearAt(t *testing.T) {
 // SetStatus — canceled context, with ClearStatusAfter
 // ---------------------------------------------------------------------------.
 
-// TestSetUserStatus_CancelledContext verifies the behavior of set user status cancelled context.
+// TestSetUserStatus_CancelledContext verifies SetUserStatus when cancelled context.
 func TestSetUserStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -770,7 +781,7 @@ func TestSetUserStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSetUserStatus_WithClearAfter verifies the behavior of set user status with clear after.
+// TestSetUserStatus_WithClearAfter verifies SetUserStatus when with clear after.
 func TestSetUserStatus_WithClearAfter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/status" {
@@ -799,7 +810,7 @@ func TestSetUserStatus_WithClearAfter(t *testing.T) {
 	}
 }
 
-// TestSetUserStatus_EmptyInput verifies the behavior of set user status empty input.
+// TestSetUserStatus_EmptyInput verifies SetUserStatus when empty input.
 func TestSetUserStatus_EmptyInput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/status" {
@@ -822,7 +833,7 @@ func TestSetUserStatus_EmptyInput(t *testing.T) {
 // ListSSHKeys — canceled context, pagination, empty result
 // ---------------------------------------------------------------------------.
 
-// TestListSSHKeys_CancelledContext verifies the behavior of list s s h keys cancelled context.
+// TestListSSHKeys_CancelledContext verifies ListSSHKeys when cancelled context.
 func TestListSSHKeys_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -836,7 +847,7 @@ func TestListSSHKeys_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_WithPagination verifies the behavior of list s s h keys with pagination.
+// TestListSSHKeys_WithPagination verifies ListSSHKeys when with pagination.
 func TestListSSHKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/keys" {
@@ -865,7 +876,7 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_Empty verifies the behavior of list s s h keys empty.
+// TestListSSHKeys_Empty verifies ListSSHKeys when empty.
 func TestListSSHKeys_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/keys" {
@@ -888,7 +899,7 @@ func TestListSSHKeys_Empty(t *testing.T) {
 // ListEmails — canceled context, empty result
 // ---------------------------------------------------------------------------.
 
-// TestListEmails_CancelledContext verifies the behavior of list emails cancelled context.
+// TestListEmails_CancelledContext verifies ListEmails when cancelled context.
 func TestListEmails_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -902,7 +913,7 @@ func TestListEmails_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListEmails_Empty verifies the behavior of list emails empty.
+// TestListEmails_Empty verifies ListEmails when empty.
 func TestListEmails_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/emails" {
@@ -925,7 +936,7 @@ func TestListEmails_Empty(t *testing.T) {
 // ListContributionEvents — canceled context, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestListContributionEvents_CancelledContext verifies the behavior of list contribution events cancelled context.
+// TestListContributionEvents_CancelledContext verifies ListContributionEvents when cancelled context.
 func TestListContributionEvents_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -939,7 +950,7 @@ func TestListContributionEvents_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_AllFilters verifies the behavior of list contribution events all filters.
+// TestListContributionEvents_AllFilters verifies ListContributionEvents when all filters.
 func TestListContributionEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
@@ -980,7 +991,7 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_InvalidDateIgnored verifies the behavior of list contribution events invalid date ignored.
+// TestListContributionEvents_InvalidDateIgnored verifies ListContributionEvents when invalid date ignored.
 func TestListContributionEvents_InvalidDateIgnored(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
@@ -1003,7 +1014,7 @@ func TestListContributionEvents_InvalidDateIgnored(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_Empty verifies the behavior of list contribution events empty.
+// TestListContributionEvents_Empty verifies ListContributionEvents when empty.
 func TestListContributionEvents_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
@@ -1026,7 +1037,7 @@ func TestListContributionEvents_Empty(t *testing.T) {
 // GetAssociationsCount — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetAssociationsCount_CancelledContext verifies the behavior of get associations count cancelled context.
+// TestGetAssociationsCount_CancelledContext verifies GetAssociationsCount when cancelled context.
 func TestGetAssociationsCount_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1044,7 +1055,7 @@ func TestGetAssociationsCount_CancelledContext(t *testing.T) {
 // FormatMarkdownString — with data, with bio/avatar
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_WithData verifies the behavior of format markdown string with data.
+// TestFormatMarkdownString_WithData verifies FormatMarkdownString when with data.
 func TestFormatMarkdownString_WithData(t *testing.T) {
 	out := Output{
 		ID:        1,
@@ -1074,7 +1085,7 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_Empty verifies the behavior of format markdown string empty.
+// TestFormatMarkdownString_Empty verifies FormatMarkdownString when empty.
 func TestFormatMarkdownString_Empty(t *testing.T) {
 	md := FormatMarkdownString(Output{})
 	if !strings.Contains(md, "## GitLab User:") {
@@ -1088,7 +1099,7 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ReturnsMCPResult verifies the behavior of format markdown returns m c p result.
+// TestFormatMarkdown_ReturnsMCPResult verifies FormatMarkdown returns MCP result.
 func TestFormatMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatMarkdown(Output{ID: 1, Name: "Test"})
 	if result == nil {
@@ -1103,7 +1114,7 @@ func TestFormatMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithData verifies the behavior of format list markdown string with data.
+// TestFormatListMarkdownString_WithData verifies FormatListMarkdownString when with data.
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Users: []Output{
@@ -1126,7 +1137,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No users found") {
@@ -1137,7 +1148,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_ReturnsMCPResult verifies the behavior of format list markdown returns m c p result.
+// TestFormatListMarkdown_ReturnsMCPResult verifies FormatListMarkdown returns MCP result.
 func TestFormatListMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{Users: []Output{{ID: 1}}})
 	if result == nil {
@@ -1152,7 +1163,7 @@ func TestFormatListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatStatusMarkdownString — with data, empty, partial
 // ---------------------------------------------------------------------------.
 
-// TestFormatStatusMarkdownString_WithData verifies the behavior of format status markdown string with data.
+// TestFormatStatusMarkdownString_WithData verifies FormatStatusMarkdownString when with data.
 func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 	out := StatusOutput{
 		Emoji:         "coffee",
@@ -1175,7 +1186,7 @@ func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdownString_Empty verifies the behavior of format status markdown string empty.
+// TestFormatStatusMarkdownString_Empty verifies FormatStatusMarkdownString when empty.
 func TestFormatStatusMarkdownString_Empty(t *testing.T) {
 	md := FormatStatusMarkdownString(StatusOutput{})
 	if !strings.Contains(md, "## User Status") {
@@ -1188,7 +1199,7 @@ func TestFormatStatusMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdownString_Partial verifies the behavior of format status markdown string partial.
+// TestFormatStatusMarkdownString_Partial verifies FormatStatusMarkdownString when partial.
 func TestFormatStatusMarkdownString_Partial(t *testing.T) {
 	md := FormatStatusMarkdownString(StatusOutput{Emoji: "fire"})
 	if !strings.Contains(md, "**Emoji**: fire") {
@@ -1199,7 +1210,7 @@ func TestFormatStatusMarkdownString_Partial(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown_ReturnsMCPResult verifies the behavior of format status markdown returns m c p result.
+// TestFormatStatusMarkdown_ReturnsMCPResult verifies FormatStatusMarkdown returns MCP result.
 func TestFormatStatusMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatStatusMarkdown(StatusOutput{Emoji: "wave"})
 	if result == nil {
@@ -1211,7 +1222,7 @@ func TestFormatStatusMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatSSHKeyListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatSSHKeyListMarkdownString_WithData verifies the behavior of format s s h key list markdown string with data.
+// TestFormatSSHKeyListMarkdownString_WithData verifies FormatSSHKeyListMarkdownString when with data.
 func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 	out := SSHKeyListOutput{
 		Keys: []SSHKeyOutput{
@@ -1235,7 +1246,7 @@ func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyListMarkdownString_Empty verifies the behavior of format s s h key list markdown string empty.
+// TestFormatSSHKeyListMarkdownString_Empty verifies FormatSSHKeyListMarkdownString when empty.
 func TestFormatSSHKeyListMarkdownString_Empty(t *testing.T) {
 	md := FormatSSHKeyListMarkdownString(SSHKeyListOutput{})
 	if !strings.Contains(md, "No SSH keys found") {
@@ -1246,7 +1257,7 @@ func TestFormatSSHKeyListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyListMarkdown_ReturnsMCPResult verifies the behavior of format s s h key list markdown returns m c p result.
+// TestFormatSSHKeyListMarkdown_ReturnsMCPResult verifies FormatSSHKeyListMarkdown returns MCP result.
 func TestFormatSSHKeyListMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatSSHKeyListMarkdown(SSHKeyListOutput{Keys: []SSHKeyOutput{{ID: 1, Title: "k"}}})
 	if result == nil {
@@ -1258,7 +1269,7 @@ func TestFormatSSHKeyListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatEmailListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatEmailListMarkdownString_WithData verifies the behavior of format email list markdown string with data.
+// TestFormatEmailListMarkdownString_WithData verifies FormatEmailListMarkdownString when with data.
 func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 	out := EmailListOutput{
 		Emails: []EmailOutput{
@@ -1280,7 +1291,7 @@ func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatEmailListMarkdownString_Empty verifies the behavior of format email list markdown string empty.
+// TestFormatEmailListMarkdownString_Empty verifies FormatEmailListMarkdownString when empty.
 func TestFormatEmailListMarkdownString_Empty(t *testing.T) {
 	md := FormatEmailListMarkdownString(EmailListOutput{})
 	if !strings.Contains(md, "No email addresses found") {
@@ -1291,7 +1302,7 @@ func TestFormatEmailListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatEmailListMarkdown_ReturnsMCPResult verifies the behavior of format email list markdown returns m c p result.
+// TestFormatEmailListMarkdown_ReturnsMCPResult verifies FormatEmailListMarkdown returns MCP result.
 func TestFormatEmailListMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatEmailListMarkdown(EmailListOutput{Emails: []EmailOutput{{ID: 1, Email: "a@b.com"}}})
 	if result == nil {
@@ -1303,7 +1314,7 @@ func TestFormatEmailListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatContributionEventsMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatContributionEventsMarkdownString_WithData verifies the behavior of format contribution events markdown string with data.
+// TestFormatContributionEventsMarkdownString_WithData verifies FormatContributionEventsMarkdownString when with data.
 func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 	out := ContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -1326,7 +1337,7 @@ func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatContributionEventsMarkdownString_Empty verifies the behavior of format contribution events markdown string empty.
+// TestFormatContributionEventsMarkdownString_Empty verifies FormatContributionEventsMarkdownString when empty.
 func TestFormatContributionEventsMarkdownString_Empty(t *testing.T) {
 	md := FormatContributionEventsMarkdownString(ContributionEventsOutput{})
 	if !strings.Contains(md, "No contribution events found") {
@@ -1337,7 +1348,7 @@ func TestFormatContributionEventsMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatContributionEventsMarkdown_ReturnsMCPResult verifies the behavior of format contribution events markdown returns m c p result.
+// TestFormatContributionEventsMarkdown_ReturnsMCPResult verifies FormatContributionEventsMarkdown returns MCP result.
 func TestFormatContributionEventsMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatContributionEventsMarkdown(ContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed"}},
@@ -1351,7 +1362,7 @@ func TestFormatContributionEventsMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatAssociationsCountMarkdownString — with data, zero values
 // ---------------------------------------------------------------------------.
 
-// TestFormatAssociationsCountMarkdownString_WithData verifies the behavior of format associations count markdown string with data.
+// TestFormatAssociationsCountMarkdownString_WithData verifies FormatAssociationsCountMarkdownString when with data.
 func TestFormatAssociationsCountMarkdownString_WithData(t *testing.T) {
 	out := AssociationsCountOutput{
 		GroupsCount:        5,
@@ -1374,7 +1385,7 @@ func TestFormatAssociationsCountMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatAssociationsCountMarkdownString_Zero verifies the behavior of format associations count markdown string zero.
+// TestFormatAssociationsCountMarkdownString_Zero verifies FormatAssociationsCountMarkdownString when zero.
 func TestFormatAssociationsCountMarkdownString_Zero(t *testing.T) {
 	md := FormatAssociationsCountMarkdownString(AssociationsCountOutput{})
 	if !strings.Contains(md, "**Groups**: 0") {
@@ -1385,150 +1396,12 @@ func TestFormatAssociationsCountMarkdownString_Zero(t *testing.T) {
 	}
 }
 
-// TestFormatAssociationsCountMarkdown_ReturnsMCPResult verifies the behavior of format associations count markdown returns m c p result.
+// TestFormatAssociationsCountMarkdown_ReturnsMCPResult verifies FormatAssociationsCountMarkdown returns MCP result.
 func TestFormatAssociationsCountMarkdown_ReturnsMCPResult(t *testing.T) {
 	result := FormatAssociationsCountMarkdown(AssociationsCountOutput{GroupsCount: 1})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 9 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newUsersMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"current_user", "gitlab_user_current", map[string]any{}},
-		{"list_users", "gitlab_list_users", map[string]any{}},
-		{"get_user", "gitlab_get_user", map[string]any{"user_id": 42}},
-		{"get_user_status", "gitlab_get_user_status", map[string]any{"user_id": 42}},
-		{"set_user_status", "gitlab_set_user_status", map[string]any{"emoji": "coffee", "message": "Working"}},
-		{"list_ssh_keys", "gitlab_list_ssh_keys", map[string]any{}},
-		{"list_emails", "gitlab_list_emails", map[string]any{}},
-		{"list_contribution_events", "gitlab_list_user_contribution_events", map[string]any{"user_id": 42}},
-		{"get_associations_count", "gitlab_get_user_associations_count", map[string]any{"user_id": 42}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newUsersMCPSession is an internal helper for the users package.
-func newUsersMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	userJSON := `{"id":42,"username":"testuser","email":"test@example.com","name":"Test User","state":"active","web_url":"https://gitlab.example.com/testuser","avatar_url":"https://gitlab.example.com/avatar.png","is_admin":false,"bio":"Developer"}`
-	statusJSON := `{"emoji":"coffee","message":"Working","availability":"busy"}`
-
-	handler := http.NewServeMux()
-
-	// Current user
-	handler.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, userJSON)
-	})
-
-	// List users
-	handler.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+userJSON+`]`)
-	})
-
-	// Get user
-	handler.HandleFunc("GET /api/v4/users/42", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, userJSON)
-	})
-
-	// Get user status
-	handler.HandleFunc("GET /api/v4/users/42/status", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, statusJSON)
-	})
-
-	// Set user status
-	handler.HandleFunc("PUT /api/v4/user/status", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, statusJSON)
-	})
-
-	// List SSH keys
-	handler.HandleFunc("GET /api/v4/user/keys", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"Work","key":"ssh-ed25519 AAAA...","usage_type":"auth","created_at":"2026-01-01T00:00:00Z"}]`)
-	})
-
-	// List emails
-	handler.HandleFunc("GET /api/v4/user/emails", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"email":"test@example.com","confirmed_at":"2026-01-01T00:00:00Z"}]`)
-	})
-
-	// List contribution events
-	handler.HandleFunc("GET /api/v4/users/42/events", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","created_at":"2026-06-01T12:00:00Z"}]`)
-	})
-
-	// Get associations count
-	handler.HandleFunc("GET /api/v4/users/42/associations_count", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"groups_count":5,"projects_count":12,"issues_count":45,"merge_requests_count":30}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // TestGetStatus_NilResponse verifies that GetStatus handles a null JSON body
@@ -1585,40 +1458,5 @@ func TestResolveProjectWebURLs_Success(t *testing.T) {
 	urls := resolveProjectWebURLs(context.Background(), client, []int64{10})
 	if got := urls[10]; got != "https://gitlab.example.com/group/project" {
 		t.Errorf("urls[10] = %q, want %q", got, "https://gitlab.example.com/group/project")
-	}
-}
-
-// TestRegisterTools_GetUser404 verifies the get_user handler returns a
-// NotFoundResult when GitLab responds with 404, covering the register.go 404 branch.
-func TestRegisterTools_GetUser404(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
-	})
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_user",
-		Arguments: map[string]any{"user_id": float64(999)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Error("expected IsError=true for 404 response")
 	}
 }

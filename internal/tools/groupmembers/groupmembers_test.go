@@ -11,7 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -19,7 +18,7 @@ import (
 // GetMember
 // ----------------------------------------------.
 
-// TestGetMember_Success verifies that GetMember handles the success scenario correctly.
+// TestGetMember_Success verifies GetMember when success.
 func TestGetMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +41,7 @@ func TestGetMember_Success(t *testing.T) {
 	}
 }
 
-// TestGetMember_MissingGroupID verifies that GetMember handles the missing group i d scenario correctly.
+// TestGetMember_MissingGroupID verifies GetMember when missing group ID.
 func TestGetMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetMember(context.Background(), client, GetInput{UserID: 10})
@@ -51,7 +50,7 @@ func TestGetMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetMember_MissingUserID verifies that GetMember handles the missing user i d scenario correctly.
+// TestGetMember_MissingUserID verifies GetMember when missing user ID.
 func TestGetMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetMember(context.Background(), client, GetInput{GroupID: "5"})
@@ -64,7 +63,7 @@ func TestGetMember_MissingUserID(t *testing.T) {
 // GetInheritedMember
 // ----------------------------------------------.
 
-// TestGetInheritedMember_Success verifies that GetInheritedMember handles the success scenario correctly.
+// TestGetInheritedMember_Success verifies GetInheritedMember when success.
 func TestGetInheritedMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/all/10", func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +84,7 @@ func TestGetInheritedMember_Success(t *testing.T) {
 // AddMember
 // ----------------------------------------------.
 
-// TestAddMember_Success verifies that AddMember handles the success scenario correctly.
+// TestAddMember_Success verifies AddMember when success.
 func TestAddMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +108,7 @@ func TestAddMember_Success(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingUserAndUsername verifies that AddMember handles the missing user and username scenario correctly.
+// TestAddMember_MissingUserAndUsername verifies AddMember when missing user and username.
 func TestAddMember_MissingUserAndUsername(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", AccessLevel: 30})
@@ -118,7 +117,7 @@ func TestAddMember_MissingUserAndUsername(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingAccessLevel verifies that AddMember handles the missing access level scenario correctly.
+// TestAddMember_MissingAccessLevel verifies AddMember when missing access level.
 func TestAddMember_MissingAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", UserID: 1})
@@ -131,7 +130,7 @@ func TestAddMember_MissingAccessLevel(t *testing.T) {
 // EditMember
 // ----------------------------------------------.
 
-// TestEditMember_Success verifies that EditMember handles the success scenario correctly.
+// TestEditMember_Success verifies EditMember when success.
 func TestEditMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +151,7 @@ func TestEditMember_Success(t *testing.T) {
 	}
 }
 
-// TestEditMember_MissingUserID verifies that EditMember handles the missing user i d scenario correctly.
+// TestEditMember_MissingUserID verifies EditMember when missing user ID.
 func TestEditMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := EditMember(context.Background(), client, EditInput{GroupID: "5"})
@@ -165,7 +164,7 @@ func TestEditMember_MissingUserID(t *testing.T) {
 // RemoveMember
 // ----------------------------------------------.
 
-// TestRemoveMember_Success verifies that RemoveMember handles the success scenario correctly.
+// TestRemoveMember_Success verifies RemoveMember when success.
 func TestRemoveMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +178,7 @@ func TestRemoveMember_Success(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_MissingGroupID verifies that RemoveMember handles the missing group i d scenario correctly.
+// TestRemoveMember_MissingGroupID verifies RemoveMember when missing group ID.
 func TestRemoveMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := RemoveMember(context.Background(), client, RemoveInput{UserID: 10})
@@ -192,7 +191,7 @@ func TestRemoveMember_MissingGroupID(t *testing.T) {
 // ShareGroup
 // ----------------------------------------------.
 
-// TestShareGroup_Success verifies that ShareGroup handles the success scenario correctly.
+// TestShareGroup_Success verifies ShareGroup when success.
 func TestShareGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +215,7 @@ func TestShareGroup_Success(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingShareGroupID verifies that ShareGroup handles the missing share group i d scenario correctly.
+// TestShareGroup_MissingShareGroupID verifies ShareGroup when missing share group ID.
 func TestShareGroup_MissingShareGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", GroupAccess: 30})
@@ -225,7 +224,7 @@ func TestShareGroup_MissingShareGroupID(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingGroupAccess verifies that ShareGroup handles the missing group access scenario correctly.
+// TestShareGroup_MissingGroupAccess verifies ShareGroup when missing group access.
 func TestShareGroup_MissingGroupAccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10})
@@ -238,7 +237,7 @@ func TestShareGroup_MissingGroupAccess(t *testing.T) {
 // UnshareGroup
 // ----------------------------------------------.
 
-// TestUnshareGroup_Success verifies that UnshareGroup handles the success scenario correctly.
+// TestUnshareGroup_Success verifies UnshareGroup when success.
 func TestUnshareGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/share/10", func(w http.ResponseWriter, r *http.Request) {
@@ -252,7 +251,7 @@ func TestUnshareGroup_Success(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_MissingShareGroupID verifies that UnshareGroup handles the missing share group i d scenario correctly.
+// TestUnshareGroup_MissingShareGroupID verifies UnshareGroup when missing share group ID.
 func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := UnshareGroup(context.Background(), client, UnshareInput{GroupID: "5"})
@@ -265,7 +264,7 @@ func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 // Markdown formatters
 // ----------------------------------------------.
 
-// TestFormatMemberMarkdown verifies the behavior of format member markdown.
+// TestFormatMemberMarkdown verifies FormatMemberMarkdown.
 func TestFormatMemberMarkdown(t *testing.T) {
 	md := FormatMemberMarkdown(Output{ID: 10, Username: "dev", Name: "Developer", AccessLevel: 30, AccessLevelDescription: "Developer"})
 	if md == "" {
@@ -273,7 +272,7 @@ func TestFormatMemberMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown verifies the behavior of format share markdown.
+// TestFormatShareMarkdown verifies FormatShareMarkdown.
 func TestFormatShareMarkdown(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{ID: 5, Name: "MyGroup", Path: "mygroup"})
 	if md == "" {
@@ -283,15 +282,17 @@ func TestFormatShareMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // GetMember — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetMember_APIError verifies the behavior of get member a p i error.
+// TestGetMember_APIError verifies GetMember when API error.
 func TestGetMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -302,7 +303,7 @@ func TestGetMember_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMember_CancelledContext verifies the behavior of get member cancelled context.
+// TestGetMember_CancelledContext verifies GetMember when cancelled context.
 func TestGetMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -318,7 +319,7 @@ func TestGetMember_CancelledContext(t *testing.T) {
 // GetInheritedMember — API error, missing group_id, missing user_id, canceled
 // ---------------------------------------------------------------------------.
 
-// TestGetInheritedMember_APIError verifies the behavior of get inherited member a p i error.
+// TestGetInheritedMember_APIError verifies GetInheritedMember when API error.
 func TestGetInheritedMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -329,7 +330,7 @@ func TestGetInheritedMember_APIError(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_MissingGroupID verifies the behavior of get inherited member missing group i d.
+// TestGetInheritedMember_MissingGroupID verifies GetInheritedMember when missing group ID.
 func TestGetInheritedMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetInheritedMember(context.Background(), client, GetInput{UserID: 10})
@@ -338,7 +339,7 @@ func TestGetInheritedMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_MissingUserID verifies the behavior of get inherited member missing user i d.
+// TestGetInheritedMember_MissingUserID verifies GetInheritedMember when missing user ID.
 func TestGetInheritedMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetInheritedMember(context.Background(), client, GetInput{GroupID: "5"})
@@ -347,7 +348,7 @@ func TestGetInheritedMember_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_CancelledContext verifies the behavior of get inherited member cancelled context.
+// TestGetInheritedMember_CancelledContext verifies GetInheritedMember when cancelled context.
 func TestGetInheritedMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -363,7 +364,7 @@ func TestGetInheritedMember_CancelledContext(t *testing.T) {
 // AddMember — API error, missing group_id, canceled, with username, with expires_at
 // ---------------------------------------------------------------------------.
 
-// TestAddMember_APIError verifies the behavior of add member a p i error.
+// TestAddMember_APIError verifies AddMember when API error.
 func TestAddMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -374,7 +375,7 @@ func TestAddMember_APIError(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingGroupID verifies the behavior of add member missing group i d.
+// TestAddMember_MissingGroupID verifies AddMember when missing group ID.
 func TestAddMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{UserID: 1, AccessLevel: 30})
@@ -383,7 +384,7 @@ func TestAddMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestAddMember_CancelledContext verifies the behavior of add member cancelled context.
+// TestAddMember_CancelledContext verifies AddMember when cancelled context.
 func TestAddMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":1}`)
@@ -395,7 +396,7 @@ func TestAddMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddMember_WithUsername verifies the behavior of add member with username.
+// TestAddMember_WithUsername verifies AddMember when with username.
 func TestAddMember_WithUsername(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
@@ -416,7 +417,7 @@ func TestAddMember_WithUsername(t *testing.T) {
 	}
 }
 
-// TestAddMember_WithExpiresAt verifies the behavior of add member with expires at.
+// TestAddMember_WithExpiresAt verifies AddMember when with expires at.
 func TestAddMember_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
@@ -442,7 +443,7 @@ func TestAddMember_WithExpiresAt(t *testing.T) {
 // EditMember — API error, missing group_id, canceled, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEditMember_APIError verifies the behavior of edit member a p i error.
+// TestEditMember_APIError verifies EditMember when API error.
 func TestEditMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -453,7 +454,7 @@ func TestEditMember_APIError(t *testing.T) {
 	}
 }
 
-// TestEditMember_MissingGroupID verifies the behavior of edit member missing group i d.
+// TestEditMember_MissingGroupID verifies EditMember when missing group ID.
 func TestEditMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := EditMember(context.Background(), client, EditInput{UserID: 10})
@@ -462,7 +463,7 @@ func TestEditMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestEditMember_CancelledContext verifies the behavior of edit member cancelled context.
+// TestEditMember_CancelledContext verifies EditMember when cancelled context.
 func TestEditMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -474,7 +475,7 @@ func TestEditMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEditMember_WithExpiresAt verifies the behavior of edit member with expires at.
+// TestEditMember_WithExpiresAt verifies EditMember when with expires at.
 func TestEditMember_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -499,7 +500,7 @@ func TestEditMember_WithExpiresAt(t *testing.T) {
 // RemoveMember — API error, missing user_id, canceled, with optional flags
 // ---------------------------------------------------------------------------.
 
-// TestRemoveMember_APIError verifies the behavior of remove member a p i error.
+// TestRemoveMember_APIError verifies RemoveMember when API error.
 func TestRemoveMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -510,7 +511,7 @@ func TestRemoveMember_APIError(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_MissingUserID verifies the behavior of remove member missing user i d.
+// TestRemoveMember_MissingUserID verifies RemoveMember when missing user ID.
 func TestRemoveMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := RemoveMember(context.Background(), client, RemoveInput{GroupID: "5"})
@@ -519,7 +520,7 @@ func TestRemoveMember_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_CancelledContext verifies the behavior of remove member cancelled context.
+// TestRemoveMember_CancelledContext verifies RemoveMember when cancelled context.
 func TestRemoveMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -531,7 +532,7 @@ func TestRemoveMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_WithOptionalFlags verifies the behavior of remove member with optional flags.
+// TestRemoveMember_WithOptionalFlags verifies RemoveMember flags for with optional.
 func TestRemoveMember_WithOptionalFlags(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -554,7 +555,7 @@ func TestRemoveMember_WithOptionalFlags(t *testing.T) {
 // ShareGroup — API error, missing group_id, canceled, with expires_at
 // ---------------------------------------------------------------------------.
 
-// TestShareGroup_APIError verifies the behavior of share group a p i error.
+// TestShareGroup_APIError verifies ShareGroup when API error.
 func TestShareGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -565,7 +566,7 @@ func TestShareGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingGroupID verifies the behavior of share group missing group i d.
+// TestShareGroup_MissingGroupID verifies ShareGroup when missing group ID.
 func TestShareGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{ShareGroupID: 10, GroupAccess: 30})
@@ -574,7 +575,7 @@ func TestShareGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestShareGroup_CancelledContext verifies the behavior of share group cancelled context.
+// TestShareGroup_CancelledContext verifies ShareGroup when cancelled context.
 func TestShareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":5}`)
@@ -586,7 +587,7 @@ func TestShareGroup_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestShareGroup_WithExpiresAt verifies the behavior of share group with expires at.
+// TestShareGroup_WithExpiresAt verifies ShareGroup when with expires at.
 func TestShareGroup_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {
@@ -615,7 +616,7 @@ func TestShareGroup_WithExpiresAt(t *testing.T) {
 // UnshareGroup — API error, missing group_id, canceled
 // ---------------------------------------------------------------------------.
 
-// TestUnshareGroup_APIError verifies the behavior of unshare group a p i error.
+// TestUnshareGroup_APIError verifies UnshareGroup when API error.
 func TestUnshareGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -626,7 +627,7 @@ func TestUnshareGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_MissingGroupID verifies the behavior of unshare group missing group i d.
+// TestUnshareGroup_MissingGroupID verifies UnshareGroup when missing group ID.
 func TestUnshareGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := UnshareGroup(context.Background(), client, UnshareInput{ShareGroupID: 10})
@@ -635,7 +636,7 @@ func TestUnshareGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_CancelledContext verifies the behavior of unshare group cancelled context.
+// TestUnshareGroup_CancelledContext verifies UnshareGroup when cancelled context.
 func TestUnshareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -651,7 +652,7 @@ func TestUnshareGroup_CancelledContext(t *testing.T) {
 // accessLevelDescription — all levels
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelDescription_AllLevels validates access level description all levels across multiple scenarios using table-driven subtests.
+// TestAccessLevelDescription_AllLevels covers AccessLevelDescription with table-driven subtests for all levels.
 func TestAccessLevelDescription_AllLevels(t *testing.T) {
 	tests := []struct {
 		level int
@@ -680,7 +681,7 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 // convertMember — with all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestConvertMember_FullFields verifies the behavior of convert member full fields.
+// TestConvertMember_FullFields verifies ConvertMember when full fields.
 func TestConvertMember_FullFields(t *testing.T) {
 	now := "2026-01-15T10:00:00Z"
 	mux := http.NewServeMux()
@@ -723,7 +724,7 @@ func TestConvertMember_FullFields(t *testing.T) {
 	}
 }
 
-// TestConvertMember_MinimalFields verifies the behavior of convert member minimal fields.
+// TestConvertMember_MinimalFields verifies ConvertMember when minimal fields.
 func TestConvertMember_MinimalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/1", func(w http.ResponseWriter, _ *http.Request) {
@@ -753,7 +754,7 @@ func TestConvertMember_MinimalFields(t *testing.T) {
 // FormatMemberMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatMemberMarkdown_WithAllFields verifies the behavior of format member markdown with all fields.
+// TestFormatMemberMarkdown_WithAllFields verifies FormatMemberMarkdown when with all fields.
 func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
 		ID:                     10,
@@ -782,7 +783,7 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMemberMarkdown_Empty verifies the behavior of format member markdown empty.
+// TestFormatMemberMarkdown_Empty verifies FormatMemberMarkdown when empty.
 func TestFormatMemberMarkdown_Empty(t *testing.T) {
 	md := FormatMemberMarkdown(Output{})
 	if !strings.Contains(md, "## Group Member") {
@@ -796,7 +797,7 @@ func TestFormatMemberMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMemberMarkdown_NoOptionalFields verifies the behavior of format member markdown no optional fields.
+// TestFormatMemberMarkdown_NoOptionalFields verifies FormatMemberMarkdown when no optional fields.
 func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
 		ID:                     5,
@@ -818,7 +819,7 @@ func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 // FormatShareMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatShareMarkdown_WithAllFields verifies the behavior of format share markdown with all fields.
+// TestFormatShareMarkdown_WithAllFields verifies FormatShareMarkdown when with all fields.
 func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{
 		ID:     5,
@@ -840,7 +841,7 @@ func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown_Empty verifies the behavior of format share markdown empty.
+// TestFormatShareMarkdown_Empty verifies FormatShareMarkdown when empty.
 func TestFormatShareMarkdown_Empty(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{})
 	if !strings.Contains(md, "## Group Shared") {
@@ -851,7 +852,7 @@ func TestFormatShareMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown_NoWebURL verifies the behavior of format share markdown no web u r l.
+// TestFormatShareMarkdown_NoWebURL verifies FormatShareMarkdown when no web URL.
 func TestFormatShareMarkdown_NoWebURL(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{
 		ID:   5,
@@ -861,133 +862,4 @@ func TestFormatShareMarkdown_NoWebURL(t *testing.T) {
 	if strings.Contains(md, "| URL") {
 		t.Errorf("should not contain URL:\n%s", md)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 7 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newGroupMembersMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get", "gitlab_group_member_get", map[string]any{"group_id": "5", "user_id": 10}},
-		{"get_inherited", "gitlab_group_member_get_inherited", map[string]any{"group_id": "5", "user_id": 10}},
-		{"add", "gitlab_group_member_add", map[string]any{"group_id": "5", "user_id": 20, "access_level": 30}},
-		{"edit", "gitlab_group_member_edit", map[string]any{"group_id": "5", "user_id": 10, "access_level": 40}},
-		{"remove", "gitlab_group_member_remove", map[string]any{"group_id": "5", "user_id": 10}},
-		{"share", "gitlab_group_share", map[string]any{"group_id": "5", "share_group_id": 10, "group_access": 30}},
-		{"unshare", "gitlab_group_unshare", map[string]any{"group_id": "5", "share_group_id": 10}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory — individual tools
-// ---------------------------------------------------------------------------.
-
-// newGroupMembersMCPSession is an internal helper for the groupmembers package.
-func newGroupMembersMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	memberJSON := `{"id":10,"username":"dev","name":"Developer","state":"active","access_level":30}`
-	groupJSON := `{"id":5,"name":"MyGroup","path":"mygroup","web_url":"https://gl/groups/mygroup"}`
-
-	handler := http.NewServeMux()
-
-	// Get group member
-	handler.HandleFunc("GET /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, memberJSON)
-	})
-
-	// Get inherited group member
-	handler.HandleFunc("GET /api/v4/groups/5/members/all/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, memberJSON)
-	})
-
-	// Add group member
-	handler.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":20,"username":"newuser","name":"New User","state":"active","access_level":30}`)
-	})
-
-	// Edit group member
-	handler.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"dev","name":"Developer","state":"active","access_level":40}`)
-	})
-
-	// Remove group member
-	handler.HandleFunc("DELETE /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Share group
-	handler.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, groupJSON)
-	})
-
-	// Unshare group
-	handler.HandleFunc("DELETE /api/v4/groups/5/share/10", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

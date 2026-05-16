@@ -1,7 +1,3 @@
-// Package members implements MCP tool handlers for GitLab project member
-// operations including listing all members (with inherited) and providing
-// human-readable access level descriptions. It wraps the ProjectMembers
-// service from client-go v2.
 package members
 
 import (

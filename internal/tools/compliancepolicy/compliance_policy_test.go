@@ -1,8 +1,3 @@
-// Package compliancepolicy tests validate the Get, Update, FormatOutputMarkdown,
-// and RegisterTools functions for the admin compliance policy settings MCP tools.
-// Tests cover success paths, API error responses (403, 400, 500), context
-// cancellation, nil/non-nil CSPNamespaceID, markdown formatting, and full MCP
-// round-trip registration.
 package compliancepolicy
 
 import (
@@ -11,12 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
-
-const testVersion = "0.0.0-test"
 
 // ---------------------------------------------------------------------------
 // Get
@@ -267,24 +260,33 @@ func TestFormatOutputMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools
+// ActionSpec route execution
 // ---------------------------------------------------------------------------
 
-// TestRegisterTools_NoPanic verifies that RegisterTools registers both compliance
-// policy tools on an MCP server without panicking.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies compliance policy action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "compliancepolicy" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates that both registered tools can be
-// invoked through a full MCP client-server round-trip and return valid results.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCompliancePolicyMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates that both canonical routes return valid results.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	client := newCompliancePolicyRouteClient(t)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 
 	tools := []struct {
 		name string
@@ -297,28 +299,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if callErr != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, callErr)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, callErr := spec.Route.Handler(t.Context(), tt.args)
+			if callErr != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, callErr)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// newCompliancePolicyMCPSession creates a full MCP client-server session backed
-// by mock handlers for both compliance policy tools.
-func newCompliancePolicyMCPSession(t *testing.T) *mcp.ClientSession {
+// newCompliancePolicyRouteClient creates a client backed by mock handlers for both compliance policy tools.
+func newCompliancePolicyRouteClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -329,22 +326,5 @@ func newCompliancePolicyMCPSession(t *testing.T) *mcp.ClientSession {
 		testutil.RespondJSON(w, http.StatusOK, `{"csp_namespace_id":200}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: testVersion}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: testVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return testutil.NewTestClient(t, handler)
 }

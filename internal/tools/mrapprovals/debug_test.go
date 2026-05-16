@@ -11,13 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestDebug_ErrorType verifies the behavior of debug error type.
+// TestDebug_ErrorType verifies Debug when error type.
 func TestDebug_ErrorType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -43,13 +42,14 @@ func TestDebug_ErrorType(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
 // ---------------------------------------------------------------------------
 // Config — canceled context & server error
 // ---------------------------------------------------------------------------.
 
-// TestConfig_CancelledContext verifies the behavior of config cancelled context.
+// TestConfig_CancelledContext verifies Config when cancelled context.
 func TestConfig_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -62,7 +62,7 @@ func TestConfig_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestConfig_ServerError verifies the behavior of config server error.
+// TestConfig_ServerError verifies Config when server error.
 func TestConfig_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"fail"}`)
@@ -78,7 +78,7 @@ func TestConfig_ServerError(t *testing.T) {
 // Reset — canceled context & server error
 // ---------------------------------------------------------------------------.
 
-// TestReset_CancelledContext verifies the behavior of reset cancelled context.
+// TestReset_CancelledContext verifies Reset when cancelled context.
 func TestReset_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -91,7 +91,7 @@ func TestReset_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestReset_ServerError verifies the behavior of reset server error.
+// TestReset_ServerError verifies Reset when server error.
 func TestReset_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"fail"}`)
@@ -107,7 +107,7 @@ func TestReset_ServerError(t *testing.T) {
 // CreateRule — canceled context, server error & ApprovalProjectRuleID path
 // ---------------------------------------------------------------------------.
 
-// TestCreateRule_CancelledContext verifies the behavior of create rule cancelled context.
+// TestCreateRule_CancelledContext verifies CreateRule when cancelled context.
 func TestCreateRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -120,7 +120,7 @@ func TestCreateRule_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateRule_ServerError verifies the behavior of create rule server error.
+// TestCreateRule_ServerError verifies CreateRule when server error.
 func TestCreateRule_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"fail"}`)
@@ -134,7 +134,7 @@ func TestCreateRule_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateRule_WithApprovalProjectRuleID verifies the behavior of create rule with approval project rule i d.
+// TestCreateRule_WithApprovalProjectRuleID verifies CreateRule when with approval project rule ID.
 func TestCreateRule_WithApprovalProjectRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules" {
@@ -168,7 +168,7 @@ func TestCreateRule_WithApprovalProjectRuleID(t *testing.T) {
 // UpdateRule — canceled context, server error & optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdateRule_CancelledContext verifies the behavior of update rule cancelled context.
+// TestUpdateRule_CancelledContext verifies UpdateRule when cancelled context.
 func TestUpdateRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -181,7 +181,7 @@ func TestUpdateRule_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateRule_ServerError verifies the behavior of update rule server error.
+// TestUpdateRule_ServerError verifies UpdateRule when server error.
 func TestUpdateRule_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"fail"}`)
@@ -195,7 +195,7 @@ func TestUpdateRule_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateRule_AllOptionalFields verifies the behavior of update rule all optional fields.
+// TestUpdateRule_AllOptionalFields verifies UpdateRule when all optional fields.
 func TestUpdateRule_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
@@ -241,7 +241,7 @@ func TestUpdateRule_AllOptionalFields(t *testing.T) {
 // DeleteRule — canceled context & server error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteRule_CancelledContext verifies the behavior of delete rule cancelled context.
+// TestDeleteRule_CancelledContext verifies DeleteRule when cancelled context.
 func TestDeleteRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -254,7 +254,7 @@ func TestDeleteRule_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteRule_ServerError verifies the behavior of delete rule server error.
+// TestDeleteRule_ServerError verifies DeleteRule when server error.
 func TestDeleteRule_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"fail"}`)
@@ -272,7 +272,7 @@ func TestDeleteRule_ServerError(t *testing.T) {
 // RuleToOutput — Users & Groups paths
 // ---------------------------------------------------------------------------.
 
-// TestRuleToOutput_WithUsersAndGroups verifies the behavior of rule to output with users and groups.
+// TestRuleToOutput_WithUsersAndGroups verifies RuleToOutput when with users and groups.
 func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 	r := fakeApprovalRule(t)
 	out := RuleToOutput(&r)
@@ -293,7 +293,7 @@ func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 	}
 }
 
-// TestRuleToOutput_NilGroupEntry verifies the behavior of rule to output nil group entry.
+// TestRuleToOutput_NilGroupEntry verifies RuleToOutput when nil group entry.
 func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 	r := fakeApprovalRuleNilGroup(t)
 	out := RuleToOutput(&r)
@@ -306,7 +306,7 @@ func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 // configToOutput — nil approved_by entry, nil suggested_approvers entry
 // ---------------------------------------------------------------------------.
 
-// TestConfig_ToOutputNilEntries verifies the behavior of config to output nil entries.
+// TestConfig_ToOutputNilEntries verifies Config when to output nil entries.
 func TestConfig_ToOutputNilEntries(t *testing.T) {
 	c := fakeConfigNilEntries(t)
 	out := configToOutput(&c)
@@ -322,7 +322,7 @@ func TestConfig_ToOutputNilEntries(t *testing.T) {
 // FormatStateMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatStateMarkdown_WithRules verifies the behavior of format state markdown with rules.
+// TestFormatStateMarkdown_WithRules verifies FormatStateMarkdown when with rules.
 func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
@@ -341,7 +341,7 @@ func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	assertContains(t, md, "Alice")
 }
 
-// TestFormatStateMarkdown_Empty verifies the behavior of format state markdown empty.
+// TestFormatStateMarkdown_Empty verifies FormatStateMarkdown when empty.
 func TestFormatStateMarkdown_Empty(t *testing.T) {
 	md := FormatStateMarkdown(StateOutput{})
 	assertContains(t, md, "**Rules overwritten**: No")
@@ -352,7 +352,7 @@ func TestFormatStateMarkdown_Empty(t *testing.T) {
 // FormatRulesMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatRulesMarkdown_WithRules verifies the behavior of format rules markdown with rules.
+// TestFormatRulesMarkdown_WithRules verifies FormatRulesMarkdown when with rules.
 func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	out := RulesOutput{
 		Rules: []RuleOutput{
@@ -366,7 +366,7 @@ func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	assertContains(t, md, "Eve, Frank")
 }
 
-// TestFormatRulesMarkdown_Empty verifies the behavior of format rules markdown empty.
+// TestFormatRulesMarkdown_Empty verifies FormatRulesMarkdown when empty.
 func TestFormatRulesMarkdown_Empty(t *testing.T) {
 	md := FormatRulesMarkdown(RulesOutput{})
 	assertContains(t, md, "## MR Approval Rules (0)")
@@ -377,7 +377,7 @@ func TestFormatRulesMarkdown_Empty(t *testing.T) {
 // FormatConfigMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatConfigMarkdown_Full verifies the behavior of format config markdown full.
+// TestFormatConfigMarkdown_Full verifies FormatConfigMarkdown when full.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
 		IID:               10,
@@ -405,7 +405,7 @@ func TestFormatConfigMarkdown_Full(t *testing.T) {
 	assertContains(t, md, "**Suggested approvers**: Bob")
 }
 
-// TestFormatConfigMarkdown_Minimal verifies the behavior of format config markdown minimal.
+// TestFormatConfigMarkdown_Minimal verifies FormatConfigMarkdown when minimal.
 func TestFormatConfigMarkdown_Minimal(t *testing.T) {
 	md := FormatConfigMarkdown(ConfigOutput{State: "merged"})
 	assertContains(t, md, "| State | merged |")
@@ -435,7 +435,7 @@ func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 // FormatRuleMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatRuleMarkdown_Full verifies the behavior of format rule markdown full.
+// TestFormatRuleMarkdown_Full verifies FormatRuleMarkdown when full.
 func TestFormatRuleMarkdown_Full(t *testing.T) {
 	r := RuleOutput{
 		ID:                1,
@@ -458,7 +458,7 @@ func TestFormatRuleMarkdown_Full(t *testing.T) {
 	assertContains(t, md, "| Groups | Leads |")
 }
 
-// TestFormatRuleMarkdown_Minimal verifies the behavior of format rule markdown minimal.
+// TestFormatRuleMarkdown_Minimal verifies FormatRuleMarkdown when minimal.
 func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 	r := RuleOutput{
 		ID:                3,
@@ -475,129 +475,7 @@ func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 	assertNotContains(t, md, "| Groups |")
 }
 
-// ---------------------------------------------------------------------------
-// TestRegisterTools_CallAllThroughMCP — full MCP roundtrip
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newApprovalsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_mr_approval_state", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_rules", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_config", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_reset", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_rule_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "name": "R", "approvals_required": 1, "approval_project_rule_id": 0, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5, "name": "U", "approvals_required": 1, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------.
-
-// newApprovalsMCPSession is an internal helper for the mrapprovals package.
-func newApprovalsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		// approval_state
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approval_state"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"approval_rules_overwritten": false,
-				"rules": [{"id":1,"name":"Default","rule_type":"any_approver","approvals_required":1,"approved":true}]
-			}`)
-
-		// approval_rules GET
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approval_rules"):
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"Default","rule_type":"any_approver","approvals_required":1,"approved":true}]`)
-
-		// approval_rules POST (create)
-		case r.Method == http.MethodPost && strings.HasSuffix(path, "/approval_rules"):
-			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id":5,"name":"R","rule_type":"regular","approvals_required":1,"approved":false,
-				"approved_by":[],"eligible_approvers":[],"users":[],"groups":[]
-			}`)
-
-		// approval_rules PUT (update)
-		case r.Method == http.MethodPut && strings.Contains(path, "/approval_rules/"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":5,"name":"U","rule_type":"regular","approvals_required":1,"approved":false,
-				"approved_by":[],"eligible_approvers":[],"users":[],"groups":[]
-			}`)
-
-		// approval_rules DELETE
-		case r.Method == http.MethodDelete && strings.Contains(path, "/approval_rules/"):
-			w.WriteHeader(http.StatusNoContent)
-
-		// approvals (config)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approvals"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"iid":1,"project_id":42,"title":"MR","state":"opened",
-				"approved":false,"approvals_required":1,"approvals_left":1,
-				"approvals_before_merge":0,"has_approval_rules":true,
-				"user_has_approved":false,"user_can_approve":true,
-				"approved_by":[],"suggested_approvers":[]
-			}`)
-
-		// reset_approvals
-		case r.Method == http.MethodPut && strings.HasSuffix(path, "/reset_approvals"):
-			w.WriteHeader(http.StatusAccepted)
-
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// assertContains is an internal helper for the mrapprovals package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, s, substr string) {
 	t.Helper()
 	if !strings.Contains(s, substr) {
@@ -605,7 +483,7 @@ func assertContains(t *testing.T, s, substr string) {
 	}
 }
 
-// assertNotContains is an internal helper for the mrapprovals package.
+// assertNotContains checks not contains invariants for tests.
 func assertNotContains(t *testing.T, s, substr string) {
 	t.Helper()
 	if strings.Contains(s, substr) {
@@ -617,7 +495,7 @@ func assertNotContains(t *testing.T, s, substr string) {
 // Fake data factories (avoid import cycle with gl types in helpers)
 // ---------------------------------------------------------------------------.
 
-// fakeApprovalRule is an internal helper for the mrapprovals package.
+// fakeApprovalRule supports fake approval rule assertions in mrapprovals tests.
 func fakeApprovalRule(t *testing.T) gl.MergeRequestApprovalRule {
 	t.Helper()
 	return gl.MergeRequestApprovalRule{
@@ -636,7 +514,7 @@ func fakeApprovalRule(t *testing.T) gl.MergeRequestApprovalRule {
 	}
 }
 
-// fakeApprovalRuleNilGroup is an internal helper for the mrapprovals package.
+// fakeApprovalRuleNilGroup supports fake approval rule nil group assertions in mrapprovals tests.
 func fakeApprovalRuleNilGroup(t *testing.T) gl.MergeRequestApprovalRule {
 	t.Helper()
 	return gl.MergeRequestApprovalRule{
@@ -644,7 +522,7 @@ func fakeApprovalRuleNilGroup(t *testing.T) gl.MergeRequestApprovalRule {
 	}
 }
 
-// fakeConfigNilEntries is an internal helper for the mrapprovals package.
+// fakeConfigNilEntries supports fake config nil entries assertions in mrapprovals tests.
 func fakeConfigNilEntries(t *testing.T) gl.MergeRequestApprovals {
 	t.Helper()
 	return gl.MergeRequestApprovals{

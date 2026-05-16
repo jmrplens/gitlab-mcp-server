@@ -1,6 +1,3 @@
-// Package groupmilestones implements GitLab group milestone operations including
-// list, get, create, update, delete, and related resource retrieval (issues,
-// merge requests, burndown chart events).
 package groupmilestones
 
 import (
@@ -214,7 +211,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Milestones: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// buildListOpts performs the build list opts operation using the GitLab API and returns [*gl.ListGroupMilestonesOptions].
+// buildListOpts handles build list opts and returns [*gl.ListGroupMilestonesOptions].
 func buildListOpts(input ListInput) (*gl.ListGroupMilestonesOptions, error) {
 	opts := &gl.ListGroupMilestonesOptions{}
 	applyListFilters(opts, input)
@@ -225,7 +222,7 @@ func buildListOpts(input ListInput) (*gl.ListGroupMilestonesOptions, error) {
 	return opts, nil
 }
 
-// applyListFilters is an internal helper for the groupmilestones package.
+// applyListFilters applies list filters transformations.
 func applyListFilters(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	if input.State != "" {
 		opts.State = new(input.State)
@@ -250,7 +247,7 @@ func applyListFilters(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	}
 }
 
-// applyListDates is an internal helper for the groupmilestones package.
+// applyListDates applies list dates transformations.
 func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error {
 	if input.UpdatedBefore != "" {
 		d, err := parseISODate(input.UpdatedBefore)
@@ -276,7 +273,7 @@ func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error 
 	return nil
 }
 
-// applyListPagination is an internal helper for the groupmilestones package.
+// applyListPagination applies list pagination transformations.
 func applyListPagination(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	if input.Page > 0 {
 		opts.Page = int64(input.Page)

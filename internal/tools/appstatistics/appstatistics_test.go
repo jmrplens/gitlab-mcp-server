@@ -4,17 +4,14 @@
 package appstatistics
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/application/statistics" {
@@ -43,7 +40,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -55,7 +52,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{ActiveUsers: 80, Projects: 45, Issues: 200}
 	md := FormatGetMarkdown(out)
@@ -72,9 +69,10 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// covStatsJSON identifies the cov stats JSON constant used by this package.
 const covStatsJSON = `{"forks":10,"issues":20,"merge_requests":30,"notes":40,"snippets":5,"ssh_keys":3,"milestones":7,"users":100,"groups":15,"projects":50,"active_users":80}`
 
-// TestGet_APIError_Coverage verifies the behavior of cov get a p i error.
+// TestGet_APIError_Coverage verifies Get when API error coverage.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -85,7 +83,7 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success_Coverage verifies the behavior of cov get success.
+// TestGet_Success_Coverage verifies Get when success coverage.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
@@ -99,7 +97,7 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Cov_Coverage verifies the behavior of cov format get markdown.
+// TestFormatGetMarkdown_Cov_Coverage verifies FormatGetMarkdown when cov coverage.
 func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	out := GetOutput{Projects: 50, ActiveUsers: 80, Users: 100, Issues: 20}
 	md := FormatGetMarkdown(out)
@@ -108,80 +106,46 @@ func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic_Coverage verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata_Coverage verifies application statistics action spec metadata.
+func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].OwnerPackage != "appstatistics" || specs[0].IndividualTool.Name != "gitlab_get_application_statistics" {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
 }
 
-// TestMCPRound_Trip_Coverage verifies the behavior of cov m c p round trip.
-func TestMCPRound_Trip_Coverage(t *testing.T) {
+// TestActionSpecs_CallRoute_Coverage verifies the application statistics canonical route.
+func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
 	})
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, handler)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	spec := ActionSpecs(client)[0]
+	res, err := spec.Route.Handler(t.Context(), map[string]any{})
 	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_application_statistics",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		t.Fatalf("Route.Handler: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
 	}
 }
 
-// TestMCPRoundTrip_Error validates the register.go error path for the
-// application statistics tool via MCP round-trip against a 500 backend.
-func TestMCPRoundTrip_Error(t *testing.T) {
+// TestActionSpecs_CallRouteError validates the application statistics route error path.
+func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, mux)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_application_statistics",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !res.IsError {
-		t.Error("expected IsError=true")
+	spec := ActionSpecs(client)[0]
+	if _, err := spec.Route.Handler(t.Context(), map[string]any{}); err == nil {
+		t.Fatal("expected route error")
 	}
 }

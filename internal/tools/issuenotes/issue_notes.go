@@ -1,6 +1,3 @@
-// Package issuenotes implements GitLab issue note (comment) operations including
-// create and list. Notes are comments attached to issues and may be marked
-// as internal (visible only to project members) or system-generated.
 package issuenotes
 
 import (

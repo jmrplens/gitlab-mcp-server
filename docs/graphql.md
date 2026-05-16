@@ -43,10 +43,10 @@ This document explains when and how the GraphQL integration is used, the pattern
 
 ```mermaid
 graph TD
-    subgraph "MCP Tool Handlers"
-        A[REST Tools<br/>~1020 tools]
-        B[GraphQL Tools — Raw<br/>~16 tools]
-        G[GraphQL Tools — WorkItems<br/>~22 tools]
+    subgraph "Catalog-backed ActionSpecs"
+        A[REST-backed GitLab actions]
+        B[GraphQL actions — raw GraphQL.Do]
+        G[GraphQL actions — WorkItems service]
     end
 
     subgraph "client-go v2"

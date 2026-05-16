@@ -4,23 +4,24 @@
 package notifications
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errNoReachAPI identifies the err no reach API constant used by this package.
 const errNoReachAPI = "should not reach API"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestGetGlobalSettings_Success verifies that GetGlobalSettings handles the success scenario correctly.
+// TestGetGlobalSettings_Success verifies GetGlobalSettings when success.
 func TestGetGlobalSettings_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/notification_settings" {
@@ -47,7 +48,7 @@ func TestGetGlobalSettings_Success(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForProject_Success verifies that GetSettingsForProject handles the success scenario correctly.
+// TestGetSettingsForProject_Success verifies GetSettingsForProject when success.
 func TestGetSettingsForProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/my-project/notification_settings" {
@@ -65,7 +66,7 @@ func TestGetSettingsForProject_Success(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForProject_ValidationError verifies that GetSettingsForProject handles the validation error scenario correctly.
+// TestGetSettingsForProject_ValidationError verifies GetSettingsForProject when validation error.
 func TestGetSettingsForProject_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -77,7 +78,7 @@ func TestGetSettingsForProject_ValidationError(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForGroup_Success verifies that GetSettingsForGroup handles the success scenario correctly.
+// TestGetSettingsForGroup_Success verifies GetSettingsForGroup when success.
 func TestGetSettingsForGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/my-group/notification_settings" {
@@ -95,7 +96,7 @@ func TestGetSettingsForGroup_Success(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForGroup_ValidationError verifies that GetSettingsForGroup handles the validation error scenario correctly.
+// TestGetSettingsForGroup_ValidationError verifies GetSettingsForGroup when validation error.
 func TestGetSettingsForGroup_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -107,7 +108,7 @@ func TestGetSettingsForGroup_ValidationError(t *testing.T) {
 	}
 }
 
-// TestUpdateGlobalSettings_Success verifies that UpdateGlobalSettings handles the success scenario correctly.
+// TestUpdateGlobalSettings_Success verifies UpdateGlobalSettings when success.
 func TestUpdateGlobalSettings_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -128,7 +129,7 @@ func TestUpdateGlobalSettings_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForProject_ValidationError verifies that UpdateSettingsForProject handles the validation error scenario correctly.
+// TestUpdateSettingsForProject_ValidationError verifies UpdateSettingsForProject when validation error.
 func TestUpdateSettingsForProject_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -140,7 +141,7 @@ func TestUpdateSettingsForProject_ValidationError(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForGroup_APIError verifies that UpdateSettingsForGroup handles the a p i error scenario correctly.
+// TestUpdateSettingsForGroup_APIError verifies UpdateSettingsForGroup when API error.
 func TestUpdateSettingsForGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -154,7 +155,7 @@ func TestUpdateSettingsForGroup_APIError(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatMarkdownString_WithEvents verifies that FormatMarkdownString handles the with events scenario correctly.
+// TestFormatMarkdownString_WithEvents verifies FormatMarkdownString when with events.
 func TestFormatMarkdownString_WithEvents(t *testing.T) {
 	out := Output{
 		Level:             "custom",
@@ -179,7 +180,7 @@ func TestFormatMarkdownString_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_NoEvents verifies that FormatMarkdownString handles the no events scenario correctly.
+// TestFormatMarkdownString_NoEvents verifies FormatMarkdownString when no events.
 func TestFormatMarkdownString_NoEvents(t *testing.T) {
 	out := Output{Level: "watch"}
 	md := FormatMarkdownString(out)
@@ -193,13 +194,15 @@ func TestFormatMarkdownString_NoEvents(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// covSettingsJSON identifies the cov settings JSON constant used by this package.
 const covSettingsJSON = `{"level":"participating","notification_email":"test@example.com","events":{"close_issue":true,"new_issue":false,"close_merge_request":false,"failed_pipeline":false,"fixed_pipeline":false,"issue_due":false,"merge_merge_request":false,"merge_when_pipeline_succeeds":false,"moved_project":false,"new_epic":false,"new_merge_request":false,"new_note":false,"push_to_merge_request":false,"reassign_issue":false,"reassign_merge_request":false,"reopen_issue":false,"reopen_merge_request":false,"success_pipeline":false}}`
 
 // API error tests.
 
-// TestGetGlobalSettings_APIError verifies the behavior of cov get global settings a p i error.
+// TestGetGlobalSettings_APIError verifies GetGlobalSettings when API error.
 func TestGetGlobalSettings_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -210,7 +213,7 @@ func TestGetGlobalSettings_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForProject_APIError verifies the behavior of cov get settings for project a p i error.
+// TestGetSettingsForProject_APIError verifies GetSettingsForProject when API error.
 func TestGetSettingsForProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -221,7 +224,7 @@ func TestGetSettingsForProject_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSettingsForGroup_APIError verifies the behavior of cov get settings for group a p i error.
+// TestGetSettingsForGroup_APIError verifies GetSettingsForGroup when API error.
 func TestGetSettingsForGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -232,7 +235,7 @@ func TestGetSettingsForGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGlobalSettings_APIError verifies the behavior of cov update global settings a p i error.
+// TestUpdateGlobalSettings_APIError verifies UpdateGlobalSettings when API error.
 func TestUpdateGlobalSettings_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -243,7 +246,7 @@ func TestUpdateGlobalSettings_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForProject_Success verifies the behavior of cov update settings for project success.
+// TestUpdateSettingsForProject_Success verifies UpdateSettingsForProject when success.
 func TestUpdateSettingsForProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
@@ -260,7 +263,7 @@ func TestUpdateSettingsForProject_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForProject_APIError verifies the behavior of cov update settings for project a p i error.
+// TestUpdateSettingsForProject_APIError verifies UpdateSettingsForProject when API error.
 func TestUpdateSettingsForProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -271,7 +274,7 @@ func TestUpdateSettingsForProject_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForGroup_Success verifies the behavior of cov update settings for group success.
+// TestUpdateSettingsForGroup_Success verifies UpdateSettingsForGroup when success.
 func TestUpdateSettingsForGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
@@ -285,7 +288,7 @@ func TestUpdateSettingsForGroup_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateSettingsForGroup_ValidationError verifies the behavior of cov update settings for group validation error.
+// TestUpdateSettingsForGroup_ValidationError verifies UpdateSettingsForGroup when validation error.
 func TestUpdateSettingsForGroup_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -298,7 +301,7 @@ func TestUpdateSettingsForGroup_ValidationError(t *testing.T) {
 
 // buildUpdateOpts coverage.
 
-// TestBuildUpdateOpts_AllBooleans verifies the behavior of cov build update opts all booleans.
+// TestBuildUpdateOpts_AllBooleans verifies BuildUpdateOpts when all booleans.
 func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	tr := true
 	fa := false
@@ -321,7 +324,7 @@ func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_UnknownLevel verifies the behavior of cov build update opts unknown level.
+// TestBuildUpdateOpts_UnknownLevel verifies BuildUpdateOpts when unknown level.
 func TestBuildUpdateOpts_UnknownLevel(t *testing.T) {
 	opts := buildUpdateOpts(eventFields{Level: "unknown_level"})
 	if opts.Level != nil {
@@ -329,7 +332,7 @@ func TestBuildUpdateOpts_UnknownLevel(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_EmptyLevel verifies the behavior of cov build update opts empty level.
+// TestBuildUpdateOpts_EmptyLevel verifies BuildUpdateOpts when empty level.
 func TestBuildUpdateOpts_EmptyLevel(t *testing.T) {
 	opts := buildUpdateOpts(eventFields{})
 	if opts.Level != nil {
@@ -337,7 +340,7 @@ func TestBuildUpdateOpts_EmptyLevel(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_ValidLevels verifies the behavior of cov build update opts valid levels.
+// TestBuildUpdateOpts_ValidLevels verifies BuildUpdateOpts when valid levels.
 func TestBuildUpdateOpts_ValidLevels(t *testing.T) {
 	for _, lv := range []string{"disabled", "participating", "watch", "global", "mention", "custom"} {
 		t.Run(lv, func(t *testing.T) {
@@ -351,7 +354,7 @@ func TestBuildUpdateOpts_ValidLevels(t *testing.T) {
 
 // FormatMarkdown wrapper.
 
-// TestFormatMarkdown_Wrapper verifies the behavior of cov format markdown wrapper.
+// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	result := FormatMarkdown(Output{Level: "watch"})
 	if result == nil {
@@ -361,7 +364,7 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 
 // eventLine.
 
-// TestEventLine_Enabled verifies the behavior of cov event line enabled.
+// TestEventLine_Enabled verifies EventLine when enabled.
 func TestEventLine_Enabled(t *testing.T) {
 	line := eventLine("Test Event", true)
 	if !strings.Contains(line, "✅") {
@@ -372,7 +375,7 @@ func TestEventLine_Enabled(t *testing.T) {
 	}
 }
 
-// TestEventLine_Disabled verifies the behavior of cov event line disabled.
+// TestEventLine_Disabled verifies EventLine when disabled.
 func TestEventLine_Disabled(t *testing.T) {
 	line := eventLine("Test Event", false)
 	if !strings.Contains(line, "❌") {
@@ -382,7 +385,7 @@ func TestEventLine_Disabled(t *testing.T) {
 
 // FormatMarkdownString edge cases.
 
-// TestFormatMarkdownString_NoEmail verifies the behavior of cov format markdown string no email.
+// TestFormatMarkdownString_NoEmail verifies FormatMarkdownString when no email.
 func TestFormatMarkdownString_NoEmail(t *testing.T) {
 	out := Output{Level: "watch"}
 	md := FormatMarkdownString(out)
@@ -394,7 +397,7 @@ func TestFormatMarkdownString_NoEmail(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_AllEvents verifies the behavior of cov format markdown string all events.
+// TestFormatMarkdownString_AllEvents verifies FormatMarkdownString when all events.
 func TestFormatMarkdownString_AllEvents(t *testing.T) {
 	out := Output{
 		Level:             "custom",
@@ -429,33 +432,33 @@ func TestFormatMarkdownString_AllEvents(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_Metadata verifies notification settings action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
 	}))
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "notifications" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
-// MCP round-trip for all 6 tools.
+// ActionSpec route execution for all 6 tools.
 
-// TestMCPRound_Trip validates cov m c p round trip across multiple scenarios using table-driven subtests.
-func TestMCPRound_Trip(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
 	}))
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
 
 	tests := []struct {
@@ -472,10 +475,13 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var res *mcp.CallToolResult
-			res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			spec, ok := specByTool[tc.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.name)
+			}
+			res, err := spec.Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool %s: %v", tc.name, err)
+				t.Fatalf("Route.Handler %s: %v", tc.name, err)
 			}
 			if res == nil {
 				t.Fatalf("nil result for %s", tc.name)

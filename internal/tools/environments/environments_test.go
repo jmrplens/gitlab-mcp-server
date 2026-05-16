@@ -11,22 +11,24 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 	errExpCancelledCtx = "expected error for canceled context"
-	errExpZeroEnvID    = "expected error for zero environment_id"
-	pathEnvironments   = "/api/v4/projects/42/environments"
-	pathEnvironment1   = "/api/v4/projects/42/environments/1"
+	// errExpZeroEnvID identifies the err exp zero env ID constant used by this package.
+	errExpZeroEnvID = "expected error for zero environment_id"
+	// pathEnvironments identifies the path environments constant used by this package.
+	pathEnvironments = "/api/v4/projects/42/environments"
+	// pathEnvironment1 identifies the path environment 1 constant used by this package.
+	pathEnvironment1 = "/api/v4/projects/42/environments/1"
 )
 
 // ---------------------------------------------------------------------------
 // environmentList tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentList_Success verifies the behavior of environment list success.
+// TestEnvironmentList_Success verifies EnvironmentList when success.
 func TestEnvironmentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodGet {
@@ -53,7 +55,7 @@ func TestEnvironmentList_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_WithFilters verifies the behavior of environment list with filters.
+// TestEnvironmentList_WithFilters verifies EnvironmentList when with filters.
 func TestEnvironmentList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments {
@@ -79,7 +81,7 @@ func TestEnvironmentList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_MissingProjectID verifies the behavior of environment list missing project i d.
+// TestEnvironmentList_MissingProjectID verifies EnvironmentList when missing project ID.
 func TestEnvironmentList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -91,7 +93,7 @@ func TestEnvironmentList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_CancelledContext verifies the behavior of environment list cancelled context.
+// TestEnvironmentList_CancelledContext verifies EnvironmentList when cancelled context.
 func TestEnvironmentList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -109,7 +111,7 @@ func TestEnvironmentList_CancelledContext(t *testing.T) {
 // environmentGet tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentGet_Success verifies the behavior of environment get success.
+// TestEnvironmentGet_Success verifies EnvironmentGet when success.
 func TestEnvironmentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodGet {
@@ -131,7 +133,7 @@ func TestEnvironmentGet_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_ZeroID verifies the behavior of environment get zero i d.
+// TestEnvironmentGet_ZeroID verifies EnvironmentGet when zero ID.
 func TestEnvironmentGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -146,7 +148,7 @@ func TestEnvironmentGet_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_CancelledContext verifies the behavior of environment get cancelled context.
+// TestEnvironmentGet_CancelledContext verifies EnvironmentGet when cancelled context.
 func TestEnvironmentGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -164,7 +166,7 @@ func TestEnvironmentGet_CancelledContext(t *testing.T) {
 // environmentCreate tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentCreate_Success verifies the behavior of environment create success.
+// TestEnvironmentCreate_Success verifies EnvironmentCreate when success.
 func TestEnvironmentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodPost {
@@ -188,7 +190,7 @@ func TestEnvironmentCreate_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_MissingName verifies the behavior of environment create missing name.
+// TestEnvironmentCreate_MissingName verifies EnvironmentCreate when missing name.
 func TestEnvironmentCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -203,7 +205,7 @@ func TestEnvironmentCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_CancelledContext verifies the behavior of environment create cancelled context.
+// TestEnvironmentCreate_CancelledContext verifies EnvironmentCreate when cancelled context.
 func TestEnvironmentCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -221,7 +223,7 @@ func TestEnvironmentCreate_CancelledContext(t *testing.T) {
 // environmentUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentUpdate_Success verifies the behavior of environment update success.
+// TestEnvironmentUpdate_Success verifies EnvironmentUpdate when success.
 func TestEnvironmentUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodPut {
@@ -245,7 +247,7 @@ func TestEnvironmentUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_ZeroID verifies the behavior of environment update zero i d.
+// TestEnvironmentUpdate_ZeroID verifies EnvironmentUpdate when zero ID.
 func TestEnvironmentUpdate_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -261,7 +263,7 @@ func TestEnvironmentUpdate_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_CancelledContext verifies the behavior of environment update cancelled context.
+// TestEnvironmentUpdate_CancelledContext verifies EnvironmentUpdate when cancelled context.
 func TestEnvironmentUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -279,7 +281,7 @@ func TestEnvironmentUpdate_CancelledContext(t *testing.T) {
 // environmentDelete tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentDelete_Success verifies the behavior of environment delete success.
+// TestEnvironmentDelete_Success verifies EnvironmentDelete when success.
 func TestEnvironmentDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodDelete {
@@ -298,7 +300,7 @@ func TestEnvironmentDelete_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_ZeroID verifies the behavior of environment delete zero i d.
+// TestEnvironmentDelete_ZeroID verifies EnvironmentDelete when zero ID.
 func TestEnvironmentDelete_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -313,7 +315,7 @@ func TestEnvironmentDelete_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_CancelledContext verifies the behavior of environment delete cancelled context.
+// TestEnvironmentDelete_CancelledContext verifies EnvironmentDelete when cancelled context.
 func TestEnvironmentDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -331,7 +333,7 @@ func TestEnvironmentDelete_CancelledContext(t *testing.T) {
 // environmentStop tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentStop_Success verifies the behavior of environment stop success.
+// TestEnvironmentStop_Success verifies EnvironmentStop when success.
 func TestEnvironmentStop_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1+"/stop" && r.Method == http.MethodPost {
@@ -353,7 +355,7 @@ func TestEnvironmentStop_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_WithForce verifies the behavior of environment stop with force.
+// TestEnvironmentStop_WithForce verifies EnvironmentStop when with force.
 func TestEnvironmentStop_WithForce(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1+"/stop" {
@@ -377,7 +379,7 @@ func TestEnvironmentStop_WithForce(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_ZeroID verifies the behavior of environment stop zero i d.
+// TestEnvironmentStop_ZeroID verifies EnvironmentStop when zero ID.
 func TestEnvironmentStop_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -392,7 +394,7 @@ func TestEnvironmentStop_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_CancelledContext verifies the behavior of environment stop cancelled context.
+// TestEnvironmentStop_CancelledContext verifies EnvironmentStop when cancelled context.
 func TestEnvironmentStop_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -408,15 +410,17 @@ func TestEnvironmentStop_CancelledContext(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error, name filter, pagination
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentList_APIError verifies the behavior of environment list a p i error.
+// TestEnvironmentList_APIError verifies EnvironmentList when API error.
 func TestEnvironmentList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -427,7 +431,7 @@ func TestEnvironmentList_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_WithNameFilter verifies the behavior of environment list with name filter.
+// TestEnvironmentList_WithNameFilter verifies EnvironmentList when with name filter.
 func TestEnvironmentList_WithNameFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments" {
@@ -454,7 +458,7 @@ func TestEnvironmentList_WithNameFilter(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_Pagination verifies the behavior of environment list pagination.
+// TestEnvironmentList_Pagination verifies EnvironmentList when pagination.
 func TestEnvironmentList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments" {
@@ -485,7 +489,7 @@ func TestEnvironmentList_Pagination(t *testing.T) {
 // Get — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentGet_APIError verifies the behavior of environment get a p i error.
+// TestEnvironmentGet_APIError verifies EnvironmentGet when API error.
 func TestEnvironmentGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -496,7 +500,7 @@ func TestEnvironmentGet_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_MissingProjectID verifies the behavior of environment get missing project i d.
+// TestEnvironmentGet_MissingProjectID verifies EnvironmentGet when missing project ID.
 func TestEnvironmentGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{EnvironmentID: 1})
@@ -509,7 +513,7 @@ func TestEnvironmentGet_MissingProjectID(t *testing.T) {
 // Create — API error, missing project_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentCreate_APIError verifies the behavior of environment create a p i error.
+// TestEnvironmentCreate_APIError verifies EnvironmentCreate when API error.
 func TestEnvironmentCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -520,7 +524,7 @@ func TestEnvironmentCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_MissingProjectID verifies the behavior of environment create missing project i d.
+// TestEnvironmentCreate_MissingProjectID verifies EnvironmentCreate when missing project ID.
 func TestEnvironmentCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Create(context.Background(), client, CreateInput{Name: "staging"})
@@ -529,7 +533,7 @@ func TestEnvironmentCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_AllOptionalFields verifies the behavior of environment create all optional fields.
+// TestEnvironmentCreate_AllOptionalFields verifies EnvironmentCreate when all optional fields.
 func TestEnvironmentCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/environments" {
@@ -568,7 +572,7 @@ func TestEnvironmentCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, missing project_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentUpdate_APIError verifies the behavior of environment update a p i error.
+// TestEnvironmentUpdate_APIError verifies EnvironmentUpdate when API error.
 func TestEnvironmentUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -579,7 +583,7 @@ func TestEnvironmentUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_MissingProjectID verifies the behavior of environment update missing project i d.
+// TestEnvironmentUpdate_MissingProjectID verifies EnvironmentUpdate when missing project ID.
 func TestEnvironmentUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{EnvironmentID: 1, Name: "x"})
@@ -588,7 +592,7 @@ func TestEnvironmentUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_AllOptionalFields verifies the behavior of environment update all optional fields.
+// TestEnvironmentUpdate_AllOptionalFields verifies EnvironmentUpdate when all optional fields.
 func TestEnvironmentUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/environments/5" {
@@ -624,7 +628,7 @@ func TestEnvironmentUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentDelete_APIError verifies the behavior of environment delete a p i error.
+// TestEnvironmentDelete_APIError verifies EnvironmentDelete when API error.
 func TestEnvironmentDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -635,7 +639,7 @@ func TestEnvironmentDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_MissingProjectID verifies the behavior of environment delete missing project i d.
+// TestEnvironmentDelete_MissingProjectID verifies EnvironmentDelete when missing project ID.
 func TestEnvironmentDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(context.Background(), client, DeleteInput{EnvironmentID: 1})
@@ -648,7 +652,7 @@ func TestEnvironmentDelete_MissingProjectID(t *testing.T) {
 // Stop — API error, missing project_id, force=false
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentStop_APIError verifies the behavior of environment stop a p i error.
+// TestEnvironmentStop_APIError verifies EnvironmentStop when API error.
 func TestEnvironmentStop_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -659,7 +663,7 @@ func TestEnvironmentStop_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_MissingProjectID verifies the behavior of environment stop missing project i d.
+// TestEnvironmentStop_MissingProjectID verifies EnvironmentStop when missing project ID.
 func TestEnvironmentStop_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Stop(context.Background(), client, StopInput{EnvironmentID: 1})
@@ -668,7 +672,7 @@ func TestEnvironmentStop_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_ForceFalse verifies the behavior of environment stop force false.
+// TestEnvironmentStop_ForceFalse verifies EnvironmentStop when force false.
 func TestEnvironmentStop_ForceFalse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments/2/stop" && r.Method == http.MethodPost {
@@ -696,7 +700,7 @@ func TestEnvironmentStop_ForceFalse(t *testing.T) {
 // toOutput — all optional timestamp fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllTimestampFields verifies the behavior of to output all timestamp fields.
+// TestToOutput_AllTimestampFields verifies ToOutput when all timestamp fields.
 func TestToOutput_AllTimestampFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:          1,
@@ -733,7 +737,7 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyName verifies the behavior of format output markdown empty name.
+// TestFormatOutputMarkdown_EmptyName verifies FormatOutputMarkdown when empty name.
 func TestFormatOutputMarkdown_EmptyName(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -741,7 +745,7 @@ func TestFormatOutputMarkdown_EmptyName(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:    7,
@@ -774,7 +778,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithEnvironments verifies the behavior of format list markdown with environments.
+// TestFormatListMarkdown_WithEnvironments verifies FormatListMarkdown when with environments.
 func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 	out := ListOutput{
 		Environments: []Output{
@@ -805,7 +809,7 @@ func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No environments found") {
@@ -836,26 +840,37 @@ func TestGet_WithAutoStopAt(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for environment actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := environmentSpecsByTool(t, specs)
+
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "environments" {
+			t.Fatalf("OwnerPackage for %s = %q, want environments", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 6 tools
+// ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newEnvironmentsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates environment routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newEnvironmentSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -872,31 +887,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newEnvironmentsMCPSession is an internal helper for the environments package.
-func newEnvironmentsMCPSession(t *testing.T) *mcp.ClientSession {
+// newEnvironmentSpecsByTool constructs environment specs by tool test fixtures.
+func newEnvironmentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	envJSON := `{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2026-01-01T00:00:00Z"}`
@@ -934,30 +941,11 @@ func newEnvironmentsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return environmentSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestEnvironmentGet_EmbedsCanonicalResource asserts gitlab_environment_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/environment/{env_id}.
-func TestEnvironmentGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_EnvironmentGetRoute verifies the canonical environment get route output.
+func TestActionSpecs_EnvironmentGetRoute(t *testing.T) {
 	const respJSON = `{"id":7,"name":"prod","slug":"prod","state":"available","tier":"production"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/environments/7") {
@@ -966,7 +954,28 @@ func TestEnvironmentGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "environment_id": 7}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_environment_get", args, "gitlab://project/42/environment/7", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := environmentSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_environment_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "environment_id": 7})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 7 || out.Name != "prod" {
+		t.Fatalf("environment output = %#v, want ID 7 name prod", out)
+	}
+}
+
+// environmentSpecsByTool supports environment specs by tool assertions in environments tests.
+func environmentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

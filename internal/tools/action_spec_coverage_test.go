@@ -11,11 +11,15 @@ import (
 )
 
 const (
-	expectedBaseDynamicCatalogActions         = 855
-	expectedEnterpriseDynamicCatalogActions   = 1010
+	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
+	expectedBaseDynamicCatalogActions = 867
+	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
+	expectedEnterpriseDynamicCatalogActions = 1010
+	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
 	expectedGitLabComEnterpriseCatalogActions = 1015
 )
 
+// TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.
 func TestActionCatalog_BaselineCountsDoNotRegress(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -38,6 +42,7 @@ func TestActionCatalog_BaselineCountsDoNotRegress(t *testing.T) {
 	}
 }
 
+// TestActionSpecCoverage_AllCatalogRoutesClassified verifies ActionSpecCoverage when all catalog routes classified.
 func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 	catalog := mustBuildDynamicActionCatalogForTest(t, newGitLabDotComClient(t), true)
 	missing := make([]actioncatalog.ActionID, 0)
@@ -52,6 +57,7 @@ func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 	}
 }
 
+// mustBuildDynamicActionCatalogForTest builds dynamic action catalog for test test fixtures and fails the test on error.
 func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
 	t.Helper()
 	catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
@@ -62,6 +68,7 @@ func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Cli
 	return catalog
 }
 
+// formatMissingActionSpecs renders the result as a formatted string.
 func formatMissingActionSpecs(ids []actioncatalog.ActionID) string {
 	var builder strings.Builder
 	for _, id := range ids {

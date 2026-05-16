@@ -21,7 +21,7 @@
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1006 self-managed Enterprise/Premium; 1011 on GitLab.com Enterprise/Premium with Orbit                     |
-| Meta-mode tools           | 32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
+| Meta-mode tools           | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 3 dynamic tools (`gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
 | MCP Resources             | 46                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
@@ -55,10 +55,10 @@ gitlab-mcp-server/
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
-│   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — builds meta route groups for the canonical action catalog
+│   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
+│   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic search/describe/execute surface over catalog routes
-│   │   ├── markdown.go          # Thin delegator to type-based markdown registry (toolutil.MarkdownForResult)
+│   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
 │   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
 │   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
 │   │   ├── logging.go           # logToolCall helper
@@ -143,8 +143,8 @@ gitlab-mcp-server/
 1. Create `internal/tools/{domain}/` sub-package directory
 2. Create `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace)
 3. Create `{domain}_test.go` with table-driven tests using `testutil.NewTestClient` and `httptest`
-4. Create `register.go` with `RegisterTools(server, client)` — use `mcp.AddTool` with typed `Out` struct to auto-generate `OutputSchema` and `StructuredContent`
-5. Wire the sub-package in `internal/tools/register.go` and `register_meta.go`
+4. Add or update domain-local `ActionSpecs` so the action has one canonical route, owner package, metadata, compatibility policy, individual projection metadata, and tests.
+5. If the domain is new, update the generated/audited catalog aggregation path rather than adding ad hoc root registration calls.
 6. Add markdown formatters in the sub-package `markdown.go` `init()` function using `toolutil.RegisterMarkdown[T]` with appropriate content annotations (`ContentList`, `ContentDetail`, `ContentMutate`)
 7. For list formatters: add `toolutil.HintPreserveLinks` as the first hint in `WriteHints()` to instruct the LLM to preserve clickable links
 8. Add clickable `[text](url)` links in Markdown table columns where applicable (MRs, issues, pipelines, etc.)
@@ -239,8 +239,8 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
-| `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
-| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; default is an empty string (not set), matching `--tool-surface`, so `TOOL_SURFACE` does not override `META_TOOLS` unless explicitly set to a non-empty value |
+| `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
+| `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; default is an empty string (not set), matching `--tool-surface`, so `TOOL_SURFACE` does not override legacy `META_TOOLS` unless explicitly set to a non-empty value |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps only `gitlab://workspace/roots` and is useful with dynamic mode |
 | `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
@@ -449,13 +449,13 @@ ADRs document key decisions in `docs/adr/`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package is split into 163 domain sub-packages (162 registered in `internal/tools/register.go` + 1 `serverupdate` registered in `cmd/server/main.go` due to its different constructor signature). Each sub-package has its own `register.go`. This provides:
+The `internal/tools/` package is split into 163 domain sub-packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
 - Zero import cycles — sub-packages import from `toolutil/` only, never from each other
-- `internal/tools/register.go` delegates to all sub-package `RegisterTools()` functions
-- Validated by `TestAllSubPackagesRegistered` which scans all sub-directories and verifies registration
+- `internal/tools/register.go` registers individual tools from the canonical action catalog projection
+- Validated by catalog and source guardrails such as `TestRegisterAllDoesNotUseDomainRegisterTools` and ActionSpec coverage audits
 
 ### Markdown registry pattern
 
@@ -471,7 +471,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 `TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` register only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. `dynamic-2` is an experimental two-tool surface (`gitlab_find_action` + `gitlab_execute_tool`) and should not be promoted unless explicitly requested.
 
-Developers add normal GitLab actions through the route definitions that feed `internal/tools/register_meta.go` or approved delegated meta groups. `internal/tools/action_catalog.go` builds the canonical catalog from those definitions; meta-tools register visible domain dispatchers from it, and dynamic mode builds search/describe/execute over it. Individual `RegisterTools` remains a separate compatibility surface. Do not add duplicate dynamic-only action definitions for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
+Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds search/describe/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
 Search combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should search, describe exact schemas, then execute the canonical action ID returned by search or describe. See `docs/dynamic-tools.md` and ADR-0011.
 
@@ -479,13 +479,13 @@ Search combines canonical `domain.action` IDs, domain/action names, aliases, nat
 
 `GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in stdio mode. In HTTP mode, the `--enterprise` flag explicitly forces the Premium/Ultimate catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition. The catalog effect is the same in individual and meta-tool modes:
 
-**Individual mode** (`META_TOOLS=false`) — gates 35 tool sub-package registrations in `register.go`:
+**Individual mode** (`TOOL_SURFACE=individual`; legacy `META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 
 - projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
-**Meta-tool mode** (`META_TOOLS=true`, default) — gates 15 dedicated meta-tools in `register_meta.go`:
+**Meta-tool mode** (`TOOL_SURFACE=meta`, default) — gates 14 dedicated Enterprise/Premium catalog groups:
 
-- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_storage_move, gitlab_vulnerability, gitlab_security_finding
+- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_finding
 
 Plus enterprise-only routes injected into 3 base meta-tools:
 
@@ -513,8 +513,8 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -d '{
 ### Common issues
 
 - **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
-- **Tool not found**: Check `register.go` for individual tools, `register_meta.go` / `action_catalog.go` for catalog-backed meta and dynamic actions, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
-- **Meta-tools disabled**: `META_TOOLS=false` disables discovery tools — set to `true` (default)
+- **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
+- **Meta-tools disabled**: legacy `META_TOOLS=false` maps to `TOOL_SURFACE=individual`; prefer setting `TOOL_SURFACE=meta` explicitly
 - **Dynamic mode shows only three tools**: this is expected when `TOOL_SURFACE=dynamic` or `dynamic-3` is set. Use `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`; unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta` to return to default meta-tools.
 - **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler

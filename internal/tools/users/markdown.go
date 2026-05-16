@@ -9,7 +9,17 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const tblSep5Col = "|---|---|---|---|---|\n"
+const fmtDeletedRow = "- **Deleted**: %s %v\n"
+
+type userNotFoundOutput struct {
+	Identifier string `json:"identifier"`
+}
+
+func formatUserNotFound(out userNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("User", out.Identifier,
+		"Use gitlab_list_users to search users by username or email",
+		"The user may have been blocked or deleted")
+}
 
 // FormatMarkdownString renders the authenticated user profile as a Markdown summary.
 func FormatMarkdownString(u Output) string {
@@ -47,8 +57,7 @@ func FormatListMarkdownString(o ListOutput) string {
 	if len(o.Users) == 0 {
 		b.WriteString("No users found.\n")
 	} else {
-		b.WriteString("| ID | Username | Name | Email | State |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State"))
 		for _, u := range o.Users {
 			fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s | %s |\n",
 				u.ID, toolutil.EscapeMdTableCell(u.Username), u.WebURL,
@@ -128,8 +137,7 @@ func FormatSSHKeyListMarkdownString(o SSHKeyListOutput) string {
 	if len(o.Keys) == 0 {
 		b.WriteString("No SSH keys found.\n")
 	} else {
-		b.WriteString("| ID | Title | Usage Type | Created At | Expires At |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Usage Type", "Created At", "Expires At"))
 		for _, k := range o.Keys {
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
 				k.ID, toolutil.EscapeMdTableCell(k.Title), k.UsageType, k.CreatedAt, k.ExpiresAt)
@@ -154,8 +162,7 @@ func FormatEmailListMarkdownString(o EmailListOutput) string {
 	if len(o.Emails) == 0 {
 		b.WriteString("No email addresses found.\n")
 	} else {
-		b.WriteString("| ID | Email | Confirmed At |\n")
-		b.WriteString("|---|---|---|\n")
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed At"))
 		for _, e := range o.Emails {
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), toolutil.FormatTime(e.ConfirmedAt))
 		}
@@ -178,8 +185,7 @@ func FormatContributionEventsMarkdownString(o ContributionEventsOutput) string {
 	if len(o.Events) == 0 {
 		b.WriteString("No contribution events found.\n")
 	} else {
-		b.WriteString("| ID | Action | Target Type | Target | Created At |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Action", "Target Type", "Target", "Created At"))
 		for _, e := range o.Events {
 			target := toolutil.FormatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
@@ -219,12 +225,35 @@ func FormatAssociationsCountMarkdown(o AssociationsCountOutput) *mcp.CallToolRes
 	return toolutil.ToolResultWithMarkdown(FormatAssociationsCountMarkdownString(o))
 }
 
+// FormatDeleteUserMarkdownString renders user deletion output as Markdown.
+func FormatDeleteUserMarkdownString(o DeleteOutput) string {
+	return fmt.Sprintf("## User Deleted\n\n"+toolutil.FmtMdID+fmtDeletedRow,
+		o.UserID, toolutil.EmojiSuccess, o.Deleted)
+}
+
+// FormatDeleteSSHKeyMarkdownString renders SSH key deletion output as Markdown.
+func FormatDeleteSSHKeyMarkdownString(o DeleteSSHKeyOutput) string {
+	return fmt.Sprintf("## SSH Key Deleted\n\n"+toolutil.FmtMdID+fmtDeletedRow,
+		o.KeyID, toolutil.EmojiSuccess, o.Deleted)
+}
+
 func init() {
+	toolutil.RegisterMarkdownResult(formatUserNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdownString)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatStatusMarkdownString)
+	toolutil.RegisterMarkdown(FormatSSHKeyMarkdownString)
 	toolutil.RegisterMarkdown(FormatSSHKeyListMarkdownString)
 	toolutil.RegisterMarkdown(FormatEmailListMarkdownString)
 	toolutil.RegisterMarkdown(FormatContributionEventsMarkdownString)
 	toolutil.RegisterMarkdown(FormatAssociationsCountMarkdownString)
+	toolutil.RegisterMarkdown(FormatAdminActionMarkdownString)
+	toolutil.RegisterMarkdown(FormatDeleteUserMarkdownString)
+	toolutil.RegisterMarkdown(FormatDeleteSSHKeyMarkdownString)
+	toolutil.RegisterMarkdown(FormatUserActivitiesMarkdownString)
+	toolutil.RegisterMarkdown(FormatUserMembershipsMarkdownString)
+	toolutil.RegisterMarkdown(FormatUserRunnerMarkdownString)
+	toolutil.RegisterMarkdown(FormatDeleteUserIdentityMarkdownString)
+	toolutil.RegisterMarkdown(FormatServiceAccountListMarkdownString)
+	toolutil.RegisterMarkdown(FormatCurrentUserPATMarkdownString)
 }

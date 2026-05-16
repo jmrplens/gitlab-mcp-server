@@ -14,9 +14,11 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// dynamicSearchCorpusCase describes one dynamic search corpus fixture row.
 type dynamicSearchCorpusCase struct {
 	Category             string                     `json:"category"`
 	Query                string                     `json:"query"`
@@ -31,6 +33,7 @@ type dynamicSearchCorpusCase struct {
 	Notes                string                     `json:"notes"`
 }
 
+// dynamicSearchCorpusAlias maps an ad hoc query alias to its canonical action.
 type dynamicSearchCorpusAlias struct {
 	Alias     string `json:"alias"`
 	Canonical string `json:"canonical"`
@@ -347,6 +350,7 @@ func TestDynamicSearchCorpus(t *testing.T) {
 	}
 }
 
+// loadDynamicSearchCorpus loads dynamic search corpus fixture data for tests.
 func loadDynamicSearchCorpus(t *testing.T) []dynamicSearchCorpusCase {
 	t.Helper()
 	content, err := os.ReadFile("testdata/dynamic_search_queries.json")
@@ -1308,6 +1312,7 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 	}
 }
 
+// TestDescribe_IncludesConsolidatedRegisterMetaReplacementActions verifies Describe includes consolidated register meta replacement actions.
 func TestDescribe_IncludesConsolidatedRegisterMetaReplacementActions(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
@@ -1794,7 +1799,7 @@ func TestNormalizeActionScopedParamsWithExplanation_KeepsValidSnippetCreateParam
 // TestActionScopedParamAliases_CoversDocumentedActions verifies the declarative
 // metadata includes every action currently normalized by dynamic execute.
 func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
-	aliases := actionScopedParamAliases()
+	aliases := actioncompat.ParameterAliases()
 	wantActions := []string{
 		"job.list",
 		"repository.file_get",
@@ -1817,8 +1822,28 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"snippet.project_create",
 	}
 	for _, actionID := range wantActions {
-		if !slices.ContainsFunc(aliases, func(alias actionScopedParamAlias) bool { return alias.ActionID == actionID }) {
-			t.Fatalf("actionScopedParamAliases() = %+v, want action %s", aliases, actionID)
+		if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
+			t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
+		}
+	}
+}
+
+// TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables guards the
+// catalog-first boundary: Dynamic may adapt compatibility metadata, but the
+// source policy tables belong to actioncompat and ActionSpec projection.
+func TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables(t *testing.T) {
+	source, err := os.ReadFile("register.go")
+	if err != nil {
+		t.Fatalf("ReadFile(register.go) error = %v", err)
+	}
+	for _, forbidden := range []string{
+		"return annotateCompatibilityAliases([]actionAlias{",
+		"func buildSnippetCreateFilesFromSingleFileParams(",
+		"func gitlabAccessLevelValue(",
+		"func boolStringValue(",
+	} {
+		if strings.Contains(string(source), forbidden) {
+			t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
 		}
 	}
 }
@@ -2545,6 +2570,7 @@ func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
 	}
 }
 
+// actionDescriptionByID supports action description by ID assertions in dynamic tests.
 func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) ActionDescription {
 	t.Helper()
 	for _, action := range output.Actions {
@@ -2556,6 +2582,7 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	return ActionDescription{}
 }
 
+// realCatalogRegistry supports real catalog registry assertions in dynamic tests.
 func realCatalogRegistry(t *testing.T) *Registry {
 	t.Helper()
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
@@ -2569,6 +2596,7 @@ func realCatalogRegistry(t *testing.T) *Registry {
 	return NewRegistryFromCatalog(catalog)
 }
 
+// gitLabDotComEnterpriseRegistry supports GitLab dot com enterprise registry assertions in dynamic tests.
 func gitLabDotComEnterpriseRegistry(t *testing.T) (*actioncatalog.Catalog, *Registry) {
 	t.Helper()
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
@@ -2586,6 +2614,7 @@ func gitLabDotComEnterpriseRegistry(t *testing.T) (*actioncatalog.Catalog, *Regi
 	return catalog, NewRegistryFromCatalog(catalog)
 }
 
+// assertSearchResultsContain checks search results contain invariants for tests.
 func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...string) {
 	t.Helper()
 	for _, actionID := range want {
@@ -2596,6 +2625,7 @@ func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...st
 	}
 }
 
+// assertSearchResultIDsEqual checks search result IDs equal invariants for tests.
 func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...string) {
 	t.Helper()
 	if len(results) != len(want) {
@@ -2635,6 +2665,7 @@ func scoredActionIDs(matches []scoredActionEntry) []string {
 	return ids
 }
 
+// assertSchemaHasProperties checks schema has properties invariants for tests.
 func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...string) {
 	t.Helper()
 	properties := schemaProperties(schema)
@@ -2645,6 +2676,7 @@ func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...str
 	}
 }
 
+// assertSchemaPropertyNamesEqual checks schema property names equal invariants for tests.
 func assertSchemaPropertyNamesEqual(t *testing.T, actionID string, gotSchema, wantSchema map[string]any) {
 	t.Helper()
 	gotNames := sortedPropertyNames(schemaProperties(gotSchema))
@@ -2654,6 +2686,7 @@ func assertSchemaPropertyNamesEqual(t *testing.T, actionID string, gotSchema, wa
 	}
 }
 
+// schemaProperties extracts schema properties details for schema assertions.
 func schemaProperties(schema map[string]any) map[string]any {
 	properties, _ := schema["properties"].(map[string]any)
 	if properties == nil {
@@ -2662,6 +2695,7 @@ func schemaProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
+// schemaRequired extracts schema required details for schema assertions.
 func schemaRequired(schema map[string]any) []string {
 	var required []string
 	switch values := schema["required"].(type) {
@@ -2678,6 +2712,7 @@ func schemaRequired(schema map[string]any) []string {
 	return required
 }
 
+// listedToolInputSchema supports listed tool input schema assertions in dynamic tests.
 func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[string]any {
 	t.Helper()
 	for _, tool := range tools {
@@ -2698,6 +2733,7 @@ func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[str
 	return nil
 }
 
+// sortedPropertyNames sorts ed property names fixtures into deterministic order.
 func sortedPropertyNames(properties map[string]any) []string {
 	names := make([]string, 0, len(properties))
 	for name := range properties {
@@ -2707,6 +2743,7 @@ func sortedPropertyNames(properties map[string]any) []string {
 	return names
 }
 
+// testRoutes supports test routes assertions in dynamic tests.
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	t.Helper()
 	return map[string]toolutil.ActionMap{
@@ -3247,6 +3284,7 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	}
 }
 
+// textContent extracts text content from MCP result content for assertions.
 func textContent(result *mcp.CallToolResult) string {
 	if result == nil || len(result.Content) == 0 {
 		return ""
@@ -3258,11 +3296,11 @@ func textContent(result *mcp.CallToolResult) string {
 	return text.Text
 }
 
-// Additional dynamic dispatcher coverage tests migrated from register_coverage_test.go.
 // TestRegistry_DefensiveBranches covers small validation and fallback branches
 // in the dynamic registry dispatcher. These scenarios matter because the catalog
 // action surface should return helpful tool errors for malformed calls instead
-// of leaking empty or ambiguous execution attempts.
+// of leaking empty or ambiguous execution attempts. The cases preserve coverage
+// migrated from the former register_coverage_test.go file.
 func TestRegistry_DefensiveBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -3396,8 +3434,8 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 
 	t.Run("segmented search ignores short queries", func(t *testing.T) {
 		registry := NewRegistry(testRoutes(t))
-		if got := registry.segmentedSearchMatches(normalizeSearchTerms("project get")); got != nil {
-			t.Fatalf("segmentedSearchMatches(short query) = %v, want nil", got)
+		if got := registry.segmentedSearchMatchesWithScorer(normalizeSearchTerms("project get"), defaultLimit, scoreEntryWithoutExplanation); got != nil {
+			t.Fatalf("segmentedSearchMatchesWithScorer(short query) = %v, want nil", got)
 		}
 	})
 }
@@ -3687,15 +3725,15 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 func TestActionScopedParamValueConversions(t *testing.T) {
 	stateCases := map[any]string{"closed": "close", "OPEN": "reopen"}
 	for input, want := range stateCases {
-		got, ok := issueStateEventValue(input)
+		got, ok := actioncompat.IssueStateEventValue(input)
 		if !ok || got != want {
 			t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", input, got, ok, want)
 		}
 	}
-	if _, ok := issueStateEventValue(123); ok {
+	if _, ok := actioncompat.IssueStateEventValue(123); ok {
 		t.Fatal("issueStateEventValue(non-string) converted unexpectedly")
 	}
-	if _, ok := issueStateEventValue("archived"); ok {
+	if _, ok := actioncompat.IssueStateEventValue("archived"); ok {
 		t.Fatal("issueStateEventValue(archived) converted unexpectedly")
 	}
 
@@ -3711,22 +3749,22 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 		"owner":        50,
 	}
 	for input, want := range accessCases {
-		got, ok := gitlabAccessLevelValue(input)
+		got, ok := actioncompat.GitLabAccessLevelValue(input)
 		if !ok || got != want {
 			t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", input, got, ok, want)
 		}
 	}
 	for _, input := range []any{float64(30.5), 70, int64(70), "70", "admin", true} {
-		if got, ok := gitlabAccessLevelValue(input); ok {
+		if got, ok := actioncompat.GitLabAccessLevelValue(input); ok {
 			t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", input, got)
 		}
 	}
 
-	if value, ok := boolStringValue(" true "); !ok || !value {
+	if value, ok := actioncompat.BoolStringValue(" true "); !ok || !value {
 		t.Fatalf("boolStringValue(true) = %t, %t; want true, true", value, ok)
 	}
 	for _, input := range []any{true, "not-bool"} {
-		if _, ok := boolStringValue(input); ok {
+		if _, ok := actioncompat.BoolStringValue(input); ok {
 			t.Fatalf("boolStringValue(%v) converted unexpectedly", input)
 		}
 	}
@@ -3736,32 +3774,28 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 // normalization helpers preserve invalid entries and only clone maps when a
 // conversion is possible. It uses in-memory parameter maps as fixtures.
 func TestSnippetParamNormalization_DefensiveBranches(t *testing.T) {
-	cloneCalls := 0
+	schema := map[string]any{"properties": map[string]any{"files": map[string]any{}}}
 	params := map[string]any{"content": "body"}
-	clone := func() map[string]any {
-		cloneCalls++
-		return params
-	}
-	if buildSnippetCreateFilesFromSingleFileParams(clone, params) {
-		t.Fatal("buildSnippetCreateFilesFromSingleFileParams() converted without file_name")
-	}
-	if cloneCalls != 0 {
-		t.Fatalf("cloneCalls = %d, want 0", cloneCalls)
+	normalized, explanations := NormalizeActionScopedParamsWithExplanation("snippet.project_create", params, schema)
+	if _, hasFiles := normalized["files"]; hasFiles || len(explanations) != 0 {
+		t.Fatalf("NormalizeActionScopedParamsWithExplanation() = %+v, %+v; want no snippet conversion without file_name", normalized, explanations)
 	}
 
 	files := map[string]any{"files": []any{"not-a-map", map[string]any{"file_name": "a.go"}}}
-	if !normalizeSnippetFileNameFields(cloneMap(files), files) {
-		t.Fatal("normalizeSnippetFileNameFields() = false, want true for map entry")
+	normalized, explanations = NormalizeActionScopedParamsWithExplanation("snippet.project_create", files, schema)
+	if len(explanations) == 0 {
+		t.Fatal("NormalizeActionScopedParamsWithExplanation() produced no explanation, want files.file_name normalization")
 	}
-	if got := files["files"].([]any)[0]; got != "not-a-map" {
+	if got := normalized["files"].([]any)[0]; got != "not-a-map" {
 		t.Fatalf("first file entry = %#v, want original non-map", got)
 	}
 
 	actions := map[string]any{"files": []any{"not-a-map", map[string]any{"action": "create", "file_path": "a.go"}}}
-	if !stripSnippetCreateFileActions(cloneMap(actions), actions) {
-		t.Fatal("stripSnippetCreateFileActions() = false, want true for create action")
+	normalized, explanations = NormalizeActionScopedParamsWithExplanation("snippet.project_create", actions, schema)
+	if len(explanations) == 0 {
+		t.Fatal("NormalizeActionScopedParamsWithExplanation() produced no explanation, want files.action normalization")
 	}
-	if got := actions["files"].([]any)[0]; got != "not-a-map" {
+	if got := normalized["files"].([]any)[0]; got != "not-a-map" {
 		t.Fatalf("first action entry = %#v, want original non-map", got)
 	}
 }
@@ -3820,8 +3854,10 @@ func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
 	}
 }
 
+// testEnumStringer holds test enum stringer data for the dynamic package.
 type testEnumStringer string
 
+// String returns the display label for testEnumStringer.
 func (value testEnumStringer) String() string { return string(value) }
 
 // TestSchemaSearchTermHelpers_Branches verifies schema descriptions and enum
@@ -3966,10 +4002,7 @@ func TestRequiredParamAndPlaceholderBranches(t *testing.T) {
 	}
 }
 
-func cloneMap(target map[string]any) func() map[string]any {
-	return func() map[string]any { return target }
-}
-
+// schemaWithProperties extracts schema with properties details for schema assertions.
 func schemaWithProperties(names ...string) map[string]any {
 	properties := make(map[string]any, len(names))
 	for _, name := range names {
@@ -4052,9 +4085,9 @@ func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
 	}
 }
 
-// Benchmarks migrated from register_benchmark_test.go.
 // BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
-// allocations against the captured meta catalog plus standalone routes.
+// allocations against the captured meta catalog plus standalone routes. It
+// preserves the benchmark coverage migrated from register_benchmark_test.go.
 func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 	registry := benchmarkRegistry(b)
 	ctx := context.Background()
@@ -4130,6 +4163,7 @@ func BenchmarkSearch_FieldAwareIndex(b *testing.B) {
 	}
 }
 
+// benchmarkRegistry supports benchmark registry assertions in dynamic tests.
 func benchmarkRegistry(b *testing.B) *Registry {
 	b.Helper()
 
@@ -4150,6 +4184,7 @@ func benchmarkRegistry(b *testing.B) *Registry {
 	return registry
 }
 
+// benchmarkName supports benchmark name assertions in dynamic tests.
 func benchmarkName(query string) string {
 	parts := strings.Fields(strings.ToLower(query))
 	if len(parts) == 0 {

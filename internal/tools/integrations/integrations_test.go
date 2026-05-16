@@ -4,7 +4,6 @@
 package integrations
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -16,12 +15,18 @@ import (
 )
 
 const (
-	errExpNonNilResult    = "expected non-nil result"
+	// errExpNonNilResult identifies the err exp non nil result constant used by this package.
+	errExpNonNilResult = "expected non-nil result"
+	// errExpUnsupportedSlug identifies the err exp unsupported slug constant used by this package.
 	errExpUnsupportedSlug = "expected error for unsupported slug"
-	fmtUnexpErr           = "unexpected error: %v"
-	fmtExpSlugJira        = "expected slug 'jira', got %q"
-	testSlugJira          = "jira"
-	testTitleJira         = "Jira"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// fmtExpSlugJira identifies the fmt exp slug jira constant used by this package.
+	fmtExpSlugJira = "expected slug 'jira', got %q"
+	// testSlugJira identifies the test slug jira constant used by this package.
+	testSlugJira = "jira"
+	// testTitleJira identifies the test title jira constant used by this package.
+	testTitleJira = "Jira"
 )
 
 // matchIntegrationPath checks if the URL path ends with a given suffix
@@ -33,7 +38,7 @@ func matchIntegrationPath(path, suffix string) bool {
 
 // List.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/services") && r.Method == http.MethodGet {
@@ -64,7 +69,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -79,7 +84,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -93,7 +98,7 @@ func TestList_Error(t *testing.T) {
 
 // Get.
 
-// TestGet_JiraSuccess verifies the behavior of get jira success.
+// TestGet_JiraSuccess verifies Get when jira success.
 func TestGet_JiraSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {
@@ -115,7 +120,7 @@ func TestGet_JiraSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_SlackSuccess verifies the behavior of get slack success.
+// TestGet_SlackSuccess verifies Get when slack success.
 func TestGet_SlackSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, "slack") && r.Method == http.MethodGet {
@@ -134,7 +139,7 @@ func TestGet_SlackSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_UnsupportedSlug verifies the behavior of get unsupported slug.
+// TestGet_UnsupportedSlug verifies Get when unsupported slug.
 func TestGet_UnsupportedSlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -146,7 +151,7 @@ func TestGet_UnsupportedSlug(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -160,7 +165,7 @@ func TestGet_APIError(t *testing.T) {
 
 // Delete.
 
-// TestDelete_JiraSuccess verifies the behavior of delete jira success.
+// TestDelete_JiraSuccess verifies Delete when jira success.
 func TestDelete_JiraSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodDelete {
@@ -176,7 +181,7 @@ func TestDelete_JiraSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_SlackApplicationSuccess verifies the behavior of delete slack application success.
+// TestDelete_SlackApplicationSuccess verifies Delete when slack application success.
 func TestDelete_SlackApplicationSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, "gitlab-slack-application") && r.Method == http.MethodDelete {
@@ -192,7 +197,7 @@ func TestDelete_SlackApplicationSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_UnsupportedSlug verifies the behavior of delete unsupported slug.
+// TestDelete_UnsupportedSlug verifies Delete when unsupported slug.
 func TestDelete_UnsupportedSlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -204,7 +209,7 @@ func TestDelete_UnsupportedSlug(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -218,7 +223,7 @@ func TestDelete_Error(t *testing.T) {
 
 // SetJira.
 
-// TestSetJira_Success verifies the behavior of set jira success.
+// TestSetJira_Success verifies SetJira when success.
 func TestSetJira_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodPut {
@@ -245,7 +250,7 @@ func TestSetJira_Success(t *testing.T) {
 	}
 }
 
-// TestSetJira_Error verifies the behavior of set jira error.
+// TestSetJira_Error verifies SetJira when error.
 func TestSetJira_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -262,7 +267,7 @@ func TestSetJira_Error(t *testing.T) {
 
 // Markdown Formatters.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -270,7 +275,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Integrations: []IntegrationItem{
@@ -283,7 +288,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true, CreatedAt: "2026-01-01"},
@@ -295,13 +300,14 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
 // ---------------------------------------------------------------------------
 // List — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies the behavior of list a p i error400.
+// TestList_APIError400 verifies List when API error 400.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -316,7 +322,7 @@ func TestList_APIError400(t *testing.T) {
 // Get — all slug dispatches, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestGet_AllSlugsSuccess verifies the behavior of get all slugs success.
+// TestGet_AllSlugsSuccess verifies Get when all slugs success.
 func TestGet_AllSlugsSuccess(t *testing.T) {
 	slugs := []string{
 		"discord", "mattermost", "microsoft-teams", "telegram",
@@ -345,7 +351,7 @@ func TestGet_AllSlugsSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_APIError400 verifies the behavior of get a p i error400.
+// TestGet_APIError400 verifies Get when API error 400.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -360,7 +366,7 @@ func TestGet_APIError400(t *testing.T) {
 // Delete — all slug dispatches, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestDelete_AllSlugsSuccess verifies the behavior of delete all slugs success.
+// TestDelete_AllSlugsSuccess verifies Delete when all slugs success.
 func TestDelete_AllSlugsSuccess(t *testing.T) {
 	slugs := []string{
 		"jira", "slack", "discord", "mattermost", "microsoft-teams", "telegram",
@@ -386,7 +392,7 @@ func TestDelete_AllSlugsSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError400 verifies the behavior of delete a p i error400.
+// TestDelete_APIError400 verifies Delete when API error 400.
 func TestDelete_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -401,7 +407,7 @@ func TestDelete_APIError400(t *testing.T) {
 // SetJira — optional fields, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestSetJira_WithAllOptionalFields verifies the behavior of set jira with all optional fields.
+// TestSetJira_WithAllOptionalFields verifies SetJira when with all optional fields.
 func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -456,7 +462,7 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestSetJira_APIError400 verifies the behavior of set jira a p i error400.
+// TestSetJira_APIError400 verifies SetJira when API error 400.
 func TestSetJira_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -474,7 +480,7 @@ func TestSetJira_APIError400(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Inactive verifies the behavior of format get markdown inactive.
+// TestFormatGetMarkdown_Inactive verifies FormatGetMarkdown when inactive.
 func TestFormatGetMarkdown_Inactive(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{ID: 2, Title: "Slack", Slug: "slack", Active: false},
@@ -488,7 +494,7 @@ func TestFormatGetMarkdown_Inactive(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_WithUpdatedAt verifies the behavior of format get markdown with updated at.
+// TestFormatGetMarkdown_WithUpdatedAt verifies FormatGetMarkdown when with updated at.
 func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{
@@ -503,111 +509,6 @@ func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	if !strings.Contains(text, "Updated") {
 		t.Errorf("expected 'Updated' in output, got %q", text)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — all tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	session := newIntegrationsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_integrations", map[string]any{"project_id": "1"}},
-		{"get_jira", "gitlab_get_integration", map[string]any{"project_id": "1", "slug": "jira"}},
-		{"delete_jira", "gitlab_delete_integration", map[string]any{"project_id": "1", "slug": "jira"}},
-		{"set_jira", "gitlab_set_jira_integration", map[string]any{"project_id": "1", "url": "https://jira.example.com"}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// newIntegrationsMCPSession is an internal helper for the integrations package.
-func newIntegrationsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	integrationJSON := `{"id":1,"title":"Jira","slug":"jira","active":true}`
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/services", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+integrationJSON+`]`)
-	})
-	handler.HandleFunc("GET /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("GET /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("DELETE /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	handler.HandleFunc("DELETE /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	handler.HandleFunc("PUT /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // TestGet_WithTimestamps covers the CreatedAt/UpdatedAt != nil branches

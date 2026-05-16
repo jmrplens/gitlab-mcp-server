@@ -1,4 +1,3 @@
-// Package groupldap implements MCP tool handlers for GitLab group LDAP link operations.
 package groupldap
 
 import (

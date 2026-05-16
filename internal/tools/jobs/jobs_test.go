@@ -12,24 +12,33 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
+	// pathPipelineJobs identifies the path pipeline jobs constant used by this package.
 	pathPipelineJobs = "/api/v4/projects/42/pipelines/10/jobs"
-	pathJobGet       = "/api/v4/projects/42/jobs/100"
-	pathJobTrace     = "/api/v4/projects/42/jobs/100/trace"
-	pathJobCancel    = "/api/v4/projects/42/jobs/100/cancel"
-	pathJobRetry     = "/api/v4/projects/42/jobs/100/retry"
+	// pathJobGet identifies the path job get constant used by this package.
+	pathJobGet = "/api/v4/projects/42/jobs/100"
+	// pathJobTrace identifies the path job trace constant used by this package.
+	pathJobTrace = "/api/v4/projects/42/jobs/100/trace"
+	// pathJobCancel identifies the path job cancel constant used by this package.
+	pathJobCancel = "/api/v4/projects/42/jobs/100/cancel"
+	// pathJobRetry identifies the path job retry constant used by this package.
+	pathJobRetry = "/api/v4/projects/42/jobs/100/retry"
 
-	testHeaderContentType  = "Content-Type"
-	testReportContent      = "test report content"
-	testReportFileName     = "report.txt"
+	// testHeaderContentType identifies the test header content type constant used by this package.
+	testHeaderContentType = "Content-Type"
+	// testReportContent identifies the test report content constant used by this package.
+	testReportContent = "test report content"
+	// testReportFileName identifies the test report file name constant used by this package.
+	testReportFileName = "report.txt"
+	// testRefArtifactContent identifies the test ref artifact content constant used by this package.
 	testRefArtifactContent = "ref artifact content"
-	fmtIDWant100           = "ID = %d, want 100"
+	// fmtIDWant100 identifies the fmt ID want 100 constant used by this package.
+	fmtIDWant100 = "ID = %d, want 100"
 )
 
+// jobJSON identifies the job JSON constant used by this package.
 const jobJSON = `{
 	"id":100,
 	"name":"build",
@@ -49,7 +58,7 @@ const jobJSON = `{
 	"runner":{"id":1}
 }`
 
-// TestJobList_Success verifies the behavior of job list success.
+// TestJobList_Success verifies JobList when success.
 func TestJobList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
@@ -87,7 +96,7 @@ func TestJobList_Success(t *testing.T) {
 	}
 }
 
-// TestJobList_WithScope verifies the behavior of job list with scope.
+// TestJobList_WithScope verifies JobList when with scope.
 func TestJobList_WithScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
@@ -115,7 +124,7 @@ func TestJobList_WithScope(t *testing.T) {
 	}
 }
 
-// TestJobList_EmptyProjectID verifies the behavior of job list empty project i d.
+// TestJobList_EmptyProjectID verifies JobList when empty project ID.
 func TestJobList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -127,7 +136,7 @@ func TestJobList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestJobGet_Success verifies the behavior of job get success.
+// TestJobGet_Success verifies JobGet when success.
 func TestJobGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathJobGet {
@@ -155,7 +164,7 @@ func TestJobGet_Success(t *testing.T) {
 	}
 }
 
-// TestJobGet_EmptyProjectID verifies the behavior of job get empty project i d.
+// TestJobGet_EmptyProjectID verifies JobGet when empty project ID.
 func TestJobGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -167,7 +176,7 @@ func TestJobGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestJobTrace_Success verifies the behavior of job trace success.
+// TestJobTrace_Success verifies JobTrace when success.
 func TestJobTrace_Success(t *testing.T) {
 	traceContent := "Running with gitlab-runner 15.0.0\nJob succeeded"
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +207,7 @@ func TestJobTrace_Success(t *testing.T) {
 	}
 }
 
-// TestJobTrace_EmptyProjectID verifies the behavior of job trace empty project i d.
+// TestJobTrace_EmptyProjectID verifies JobTrace when empty project ID.
 func TestJobTrace_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -210,7 +219,7 @@ func TestJobTrace_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestJobCancel_Success verifies the behavior of job cancel success.
+// TestJobCancel_Success verifies JobCancel when success.
 func TestJobCancel_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
@@ -237,7 +246,7 @@ func TestJobCancel_Success(t *testing.T) {
 	}
 }
 
-// TestJobCancel_EmptyProjectID verifies the behavior of job cancel empty project i d.
+// TestJobCancel_EmptyProjectID verifies JobCancel when empty project ID.
 func TestJobCancel_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -249,7 +258,7 @@ func TestJobCancel_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestJobRetry_Success verifies the behavior of job retry success.
+// TestJobRetry_Success verifies JobRetry when success.
 func TestJobRetry_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobRetry {
@@ -279,7 +288,7 @@ func TestJobRetry_Success(t *testing.T) {
 	}
 }
 
-// TestJobRetry_EmptyProjectID verifies the behavior of job retry empty project i d.
+// TestJobRetry_EmptyProjectID verifies JobRetry when empty project ID.
 func TestJobRetry_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -291,7 +300,7 @@ func TestJobRetry_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestJobList_CancelledContext verifies the behavior of job list cancelled context.
+// TestJobList_CancelledContext verifies JobList when cancelled context.
 func TestJobList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -308,11 +317,16 @@ func TestJobList_CancelledContext(t *testing.T) {
 // TASK-024 tests.
 
 const (
-	pathProjectJobs  = "/api/v4/projects/42/jobs"
-	pathJobErase     = "/api/v4/projects/42/jobs/100/erase"
-	pathJobPlay      = "/api/v4/projects/42/jobs/100/play"
+	// pathProjectJobs identifies the path project jobs constant used by this package.
+	pathProjectJobs = "/api/v4/projects/42/jobs"
+	// pathJobErase identifies the path job erase constant used by this package.
+	pathJobErase = "/api/v4/projects/42/jobs/100/erase"
+	// pathJobPlay identifies the path job play constant used by this package.
+	pathJobPlay = "/api/v4/projects/42/jobs/100/play"
+	// pathJobArtifacts identifies the path job artifacts constant used by this package.
 	pathJobArtifacts = "/api/v4/projects/42/jobs/100/artifacts"
 
+	// bridgeJSON identifies the bridge JSON constant used by this package.
 	bridgeJSON = `{
 		"id":200,"name":"trigger-downstream","stage":"deploy",
 		"status":"success","ref":"main","tag":false,"allow_failure":false,
@@ -324,10 +338,11 @@ const (
 		"downstream_pipeline":{"id":50}
 	}`
 
+	// msgMissingProject identifies the msg missing project constant used by this package.
 	msgMissingProject = "expected error for empty project_id"
 )
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
@@ -350,7 +365,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProject verifies the behavior of list project missing project.
+// TestListProject_MissingProject verifies ListProject when missing project.
 func TestListProject_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -361,7 +376,7 @@ func TestListProject_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListBridges_Success verifies the behavior of list bridges success.
+// TestListBridges_Success verifies ListBridges when success.
 func TestListBridges_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/10/bridges" {
@@ -386,7 +401,7 @@ func TestListBridges_Success(t *testing.T) {
 	}
 }
 
-// TestListBridges_MissingProject verifies the behavior of list bridges missing project.
+// TestListBridges_MissingProject verifies ListBridges when missing project.
 func TestListBridges_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -397,7 +412,7 @@ func TestListBridges_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetArtifacts_Success verifies the behavior of get artifacts success.
+// TestGetArtifacts_Success verifies GetArtifacts when success.
 func TestGetArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathJobArtifacts {
@@ -421,7 +436,7 @@ func TestGetArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestGetArtifacts_MissingProject verifies the behavior of get artifacts missing project.
+// TestGetArtifacts_MissingProject verifies GetArtifacts when missing project.
 func TestGetArtifacts_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -432,7 +447,7 @@ func TestGetArtifacts_MissingProject(t *testing.T) {
 	}
 }
 
-// TestDownloadArtifacts_Success verifies the behavior of download artifacts success.
+// TestDownloadArtifacts_Success verifies DownloadArtifacts when success.
 func TestDownloadArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/artifacts/main/download" {
@@ -455,7 +470,7 @@ func TestDownloadArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestDownloadArtifacts_MissingRef verifies the behavior of download artifacts missing ref.
+// TestDownloadArtifacts_MissingRef verifies DownloadArtifacts when missing ref.
 func TestDownloadArtifacts_MissingRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -466,7 +481,7 @@ func TestDownloadArtifacts_MissingRef(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_Success verifies the behavior of download single artifact success.
+// TestDownloadSingleArtifact_Success verifies DownloadSingleArtifact when success.
 func TestDownloadSingleArtifact_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/100/artifacts/"+testReportFileName {
@@ -491,7 +506,7 @@ func TestDownloadSingleArtifact_Success(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_MissingPath verifies the behavior of download single artifact missing path.
+// TestDownloadSingleArtifact_MissingPath verifies DownloadSingleArtifact when missing path.
 func TestDownloadSingleArtifact_MissingPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -502,7 +517,7 @@ func TestDownloadSingleArtifact_MissingPath(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_Success verifies the behavior of download single artifact by ref success.
+// TestDownloadSingleArtifactByRef_Success verifies DownloadSingleArtifactByRef when success.
 func TestDownloadSingleArtifactByRef_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/artifacts/main/raw/"+testReportFileName {
@@ -524,7 +539,7 @@ func TestDownloadSingleArtifactByRef_Success(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_MissingRef verifies the behavior of download single artifact by ref missing ref.
+// TestDownloadSingleArtifactByRef_MissingRef verifies DownloadSingleArtifactByRef when missing ref.
 func TestDownloadSingleArtifactByRef_MissingRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -537,7 +552,7 @@ func TestDownloadSingleArtifactByRef_MissingRef(t *testing.T) {
 	}
 }
 
-// TestErase_Success verifies the behavior of erase success.
+// TestErase_Success verifies Erase when success.
 func TestErase_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobErase {
@@ -556,7 +571,7 @@ func TestErase_Success(t *testing.T) {
 	}
 }
 
-// TestErase_MissingProject verifies the behavior of erase missing project.
+// TestErase_MissingProject verifies Erase when missing project.
 func TestErase_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -567,7 +582,7 @@ func TestErase_MissingProject(t *testing.T) {
 	}
 }
 
-// TestKeepArtifacts_Success verifies the behavior of keep artifacts success.
+// TestKeepArtifacts_Success verifies KeepArtifacts when success.
 func TestKeepArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/jobs/100/artifacts/keep" {
@@ -586,7 +601,7 @@ func TestKeepArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestKeepArtifacts_MissingProject verifies the behavior of keep artifacts missing project.
+// TestKeepArtifacts_MissingProject verifies KeepArtifacts when missing project.
 func TestKeepArtifacts_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -597,7 +612,7 @@ func TestKeepArtifacts_MissingProject(t *testing.T) {
 	}
 }
 
-// TestPlay_Success verifies the behavior of play success.
+// TestPlay_Success verifies Play when success.
 func TestPlay_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobPlay {
@@ -616,7 +631,7 @@ func TestPlay_Success(t *testing.T) {
 	}
 }
 
-// TestPlay_MissingProject verifies the behavior of play missing project.
+// TestPlay_MissingProject verifies Play when missing project.
 func TestPlay_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -627,7 +642,7 @@ func TestPlay_MissingProject(t *testing.T) {
 	}
 }
 
-// TestDeleteArtifacts_Success verifies the behavior of delete artifacts success.
+// TestDeleteArtifacts_Success verifies DeleteArtifacts when success.
 func TestDeleteArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathJobArtifacts {
@@ -643,7 +658,7 @@ func TestDeleteArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteArtifacts_MissingProject verifies the behavior of delete artifacts missing project.
+// TestDeleteArtifacts_MissingProject verifies DeleteArtifacts when missing project.
 func TestDeleteArtifacts_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -654,7 +669,7 @@ func TestDeleteArtifacts_MissingProject(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectArtifacts_Success verifies the behavior of delete project artifacts success.
+// TestDeleteProjectArtifacts_Success verifies DeleteProjectArtifacts when success.
 func TestDeleteProjectArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/artifacts" {
@@ -670,7 +685,7 @@ func TestDeleteProjectArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectArtifacts_MissingProject verifies the behavior of delete project artifacts missing project.
+// TestDeleteProjectArtifacts_MissingProject verifies DeleteProjectArtifacts when missing project.
 func TestDeleteProjectArtifacts_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -774,17 +789,20 @@ func TestPipelineIDRequired_ValidationJobs(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error, pagination params, include_retried
 // ---------------------------------------------------------------------------.
 
-// TestJobList_APIError verifies the behavior of job list a p i error.
+// TestJobList_APIError verifies JobList when API error.
 func TestJobList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -795,7 +813,7 @@ func TestJobList_APIError(t *testing.T) {
 	}
 }
 
-// TestJobList_WithPaginationAndIncludeRetried verifies the behavior of job list with pagination and include retried.
+// TestJobList_WithPaginationAndIncludeRetried verifies JobList when with pagination and include retried.
 func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
@@ -837,7 +855,7 @@ func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
 // Get — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobGet_APIError verifies the behavior of job get a p i error.
+// TestJobGet_APIError verifies JobGet when API error.
 func TestJobGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -848,7 +866,7 @@ func TestJobGet_APIError(t *testing.T) {
 	}
 }
 
-// TestJobGet_CancelledContext verifies the behavior of job get cancelled context.
+// TestJobGet_CancelledContext verifies JobGet when cancelled context.
 func TestJobGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -864,7 +882,7 @@ func TestJobGet_CancelledContext(t *testing.T) {
 // Trace — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobTrace_APIError verifies the behavior of job trace a p i error.
+// TestJobTrace_APIError verifies JobTrace when API error.
 func TestJobTrace_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -875,7 +893,7 @@ func TestJobTrace_APIError(t *testing.T) {
 	}
 }
 
-// TestJobTrace_CancelledContext verifies the behavior of job trace cancelled context.
+// TestJobTrace_CancelledContext verifies JobTrace when cancelled context.
 func TestJobTrace_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -891,7 +909,7 @@ func TestJobTrace_CancelledContext(t *testing.T) {
 // Cancel — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobCancel_APIError verifies the behavior of job cancel a p i error.
+// TestJobCancel_APIError verifies JobCancel when API error.
 func TestJobCancel_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -902,7 +920,7 @@ func TestJobCancel_APIError(t *testing.T) {
 	}
 }
 
-// TestJobCancel_CancelledContext verifies the behavior of job cancel cancelled context.
+// TestJobCancel_CancelledContext verifies JobCancel when cancelled context.
 func TestJobCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -918,7 +936,7 @@ func TestJobCancel_CancelledContext(t *testing.T) {
 // Retry — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobRetry_APIError verifies the behavior of job retry a p i error.
+// TestJobRetry_APIError verifies JobRetry when API error.
 func TestJobRetry_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -929,7 +947,7 @@ func TestJobRetry_APIError(t *testing.T) {
 	}
 }
 
-// TestJobRetry_CancelledContext verifies the behavior of job retry cancelled context.
+// TestJobRetry_CancelledContext verifies JobRetry when cancelled context.
 func TestJobRetry_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -945,7 +963,7 @@ func TestJobRetry_CancelledContext(t *testing.T) {
 // ListProject — API error, canceled context, with scope and pagination
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies the behavior of list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -956,7 +974,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_CancelledContext verifies the behavior of list project cancelled context.
+// TestListProject_CancelledContext verifies ListProject when cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -968,7 +986,7 @@ func TestListProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProject_WithScopeAndPagination verifies the behavior of list project with scope and pagination.
+// TestListProject_WithScopeAndPagination verifies ListProject when with scope and pagination.
 func TestListProject_WithScopeAndPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
@@ -1002,7 +1020,7 @@ func TestListProject_WithScopeAndPagination(t *testing.T) {
 // ListBridges — API error, canceled context, with scope and pagination
 // ---------------------------------------------------------------------------.
 
-// TestListBridges_APIError verifies the behavior of list bridges a p i error.
+// TestListBridges_APIError verifies ListBridges when API error.
 func TestListBridges_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1013,7 +1031,7 @@ func TestListBridges_APIError(t *testing.T) {
 	}
 }
 
-// TestListBridges_CancelledContext verifies the behavior of list bridges cancelled context.
+// TestListBridges_CancelledContext verifies ListBridges when cancelled context.
 func TestListBridges_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -1025,7 +1043,7 @@ func TestListBridges_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListBridges_WithScopeAndPagination verifies the behavior of list bridges with scope and pagination.
+// TestListBridges_WithScopeAndPagination verifies ListBridges when with scope and pagination.
 func TestListBridges_WithScopeAndPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/10/bridges" {
@@ -1059,7 +1077,7 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 // GetArtifacts — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetArtifacts_APIError verifies the behavior of get artifacts a p i error.
+// TestGetArtifacts_APIError verifies GetArtifacts when API error.
 func TestGetArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1070,7 +1088,7 @@ func TestGetArtifacts_APIError(t *testing.T) {
 	}
 }
 
-// TestGetArtifacts_CancelledContext verifies the behavior of get artifacts cancelled context.
+// TestGetArtifacts_CancelledContext verifies GetArtifacts when cancelled context.
 func TestGetArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/zip")
@@ -1088,7 +1106,7 @@ func TestGetArtifacts_CancelledContext(t *testing.T) {
 // DownloadArtifacts — API error, canceled context, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDownloadArtifacts_APIError verifies the behavior of download artifacts a p i error.
+// TestDownloadArtifacts_APIError verifies DownloadArtifacts when API error.
 func TestDownloadArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1101,7 +1119,7 @@ func TestDownloadArtifacts_APIError(t *testing.T) {
 	}
 }
 
-// TestDownloadArtifacts_CancelledContext verifies the behavior of download artifacts cancelled context.
+// TestDownloadArtifacts_CancelledContext verifies DownloadArtifacts when cancelled context.
 func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1115,7 +1133,7 @@ func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadArtifacts_MissingProjectID verifies the behavior of download artifacts missing project i d.
+// TestDownloadArtifacts_MissingProjectID verifies DownloadArtifacts when missing project ID.
 func TestDownloadArtifacts_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1130,7 +1148,7 @@ func TestDownloadArtifacts_MissingProjectID(t *testing.T) {
 // DownloadSingleArtifact — API error, canceled context, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDownloadSingleArtifact_APIError verifies the behavior of download single artifact a p i error.
+// TestDownloadSingleArtifact_APIError verifies DownloadSingleArtifact when API error.
 func TestDownloadSingleArtifact_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1143,7 +1161,7 @@ func TestDownloadSingleArtifact_APIError(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_CancelledContext verifies the behavior of download single artifact cancelled context.
+// TestDownloadSingleArtifact_CancelledContext verifies DownloadSingleArtifact when cancelled context.
 func TestDownloadSingleArtifact_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1157,7 +1175,7 @@ func TestDownloadSingleArtifact_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_MissingProjectID verifies the behavior of download single artifact missing project i d.
+// TestDownloadSingleArtifact_MissingProjectID verifies DownloadSingleArtifact when missing project ID.
 func TestDownloadSingleArtifact_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1174,7 +1192,7 @@ func TestDownloadSingleArtifact_MissingProjectID(t *testing.T) {
 // DownloadSingleArtifactByRef — API error, canceled context, missing fields
 // ---------------------------------------------------------------------------.
 
-// TestDownloadSingleArtifactByRef_APIError verifies the behavior of download single artifact by ref a p i error.
+// TestDownloadSingleArtifactByRef_APIError verifies DownloadSingleArtifactByRef when API error.
 func TestDownloadSingleArtifactByRef_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1187,7 +1205,7 @@ func TestDownloadSingleArtifactByRef_APIError(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_CancelledContext verifies the behavior of download single artifact by ref cancelled context.
+// TestDownloadSingleArtifactByRef_CancelledContext verifies DownloadSingleArtifactByRef when cancelled context.
 func TestDownloadSingleArtifactByRef_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1201,7 +1219,7 @@ func TestDownloadSingleArtifactByRef_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_MissingProjectID verifies the behavior of download single artifact by ref missing project i d.
+// TestDownloadSingleArtifactByRef_MissingProjectID verifies DownloadSingleArtifactByRef when missing project ID.
 func TestDownloadSingleArtifactByRef_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1214,7 +1232,7 @@ func TestDownloadSingleArtifactByRef_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_MissingArtifactPath verifies the behavior of download single artifact by ref missing artifact path.
+// TestDownloadSingleArtifactByRef_MissingArtifactPath verifies DownloadSingleArtifactByRef when missing artifact path.
 func TestDownloadSingleArtifactByRef_MissingArtifactPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1231,7 +1249,7 @@ func TestDownloadSingleArtifactByRef_MissingArtifactPath(t *testing.T) {
 // Erase — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestErase_APIError verifies the behavior of erase a p i error.
+// TestErase_APIError verifies Erase when API error.
 func TestErase_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1242,7 +1260,7 @@ func TestErase_APIError(t *testing.T) {
 	}
 }
 
-// TestErase_CancelledContext verifies the behavior of erase cancelled context.
+// TestErase_CancelledContext verifies Erase when cancelled context.
 func TestErase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, jobJSON)
@@ -1258,7 +1276,7 @@ func TestErase_CancelledContext(t *testing.T) {
 // KeepArtifacts — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestKeepArtifacts_APIError verifies the behavior of keep artifacts a p i error.
+// TestKeepArtifacts_APIError verifies KeepArtifacts when API error.
 func TestKeepArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1269,7 +1287,7 @@ func TestKeepArtifacts_APIError(t *testing.T) {
 	}
 }
 
-// TestKeepArtifacts_CancelledContext verifies the behavior of keep artifacts cancelled context.
+// TestKeepArtifacts_CancelledContext verifies KeepArtifacts when cancelled context.
 func TestKeepArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -1285,7 +1303,7 @@ func TestKeepArtifacts_CancelledContext(t *testing.T) {
 // Play — API error, canceled context, with variables
 // ---------------------------------------------------------------------------.
 
-// TestPlay_APIError verifies the behavior of play a p i error.
+// TestPlay_APIError verifies Play when API error.
 func TestPlay_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1296,7 +1314,7 @@ func TestPlay_APIError(t *testing.T) {
 	}
 }
 
-// TestPlay_CancelledContext verifies the behavior of play cancelled context.
+// TestPlay_CancelledContext verifies Play when cancelled context.
 func TestPlay_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
@@ -1308,7 +1326,7 @@ func TestPlay_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestPlay_WithVariables verifies the behavior of play with variables.
+// TestPlay_WithVariables verifies Play when with variables.
 func TestPlay_WithVariables(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobPlay {
@@ -1338,7 +1356,7 @@ func TestPlay_WithVariables(t *testing.T) {
 // DeleteArtifacts — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteArtifacts_APIError verifies the behavior of delete artifacts a p i error.
+// TestDeleteArtifacts_APIError verifies DeleteArtifacts when API error.
 func TestDeleteArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1353,7 +1371,7 @@ func TestDeleteArtifacts_APIError(t *testing.T) {
 // DeleteProjectArtifacts — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProjectArtifacts_APIError verifies the behavior of delete project artifacts a p i error.
+// TestDeleteProjectArtifacts_APIError verifies DeleteProjectArtifacts when API error.
 func TestDeleteProjectArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1368,7 +1386,7 @@ func TestDeleteProjectArtifacts_APIError(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:             100,
@@ -1403,7 +1421,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     50,
@@ -1433,7 +1451,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithJobs verifies the behavior of format list markdown with jobs.
+// TestFormatListMarkdown_WithJobs verifies FormatListMarkdown when with jobs.
 func TestFormatListMarkdown_WithJobs(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
@@ -1463,7 +1481,7 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No jobs found") {
@@ -1494,7 +1512,7 @@ func TestFormatListMarkdown_ClickableJobLinks(t *testing.T) {
 // FormatTraceMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTraceMarkdown_WithData verifies the behavior of format trace markdown with data.
+// TestFormatTraceMarkdown_WithData verifies FormatTraceMarkdown when with data.
 func TestFormatTraceMarkdown_WithData(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{
 		JobID: 100,
@@ -1516,7 +1534,7 @@ func TestFormatTraceMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatTraceMarkdown_Truncated verifies the behavior of format trace markdown truncated.
+// TestFormatTraceMarkdown_Truncated verifies FormatTraceMarkdown when truncated.
 func TestFormatTraceMarkdown_Truncated(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{
 		JobID:     100,
@@ -1529,7 +1547,7 @@ func TestFormatTraceMarkdown_Truncated(t *testing.T) {
 	}
 }
 
-// TestFormatTraceMarkdown_Empty verifies the behavior of format trace markdown empty.
+// TestFormatTraceMarkdown_Empty verifies FormatTraceMarkdown when empty.
 func TestFormatTraceMarkdown_Empty(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{JobID: 99})
 	if !strings.Contains(md, "## Job #99 Trace") {
@@ -1544,7 +1562,7 @@ func TestFormatTraceMarkdown_Empty(t *testing.T) {
 // FormatBridgeListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatBridgeListMarkdown_WithData verifies the behavior of format bridge list markdown with data.
+// TestFormatBridgeListMarkdown_WithData verifies FormatBridgeListMarkdown when with data.
 func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 	out := BridgeListOutput{
 		Bridges: []BridgeOutput{
@@ -1573,7 +1591,7 @@ func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatBridgeListMarkdown_Empty verifies the behavior of format bridge list markdown empty.
+// TestFormatBridgeListMarkdown_Empty verifies FormatBridgeListMarkdown when empty.
 func TestFormatBridgeListMarkdown_Empty(t *testing.T) {
 	md := FormatBridgeListMarkdown(BridgeListOutput{})
 	if !strings.Contains(md, "No bridge jobs found") {
@@ -1588,7 +1606,7 @@ func TestFormatBridgeListMarkdown_Empty(t *testing.T) {
 // FormatArtifactsMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatArtifactsMarkdown_WithJobID verifies the behavior of format artifacts markdown with job i d.
+// TestFormatArtifactsMarkdown_WithJobID verifies FormatArtifactsMarkdown when with job ID.
 func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{
 		JobID: 100,
@@ -1609,7 +1627,7 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 	}
 }
 
-// TestFormatArtifactsMarkdown_WithoutJobID verifies the behavior of format artifacts markdown without job i d.
+// TestFormatArtifactsMarkdown_WithoutJobID verifies FormatArtifactsMarkdown when without job ID.
 func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 512})
 	if !strings.Contains(md, "## Artifacts") {
@@ -1620,7 +1638,7 @@ func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	}
 }
 
-// TestFormatArtifactsMarkdown_Truncated verifies the behavior of format artifacts markdown truncated.
+// TestFormatArtifactsMarkdown_Truncated verifies FormatArtifactsMarkdown when truncated.
 func TestFormatArtifactsMarkdown_Truncated(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{
 		JobID:     100,
@@ -1636,7 +1654,7 @@ func TestFormatArtifactsMarkdown_Truncated(t *testing.T) {
 // FormatSingleArtifactMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatSingleArtifactMarkdown_WithJobID verifies the behavior of format single artifact markdown with job i d.
+// TestFormatSingleArtifactMarkdown_WithJobID verifies FormatSingleArtifactMarkdown when with job ID.
 func TestFormatSingleArtifactMarkdown_WithJobID(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		JobID:        100,
@@ -1658,7 +1676,7 @@ func TestFormatSingleArtifactMarkdown_WithJobID(t *testing.T) {
 	}
 }
 
-// TestFormatSingleArtifactMarkdown_WithoutJobID verifies the behavior of format single artifact markdown without job i d.
+// TestFormatSingleArtifactMarkdown_WithoutJobID verifies FormatSingleArtifactMarkdown when without job ID.
 func TestFormatSingleArtifactMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		ArtifactPath: "output.log",
@@ -1673,7 +1691,7 @@ func TestFormatSingleArtifactMarkdown_WithoutJobID(t *testing.T) {
 	}
 }
 
-// TestFormatSingleArtifactMarkdown_Truncated verifies the behavior of format single artifact markdown truncated.
+// TestFormatSingleArtifactMarkdown_Truncated verifies FormatSingleArtifactMarkdown when truncated.
 func TestFormatSingleArtifactMarkdown_Truncated(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		JobID:        100,
@@ -1688,26 +1706,37 @@ func TestFormatSingleArtifactMarkdown_Truncated(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for job actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := jobSpecsByTool(t, specs)
+
+	if len(specs) != 17 {
+		t.Fatalf("len(ActionSpecs) = %d, want 17", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "jobs" {
+			t.Fatalf("OwnerPackage for %s = %q, want jobs", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 16 tools
+// ActionSpecsCallAllRoutes — route coverage for all 17 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newJobsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates job routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newJobsRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -1730,35 +1759,28 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		{"play", "gitlab_job_play", map[string]any{"project_id": "42", "job_id": 100}},
 		{"delete_artifacts", "gitlab_job_delete_artifacts", map[string]any{"project_id": "42", "job_id": 100}},
 		{"delete_project_artifacts", "gitlab_job_delete_project_artifacts", map[string]any{"project_id": "42"}},
+		{"wait", "gitlab_job_wait", map[string]any{"project_id": "42", "job_id": 100, "timeout_seconds": 1}},
 	}
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newJobsMCPSession is an internal helper for the jobs package.
-func newJobsMCPSession(t *testing.T) *mcp.ClientSession {
+// newJobsRouteSpecs constructs jobs route specs test fixtures.
+func newJobsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -1862,29 +1884,11 @@ func newJobsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return jobSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestJobGet_EmbedsCanonicalResource asserts gitlab_job_get attaches an
-// EmbeddedResource block with URI gitlab://project/{id}/job/{job_id}.
-func TestJobGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_JobGetRoute verifies the canonical job get route output.
+func TestActionSpecs_JobGetRoute(t *testing.T) {
 	const respJSON = `{"id":555,"name":"build","stage":"build","status":"success","ref":"main","tag":false}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/jobs/555") {
@@ -1893,7 +1897,28 @@ func TestJobGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "job_id": 555}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_job_get", args, "gitlab://project/42/job/555", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := jobSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_job_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "job_id": 555})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 555 || out.Name != "build" {
+		t.Fatalf("job output = %#v, want ID 555 name build", out)
+	}
+}
+
+// jobSpecsByTool supports job specs by tool assertions in jobs tests.
+func jobSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

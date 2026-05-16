@@ -23,22 +23,15 @@ type ActionCatalogOptions struct {
 // BuildActionCatalog builds the canonical action catalog for catalog-backed
 // GitLab action surfaces without constructing an MCP server.
 func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-	definitions := toolutil.CaptureMetaToolDefinitions(func() {
-		registerAllMetaGroups(nil, client, opts.Enterprise)
-	})
 	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups)
-	specsByTool, specErr := actionSpecGroupsByTool(specGroups)
-	if specErr != nil {
-		return nil, fmt.Errorf("collect action specs: %w", specErr)
-	}
 	catalog := actioncatalog.NewCatalog()
-	for _, definition := range definitions {
-		group, groupErr := groupFromMetaToolDefinition(definition, specsByTool[definition.Name])
+	for _, specGroup := range specGroups {
+		group, groupErr := groupFromActionSpecGroup(specGroup)
 		if groupErr != nil {
-			return nil, fmt.Errorf("build meta tool group %q: %w", definition.Name, groupErr)
+			return nil, fmt.Errorf("build catalog group %q: %w", specGroup.ToolName, groupErr)
 		}
 		if addErr := catalog.AddGroup(group); addErr != nil {
-			return nil, fmt.Errorf("add meta tool group %q: %w", definition.Name, addErr)
+			return nil, fmt.Errorf("add catalog group %q: %w", group.ToolName, addErr)
 		}
 	}
 	if opts.IncludeMCP {
@@ -56,83 +49,143 @@ func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup)
 	if len(overrideGroups) == 0 {
 		return baseGroups
 	}
-	overrideNamesByTool := make(map[string]map[string]struct{}, len(overrideGroups))
-	for _, group := range overrideGroups {
-		toolName := strings.TrimSpace(group.ToolName)
-		if toolName == "" {
-			continue
-		}
-		if overrideNamesByTool[toolName] == nil {
-			overrideNamesByTool[toolName] = make(map[string]struct{}, len(group.Specs))
-		}
-		for _, spec := range group.Specs {
-			name := strings.TrimSpace(spec.Name)
-			if name != "" {
-				overrideNamesByTool[toolName][name] = struct{}{}
-			}
-		}
-	}
-	merged := make([]ActionSpecGroup, 0, len(baseGroups)+len(overrideGroups))
+	mergedByTool := make(map[string]ActionSpecGroup, len(baseGroups)+len(overrideGroups))
+	invalidGroups := make([]ActionSpecGroup, 0)
 	for _, group := range baseGroups {
 		toolName := strings.TrimSpace(group.ToolName)
-		overrideNames := overrideNamesByTool[toolName]
-		if len(overrideNames) == 0 {
-			merged = append(merged, group)
+		if toolName == "" {
+			invalidGroups = append(invalidGroups, group)
 			continue
 		}
-		specs := make([]toolutil.ActionSpec, 0, len(group.Specs))
-		for _, spec := range group.Specs {
-			if _, overridden := overrideNames[strings.TrimSpace(spec.Name)]; !overridden {
-				specs = append(specs, spec)
-			}
-		}
-		if len(specs) > 0 {
-			merged = append(merged, ActionSpecGroup{ToolName: group.ToolName, Specs: specs})
-		}
+		mergedByTool[toolName] = actioncatalog.CloneCatalogGroupSpec(group)
 	}
-	return append(merged, overrideGroups...)
+	for _, override := range overrideGroups {
+		toolName := strings.TrimSpace(override.ToolName)
+		if toolName == "" {
+			invalidGroups = append(invalidGroups, override)
+			continue
+		}
+		base := mergedByTool[toolName]
+		mergedByTool[toolName] = mergeActionSpecGroup(base, override)
+	}
+	toolNames := make([]string, 0, len(mergedByTool))
+	for toolName := range mergedByTool {
+		toolNames = append(toolNames, toolName)
+	}
+	sort.Strings(toolNames)
+	merged := make([]ActionSpecGroup, 0, len(invalidGroups)+len(toolNames))
+	merged = append(merged, invalidGroups...)
+	for _, toolName := range toolNames {
+		merged = append(merged, mergedByTool[toolName])
+	}
+	return merged
 }
 
-// groupFromMetaToolDefinition converts a captured meta-tool definition into an
-// actioncatalog.Group built with actioncatalog.NewGroup and populated with
-// group.SetAction. Route names are sorted first so catalog action ordering is
-// deterministic across map iterations.
-func groupFromMetaToolDefinition(def toolutil.MetaToolDefinition, specs []toolutil.ActionSpec) (actioncatalog.Group, error) {
-	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
-		ToolName:     def.Name,
-		Description:  def.Description,
-		Icons:        def.Icons,
-		ReadOnly:     def.ReadOnly,
-		FormatResult: def.FormatResult,
-	})
-	specActions, err := actioncatalog.ActionsFromSpecs(specs)
-	if err != nil {
-		return actioncatalog.Group{}, err
+func mergeActionSpecGroup(base, override ActionSpecGroup) ActionSpecGroup {
+	merged := actioncatalog.CloneCatalogGroupSpec(base)
+	override = actioncatalog.CloneCatalogGroupSpec(override)
+	if merged.ToolName == "" {
+		merged.ToolName = strings.TrimSpace(override.ToolName)
 	}
-	specActionByName := make(map[string]actioncatalog.Action, len(specActions))
-	for _, action := range specActions {
-		specActionByName[action.Name] = action
+	if strings.TrimSpace(override.Title) != "" {
+		merged.Title = override.Title
 	}
-	actionNames := make([]string, 0, len(def.Routes))
-	for actionName := range def.Routes {
-		actionNames = append(actionNames, actionName)
+	if strings.TrimSpace(override.Description) != "" {
+		merged.Description = override.Description
 	}
-	sort.Strings(actionNames)
-	for _, actionName := range actionNames {
-		if action, ok := specActionByName[actionName]; ok {
-			group.SetAction(action)
-			delete(specActionByName, actionName)
+	if len(override.Icons) > 0 {
+		merged.Icons = override.Icons
+	}
+	if override.ReadOnly {
+		merged.ReadOnly = true
+	}
+	if strings.TrimSpace(override.BaseDomain) != "" {
+		merged.BaseDomain = override.BaseDomain
+	}
+	if override.EnterpriseOnly {
+		merged.EnterpriseOnly = true
+	}
+	if override.GitLabDotComOnly {
+		merged.GitLabDotComOnly = true
+	}
+	if len(override.CapabilityRequirements) > 0 {
+		merged.CapabilityRequirements = override.CapabilityRequirements
+	}
+	if override.FormatResult != nil {
+		merged.FormatResult = override.FormatResult
+	}
+	if strings.TrimSpace(override.OwnerPackage) != "" {
+		merged.OwnerPackage = override.OwnerPackage
+	}
+	if override.SurfaceKind != "" {
+		merged.SurfaceKind = override.SurfaceKind
+	}
+	merged.Actions = mergeActionSpecOverrides(merged.Actions, override.Actions)
+	return merged
+}
+
+func mergeActionSpecOverrides(baseSpecs, overrideSpecs []toolutil.ActionSpec) []toolutil.ActionSpec {
+	if len(overrideSpecs) == 0 {
+		return baseSpecs
+	}
+	overrideNames := make(map[string]struct{}, len(overrideSpecs))
+	for _, spec := range overrideSpecs {
+		name := strings.TrimSpace(spec.Name)
+		if name != "" {
+			overrideNames[name] = struct{}{}
+		}
+	}
+	merged := make([]toolutil.ActionSpec, 0, len(baseSpecs)+len(overrideSpecs))
+	for _, spec := range baseSpecs {
+		if _, overridden := overrideNames[strings.TrimSpace(spec.Name)]; overridden {
 			continue
 		}
-		group.SetAction(actioncatalog.Action{Name: actionName, Route: def.Routes[actionName]})
+		merged = append(merged, spec)
 	}
-	if len(specActionByName) > 0 {
-		missing := make([]string, 0, len(specActionByName))
-		for actionName := range specActionByName {
-			missing = append(missing, actionName)
+	merged = append(merged, overrideSpecs...)
+	return merged
+}
+
+func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, error) {
+	specGroup = actioncatalog.CloneCatalogGroupSpec(specGroup)
+	if specGroup.OwnerPackage == "" {
+		specGroup.OwnerPackage = "tools"
+	}
+	specGroup.Actions = ensureActionSpecOwners(specGroup.Actions, specGroup.OwnerPackage)
+	if specGroup.SurfaceKind == "" {
+		specGroup.SurfaceKind = actioncatalog.SurfaceKindMetaGroup
+	}
+	if len(specGroup.Icons) == 0 {
+		specGroup.Icons = catalogGroupIcons(specGroup.ToolName)
+	}
+	if specGroup.FormatResult == nil {
+		specGroup.FormatResult = catalogGroupFormatResult(specGroup.ToolName)
+	}
+	if !specGroup.ReadOnly {
+		specGroup.ReadOnly = catalogGroupReadOnly(specGroup.Actions)
+	}
+	if specGroup.Description == "" {
+		routes, err := toolutil.ActionSpecsToMapWithError(specGroup.Actions)
+		if err != nil {
+			return actioncatalog.Group{}, err
 		}
-		sort.Strings(missing)
-		return actioncatalog.Group{}, fmt.Errorf("spec actions missing captured routes: %v", missing)
+		specGroup.Description = catalogGroupDescription(specGroup.ToolName, routes)
 	}
-	return group, nil
+	if err := specGroup.Validate(); err != nil {
+		return actioncatalog.Group{}, err
+	}
+	return actioncatalog.GroupFromSpecs(specGroup.GroupOptions(), specGroup.Actions)
+}
+
+func ensureActionSpecOwners(specs []toolutil.ActionSpec, ownerPackage string) []toolutil.ActionSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := toolutil.CloneActionSpecs(specs)
+	for index := range out {
+		if out[index].OwnerPackage == "" {
+			out[index].OwnerPackage = ownerPackage
+		}
+	}
+	return out
 }

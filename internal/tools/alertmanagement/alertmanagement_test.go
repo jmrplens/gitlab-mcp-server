@@ -4,7 +4,6 @@
 package alertmanagement
 
 import (
-	"context"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -12,19 +11,22 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testFilename identifies the test filename constant used by this package.
 const testFilename = "test.png"
 
+// errMissingAlertIID identifies the err missing alert IID constant used by this package.
 const errMissingAlertIID = "expected error for missing alert_iid"
 
-// TestListMetricImages verifies the behavior of list metric images.
+// TestListMetricImages verifies ListMetricImages.
 func TestListMetricImages(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images" || r.Method != http.MethodGet {
@@ -45,7 +47,7 @@ func TestListMetricImages(t *testing.T) {
 	}
 }
 
-// TestListMetricImages_Error verifies the behavior of list metric images error.
+// TestListMetricImages_Error verifies ListMetricImages when error.
 func TestListMetricImages_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -56,7 +58,7 @@ func TestListMetricImages_Error(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage verifies the behavior of update metric image.
+// TestUpdateMetricImage verifies UpdateMetricImage.
 func TestUpdateMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images/10" || r.Method != http.MethodPut {
@@ -75,7 +77,7 @@ func TestUpdateMetricImage(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_Error verifies the behavior of update metric image error.
+// TestUpdateMetricImage_Error verifies UpdateMetricImage when error.
 func TestUpdateMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -86,7 +88,7 @@ func TestUpdateMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage verifies the behavior of upload metric image.
+// TestUploadMetricImage verifies UploadMetricImage.
 func TestUploadMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -105,7 +107,7 @@ func TestUploadMetricImage(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_Error verifies the behavior of upload metric image error.
+// TestUploadMetricImage_Error verifies UploadMetricImage when error.
 func TestUploadMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -117,7 +119,7 @@ func TestUploadMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage verifies the behavior of delete metric image.
+// TestDeleteMetricImage verifies DeleteMetricImage.
 func TestDeleteMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images/10" || r.Method != http.MethodDelete {
@@ -132,7 +134,7 @@ func TestDeleteMetricImage(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_Error verifies the behavior of delete metric image error.
+// TestDeleteMetricImage_Error verifies DeleteMetricImage when error.
 func TestDeleteMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -143,7 +145,7 @@ func TestDeleteMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListMetricImagesOutput{Images: []MetricImageItem{{ID: 1, Filename: "img.png", URL: "https://example.com"}}}
 	md := FormatListMarkdown(out)
@@ -152,7 +154,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatImageMarkdown verifies the behavior of format image markdown.
+// TestFormatImageMarkdown verifies FormatImageMarkdown.
 func TestFormatImageMarkdown(t *testing.T) {
 	md := FormatImageMarkdown(MetricImageItem{ID: 1, Filename: testFilename})
 	if md == "" {
@@ -160,7 +162,7 @@ func TestFormatImageMarkdown(t *testing.T) {
 	}
 }
 
-// TestListMetricImages_MissingAlertIID verifies the behavior of list metric images missing alert i i d.
+// TestListMetricImages_MissingAlertIID verifies ListMetricImages when missing alert IID.
 func TestListMetricImages_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -171,7 +173,7 @@ func TestListMetricImages_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_MissingAlertIID verifies the behavior of update metric image missing alert i i d.
+// TestUpdateMetricImage_MissingAlertIID verifies UpdateMetricImage when missing alert IID.
 func TestUpdateMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -182,7 +184,7 @@ func TestUpdateMetricImage_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_MissingImageID verifies the behavior of update metric image missing image i d.
+// TestUpdateMetricImage_MissingImageID verifies UpdateMetricImage when missing image ID.
 func TestUpdateMetricImage_MissingImageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -193,7 +195,7 @@ func TestUpdateMetricImage_MissingImageID(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_MissingAlertIID verifies the behavior of upload metric image missing alert i i d.
+// TestUploadMetricImage_MissingAlertIID verifies UploadMetricImage when missing alert IID.
 func TestUploadMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -260,7 +262,7 @@ func TestUploadMetricImage_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_MissingAlertIID verifies the behavior of delete metric image missing alert i i d.
+// TestDeleteMetricImage_MissingAlertIID verifies DeleteMetricImage when missing alert IID.
 func TestDeleteMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -271,7 +273,7 @@ func TestDeleteMetricImage_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_MissingImageID verifies the behavior of delete metric image missing image i d.
+// TestDeleteMetricImage_MissingImageID verifies DeleteMetricImage when missing image ID.
 func TestDeleteMetricImage_MissingImageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -291,7 +293,7 @@ const covImageJSON = `{"id":1,"filename":"img.png","file_path":"/uploads/img.png
 // ListMetricImages — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListMetricImages_WithPagination verifies the behavior of cov list metric images with pagination.
+// TestListMetricImages_WithPagination verifies ListMetricImages when with pagination.
 func TestListMetricImages_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/alert_management_alerts/5/metric_images" && r.Method == http.MethodGet {
@@ -318,7 +320,7 @@ func TestListMetricImages_WithPagination(t *testing.T) {
 // UploadMetricImage — with optional URL and URLText
 // ---------------------------------------------------------------------------.
 
-// TestUploadMetricImage_WithOptionalFields verifies the behavior of cov upload metric image with optional fields.
+// TestUploadMetricImage_WithOptionalFields verifies UploadMetricImage when with optional fields.
 func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -353,7 +355,7 @@ func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 // FormatListMarkdown — empty images
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListMetricImagesOutput{})
 	if !strings.Contains(md, "No metric images found") {
@@ -364,27 +366,29 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies alert management action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "alertmanagement" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 4 tools (success)
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewAlertMgmtMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates all alert management canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtHandler())
 
 	tools := []struct {
 		name string
@@ -399,33 +403,28 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 4 tools (error paths)
+// ActionSpec route execution error paths
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCPError validates cov register tools call all through m c p error across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
-	session := covNewAlertMgmtErrorMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRouteErrors validates canonical route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
+	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtErrorHandler())
 
 	tools := []struct {
 		name string
@@ -440,15 +439,12 @@ func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
 			}
 		})
 	}
@@ -460,14 +456,8 @@ func TestRegisterTools_CallAllThroughMCPError(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (success)
-// ---------------------------------------------------------------------------.
-
-// covNewAlertMgmtMCPSession is an internal helper for the alertmanagement package.
-func covNewAlertMgmtMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
+// covAlertMgmtHandler supports cov alert mgmt handler assertions in alertmanagement tests.
+func covAlertMgmtHandler() http.Handler {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("GET /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
@@ -486,95 +476,30 @@ func covNewAlertMgmtMCPSession(t *testing.T) *mcp.ClientSession {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return handler
 }
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (error paths)
-// ---------------------------------------------------------------------------.
-
-// covNewAlertMgmtErrorMCPSession is an internal helper for the alertmanagement package.
-func covNewAlertMgmtErrorMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
+// covAlertMgmtErrorHandler supports cov alert mgmt error handler assertions in alertmanagement tests.
+func covAlertMgmtErrorHandler() http.Handler {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	})
 
+	return handler
+}
+
+// covAlertMgmtSpecsByTool supports cov alert mgmt specs by tool assertions in alertmanagement tests.
+func covAlertMgmtSpecsByTool(t *testing.T, handler http.Handler) map[string]toolutil.ActionSpec {
+	t.Helper()
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
-
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the alert metric image delete handler when the user declines.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_alert_metric_image",
-		Arguments: map[string]any{"project_id": "42", "alert_iid": 1, "image_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
-	}
-}

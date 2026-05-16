@@ -11,31 +11,38 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
 const errExpMissingProjectID = "expected error for missing project_id"
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testPathIssueLinks identifies the test path issue links constant used by this package.
 const testPathIssueLinks = "/api/v4/projects/10/issues/5/links"
 
+// errExpMissingIssueIID identifies the err exp missing issue IID constant used by this package.
 const errExpMissingIssueIID = "expected error for missing issue_iid"
 
+// testProjectID identifies the test project ID constant used by this package.
 const testProjectID = "10"
 
+// fmtLinkTypeWant identifies the fmt link type want constant used by this package.
 const fmtLinkTypeWant = "LinkType = %q, want %q"
 
+// testLinkRelatesTo identifies the test link relates to constant used by this package.
 const testLinkRelatesTo = "relates_to"
 
 // ---------------------------------------------------------------------------
 // Issue Link List
 // ---------------------------------------------------------------------------.
 
-// TestIssueLinkList_Success verifies the behavior of issue link list success.
+// TestIssueLinkList_Success verifies IssueLinkList when success.
 func TestIssueLinkList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodGet {
@@ -75,7 +82,7 @@ func TestIssueLinkList_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkList_Empty verifies the behavior of issue link list empty.
+// TestIssueLinkList_Empty verifies IssueLinkList when empty.
 func TestIssueLinkList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodGet {
@@ -97,7 +104,7 @@ func TestIssueLinkList_Empty(t *testing.T) {
 	}
 }
 
-// TestIssueLinkList_MissingProjectID verifies the behavior of issue link list missing project i d.
+// TestIssueLinkList_MissingProjectID verifies IssueLinkList when missing project ID.
 func TestIssueLinkList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -108,7 +115,7 @@ func TestIssueLinkList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkList_MissingIssueIID verifies the behavior of issue link list missing issue i i d.
+// TestIssueLinkList_MissingIssueIID verifies IssueLinkList when missing issue IID.
 func TestIssueLinkList_MissingIssueIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -119,7 +126,7 @@ func TestIssueLinkList_MissingIssueIID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkList_CancelledContext verifies the behavior of issue link list cancelled context.
+// TestIssueLinkList_CancelledContext verifies IssueLinkList when cancelled context.
 func TestIssueLinkList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -135,7 +142,7 @@ func TestIssueLinkList_CancelledContext(t *testing.T) {
 // Issue Link Get
 // ---------------------------------------------------------------------------.
 
-// TestIssueLinkGet_Success verifies the behavior of issue link get success.
+// TestIssueLinkGet_Success verifies IssueLinkGet when success.
 func TestIssueLinkGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/issues/5/links/1" && r.Method == http.MethodGet {
@@ -172,7 +179,7 @@ func TestIssueLinkGet_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkGet_MissingProjectID verifies the behavior of issue link get missing project i d.
+// TestIssueLinkGet_MissingProjectID verifies IssueLinkGet when missing project ID.
 func TestIssueLinkGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -183,7 +190,7 @@ func TestIssueLinkGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkGet_MissingIssueIID verifies the behavior of issue link get missing issue i i d.
+// TestIssueLinkGet_MissingIssueIID verifies IssueLinkGet when missing issue IID.
 func TestIssueLinkGet_MissingIssueIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -194,7 +201,7 @@ func TestIssueLinkGet_MissingIssueIID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkGet_MissingLinkID verifies the behavior of issue link get missing link i d.
+// TestIssueLinkGet_MissingLinkID verifies IssueLinkGet when missing link ID.
 func TestIssueLinkGet_MissingLinkID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -205,7 +212,7 @@ func TestIssueLinkGet_MissingLinkID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkGet_CancelledContext verifies the behavior of issue link get cancelled context.
+// TestIssueLinkGet_CancelledContext verifies IssueLinkGet when cancelled context.
 func TestIssueLinkGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -221,7 +228,7 @@ func TestIssueLinkGet_CancelledContext(t *testing.T) {
 // Issue Link Create
 // ---------------------------------------------------------------------------.
 
-// TestIssueLinkCreate_Success verifies the behavior of issue link create success.
+// TestIssueLinkCreate_Success verifies IssueLinkCreate when success.
 func TestIssueLinkCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodPost {
@@ -260,7 +267,7 @@ func TestIssueLinkCreate_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_WithoutLinkType verifies the behavior of issue link create without link type.
+// TestIssueLinkCreate_WithoutLinkType verifies IssueLinkCreate when without link type.
 func TestIssueLinkCreate_WithoutLinkType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodPost {
@@ -289,7 +296,7 @@ func TestIssueLinkCreate_WithoutLinkType(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_MissingProjectID verifies the behavior of issue link create missing project i d.
+// TestIssueLinkCreate_MissingProjectID verifies IssueLinkCreate when missing project ID.
 func TestIssueLinkCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -300,7 +307,7 @@ func TestIssueLinkCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_MissingIssueIID verifies the behavior of issue link create missing issue i i d.
+// TestIssueLinkCreate_MissingIssueIID verifies IssueLinkCreate when missing issue IID.
 func TestIssueLinkCreate_MissingIssueIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -311,7 +318,7 @@ func TestIssueLinkCreate_MissingIssueIID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_MissingTargetProject verifies the behavior of issue link create missing target project.
+// TestIssueLinkCreate_MissingTargetProject verifies IssueLinkCreate when missing target project.
 func TestIssueLinkCreate_MissingTargetProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -322,7 +329,7 @@ func TestIssueLinkCreate_MissingTargetProject(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_MissingTargetIssue verifies the behavior of issue link create missing target issue.
+// TestIssueLinkCreate_MissingTargetIssue verifies IssueLinkCreate when missing target issue.
 func TestIssueLinkCreate_MissingTargetIssue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -333,7 +340,7 @@ func TestIssueLinkCreate_MissingTargetIssue(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_CancelledContext verifies the behavior of issue link create cancelled context.
+// TestIssueLinkCreate_CancelledContext verifies IssueLinkCreate when cancelled context.
 func TestIssueLinkCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -349,7 +356,7 @@ func TestIssueLinkCreate_CancelledContext(t *testing.T) {
 // Issue Link Delete
 // ---------------------------------------------------------------------------.
 
-// TestIssueLinkDelete_Success verifies the behavior of issue link delete success.
+// TestIssueLinkDelete_Success verifies IssueLinkDelete when success.
 func TestIssueLinkDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/issues/5/links/1" && r.Method == http.MethodDelete {
@@ -374,7 +381,7 @@ func TestIssueLinkDelete_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkDelete_MissingProjectID verifies the behavior of issue link delete missing project i d.
+// TestIssueLinkDelete_MissingProjectID verifies IssueLinkDelete when missing project ID.
 func TestIssueLinkDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -385,7 +392,7 @@ func TestIssueLinkDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkDelete_MissingIssueIID verifies the behavior of issue link delete missing issue i i d.
+// TestIssueLinkDelete_MissingIssueIID verifies IssueLinkDelete when missing issue IID.
 func TestIssueLinkDelete_MissingIssueIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -396,7 +403,7 @@ func TestIssueLinkDelete_MissingIssueIID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkDelete_MissingLinkID verifies the behavior of issue link delete missing link i d.
+// TestIssueLinkDelete_MissingLinkID verifies IssueLinkDelete when missing link ID.
 func TestIssueLinkDelete_MissingLinkID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -407,7 +414,7 @@ func TestIssueLinkDelete_MissingLinkID(t *testing.T) {
 	}
 }
 
-// TestIssueLinkDelete_CancelledContext verifies the behavior of issue link delete cancelled context.
+// TestIssueLinkDelete_CancelledContext verifies IssueLinkDelete when cancelled context.
 func TestIssueLinkDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -497,7 +504,7 @@ func TestIssueLinkIDNegative_Validation(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Populated validates format output markdown populated across multiple scenarios using table-driven subtests.
+// TestFormatOutputMarkdown_Populated covers FormatOutputMarkdown with table-driven subtests for populated.
 func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
 		ID:              42,
@@ -525,7 +532,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -537,7 +544,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Populated validates format list markdown populated across multiple scenarios using table-driven subtests.
+// TestFormatListMarkdown_Populated covers FormatListMarkdown with table-driven subtests for populated.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Relations: []RelationOutput{
@@ -564,7 +571,7 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No linked issues found") {
@@ -576,7 +583,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // toOutput converter
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_FullFields verifies the behavior of to output full fields.
+// TestToOutput_FullFields verifies ToOutput when full fields.
 func TestToOutput_FullFields(t *testing.T) {
 	link := &gl.IssueLink{
 		ID:       42,
@@ -612,7 +619,7 @@ func TestToOutput_FullFields(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilSourceIssue verifies the behavior of to output nil source issue.
+// TestToOutput_NilSourceIssue verifies ToOutput when nil source issue.
 func TestToOutput_NilSourceIssue(t *testing.T) {
 	link := &gl.IssueLink{
 		ID:       1,
@@ -635,7 +642,7 @@ func TestToOutput_NilSourceIssue(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilTargetIssue verifies the behavior of to output nil target issue.
+// TestToOutput_NilTargetIssue verifies ToOutput when nil target issue.
 func TestToOutput_NilTargetIssue(t *testing.T) {
 	link := &gl.IssueLink{
 		ID:       2,
@@ -658,7 +665,7 @@ func TestToOutput_NilTargetIssue(t *testing.T) {
 	}
 }
 
-// TestToOutputBoth_Nil verifies the behavior of to output both nil.
+// TestToOutputBoth_Nil verifies ToOutputBoth when nil.
 func TestToOutputBoth_Nil(t *testing.T) {
 	link := &gl.IssueLink{
 		ID:       3,
@@ -681,7 +688,7 @@ func TestToOutputBoth_Nil(t *testing.T) {
 // toRelationOutput converter
 // ---------------------------------------------------------------------------.
 
-// TestToRelationOutput_FullFields verifies the behavior of to relation output full fields.
+// TestToRelationOutput_FullFields verifies ToRelationOutput when full fields.
 func TestToRelationOutput_FullFields(t *testing.T) {
 	r := &gl.IssueRelation{
 		ID:          100,
@@ -725,7 +732,7 @@ func TestToRelationOutput_FullFields(t *testing.T) {
 // Handler API error paths
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -739,7 +746,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -753,7 +760,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -769,7 +776,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -788,10 +795,12 @@ func TestDelete_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	msgServerError  = "server error"
-	pathIssueLinks  = "/api/v4/projects/42/issues/10/links"
+	// pathIssueLinks identifies the path issue links constant used by this package.
+	pathIssueLinks = "/api/v4/projects/42/issues/10/links"
+	// pathIssueLink99 identifies the path issue link 99 constant used by this package.
 	pathIssueLink99 = "/api/v4/projects/42/issues/10/links/99"
 
+	// issueLinkJSON identifies the issue link JSON constant used by this package.
 	issueLinkJSON = `{
 		"id":99,
 		"source_issue":{"id":50,"iid":10,"project_id":42,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
@@ -799,6 +808,7 @@ const (
 		"link_type":"relates_to"
 	}`
 
+	// issueRelationJSON identifies the issue relation JSON constant used by this package.
 	issueRelationJSON = `[{
 		"id":100,"iid":8,"title":"Related issue","state":"opened",
 		"project_id":42,"issue_link_id":99,"link_type":"relates_to",
@@ -806,95 +816,11 @@ const (
 	}]`
 )
 
-// newIssueLinksMCPSession is an internal helper for the issuelinks package.
-func newIssueLinksMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && path == pathIssueLinks:
-			testutil.RespondJSON(w, http.StatusOK, issueRelationJSON)
-		case r.Method == http.MethodGet && path == pathIssueLink99:
-			testutil.RespondJSON(w, http.StatusOK, issueLinkJSON)
-		case r.Method == http.MethodPost && path == pathIssueLinks:
-			testutil.RespondJSON(w, http.StatusCreated, issueLinkJSON)
-		case r.Method == http.MethodDelete && path == pathIssueLink99:
-			testutil.RespondJSON(w, http.StatusOK, issueLinkJSON)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueLinksMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_link_list", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_issue_link_get", map[string]any{"project_id": "42", "issue_iid": 10, "issue_link_id": 99}},
-		{"gitlab_issue_link_create", map[string]any{"project_id": "42", "issue_iid": 10, "target_project_id": "42", "target_issue_iid": "20", "link_type": "relates_to"}},
-		{"gitlab_issue_link_delete", map[string]any{"project_id": "42", "issue_iid": 10, "issue_link_id": 99}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
 // ---------------------------------------------------------------------------
 // FormatListMarkdown with special characters
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_SpecialChars verifies the behavior of format list markdown special chars.
+// TestFormatListMarkdown_SpecialChars verifies FormatListMarkdown when special chars.
 func TestFormatListMarkdown_SpecialChars(t *testing.T) {
 	out := ListOutput{
 		Relations: []RelationOutput{

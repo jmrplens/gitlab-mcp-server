@@ -1,6 +1,3 @@
-// Package projectdiscovery implements tools to help LLMs discover the GitLab
-// project associated with a local workspace. It parses git remote URLs into
-// GitLab path_with_namespace and resolves them via the GitLab API.
 package projectdiscovery
 
 import (

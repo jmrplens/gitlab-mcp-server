@@ -13,22 +13,29 @@ import (
 )
 
 const (
-	pathGroupHooks         = "/api/v4/groups/99/hooks"
-	pathGroupHook10        = "/api/v4/groups/99/hooks/10"
-	testHookURL            = "https://example.com/hook"
-	errZeroHookID          = "expected error for zero HookID"
+	// pathGroupHooks identifies the path group hooks constant used by this package.
+	pathGroupHooks = "/api/v4/groups/99/hooks"
+	// pathGroupHook10 identifies the path group hook 10 constant used by this package.
+	pathGroupHook10 = "/api/v4/groups/99/hooks/10"
+	// testHookURL identifies the test hook URL constant used by this package.
+	testHookURL = "https://example.com/hook"
+	// errZeroHookID identifies the err zero hook ID constant used by this package.
+	errZeroHookID = "expected error for zero HookID"
+	// fmtExpectedHookIDError identifies the fmt expected hook ID error constant used by this package.
 	fmtExpectedHookIDError = "expected error to mention 'hook_id', got: %v"
 )
 
+// groupHookJSON stores the package-level group hook JSON state.
 var groupHookJSON = `{"id":10,"url":"https://example.com/hook","name":"CI Hook","description":"Triggers CI","group_id":99,"push_events":true,"merge_requests_events":true,"issues_events":false,"tag_push_events":false,"note_events":false,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"subgroup_events":false,"member_events":false,"confidential_issues_events":false,"confidential_note_events":false,"enable_ssl_verification":true,"alert_status":"executable","created_at":"2026-01-15T10:00:00Z"}`
 
+// groupHookListJSON stores the package-level group hook list JSON state.
 var groupHookListJSON = `[` + groupHookJSON + `]`
 
 // ---------------------------------------------------------------------------
 // ListHooks tests
 // ---------------------------------------------------------------------------.
 
-// TestListHooks_Success verifies the behavior of list hooks success.
+// TestListHooks_Success verifies ListHooks when success.
 func TestListHooks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupHooks {
@@ -55,7 +62,7 @@ func TestListHooks_Success(t *testing.T) {
 	}
 }
 
-// TestListHooks_APIError verifies the behavior of list hooks a p i error.
+// TestListHooks_APIError verifies ListHooks when API error.
 func TestListHooks_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -71,7 +78,7 @@ func TestListHooks_APIError(t *testing.T) {
 // GetHook tests
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_Success verifies the behavior of get hook success.
+// TestGetHook_Success verifies GetHook when success.
 func TestGetHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupHook10 {
@@ -93,7 +100,7 @@ func TestGetHook_Success(t *testing.T) {
 	}
 }
 
-// TestGetHook_APIError verifies the behavior of get hook a p i error.
+// TestGetHook_APIError verifies GetHook when API error.
 func TestGetHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -109,7 +116,7 @@ func TestGetHook_APIError(t *testing.T) {
 // AddHook tests
 // ---------------------------------------------------------------------------.
 
-// TestAddHook_Success verifies the behavior of add hook success.
+// TestAddHook_Success verifies AddHook when success.
 func TestAddHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupHooks {
@@ -135,7 +142,7 @@ func TestAddHook_Success(t *testing.T) {
 	}
 }
 
-// TestAddHook_APIError verifies the behavior of add hook a p i error.
+// TestAddHook_APIError verifies AddHook when API error.
 func TestAddHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -154,7 +161,7 @@ func TestAddHook_APIError(t *testing.T) {
 // EditHook tests
 // ---------------------------------------------------------------------------.
 
-// TestEditHook_Success verifies the behavior of edit hook success.
+// TestEditHook_Success verifies EditHook when success.
 func TestEditHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupHook10 {
@@ -179,7 +186,7 @@ func TestEditHook_Success(t *testing.T) {
 	}
 }
 
-// TestEditHook_APIError verifies the behavior of edit hook a p i error.
+// TestEditHook_APIError verifies EditHook when API error.
 func TestEditHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -199,7 +206,7 @@ func TestEditHook_APIError(t *testing.T) {
 // DeleteHook tests
 // ---------------------------------------------------------------------------.
 
-// TestDeleteHook_Success verifies the behavior of delete hook success.
+// TestDeleteHook_Success verifies DeleteHook when success.
 func TestDeleteHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupHook10 {
@@ -215,7 +222,7 @@ func TestDeleteHook_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_APIError verifies the behavior of delete hook a p i error.
+// TestDeleteHook_APIError verifies DeleteHook when API error.
 func TestDeleteHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -231,7 +238,7 @@ func TestDeleteHook_APIError(t *testing.T) {
 // HookID validation tests
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_InvalidHookID verifies the behavior of get hook invalid hook i d.
+// TestGetHook_InvalidHookID verifies GetHook when invalid hook ID.
 func TestGetHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -246,7 +253,7 @@ func TestGetHook_InvalidHookID(t *testing.T) {
 	}
 }
 
-// TestEditHook_InvalidHookID verifies the behavior of edit hook invalid hook i d.
+// TestEditHook_InvalidHookID verifies EditHook when invalid hook ID.
 func TestEditHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -261,7 +268,7 @@ func TestEditHook_InvalidHookID(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_InvalidHookID verifies the behavior of delete hook invalid hook i d.
+// TestDeleteHook_InvalidHookID verifies DeleteHook when invalid hook ID.
 func TestDeleteHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

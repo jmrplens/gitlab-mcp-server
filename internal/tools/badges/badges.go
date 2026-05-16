@@ -1,6 +1,3 @@
-// Package badges implements MCP tool handlers for GitLab project and group
-// badges. It wraps the ProjectBadgesService and GroupBadgesService from
-// client-go v2.
 package badges
 
 import (
@@ -27,7 +24,7 @@ type BadgeItem struct {
 	Kind             string `json:"kind,omitempty"`
 }
 
-// projectBadgeToItem is an internal helper for the badges package.
+// projectBadgeToItem maps project badge to item between API and evaluator models.
 func projectBadgeToItem(b *gl.ProjectBadge) BadgeItem {
 	return BadgeItem{
 		ID:               b.ID,
@@ -40,7 +37,7 @@ func projectBadgeToItem(b *gl.ProjectBadge) BadgeItem {
 	}
 }
 
-// groupBadgeToItem is an internal helper for the badges package.
+// groupBadgeToItem maps group badge to item between API and evaluator models.
 func groupBadgeToItem(b *gl.GroupBadge) BadgeItem {
 	return BadgeItem{
 		ID:               b.ID,

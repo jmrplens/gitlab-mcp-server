@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 )
 
 const (
@@ -218,6 +220,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 		metrics.OverallCoverage = combinedTotal
 		metrics.InternalCoverage = internalTotal
 	}
+	toolCounts := actionSpecToolCounts()
 
 	for _, info := range infos {
 		pkg := packageMetrics{
@@ -241,11 +244,18 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 		}
 
 		if pkg.Layer == layerToolSubpackage {
-			toolCount, toolErr := countMCPTools(info.Dir)
+			legacyToolCount, toolErr := countMCPTools(info.Dir)
 			if toolErr != nil {
 				return repositoryMetrics{}, fmt.Errorf("count MCP tools in %s: %w", pkg.RelPath, toolErr)
 			}
-			pkg.ToolCount = toolCount
+			localSpecCount, specErr := countLocalActionSpecTools(info.Dir)
+			if specErr != nil {
+				return repositoryMetrics{}, fmt.Errorf("count ActionSpec tools in %s: %w", pkg.RelPath, specErr)
+			}
+			pkg.ToolCount = max(legacyToolCount, localSpecCount)
+			if catalogToolCount := toolCounts[pkg.Key]; catalogToolCount > 0 {
+				pkg.ToolCount = max(catalogToolCount, legacyToolCount)
+			}
 		}
 
 		if coverage, ok := coverageByPackage[pkg.ImportPath]; ok {
@@ -447,6 +457,182 @@ func countMCPTools(dir string) (int, error) {
 		})
 	}
 	return count, nil
+}
+
+func countLocalActionSpecTools(dir string) (int, error) {
+	count := 0
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return 0, parseErr
+		}
+		for _, decl := range node.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil || !isActionSpecBuilderName(fn.Name.Name) {
+				continue
+			}
+			count += countActionSpecStatements(fn.Body.List, map[string]int{})
+		}
+	}
+	return count, nil
+}
+
+func isActionSpecBuilderName(name string) bool {
+	switch name {
+	case "ActionSpecs", "GroupActionSpecs", "IssueActionSpecs", "MergeRequestActionSpecs", "ProjectActionSpecs", "SnippetActionSpecs", "UserActionSpecs":
+		return true
+	default:
+		return false
+	}
+}
+
+func countActionSpecStatements(statements []ast.Stmt, vars map[string]int) int {
+	count := 0
+	for _, statement := range statements {
+		switch stmt := statement.(type) {
+		case *ast.AssignStmt:
+			for index, rhs := range stmt.Rhs {
+				if index >= len(stmt.Lhs) {
+					continue
+				}
+				ident, isIdent := stmt.Lhs[index].(*ast.Ident)
+				if !isIdent {
+					continue
+				}
+				if literalCount, hasLiteral := actionSpecLiteralCount(rhs); hasLiteral {
+					vars[ident.Name] = literalCount
+					continue
+				}
+				if appendCount, hasAppend := actionSpecAppendCount(rhs); hasAppend {
+					vars[ident.Name] += appendCount
+				}
+			}
+		case *ast.ReturnStmt:
+			for _, result := range stmt.Results {
+				count += actionSpecReturnCount(result, vars)
+			}
+		case *ast.IfStmt:
+			count += countActionSpecStatements(stmt.Body.List, vars)
+			count += countActionSpecElse(stmt.Else, vars)
+		case *ast.ForStmt:
+			count += countActionSpecStatements(stmt.Body.List, vars)
+		case *ast.RangeStmt:
+			count += countActionSpecStatements(stmt.Body.List, vars)
+		case *ast.BlockStmt:
+			count += countActionSpecStatements(stmt.List, vars)
+		}
+	}
+	return count
+}
+
+func countActionSpecElse(statement ast.Stmt, vars map[string]int) int {
+	switch stmt := statement.(type) {
+	case nil:
+		return 0
+	case *ast.BlockStmt:
+		return countActionSpecStatements(stmt.List, vars)
+	case *ast.IfStmt:
+		return countActionSpecStatements([]ast.Stmt{stmt}, vars)
+	default:
+		return 0
+	}
+}
+
+func actionSpecReturnCount(expr ast.Expr, vars map[string]int) int {
+	if literalCount, hasLiteral := actionSpecLiteralCount(expr); hasLiteral {
+		return literalCount
+	}
+	if appendCount, hasAppend := actionSpecAppendCount(expr); hasAppend {
+		return appendCount
+	}
+	ident, ok := expr.(*ast.Ident)
+	if !ok {
+		return 0
+	}
+	return vars[ident.Name]
+}
+
+func actionSpecLiteralCount(expr ast.Expr) (int, bool) {
+	literal, ok := expr.(*ast.CompositeLit)
+	if !ok || !isActionSpecComposite(literal) {
+		return 0, false
+	}
+	return len(literal.Elts), true
+}
+
+func actionSpecAppendCount(expr ast.Expr) (int, bool) {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok || !isIdentCall(call, "append") || len(call.Args) < 2 {
+		return 0, false
+	}
+	count := 0
+	for _, arg := range call.Args[1:] {
+		if call.Ellipsis.IsValid() {
+			continue
+		}
+		if literalCount, hasLiteral := actionSpecLiteralCount(arg); hasLiteral {
+			count += literalCount
+			continue
+		}
+		count++
+	}
+	return count, true
+}
+
+func isIdentCall(call *ast.CallExpr, name string) bool {
+	ident, ok := call.Fun.(*ast.Ident)
+	return ok && ident.Name == name
+}
+
+func isActionSpecComposite(literal *ast.CompositeLit) bool {
+	arrayType, ok := literal.Type.(*ast.ArrayType)
+	return ok && isActionSpecType(arrayType.Elt)
+}
+
+func isActionSpecType(expr ast.Expr) bool {
+	switch typ := expr.(type) {
+	case *ast.Ident:
+		return typ.Name == "ActionSpec"
+	case *ast.SelectorExpr:
+		return typ.Sel.Name == "ActionSpec"
+	default:
+		return false
+	}
+}
+
+func actionSpecToolCounts() map[string]int {
+	toolsByPackage := map[string]map[string]struct{}{}
+	for _, group := range tools.CollectActionSpecs(nil, true) {
+		for _, spec := range group.Actions {
+			owner := strings.TrimSpace(spec.OwnerPackage)
+			toolName := strings.TrimSpace(spec.IndividualTool.Name)
+			if owner == "" || toolName == "" {
+				continue
+			}
+			if toolsByPackage[owner] == nil {
+				toolsByPackage[owner] = map[string]struct{}{}
+			}
+			toolsByPackage[owner][toolName] = struct{}{}
+		}
+	}
+
+	counts := make(map[string]int, len(toolsByPackage))
+	for packageName, toolNames := range toolsByPackage {
+		counts[packageName] = len(toolNames)
+	}
+	return counts
 }
 
 // parsePackageCoverages extracts coverage percentages from go test output.

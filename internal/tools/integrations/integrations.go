@@ -21,7 +21,7 @@ type IntegrationItem struct {
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
-// integrationToItem is an internal helper for the integrations package.
+// integrationToItem maps integration to item between API and evaluator models.
 func integrationToItem(s *gl.Integration) IntegrationItem {
 	item := IntegrationItem{
 		ID:     s.ID,

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Projects
 > **Individual tools**: 42
-> **Meta-tool**: `gitlab_project` (when `META_TOOLS=true`, default)
+> **Meta-tool**: `gitlab_project` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The projects domain covers the full lifecycle of GitLab projects (repositories): creation, retrieval, listing, updating, deletion, forking, starring, archiving, transferring, webhook management, user/group listings, and push rule configuration.
 
-When `META_TOOLS=true` (the default), all 33 individual tools below are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
+With the default `TOOL_SURFACE=meta` catalog, all 33 individual tools below are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

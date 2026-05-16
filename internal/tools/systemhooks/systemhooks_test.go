@@ -14,19 +14,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testHookURL identifies the test hook URL constant used by this package.
 const testHookURL = "https://example.com/hook"
 
+// errExpectedErrZeroID identifies the err expected err zero ID constant used by this package.
 const errExpectedErrZeroID = "expected error for zero ID, got nil"
 
+// errAPINotCalledZeroID identifies the err API not called zero ID constant used by this package.
 const errAPINotCalledZeroID = "API should not be called when ID is 0"
 
+// hookJSON identifies the hook JSON constant used by this package.
 const hookJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook","description":"Test hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/hooks" {
@@ -53,7 +59,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -65,7 +71,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/hooks/1" {
@@ -89,7 +95,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestAdd_Success verifies the behavior of add success.
+// TestAdd_Success verifies Add when success.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -108,7 +114,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestTest_Success verifies the behavior of test success.
+// TestTest_Success verifies Test when success.
 func TestTest_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/hooks/1" {
@@ -129,7 +135,7 @@ func TestTest_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -144,7 +150,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -156,7 +162,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestGet_ZeroID verifies the behavior of get zero i d.
+// TestGet_ZeroID verifies Get when zero ID.
 func TestGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPINotCalledZeroID)
@@ -167,7 +173,7 @@ func TestGet_ZeroID(t *testing.T) {
 	}
 }
 
-// TestTest_ZeroID verifies the behavior of test zero i d.
+// TestTest_ZeroID verifies Test when zero ID.
 func TestTest_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPINotCalledZeroID)
@@ -178,7 +184,7 @@ func TestTest_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDelete_ZeroID verifies the behavior of delete zero i d.
+// TestDelete_ZeroID verifies Delete when zero ID.
 func TestDelete_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPINotCalledZeroID)
@@ -189,7 +195,7 @@ func TestDelete_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Hooks: []HookItem{
@@ -205,7 +211,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown verifies the behavior of format hook markdown.
+// TestFormatHookMarkdown verifies FormatHookMarkdown.
 func TestFormatHookMarkdown(t *testing.T) {
 	result := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL, Name: "My Hook", Description: "A test hook", PushEvents: true})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -220,7 +226,7 @@ func TestFormatHookMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatTestMarkdown verifies the behavior of format test markdown.
+// TestFormatTestMarkdown verifies FormatTestMarkdown.
 func TestFormatTestMarkdown(t *testing.T) {
 	result := FormatTestMarkdown(TestOutput{Event: HookEventItem{EventName: "project_create", Name: "test", ProjectID: 42}})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -231,13 +237,14 @@ func TestFormatTestMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -252,7 +259,7 @@ func TestGet_APIError(t *testing.T) {
 // Add — API error, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestAdd_APIError verifies the behavior of add a p i error.
+// TestAdd_APIError verifies Add when API error.
 func TestAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -263,7 +270,7 @@ func TestAdd_APIError(t *testing.T) {
 	}
 }
 
-// TestAdd_AllOptionalFields verifies the behavior of add all optional fields.
+// TestAdd_AllOptionalFields verifies Add when all optional fields.
 func TestAdd_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -308,7 +315,7 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 // Test — API error
 // ---------------------------------------------------------------------------.
 
-// TestTest_APIError verifies the behavior of test a p i error.
+// TestTest_APIError verifies Test when API error.
 func TestTest_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -323,7 +330,7 @@ func TestTest_APIError(t *testing.T) {
 // Formatters — empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -336,7 +343,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // Formatters — hook with created_at
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookMarkdown_WithCreatedAt verifies the behavior of format hook markdown with created at.
+// TestFormatHookMarkdown_WithCreatedAt verifies FormatHookMarkdown when with created at.
 func TestFormatHookMarkdown_WithCreatedAt(t *testing.T) {
 	result := FormatHookMarkdown(HookItem{
 		ID:        1,
@@ -347,190 +354,4 @@ func TestFormatHookMarkdown_WithCreatedAt(t *testing.T) {
 	if !strings.Contains(text, "1 Jan 2026 00:00 UTC") {
 		t.Errorf("expected created_at in output, got: %s", text)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip for all tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newSystemHooksMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_system_hooks", map[string]any{}},
-		{"get", "gitlab_get_system_hook", map[string]any{"id": float64(1)}},
-		{"add", "gitlab_add_system_hook", map[string]any{"url": "https://example.com/hook"}},
-		{"test", "gitlab_test_system_hook", map[string]any{"id": float64(1)}},
-		{"delete", "gitlab_delete_system_hook", map[string]any{"id": float64(1)}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
-// handlers when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_system_hooks", map[string]any{}},
-		{"gitlab_get_system_hook", map[string]any{"hook_id": float64(1)}},
-		{"gitlab_add_system_hook", map[string]any{"url": "https://example.com"}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("unexpected transport error: %v", err)
-			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result for %s with 500 backend", tt.name)
-			}
-		})
-	}
-}
-
-// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in delete_system_hook when user declines.
-func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
-	handler := http.NewServeMux()
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_system_hook",
-		Arguments: map[string]any{"hook_id": float64(1)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
-	}
-}
-
-func newSystemHooksMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	hookJSON := `{"id":1,"url":"https://example.com/hook","name":"My Hook","description":"Test hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/hooks", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+hookJSON+`]`)
-	})
-
-	handler.HandleFunc("GET /api/v4/hooks/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, hookJSON)
-	})
-
-	handler.HandleFunc("POST /api/v4/hooks", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, hookJSON)
-	})
-
-	// TestHook also uses GET /api/v4/hooks/1 — the GitLab API tests hooks via GET with special handling
-	// Actually, the SDK uses /api/v4/hooks/:id — but the test endpoint shares the same path.
-	// We need a separate handler for the test endpoint (it's actually a GET to a specific path).
-
-	handler.HandleFunc("DELETE /api/v4/hooks/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }

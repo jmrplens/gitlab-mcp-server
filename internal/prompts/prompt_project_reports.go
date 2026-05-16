@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	mdSummaryHeader       = "## Summary\n\n"
+	// mdSummaryHeader identifies the md summary header constant used by this package.
+	mdSummaryHeader = "## Summary\n\n"
+	// mdCategoryTableHeader identifies the md category table header constant used by this package.
 	mdCategoryTableHeader = "| Category | Count |\n|----------|-------|\n"
 )
 
@@ -46,7 +48,7 @@ func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Clie
 	})
 }
 
-// handleBranchMRSummary performs the handle branch m r summary operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleBranchMRSummary handles handle branch MR summary and returns [*mcp.GetPromptResult].
 func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -115,7 +117,7 @@ func registerProjectActivityReportPrompt(server *mcp.Server, client *gitlabclien
 	})
 }
 
-// handleProjectActivityReport performs the handle project activity report operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleProjectActivityReport handles handle project activity report and returns [*mcp.GetPromptResult].
 func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -214,7 +216,7 @@ type mrDiscussionInfo struct {
 	unresolved int
 }
 
-// handleMRReviewStatus performs the handle m r review status operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleMRReviewStatus handles handle MR review status and returns [*mcp.GetPromptResult].
 func handleMRReviewStatus(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -323,7 +325,7 @@ func registerUnassignedItemsPrompt(server *mcp.Server, client *gitlabclient.Clie
 	})
 }
 
-// handleUnassignedItems performs the handle unassigned items operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleUnassignedItems handles handle unassigned items and returns [*mcp.GetPromptResult].
 func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -390,7 +392,7 @@ func registerStaleItemsReportPrompt(server *mcp.Server, client *gitlabclient.Cli
 	})
 }
 
-// handleStaleItemsReport performs the handle stale items report operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleStaleItemsReport handles handle stale items report and returns [*mcp.GetPromptResult].
 func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {

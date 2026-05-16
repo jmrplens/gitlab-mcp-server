@@ -12,7 +12,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// TestUserActivityReport_EventBreakdown verifies that UserActivityReport handles the event breakdown scenario correctly.
+// TestUserActivityReport_EventBreakdown verifies UserActivityReport when event breakdown.
 func TestUserActivityReport_EventBreakdown(t *testing.T) {
 	mux := http.NewServeMux()
 	now := time.Now()
@@ -57,7 +57,7 @@ func TestUserActivityReport_EventBreakdown(t *testing.T) {
 	}
 }
 
-// TestUserActivityReport_MissingUsername verifies that UserActivityReport handles the missing username scenario correctly.
+// TestUserActivityReport_MissingUsername verifies UserActivityReport when missing username.
 func TestUserActivityReport_MissingUsername(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +73,7 @@ func TestUserActivityReport_MissingUsername(t *testing.T) {
 	}
 }
 
-// TestTeamOverview_MemberWorkload verifies that TeamOverview handles the member workload scenario correctly.
+// TestTeamOverview_MemberWorkload verifies TeamOverview when member workload.
 func TestTeamOverview_MemberWorkload(t *testing.T) {
 	created := time.Now().Add(-3 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -129,7 +129,7 @@ func TestTeamOverview_MemberWorkload(t *testing.T) {
 	}
 }
 
-// TestTeamOverview_MissingGroupID verifies that TeamOverview handles the missing group i d scenario correctly.
+// TestTeamOverview_MissingGroupID verifies TeamOverview when missing group ID.
 func TestTeamOverview_MissingGroupID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)
@@ -141,7 +141,7 @@ func TestTeamOverview_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestTeamMRDashboard_GroupsByProject verifies that TeamMRDashboard handles the groups by project scenario correctly.
+// TestTeamMRDashboard_GroupsByProject verifies TeamMRDashboard when groups by project.
 func TestTeamMRDashboard_GroupsByProject(t *testing.T) {
 	created := time.Now().Add(-2 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -180,7 +180,7 @@ func TestTeamMRDashboard_GroupsByProject(t *testing.T) {
 	}
 }
 
-// TestTeamMRDashboard_TargetBranchFilter verifies that TeamMRDashboard handles the target branch filter scenario correctly.
+// TestTeamMRDashboard_TargetBranchFilter verifies TeamMRDashboard when target branch filter.
 func TestTeamMRDashboard_TargetBranchFilter(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -206,7 +206,7 @@ func TestTeamMRDashboard_TargetBranchFilter(t *testing.T) {
 	}
 }
 
-// TestTeamMRDashboard_EmptyResult verifies that TeamMRDashboard handles the empty result scenario correctly.
+// TestTeamMRDashboard_EmptyResult verifies TeamMRDashboard when empty result.
 func TestTeamMRDashboard_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/mygroup/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func TestTeamMRDashboard_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestReviewerWorkload_Distribution verifies that ReviewerWorkload handles the distribution scenario correctly.
+// TestReviewerWorkload_Distribution verifies ReviewerWorkload when distribution.
 func TestReviewerWorkload_Distribution(t *testing.T) {
 	created := time.Now().Add(-4 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -279,7 +279,7 @@ func TestReviewerWorkload_Distribution(t *testing.T) {
 	}
 }
 
-// TestReviewerWorkload_MissingGroupID verifies that ReviewerWorkload handles the missing group i d scenario correctly.
+// TestReviewerWorkload_MissingGroupID verifies ReviewerWorkload when missing group ID.
 func TestReviewerWorkload_MissingGroupID(t *testing.T) {
 	mux := http.NewServeMux()
 	session := newMCPSession(t, mux)

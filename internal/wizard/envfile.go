@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 // writeEnvFileFn is the function used to write the env file.
@@ -54,8 +56,7 @@ func loadExistingConfigFromPath(path string) (ServerConfig, bool) {
 	cfg.GitLabURL = firstNonEmpty(vars["GITLAB_URL"], cfg.GitLabURL)
 	cfg.GitLabToken = vars["GITLAB_TOKEN"]
 	cfg.SkipTLSVerify = envBool(vars, "GITLAB_SKIP_TLS_VERIFY", false)
-	cfg.MetaTools = envBool(vars, "META_TOOLS", true)
-	cfg.ToolSurface = firstNonEmpty(vars["TOOL_SURFACE"], toolSurfaceFromMetaTools(cfg.MetaTools))
+	cfg.ToolSurface, cfg.MetaTools = toolSurfaceFromEnv(vars)
 	cfg.CapabilitySurface = firstNonEmpty(vars["CAPABILITY_SURFACE"], cfg.CapabilitySurface)
 	cfg.MetaParamSchema = firstNonEmpty(vars["META_PARAM_SCHEMA"], cfg.MetaParamSchema)
 	cfg.Enterprise = envBool(vars, "GITLAB_ENTERPRISE", false)
@@ -124,7 +125,6 @@ func envFileEntries(cfg ServerConfig) []envFileEntry {
 		{"GITLAB_URL", cfg.GitLabURL},
 		{"GITLAB_TOKEN", cfg.GitLabToken},
 		{"GITLAB_SKIP_TLS_VERIFY", boolString(cfg.SkipTLSVerify)},
-		{"META_TOOLS", boolString(cfg.MetaTools)},
 		{"TOOL_SURFACE", cfg.ToolSurface},
 		{"CAPABILITY_SURFACE", cfg.CapabilitySurface},
 		{"META_PARAM_SCHEMA", cfg.MetaParamSchema},
@@ -146,4 +146,13 @@ func envFileEntries(cfg ServerConfig) []envFileEntry {
 	return slices.DeleteFunc(entries, func(entry envFileEntry) bool {
 		return strings.TrimSpace(entry.value) == ""
 	})
+}
+
+func toolSurfaceFromEnv(vars map[string]string) (string, bool) {
+	toolSurface, metaTools, err := config.ParseToolSurface(vars["TOOL_SURFACE"], vars["META_TOOLS"])
+	if err == nil {
+		return toolSurface, metaTools
+	}
+	metaTools = envBool(vars, "META_TOOLS", true)
+	return toolSurfaceFromMetaTools(metaTools), metaTools
 }

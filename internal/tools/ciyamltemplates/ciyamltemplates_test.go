@@ -11,11 +11,9 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls" {
@@ -36,7 +34,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -48,7 +46,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls/Go" {
@@ -66,7 +64,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -78,7 +76,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyKey verifies that Get handles the empty key scenario correctly.
+// TestGet_EmptyKey verifies Get when empty key.
 func TestGet_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not call API with empty key")
@@ -92,7 +90,7 @@ func TestGet_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{Templates: []TemplateListItem{{Key: "Go", Name: "Go"}}}
 	md := FormatListMarkdown(out)
@@ -101,7 +99,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Go", Content: "stages:\n  - test"})
 	if !strings.Contains(md, "Go") || !strings.Contains(md, "stages") {
@@ -111,13 +109,14 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — canceled context, pagination, empty result
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -127,7 +126,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/templates/gitlab_ci_ymls" {
@@ -154,7 +153,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -172,7 +171,7 @@ func TestList_EmptyResult(t *testing.T) {
 // Get — canceled context, empty key
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -182,7 +181,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyKey_Cov verifies the behavior of cov get empty key returning not found.
+// TestGet_EmptyKey_Cov verifies Get when empty key cov.
 func TestGet_EmptyKey_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -193,7 +192,7 @@ func TestGet_EmptyKey_Cov(t *testing.T) {
 	}
 }
 
-// TestGetOutput_Fields verifies the behavior of get output fields.
+// TestGetOutput_Fields verifies GetOutput when fields.
 func TestGetOutput_Fields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/templates/gitlab_ci_ymls/Python" {
@@ -218,7 +217,7 @@ func TestGetOutput_Fields(t *testing.T) {
 // FormatListMarkdown — empty, with data, with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No templates found") {
@@ -229,7 +228,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithPagination verifies the behavior of format list markdown with pagination.
+// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Templates: []TemplateListItem{
@@ -252,7 +251,7 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharacters verifies the behavior of format list markdown special characters.
+// TestFormatListMarkdown_SpecialCharacters verifies FormatListMarkdown when special characters.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		Templates: []TemplateListItem{
@@ -269,7 +268,7 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 // FormatGetMarkdown — with data, empty content
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies the behavior of format get markdown all fields.
+// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{
 		Name:    "Ruby",
@@ -289,7 +288,7 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_EmptyContent verifies the behavior of format get markdown empty content.
+// TestFormatGetMarkdown_EmptyContent verifies FormatGetMarkdown when empty content.
 func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Empty", Content: ""})
 	if !strings.Contains(md, "## CI YAML Template: Empty") {
@@ -300,27 +299,29 @@ func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies CI YAML template action spec metadata.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "ciyamltemplates" || spec.IndividualTool.Name == "" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all tools
+// ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newCIYAMLTemplatesMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes validates CI YAML template canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	specByTool := newCIYAMLTemplatesRouteSpecs(t)
 
 	tools := []struct {
 		name string
@@ -334,51 +335,29 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.tool)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			result, err := spec.Route.Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			}
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
-// handlers when the GitLab API returns an error.
-func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+// TestActionSpecs_CallRouteErrors covers canonical route error paths.
+func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
+	specByTool := ciyamlTemplateSpecsByTool(ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -389,19 +368,19 @@ func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("unexpected transport error: %v", err)
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
 			}
-			if result == nil || !result.IsError {
-				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
+				t.Fatalf("Route.Handler(%s) expected error", tt.name)
 			}
 		})
 	}
 }
 
-// newCIYAMLTemplatesMCPSession is an internal helper for the ciyamltemplates package.
-func newCIYAMLTemplatesMCPSession(t *testing.T) *mcp.ClientSession {
+// newCIYAMLTemplatesRouteSpecs constructs ciyaml templates route specs test fixtures.
+func newCIYAMLTemplatesRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -417,22 +396,14 @@ func newCIYAMLTemplatesMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	return ciyamlTemplateSpecsByTool(ActionSpecs(client))
+}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+// ciyamlTemplateSpecsByTool supports ciyaml template specs by tool assertions in ciyamltemplates tests.
+func ciyamlTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
 	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return specByTool
 }

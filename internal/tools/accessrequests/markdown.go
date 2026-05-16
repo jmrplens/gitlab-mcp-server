@@ -11,7 +11,7 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Access Request #%d\n\n", out.ID)
-	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
+	b.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
 	fmt.Fprintf(&b, "| Username | %s |\n", out.Username)
 	fmt.Fprintf(&b, "| Name | %s |\n", out.Name)
@@ -41,8 +41,7 @@ func FormatListMarkdown(out ListOutput) string {
 		toolutil.WritePagination(&b, out.Pagination)
 		return b.String()
 	}
-	b.WriteString("| ID | Username | Name | State | Access Level |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State", "Access Level"))
 	for _, ar := range out.AccessRequests {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n",
 			ar.ID, ar.Username, ar.Name, ar.State, ar.AccessLevel)

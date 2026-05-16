@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.6.1 | up to 1011 tools | 32 base meta-tools; 47 self-managed enterprise meta-tools; 48 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
+> Version 1.6.1 | up to 1011 tools | 33 base meta-tools; 47 self-managed enterprise meta-tools; 48 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
@@ -8,7 +8,7 @@ Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`.
 
 ## Meta-Tools
 
-Meta-tools are the default mode (META_TOOLS=true). Each groups related
+Meta-tools are the default mode (`TOOL_SURFACE=meta`). Each groups related
 operations under a single tool with an `action` parameter.
 
 ### gitlab_access
@@ -2216,94 +2216,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"archive","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group/<action>.
 
-Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
-When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
-
-Behavior:
-- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / release_list (Premium+ adds wiki_list / epic_list / protected_*_list / ldap_link_list / saml_link_list / service_account_*_list).
-- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add are NON-idempotent (re-invocation creates a duplicate or returns 409).
-- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
-- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_* are irreversible. Premium+ adds destructive: epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete, service_account_pat_revoke. archive is reversible via unarchive.
-
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
-Errors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).
-
-Param conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.
-
-Group CRUD:
-- list: search, owned, top_level_only (no group_id needed)
-- get: group_id*
-- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch
-- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch
-- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)
-- restore: group_id*
-- archive / unarchive: group_id* (requires Owner role)
-- search: query* (no group_id needed)
-- transfer_project: group_id*, project_id*
-
-Group queries:
-- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared
-- members: group_id*, query (filter name/username)
-- subgroups: group_id*, search
-- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username
-
-Webhooks (hook_*):
-- hook_list: group_id*
-- hook_get / hook_delete: group_id*, hook_id*
-- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter
-- hook_edit: group_id*, hook_id*, same params as hook_add
-
-Badges (badge_*):
-- badge_list: group_id*, name
-- badge_get / badge_delete: group_id*, badge_id*
-- badge_add / badge_preview: group_id*, link_url*, image_url*, name
-- badge_edit: group_id*, badge_id*, link_url, image_url, name
-
-Members (group_member_*):
-- group_member_get: group_id*, user_id*
-- group_member_get_inherited: group_id*, user_id* (includes inherited)
-- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at
-- group_member_remove: group_id*, user_id*
-- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at
-- group_member_unshare: group_id*, shared_with_group_id*
-
-Labels (group_label_*):
-- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups
-- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*
-- group_label_create: group_id*, name*, color*, description
-- group_label_update: group_id*, label_id*, new_name, color, description
-
-Group milestones (group_milestone_* — group scope only; use gitlab_project milestone_* for project milestones):
-- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
-- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
-- group_milestone_create: group_id*, title*, description, start_date, due_date
-- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event
-- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*
-
-Boards (group_board_*):
-- group_board_list: group_id*
-- group_board_get / group_board_delete: group_id*, board_id*
-- group_board_create: group_id*, name*
-- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight
-- group_board_list_lists: group_id*, board_id*
-- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*
-- group_board_create_list: group_id*, board_id*, label_id
-- group_board_update_list: group_id*, board_id*, list_id*, position
-
-Uploads:
-- group_upload_list: group_id*
-- group_upload_delete_by_id: group_id*, upload_id*
-- group_upload_delete_by_secret: group_id*, secret*, filename*
-
-Import/Export:
-- group_relations_schedule / group_relations_list_status: group_id*
-- group_export_schedule / group_export_download: group_id*
-- group_import_file: name*, path*, file*, parent_id (no group_id)
-
-Releases:
-- release_list: group_id*, simple
-
-See also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)
+GitLab group actions.
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -3550,6 +3463,10 @@ Resource events (event_issue_*): project_id*, issue_iid* for all.
 - event_issue_state_list / event_issue_state_get (+ state_event_id*)
 - event_issue_iteration_list / event_issue_iteration_get (+ iteration_event_id*)
 - event_issue_weight_list
+
+Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
+- iteration_list_project: project_id*, state (1=opened, 2=upcoming, 3=current, 4=closed), search, include_ancestors
+- iteration_list_group: group_id*, state, search, include_ancestors
 
 See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD).
 
@@ -5861,6 +5778,14 @@ Admin:
 - create_for_user: user_id*, name*, path, namespace_id, description, visibility, initialize_with_readme, default_branch, topics
 
 See also: gitlab_repository (files/commits), gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request, gitlab_discover_project (find project ID)
+
+Push Rules (Premium+ — GITLAB_ENTERPRISE=true):
+- push_rule_get / push_rule_delete: project_id*
+- push_rule_add / push_rule_edit: project_id*, commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size, deny_delete_tag, member_check, prevent_secrets, commit_committer_check, reject_unsigned_commits, reject_non_dco_commits
+
+Security Settings (Ultimate — GITLAB_ENTERPRISE=true):
+- security_settings_get: project_id*
+- security_settings_update: project_id*, secret_push_protection_enabled*
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -8191,6 +8116,163 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+### gitlab_storage_move
+
+**Storage Move**
+
+Use {"action":"get_project","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
+
+GitLab storage move actions.
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>get_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_group_for_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_project_for_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>get_snippet_for_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_all_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>retrieve_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_all_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_group</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_project</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
+<details><summary>schedule_snippet</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
+```
+
+</details>
+
 ### gitlab_tag
 
 **Tag**
@@ -8519,6 +8601,10 @@ Keys and namespaces:
 Misc:
 - create_runner: runner_type*, group_id, project_id, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
 - delete_identity: user_id*, provider*
+
+Service Accounts (Premium+ — GITLAB_ENTERPRISE=true):
+- create_service_account: name, username, email
+- list_service_accounts: order_by, sort
 
 See also: gitlab_access (deploy/access tokens), gitlab_admin (instance administration)
 
@@ -9201,7 +9287,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 16 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 15 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
@@ -9859,20 +9945,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 Use {"action":"graph_status","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_orbit/<action>.
 
-Experimental GitLab.com-only Orbit Knowledge Graph operations. Read-only.
-When to use: inspect Orbit availability and graph indexing, discover the Orbit MCP tool/query schema, or execute a Knowledge Graph query on GitLab.com.
-NOT for: GitLab self-managed instances (Orbit is GitLab.com-only), standard project/group/issue/MR CRUD (use gitlab_project, gitlab_group, gitlab_issue, gitlab_merge_request), or full-text search (use gitlab_search).
-
-This meta-tool is registered only when the MCP server is connected to https://gitlab.com and the Enterprise/Premium catalog is enabled. Orbit itself is experimental and also depends on GitLab's knowledge_graph feature flag and namespace/project access.
-
-Actions:
-- status: response_format (raw/llm) — cluster health and component status.
-- schema: expand, format (raw/llm) — graph ontology domains, nodes, and edges.
-- tools: no params — Orbit MCP tool manifest and parameter schemas.
-- query: query*, response_format (raw/llm) — execute an Orbit query DSL object. First call gitlab_orbit with action "tools" (or use gitlab_orbit_tools) to inspect the live query schema.
-- graph_status: exactly one of namespace_id, project_id, full_path; response_format (raw/llm) — graph indexing state.
-
-Errors: 404 means Orbit is not enabled or not available; 403 means the token lacks access to a Knowledge Graph-enabled namespace/project; 503 means Orbit is temporarily unavailable.
+GitLab orbit actions.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -9996,192 +10069,6 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 </details>
 
-### gitlab_storage_move
-
-**Storage Move**
-
-Use {"action":"get_group","params":{...}}; only top-level keys are action and params.
-Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
-
-Manage repository storage moves for projects, groups, and snippets (admin only).
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
-
-Param conventions: * = required. retrieve_all/list actions accept page, per_page. Each resource type (project/group/snippet) has the same action pattern.
-
-Project storage moves:
-- retrieve_all_project: page, per_page
-- retrieve_project: project_id*, page, per_page
-- get_project: id*
-- get_project_for_project: project_id*, id*
-- schedule_project: project_id*, destination_storage_name
-- schedule_all_project: source_storage_name, destination_storage_name
-
-Group storage moves:
-- retrieve_all_group: page, per_page
-- retrieve_group: group_id*, page, per_page
-- get_group: id*
-- get_group_for_group: group_id*, id*
-- schedule_group: group_id*, destination_storage_name
-- schedule_all_group: source_storage_name, destination_storage_name
-
-Snippet storage moves:
-- retrieve_all_snippet: page, per_page
-- retrieve_snippet: snippet_id*, page, per_page
-- get_snippet: id*
-- get_snippet_for_snippet: snippet_id*, id*
-- schedule_snippet: snippet_id*, destination_storage_name
-- schedule_all_snippet: source_storage_name, destination_storage_name
-
-See also: gitlab_admin
-
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
-
-**Action Output Schemas:**
-
-<details><summary>get_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_group_for_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_project_for_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>get_snippet_for_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_all_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>retrieve_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"moves":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["moves","pagination"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_all_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_group</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"group":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"web_url":{"type":"string"}},"required":["id","name"],"type":["null","object"]},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_project</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"path_with_namespace":{"type":"string"}},"required":["id","name","path_with_namespace"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
-<details><summary>schedule_snippet</summary>
-
-```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"destination_storage_name":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"snippet":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","title"],"type":["null","object"]},"source_storage_name":{"type":"string"},"state":{"type":"string"}},"required":["id","created_at","state","source_storage_name","destination_storage_name"],"type":"object"}
-```
-
-</details>
-
 ### gitlab_vulnerability
 
 **Vulnerability**
@@ -10272,7 +10159,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When META_TOOLS=false, up to 1011 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1006.
+When `TOOL_SURFACE=individual`, up to 1011 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1006.
 Grouped by domain:
 
 ### access (8 tools)
@@ -10307,6 +10194,7 @@ Deny a group access request. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -10318,6 +10206,7 @@ Deny a project access request. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -10690,6 +10579,7 @@ Ban a GitLab user, hiding their activity and preventing login (admin only). More
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -10702,6 +10592,7 @@ Block a GitLab user, preventing login and API access (admin only). The user's co
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -10726,6 +10617,7 @@ Delete an issue board from a project. This action cannot be undone.
 **Parameters:**
 
 - `board_id` (integer) (required): Board ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -10775,6 +10667,7 @@ Delete a list from an issue board. This action cannot be undone.
 **Parameters:**
 
 - `board_id` (integer) (required): Board ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `list_id` (integer) (required): Board list ID
 - `project_id` (string) (required): Project ID or path
 
@@ -10857,6 +10750,7 @@ Delete a branch from a GitLab repository. Cannot delete the default branch or pr
 **Parameters:**
 
 - `branch_name` (string) (required): Branch name to delete
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -10867,6 +10761,7 @@ Delete all branches that have been merged into the default branch. The default b
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -10917,6 +10812,7 @@ Remove all protection rules from a GitLab branch, allowing unrestricted push, me
 **Parameters:**
 
 - `branch_name` (string) (required): Name of the protected branch to remove
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11019,6 +10915,7 @@ Delete a CI/CD variable from a GitLab project by key. Optionally filter by envir
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_scope` (string) (required): Filter by environment scope
 - `key` (string) (required): Variable key name
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -11238,7 +11135,7 @@ Set the pipeline status of a commit. State can be: pending, running, success, fa
 - `state` (string) (required): Status state: pending, running, success, failed, canceled
 - `target_url` (string): URL to link from the status
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_commit_statuses
 
@@ -11722,6 +11619,7 @@ Deactivate an active GitLab user (admin only). Deactivated users cannot login bu
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -11735,6 +11633,7 @@ Delete a metric image from a GitLab alert.
 **Parameters:**
 
 - `alert_iid` (integer) (required): Alert IID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `image_id` (integer) (required): Metric image ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -11746,6 +11645,7 @@ Delete an OAuth2 application (admin). Params: id (required).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): Application ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11756,6 +11656,7 @@ Delete a broadcast message. Requires admin access.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): Broadcast message ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11767,6 +11668,7 @@ Delete a cluster agent
 **Parameters:**
 
 - `agent_id` (integer) (required): Agent ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11778,6 +11680,7 @@ Delete a note from a commit discussion thread.
 **Parameters:**
 
 - `commit_sha` (string) (required): Commit SHA
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `discussion_id` (string) (required): Discussion ID
 - `note_id` (integer) (required): Note ID to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -11790,6 +11693,7 @@ Delete a custom attribute for a user, group, or project (admin). Params: resourc
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Attribute key to delete
 - `resource_id` (integer) (required): ID of the resource
 - `resource_type` (string) (required): Resource type: user, group, or project
@@ -11802,6 +11706,7 @@ Delete a custom emoji from a GitLab group via GraphQL API. Requires the emoji GI
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (string) (required): required,Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1)
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11812,6 +11717,7 @@ Delete an email address from the currently authenticated GitLab user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `email_id` (integer) (required): Email ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11822,6 +11728,7 @@ Delete an email address from a specific GitLab user (admin only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `email_id` (integer) (required): Email ID to delete
 - `user_id` (integer) (required): GitLab user ID
 
@@ -11833,6 +11740,7 @@ Delete an enterprise user from a group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `hard_delete` (): Permanently delete user instead of soft delete
 - `user_id` (integer) (required): User ID
@@ -11845,6 +11753,7 @@ Delete a note from an epic discussion thread via the Work Items GraphQL API.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `note_id` (integer) (required): Note ID to delete
@@ -11857,6 +11766,7 @@ Delete an error tracking client key for a GitLab project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key_id` (integer) (required): Client key ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -11868,6 +11778,7 @@ Delete a feature flag (admin). Requires the flag name.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): Feature flag name to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11878,6 +11789,7 @@ Delete a deploy freeze period from a project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `freeze_period_id` (integer) (required): Freeze period ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -11889,6 +11801,7 @@ Delete a Geo replication site by ID.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): Numeric ID of the Geo site
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11899,6 +11812,7 @@ Delete a GPG key from the currently authenticated GitLab user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key_id` (integer) (required): The ID of the GPG key to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11909,6 +11823,7 @@ Delete a GPG key from a specific GitLab user (admin only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key_id` (integer) (required): The ID of the GPG key to delete
 - `user_id` (integer) (required): The ID of the user
 
@@ -11921,6 +11836,7 @@ Remove a badge from a group.
 **Parameters:**
 
 - `badge_id` (integer) (required): Badge ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11931,6 +11847,7 @@ Delete a group markdown upload by ID.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): The ID or URL-encoded path of the group
 - `upload_id` (integer) (required): The ID of the upload to delete
 
@@ -11942,6 +11859,7 @@ Delete a group markdown upload by secret and filename.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `filename` (string) (required): The filename of the upload
 - `group_id` (string) (required): The ID or URL-encoded path of the group
 - `secret` (string) (required): The secret of the upload
@@ -11954,6 +11872,7 @@ Delete a custom member role from a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer) (required): Member role ID to delete
 
@@ -11965,6 +11884,7 @@ Delete a SCIM identity from a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `uid` (string) (required): SCIM external UID of the user
 
@@ -11977,6 +11897,7 @@ Delete an SSH certificate from a GitLab group.
 **Parameters:**
 
 - `certificate_id` (integer) (required): SSH certificate ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11987,6 +11908,7 @@ Delete an SSH key managed by a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `key_id` (integer) (required): SSH key ID
 
@@ -11998,6 +11920,7 @@ Delete a custom member role at the GitLab instance level.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `member_role_id` (integer) (required): Member role ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12008,6 +11931,7 @@ Delete (disable) a project integration by slug. Supports the same slugs as get, 
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
 
@@ -12019,6 +11943,7 @@ Delete a note from an issue discussion thread.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `discussion_id` (string) (required): Discussion ID
 - `issue_iid` (integer) (required): Issue internal ID
 - `note_id` (integer) (required): Note ID to delete
@@ -12032,6 +11957,7 @@ Delete a GitLab license by ID (admin).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): License ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12043,6 +11969,7 @@ Remove context commits from a merge request. Provide the list of commit SHAs to 
 **Parameters:**
 
 - `commits` () (required): List of commit SHAs to remove from context
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12054,6 +11981,7 @@ Delete a package protection rule from a GitLab project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `rule_id` (integer) (required): Package protection rule ID
 
@@ -12065,6 +11993,7 @@ Delete a project alias by name (admin-only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): The alias name to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12076,6 +12005,7 @@ Remove a badge from a project.
 **Parameters:**
 
 - `badge_id` (integer) (required): Badge ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12087,6 +12017,7 @@ Delete an external status check from a project. Requires project_id and check_id
 **Parameters:**
 
 - `check_id` (integer) (required): External status check ID to delete
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12097,6 +12028,7 @@ Delete a remote push mirror from a GitLab project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `mirror_id` (integer) (required): Remote mirror ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12108,6 +12040,7 @@ Delete a note from a snippet discussion thread.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `discussion_id` (string) (required): Discussion ID
 - `note_id` (integer) (required): Note ID to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -12121,6 +12054,7 @@ Delete an SSH key from the currently authenticated GitLab user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key_id` (integer) (required): The ID of the SSH key to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12131,6 +12065,7 @@ Delete an SSH key from a specific GitLab user (admin only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key_id` (integer) (required): The ID of the SSH key to delete
 - `user_id` (integer) (required): The ID of the user
 
@@ -12142,6 +12077,7 @@ Delete a system hook by ID (admin).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): System hook ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12152,6 +12088,7 @@ Delete a Terraform state
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): Terraform state name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12163,6 +12100,7 @@ Delete a specific version of a Terraform state
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): Terraform state name
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `serial` (integer) (required): State version serial number
@@ -12175,6 +12113,7 @@ Delete a project topic. Requires admin access.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `topic_id` (integer) (required): Topic ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12185,6 +12124,7 @@ Delete a GitLab user account (admin only). This permanently removes the user and
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12195,6 +12135,7 @@ Delete a user's identity provider link (e.g., LDAP, SAML) from GitLab (admin onl
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `provider` (string) (required): The external provider name (e.g. ldap or saml)
 - `user_id` (integer) (required): The ID of the user
 
@@ -12206,6 +12147,7 @@ Permanently delete a work item by IID. This action cannot be undone. Experimenta
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)
 - `work_item_iid` (integer) (required): Work item IID
 
@@ -12245,6 +12187,7 @@ Remove a deploy key from a GitLab project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `deploy_key_id` (integer) (required): Deploy key ID
 - `project_id` (string) (required): Project ID or path
 
@@ -12355,6 +12298,7 @@ Delete a deploy token from a group. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `deploy_token_id` (integer) (required): Deploy token ID
 - `group_id` (string) (required): Group ID or URL-encoded path
 
@@ -12366,6 +12310,7 @@ Delete a deploy token from a project. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `deploy_token_id` (integer) (required): Deploy token ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12459,6 +12404,7 @@ Permanently delete a deployment from a GitLab project. This action cannot be und
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `deployment_id` (integer) (required): Deployment ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12511,6 +12457,7 @@ Disable two-factor authentication for an enterprise user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `user_id` (integer) (required): User ID
 
@@ -12522,6 +12469,7 @@ Disable two-factor authentication for a GitLab user (admin only). Use with cauti
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -12725,6 +12673,7 @@ Permanently delete an environment from a GitLab project. The environment must be
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_id` (integer) (required): Environment ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12762,6 +12711,7 @@ Stop a running environment in a GitLab project. Triggers any on_stop actions def
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_id` (integer) (required): Environment ID
 - `force` (): Force stop even if environment has active deployments
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -12811,6 +12761,7 @@ Permanently delete an epic from a GitLab group (via Work Items GraphQL API).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 
@@ -12874,6 +12825,7 @@ Remove an issue from a GitLab group epic via the Work Items GraphQL API. Clears 
 
 - `child_iid` (integer) (required): IID of the issue to remove from the epic
 - `child_project_path` (string) (required): Full project path of the issue to remove
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group that contains the epic
 
@@ -12931,6 +12883,7 @@ Permanently delete a comment from a GitLab group epic via the Work Items GraphQL
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `note_id` (integer) (required): ID of the note to delete
@@ -13024,6 +12977,7 @@ Delete a feature flag.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): Feature flag name
 - `project_id` (string) (required): Project ID or path
 
@@ -13088,6 +13042,7 @@ Delete a feature flag user list.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `user_list_iid` (integer) (required): Feature flag user list internal ID
 
@@ -13175,6 +13130,7 @@ Delete a file from a GitLab repository. Requires branch and commit message. This
 - `author_name` (string): Commit author name
 - `branch` (string) (required): Branch to delete the file from
 - `commit_message` (string) (required): Commit message
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `file_path` (string) (required): URL-encoded full path of the file to delete
 - `last_commit_id` (string): Last known commit ID for optimistic locking
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -13271,6 +13227,7 @@ Trigger an immediate update for a remote push mirror, bypassing the normal sched
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `mirror_id` (integer) (required): Remote mirror ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -14250,6 +14207,7 @@ Revoke a group access token. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID to revoke
 
@@ -14265,7 +14223,7 @@ Rotate a group access token, generating a new token value. Optionally set a new 
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_access_token_rotate_self
 
@@ -14276,7 +14234,7 @@ Rotate the group access token used for the current request. Returns the new toke
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `group_id` (string) (required): Group ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_archive
 
@@ -14306,6 +14264,7 @@ Delete a group issue board. This action cannot be undone.
 **Parameters:**
 
 - `board_id` (integer) (required): Board ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -14352,6 +14311,7 @@ Delete a list from a group issue board. This action cannot be undone.
 **Parameters:**
 
 - `board_id` (integer) (required): Board ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or path
 - `list_id` (integer) (required): Board list ID
 
@@ -14434,6 +14394,7 @@ Delete a GitLab group. On instances with delayed deletion, the group is marked f
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `full_path` (string): Full path (required when permanently_remove=true)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `permanently_remove` (boolean): Permanently remove instead of marking for deletion
@@ -14509,6 +14470,7 @@ Delete a webhook from a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Hook ID to delete
 
@@ -14615,6 +14577,7 @@ Delete a group label by ID or name.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `label_id` (string) (required): Label ID or name
 
@@ -14707,6 +14670,7 @@ Delete a group LDAP link by CN or filter.
 **Parameters:**
 
 - `cn` (string): LDAP Common Name to delete
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `filter` (string): LDAP filter to delete
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `provider` (string): LDAP provider name
@@ -14720,6 +14684,7 @@ Delete a group LDAP link for a specific provider.
 **Parameters:**
 
 - `cn` (string) (required): LDAP Common Name
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `provider` (string) (required): LDAP provider name
 
@@ -14811,6 +14776,7 @@ Remove a member from a GitLab group. Optionally skip subresource removal and una
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `skip_subresources` (boolean): Skip removal from subresources
 - `unassign_issuables` (boolean): Unassign issues and merge requests
@@ -14864,6 +14830,7 @@ Delete a group milestone by IID.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
 
@@ -15016,6 +14983,7 @@ Remove a group-level protected branch rule.
 **Parameters:**
 
 - `branch` (string) (required): Branch name or wildcard to unprotect
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -15080,6 +15048,7 @@ Remove protection from a group-level environment.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment` (string) (required): Environment name to unprotect
 - `group_id` (string) (required): Group ID or URL-encoded path
 
@@ -15143,6 +15112,7 @@ Delete a SAML group link from a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `saml_group_name` (string) (required): Name of the SAML group to delete
 
@@ -15198,6 +15168,7 @@ Delete a service account from a GitLab group (top-level only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path (top-level only)
 - `hard_delete` (boolean): Hard delete the service account
 - `service_account_id` (integer) (required): Service account user ID
@@ -15252,6 +15223,7 @@ Revoke a personal access token for a group service account.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `service_account_id` (integer) (required): Service account user ID
 - `token_id` (integer) (required): Personal access token ID to revoke
@@ -15312,6 +15284,7 @@ Stop sharing a GitLab group with another group, removing the group-level access.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `share_group_id` (integer) (required): Group ID to stop sharing with
 
@@ -15359,6 +15332,7 @@ Delete a CI/CD variable from a GitLab group by key. Optionally filter by environ
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_scope` (string): Filter by environment scope
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `key` (string) (required): Variable key name
@@ -15426,6 +15400,7 @@ Delete a wiki page from a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `slug` (string) (required): URL-encoded slug of the wiki page to delete
 
@@ -15579,6 +15554,7 @@ Delete a CI/CD variable from the GitLab instance level by key. This action canno
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Variable key name
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -15701,6 +15677,7 @@ Permanently delete a GitLab issue. This action cannot be undone. Requires at lea
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID, not 'issue_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -15725,6 +15702,7 @@ Delete an award emoji from a project issue.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -15846,6 +15824,7 @@ Delete an issue link, removing the two-way relationship between the linked issue
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue IID
 - `issue_link_id` (integer) (required): Issue link ID to remove
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16033,6 +16012,7 @@ Permanently delete a comment from a GitLab issue. Only the note author or a proj
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue internal ID
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16059,6 +16039,7 @@ Delete an award emoji from a project issue note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16330,6 +16311,7 @@ Delete the artifacts for a specific job.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `job_id` (integer) (required): Job ID to delete artifacts from
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16341,6 +16323,7 @@ Delete all artifacts across an entire project. This is a destructive operation.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16388,6 +16371,7 @@ Erase a job's trace log and artifacts. Returns the updated job details with eras
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `job_id` (integer) (required): Job ID to act on
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16528,6 +16512,7 @@ Delete a project label by ID or name.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `label_id` (string) (required): Label ID or name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -17587,6 +17572,7 @@ Mark a pending database migration as successfully executed (admin). Params: vers
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `database` (string): Database name (optional, e.g. main or ci)
 - `version` (integer) (required): Migration version number to mark as successful
 
@@ -17614,6 +17600,7 @@ Delete a project milestone by IID. This action is irreversible.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -17749,6 +17736,7 @@ Reset all approvals on a GitLab merge request. Requires project_id and merge_req
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -17777,6 +17765,7 @@ Delete an approval rule from a GitLab merge request. Requires project_id, merge_
 **Parameters:**
 
 - `approval_rule_id` (integer) (required): Approval rule ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -17917,6 +17906,7 @@ Permanently delete a GitLab merge request. This action cannot be undone. Require
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID to delete (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -17952,6 +17942,7 @@ Remove a merge request dependency (blocker). The specified blocking MR will no l
 **Parameters:**
 
 - `blocking_merge_request_id` (integer) (required): ID of the blocking merge request to remove
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -18027,6 +18018,7 @@ Delete a note from a merge request discussion thread. Only the note author or pr
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `discussion_id` (string) (required): ID of the discussion containing the note
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to delete
@@ -18097,6 +18089,7 @@ Permanently delete a draft note from a GitLab merge request. Only the draft auth
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): Draft note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -18186,6 +18179,7 @@ Delete an award emoji from a merge request.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -18358,6 +18352,7 @@ Merge an accepted GitLab merge request into its target branch. Supports optional
 **Parameters:**
 
 - `auto_merge` (): Automatically merge when pipeline succeeds (auto-merge)
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_commit_message` (string): Custom merge commit message
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -18411,6 +18406,7 @@ Permanently delete a comment from a GitLab merge request. Only the note author o
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -18437,6 +18433,7 @@ Delete an award emoji from a merge request note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -18666,6 +18663,7 @@ Remove the authenticated user's approval from a GitLab merge request.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -18876,7 +18874,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_graph_status
 
-Get experimental GitLab Orbit Knowledge Graph indexing status for one namespace, project, or full path on GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: indexed project counts, domain counts, and indexing state.
+Inspect experimental GitLab Orbit graph indexing status for one scope.
 
 **Parameters:**
 
@@ -18889,7 +18887,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute an experimental GitLab Orbit Knowledge Graph query on GitLab.com. This read-only POST endpoint is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Query shape is provided by gitlab_orbit_tools and is passed through as JSON. Returns: raw result payload, query type, row count, and compiled query strings.
+Execute a read-only experimental GitLab Orbit Knowledge Graph query.
 
 **Parameters:**
 
@@ -18900,7 +18898,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_schema
 
-Get the experimental GitLab Orbit Knowledge Graph ontology. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: schema version, domains, nodes, and edges.
+Inspect the experimental GitLab Orbit Knowledge Graph ontology.
 
 **Parameters:**
 
@@ -18912,7 +18910,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_status
 
-Get experimental GitLab Orbit Knowledge Graph cluster status. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: status, version, component health, or formatted LLM text.
+Inspect experimental GitLab Orbit cluster health on GitLab.com.
 
 **Parameters:**
 
@@ -18922,7 +18920,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_tools
 
-Get the experimental GitLab Orbit MCP tool manifest from GitLab.com. This tool is registered only when the MCP server is connected to GitLab.com with the Enterprise catalog enabled. Returns: Orbit tool names, descriptions, and parameter schemas.
+List the experimental GitLab Orbit MCP tool manifest and parameter schemas.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -18934,6 +18932,7 @@ Delete a package and all its files from the GitLab Package Registry. This action
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `package_id` (string) (required): Package ID to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -18959,6 +18958,7 @@ Delete a single file from a package in the GitLab Package Registry. This action 
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `package_file_id` (string) (required): Package file ID to delete
 - `package_id` (string) (required): Package ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -19069,6 +19069,7 @@ Delete a Pages domain from a project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `domain` (string) (required): The Pages domain name to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -19133,6 +19134,7 @@ Unpublish Pages for a project. Removes all published Pages content.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -19195,6 +19197,7 @@ Revoke a personal access token by ID. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `token_id` (integer) (required): Access token ID to revoke
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -19202,6 +19205,10 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 #### gitlab_personal_access_token_revoke_self
 
 Revoke the personal access token used for the current request. This action cannot be undone.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -19214,7 +19221,7 @@ Rotate a personal access token, generating a new token value. Optionally set a n
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_personal_access_token_rotate_self
 
@@ -19224,7 +19231,7 @@ Rotate the personal access token used for the current request. Returns the new t
 
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### pipeline (30 tools)
 
@@ -19257,6 +19264,7 @@ Permanently delete a pipeline and all its jobs. This action cannot be undone. Re
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `pipeline_id` (integer) (required): Pipeline ID to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -19356,6 +19364,7 @@ Permanently delete a pipeline schedule from a GitLab project. This action cannot
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
 
@@ -19367,6 +19376,7 @@ Delete a pipeline schedule variable by key. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Variable key to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
@@ -19512,6 +19522,7 @@ Delete a pipeline trigger token
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `trigger_id` (integer) (required): Pipeline trigger ID
 
@@ -19676,6 +19687,7 @@ Revoke a project access token. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID to revoke
 
@@ -19691,7 +19703,7 @@ Rotate a project access token, generating a new token value. Optionally set a ne
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_access_token_rotate_self
 
@@ -19702,7 +19714,7 @@ Rotate the project access token used for the current request. Returns the new to
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `project_id` (string) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_add_push_rule
 
@@ -19778,6 +19790,7 @@ Delete a project-level approval rule.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `rule_id` (integer) (required): Approval rule ID to delete
 
@@ -19915,6 +19928,7 @@ Delete a GitLab project. On instances with delayed deletion enabled, the project
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `full_path` (string): Full path of the project to confirm permanent removal (required when permanently_remove is true)
 - `permanently_remove` (boolean): If true, immediately and permanently delete the project bypassing delayed deletion. Requires admin permissions on some GitLab instances.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -19927,6 +19941,7 @@ Remove the fork relation from a project. The project will no longer be marked as
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -19937,6 +19952,7 @@ Delete the push rule configuration from a project. This removes all push restric
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -19947,6 +19963,7 @@ Remove a shared group from a project, revoking the group's access.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (integer) (required): Group ID to remove from project sharing
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -20081,6 +20098,7 @@ Delete a webhook from a GitLab project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `hook_id` (integer) (required): Webhook ID to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -20092,6 +20110,7 @@ Delete a custom header from a project webhook.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): Custom header key name to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -20104,6 +20123,7 @@ Delete a URL variable from a project webhook.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): URL variable key name to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -20423,6 +20443,7 @@ Remove a member from a project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `user_id` (integer) (required): User ID of the member to remove
 
@@ -20571,6 +20592,7 @@ Delete a project snippet. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `snippet_id` (integer) (required): Snippet ID
 
@@ -20652,10 +20674,11 @@ Transfer a GitLab project to a different namespace. Requires the namespace (ID o
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `namespace` (string) (required): Target namespace ID or path
 - `project_id` (string) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_unarchive
 
@@ -20753,6 +20776,7 @@ Delete a file upload (markdown attachment) from a GitLab project by upload ID. T
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `upload_id` (integer) (required): ID of the upload to delete
 
@@ -20849,6 +20873,7 @@ Remove protection from an environment. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment` (string) (required): Environment name to unprotect
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -20877,6 +20902,7 @@ Purge the dependency proxy cache for a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -20917,6 +20943,7 @@ Delete a container registry repository. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `repository_id` (integer) (required): Registry repository ID
 
@@ -20928,6 +20955,7 @@ Delete a single container registry repository tag. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `repository_id` (integer) (required): Registry repository ID
 - `tag_name` (string) (required): Tag name to delete
@@ -20940,6 +20968,7 @@ Delete container registry repository tags in bulk using regex patterns. Use name
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `keep_n` (integer): Number of latest tags to keep
 - `name_regex_delete` (string): Regex pattern of tag names to delete
 - `name_regex_keep` (string): Regex pattern of tag names to keep
@@ -21031,6 +21060,7 @@ Delete a container registry protection rule. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
 - `rule_id` (integer) (required): Protection rule ID
 
@@ -21068,6 +21098,7 @@ Reject a pending GitLab user registration (admin only). The user account will be
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -21097,6 +21128,7 @@ Delete a GitLab release. The underlying Git tag is preserved and not deleted.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release to delete
 
@@ -21155,6 +21187,7 @@ Remove an asset link from a GitLab release by its link ID.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `link_id` (integer) (required): ID of the release link to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
@@ -21240,6 +21273,7 @@ Remove a group from the CI/CD job token allowlist.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `target_group_id` (integer) (required): ID of the group to remove from the allowlist
 
@@ -21251,6 +21285,7 @@ Remove a project from the CI/CD job token inbound allowlist.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `target_project_id` (integer) (required): ID of the project to remove from the allowlist
 
@@ -21262,6 +21297,7 @@ Remove a CI/CD secure file.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `file_id` (integer) (required): Secure file ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -21548,6 +21584,7 @@ Revoke a cluster agent token
 **Parameters:**
 
 - `agent_id` (integer) (required): Agent ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `token_id` (integer) (required): Token ID
 
@@ -21559,6 +21596,7 @@ Revoke a personal access token managed by a GitLab group.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `token_id` (integer) (required): Personal access token ID
 
@@ -21570,6 +21608,7 @@ Revoke an impersonation token for a GitLab user (admin only).
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `token_id` (integer) (required): Impersonation token ID to revoke
 - `user_id` (integer) (required): GitLab user ID
 
@@ -21594,6 +21633,7 @@ Delete a runner controller. Admin only. This action cannot be undone. Experiment
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `controller_id` (integer) (required): Runner controller ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -21656,6 +21696,7 @@ Remove the instance-level scope from a runner controller. Admin only. Experiment
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `controller_id` (integer) (required): Runner controller ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -21666,6 +21707,7 @@ Remove a runner scope from a runner controller. Admin only. Experimental: may ch
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `controller_id` (integer) (required): Runner controller ID
 - `runner_id` (integer) (required): Runner ID to remove from scope
 
@@ -21711,6 +21753,7 @@ Revoke a runner controller token. This action cannot be undone. Admin only. Expe
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `controller_id` (integer) (required): Runner controller ID
 - `token_id` (integer) (required): Token ID
 
@@ -21745,6 +21788,7 @@ Delete a registered CI/CD runner using its authentication token. This action can
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `token` (string) (required): Runner authentication token
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -21755,6 +21799,7 @@ Delete a registered CI/CD runner by its ID. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `runner_id` (integer) (required): Runner ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -21765,6 +21810,7 @@ Remove a CI/CD runner from a project. The runner itself is not deleted.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `runner_id` (integer) (required): Runner ID to remove from project
 
@@ -21900,6 +21946,7 @@ Remove a CI/CD runner by its ID. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `runner_id` (integer) (required): Runner ID to remove
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -22360,6 +22407,7 @@ Delete a personal snippet. This action cannot be undone.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -22383,6 +22431,7 @@ Delete an award emoji from a project snippet.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
 
@@ -22488,6 +22537,7 @@ Permanently delete a comment from a GitLab project snippet. Only the note author
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
@@ -22514,6 +22564,7 @@ Delete an award emoji from a project snippet note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
@@ -22683,6 +22734,7 @@ Delete a Git tag from a GitLab project. If a release is associated with the tag,
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Name of the tag to delete
 
@@ -22767,6 +22819,7 @@ Remove protection from a repository tag. The tag itself is not deleted.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Name of the protected tag to unprotect
 
@@ -22876,6 +22929,7 @@ Unlock a Terraform state
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `name` (string) (required): Terraform state name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -23253,6 +23307,7 @@ Delete a wiki page by slug. This action cannot be undone. Use gitlab_wiki_list t
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `slug` (string) (required): URL-encoded slug of the wiki page to delete
 

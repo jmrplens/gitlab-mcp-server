@@ -11,18 +11,18 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // deploymentList tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentList_Success verifies the behavior of deployment list success.
+// TestDeploymentList_Success verifies DeploymentList when success.
 func TestDeploymentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodGet {
@@ -50,7 +50,7 @@ func TestDeploymentList_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_WithFilters verifies the behavior of deployment list with filters.
+// TestDeploymentList_WithFilters verifies DeploymentList when with filters.
 func TestDeploymentList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" {
@@ -80,7 +80,7 @@ func TestDeploymentList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_MissingProjectID verifies the behavior of deployment list missing project i d.
+// TestDeploymentList_MissingProjectID verifies DeploymentList when missing project ID.
 func TestDeploymentList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -92,7 +92,7 @@ func TestDeploymentList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_CancelledContext verifies the behavior of deployment list cancelled context.
+// TestDeploymentList_CancelledContext verifies DeploymentList when cancelled context.
 func TestDeploymentList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -110,7 +110,7 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 // deploymentGet tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentGet_Success verifies the behavior of deployment get success.
+// TestDeploymentGet_Success verifies DeploymentGet when success.
 func TestDeploymentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
@@ -129,7 +129,7 @@ func TestDeploymentGet_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_ZeroID verifies the behavior of deployment get zero i d.
+// TestDeploymentGet_ZeroID verifies DeploymentGet when zero ID.
 func TestDeploymentGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -141,7 +141,7 @@ func TestDeploymentGet_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_CancelledContext verifies the behavior of deployment get cancelled context.
+// TestDeploymentGet_CancelledContext verifies DeploymentGet when cancelled context.
 func TestDeploymentGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -159,7 +159,7 @@ func TestDeploymentGet_CancelledContext(t *testing.T) {
 // deploymentCreate tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentCreate_Success verifies the behavior of deployment create success.
+// TestDeploymentCreate_Success verifies DeploymentCreate when success.
 func TestDeploymentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodPost {
@@ -183,7 +183,7 @@ func TestDeploymentCreate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_MissingFields validates deployment create missing fields across multiple scenarios using table-driven subtests.
+// TestDeploymentCreate_MissingFields covers DeploymentCreate with table-driven subtests for missing fields.
 func TestDeploymentCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -209,7 +209,7 @@ func TestDeploymentCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_CancelledContext verifies the behavior of deployment create cancelled context.
+// TestDeploymentCreate_CancelledContext verifies DeploymentCreate when cancelled context.
 func TestDeploymentCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -227,7 +227,7 @@ func TestDeploymentCreate_CancelledContext(t *testing.T) {
 // deploymentUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentUpdate_Success verifies the behavior of deployment update success.
+// TestDeploymentUpdate_Success verifies DeploymentUpdate when success.
 func TestDeploymentUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodPut {
@@ -250,7 +250,7 @@ func TestDeploymentUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_ZeroID verifies the behavior of deployment update zero i d.
+// TestDeploymentUpdate_ZeroID verifies DeploymentUpdate when zero ID.
 func TestDeploymentUpdate_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -262,7 +262,7 @@ func TestDeploymentUpdate_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_MissingStatus verifies the behavior of deployment update missing status.
+// TestDeploymentUpdate_MissingStatus verifies DeploymentUpdate when missing status.
 func TestDeploymentUpdate_MissingStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -274,7 +274,7 @@ func TestDeploymentUpdate_MissingStatus(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_CancelledContext verifies the behavior of deployment update cancelled context.
+// TestDeploymentUpdate_CancelledContext verifies DeploymentUpdate when cancelled context.
 func TestDeploymentUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -292,7 +292,7 @@ func TestDeploymentUpdate_CancelledContext(t *testing.T) {
 // deploymentDelete tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentDelete_Success verifies the behavior of deployment delete success.
+// TestDeploymentDelete_Success verifies DeploymentDelete when success.
 func TestDeploymentDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodDelete {
@@ -308,7 +308,7 @@ func TestDeploymentDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_ZeroID verifies the behavior of deployment delete zero i d.
+// TestDeploymentDelete_ZeroID verifies DeploymentDelete when zero ID.
 func TestDeploymentDelete_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -320,7 +320,7 @@ func TestDeploymentDelete_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_CancelledContext verifies the behavior of deployment delete cancelled context.
+// TestDeploymentDelete_CancelledContext verifies DeploymentDelete when cancelled context.
 func TestDeploymentDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -336,7 +336,7 @@ func TestDeploymentDelete_CancelledContext(t *testing.T) {
 
 // Approve or Reject Tests.
 
-// TestDeploymentApprove_Success verifies the behavior of deployment approve success.
+// TestDeploymentApprove_Success verifies DeploymentApprove when success.
 func TestDeploymentApprove_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
@@ -360,7 +360,7 @@ func TestDeploymentApprove_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentReject_Success verifies the behavior of deployment reject success.
+// TestDeploymentReject_Success verifies DeploymentReject when success.
 func TestDeploymentReject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
@@ -383,7 +383,7 @@ func TestDeploymentReject_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_MissingProjectID verifies the behavior of deployment approve or reject missing project i d.
+// TestDeploymentApproveOrReject_MissingProjectID verifies DeploymentApproveOrReject when missing project ID.
 func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -398,7 +398,7 @@ func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeploymentApprove_OrRejectZeroDeploymentID verifies the behavior of deployment approve or reject zero deployment i d.
+// TestDeploymentApprove_OrRejectZeroDeploymentID verifies DeploymentApprove when or reject zero deployment ID.
 func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -413,7 +413,7 @@ func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_InvalidStatus verifies the behavior of deployment approve or reject invalid status.
+// TestDeploymentApproveOrReject_InvalidStatus verifies DeploymentApproveOrReject when invalid status.
 func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -429,7 +429,7 @@ func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_APIError verifies the behavior of deployment approve or reject a p i error.
+// TestDeploymentApproveOrReject_APIError verifies DeploymentApproveOrReject when API error.
 func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -447,13 +447,14 @@ func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // List — API error, missing project_id (via empty StringOrInt)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentList_APIError verifies the behavior of deployment list a p i error.
+// TestDeploymentList_APIError verifies DeploymentList when API error.
 func TestDeploymentList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -468,7 +469,7 @@ func TestDeploymentList_APIError(t *testing.T) {
 // Get — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentGet_APIError verifies the behavior of deployment get a p i error.
+// TestDeploymentGet_APIError verifies DeploymentGet when API error.
 func TestDeploymentGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -479,7 +480,7 @@ func TestDeploymentGet_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_MissingProjectID verifies the behavior of deployment get missing project i d.
+// TestDeploymentGet_MissingProjectID verifies DeploymentGet when missing project ID.
 func TestDeploymentGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{DeploymentID: 1})
@@ -492,7 +493,7 @@ func TestDeploymentGet_MissingProjectID(t *testing.T) {
 // Create — API error, with optional fields (Tag + Status)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentCreate_APIError verifies the behavior of deployment create a p i error.
+// TestDeploymentCreate_APIError verifies DeploymentCreate when API error.
 func TestDeploymentCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -505,7 +506,7 @@ func TestDeploymentCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_WithOptionalFields verifies the behavior of deployment create with optional fields.
+// TestDeploymentCreate_WithOptionalFields verifies DeploymentCreate when with optional fields.
 func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments" {
@@ -550,7 +551,7 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 // Update — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentUpdate_APIError verifies the behavior of deployment update a p i error.
+// TestDeploymentUpdate_APIError verifies DeploymentUpdate when API error.
 func TestDeploymentUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -561,7 +562,7 @@ func TestDeploymentUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_MissingProjectID verifies the behavior of deployment update missing project i d.
+// TestDeploymentUpdate_MissingProjectID verifies DeploymentUpdate when missing project ID.
 func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{DeploymentID: 1, Status: "success"})
@@ -574,7 +575,7 @@ func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 // Delete — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentDelete_APIError verifies the behavior of deployment delete a p i error.
+// TestDeploymentDelete_APIError verifies DeploymentDelete when API error.
 func TestDeploymentDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -585,7 +586,7 @@ func TestDeploymentDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_MissingProjectID verifies the behavior of deployment delete missing project i d.
+// TestDeploymentDelete_MissingProjectID verifies DeploymentDelete when missing project ID.
 func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(context.Background(), client, DeleteInput{DeploymentID: 1})
@@ -598,7 +599,7 @@ func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 // ApproveOrReject — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentApproveOrReject_CancelledContext verifies the behavior of deployment approve or reject cancelled context.
+// TestDeploymentApproveOrReject_CancelledContext verifies DeploymentApproveOrReject when cancelled context.
 func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -615,7 +616,7 @@ func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:              1,
@@ -646,7 +647,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ZeroID verifies the behavior of format output markdown zero i d.
+// TestFormatOutputMarkdown_ZeroID verifies FormatOutputMarkdown when zero ID.
 func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -654,7 +655,7 @@ func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     2,
@@ -683,7 +684,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithDeployments verifies the behavior of format list markdown with deployments.
+// TestFormatListMarkdown_WithDeployments verifies FormatListMarkdown when with deployments.
 func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 	out := ListOutput{
 		Deployments: []Output{
@@ -715,7 +716,7 @@ func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No deployments found") {
@@ -730,7 +731,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatApproveOrRejectMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatApproveOrRejectMarkdown_Approved verifies the behavior of format approve or reject markdown approved.
+// TestFormatApproveOrRejectMarkdown_Approved verifies FormatApproveOrRejectMarkdown when approved.
 func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 approved successfully",
@@ -743,7 +744,7 @@ func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_Rejected verifies the behavior of format approve or reject markdown rejected.
+// TestFormatApproveOrRejectMarkdown_Rejected verifies FormatApproveOrRejectMarkdown when rejected.
 func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 rejected successfully",
@@ -753,7 +754,7 @@ func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_EmptyMessage verifies the behavior of format approve or reject markdown empty message.
+// TestFormatApproveOrRejectMarkdown_EmptyMessage verifies FormatApproveOrRejectMarkdown when empty message.
 func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{})
 	if md == "" {
@@ -765,7 +766,7 @@ func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 // toOutput — all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields verifies the behavior of to output all optional fields.
+// TestToOutput_AllOptionalFields verifies ToOutput when all optional fields.
 func TestToOutput_AllOptionalFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
 		ID:              100,
@@ -814,26 +815,37 @@ func TestList_WithSortField(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for deployment actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := deploymentSpecsByTool(t, specs)
+
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "deployments" {
+			t.Fatalf("OwnerPackage for %s = %q, want deployments", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 6 tools
+// ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newDeploymentsMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates deployment routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := newDeploymentSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -850,31 +862,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// newDeploymentsMCPSession is an internal helper for the deployments package.
-func newDeploymentsMCPSession(t *testing.T) *mcp.ClientSession {
+// newDeploymentSpecsByTool constructs deployment specs by tool test fixtures.
+func newDeploymentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	deploymentJSON := `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z"}`
@@ -912,30 +916,11 @@ func newDeploymentsMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return deploymentSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestDeploymentGet_EmbedsCanonicalResource asserts gitlab_deployment_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/deployment/{deployment_id}.
-func TestDeploymentGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_DeploymentGetRoute verifies the canonical deployment get route output.
+func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	const respJSON = `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deployments/17") {
@@ -944,7 +929,28 @@ func TestDeploymentGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "deployment_id": 17}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_deployment_get", args, "gitlab://project/42/deployment/17", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := deploymentSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_deployment_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "deployment_id": 17})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.ID != 17 || out.EnvironmentName != "prod" {
+		t.Fatalf("deployment output = %#v, want ID 17 environment prod", out)
+	}
+}
+
+// deploymentSpecsByTool supports deployment specs by tool assertions in deployments tests.
+func deploymentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

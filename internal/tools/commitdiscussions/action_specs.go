@@ -1,6 +1,8 @@
 package commitdiscussions
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		commitDiscussionCreateSpec("commit_discussion_create", toolutil.RouteAction(client, Create), "gitlab_create_commit_discussion"),
 		commitDiscussionCreateSpec("commit_discussion_add_note", toolutil.RouteAction(client, AddNote), "gitlab_add_commit_discussion_note"),
 		commitDiscussionUpdateSpec("commit_discussion_update_note", toolutil.RouteAction(client, UpdateNote), "gitlab_update_commit_discussion_note"),
-		commitDiscussionDeleteSpec("commit_discussion_delete_note", toolutil.DestructiveVoidAction(client, DeleteNote), "gitlab_delete_commit_discussion_note"),
+		commitDiscussionDeleteSpec("commit_discussion_delete_note", toolutil.DestructiveAction(client, DeleteNoteOutput), "gitlab_delete_commit_discussion_note"),
 	}
 }
 
@@ -49,4 +51,12 @@ func commitDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "commitdiscussions",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+}
+
+// DeleteNoteOutput deletes a commit discussion note and returns the canonical success message shape.
+func DeleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteNote(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted commit discussion note."}, nil
 }

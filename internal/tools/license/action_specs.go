@@ -1,6 +1,8 @@
 package license
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -10,8 +12,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		licenseReadSpec("license_get", toolutil.RouteAction(client, Get), "gitlab_get_license"),
 		licenseCreateSpec("license_add", toolutil.RouteAction(client, Add), "gitlab_add_license"),
-		licenseDeleteSpec("license_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_license"),
+		licenseDeleteSpec("license_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_license"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted license."}, nil
 }
 
 func licenseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

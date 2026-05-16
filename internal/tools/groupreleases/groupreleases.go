@@ -1,5 +1,3 @@
-// Package groupreleases implements MCP tool handlers for listing
-// releases across all projects in a GitLab group.
 package groupreleases
 
 import (

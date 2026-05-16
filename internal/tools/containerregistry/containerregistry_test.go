@@ -13,12 +13,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 const (
-	fmtUnexpErr       = "unexpected error: %v"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// fmtExpectedDELETE identifies the fmt expected delete constant used by this package.
 	fmtExpectedDELETE = "expected DELETE, got %s"
 )
 
@@ -26,7 +27,7 @@ const (
 // ListProject
 // ---------------------------------------------------------------------------.
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +61,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies the behavior of list project missing project i d.
+// TestListProject_MissingProjectID verifies ListProject when missing project ID.
 func TestListProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
@@ -73,7 +74,7 @@ func TestListProject_MissingProjectID(t *testing.T) {
 // ListGroup
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_Success verifies the behavior of list group success.
+// TestListGroup_Success verifies ListGroup when success.
 func TestListGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +102,7 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingGroupID verifies the behavior of list group missing group i d.
+// TestListGroup_MissingGroupID verifies ListGroup when missing group ID.
 func TestListGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroup(context.Background(), client, ListGroupInput{})
@@ -114,7 +115,7 @@ func TestListGroup_MissingGroupID(t *testing.T) {
 // GetRepository
 // ---------------------------------------------------------------------------.
 
-// TestGetRepository_Success verifies the behavior of get repository success.
+// TestGetRepository_Success verifies GetRepository when success.
 func TestGetRepository_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/registry/repositories/1", func(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +148,7 @@ func TestGetRepository_Success(t *testing.T) {
 	}
 }
 
-// TestGetRepository_MissingID verifies the behavior of get repository missing i d.
+// TestGetRepository_MissingID verifies GetRepository when missing ID.
 func TestGetRepository_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetRepository(context.Background(), client, GetRepositoryInput{})
@@ -160,7 +161,7 @@ func TestGetRepository_MissingID(t *testing.T) {
 // DeleteRepository
 // ---------------------------------------------------------------------------.
 
-// TestDeleteRepository_Success verifies the behavior of delete repository success.
+// TestDeleteRepository_Success verifies DeleteRepository when success.
 func TestDeleteRepository_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +180,7 @@ func TestDeleteRepository_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteRepository_MissingRepoID verifies the behavior of delete repository missing repo i d.
+// TestDeleteRepository_MissingRepoID verifies DeleteRepository when missing repo ID.
 func TestDeleteRepository_MissingRepoID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteRepository(context.Background(), client, DeleteRepositoryInput{
@@ -194,7 +195,7 @@ func TestDeleteRepository_MissingRepoID(t *testing.T) {
 // ListTags
 // ---------------------------------------------------------------------------.
 
-// TestListTags_Success verifies the behavior of list tags success.
+// TestListTags_Success verifies ListTags when success.
 func TestListTags_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +228,7 @@ func TestListTags_Success(t *testing.T) {
 	}
 }
 
-// TestListTags_MissingRepoID verifies the behavior of list tags missing repo i d.
+// TestListTags_MissingRepoID verifies ListTags when missing repo ID.
 func TestListTags_MissingRepoID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListTags(context.Background(), client, ListTagsInput{
@@ -242,7 +243,7 @@ func TestListTags_MissingRepoID(t *testing.T) {
 // GetTag
 // ---------------------------------------------------------------------------.
 
-// TestGetTag_Success verifies the behavior of get tag success.
+// TestGetTag_Success verifies GetTag when success.
 func TestGetTag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags/latest", func(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +272,7 @@ func TestGetTag_Success(t *testing.T) {
 	}
 }
 
-// TestGetTag_MissingTagName verifies the behavior of get tag missing tag name.
+// TestGetTag_MissingTagName verifies GetTag when missing tag name.
 func TestGetTag_MissingTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetTag(context.Background(), client, GetTagInput{
@@ -314,7 +315,7 @@ func TestListTags_MultiPage(t *testing.T) {
 // DeleteTag
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTag_Success verifies the behavior of delete tag success.
+// TestDeleteTag_Success verifies DeleteTag when success.
 func TestDeleteTag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags/old", func(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +334,7 @@ func TestDeleteTag_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteTag_MissingTagName verifies the behavior of delete tag missing tag name.
+// TestDeleteTag_MissingTagName verifies DeleteTag when missing tag name.
 func TestDeleteTag_MissingTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTag(context.Background(), client, DeleteTagInput{
@@ -348,7 +349,7 @@ func TestDeleteTag_MissingTagName(t *testing.T) {
 // DeleteTagsBulk
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTagsBulk_Success verifies the behavior of delete tags bulk success.
+// TestDeleteTagsBulk_Success verifies DeleteTagsBulk when success.
 func TestDeleteTagsBulk_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
@@ -377,7 +378,7 @@ func TestDeleteTagsBulk_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteTagsBulk_MissingRepoID verifies the behavior of delete tags bulk missing repo i d.
+// TestDeleteTagsBulk_MissingRepoID verifies DeleteTagsBulk when missing repo ID.
 func TestDeleteTagsBulk_MissingRepoID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTagsBulk(context.Background(), client, DeleteTagsBulkInput{
@@ -391,24 +392,37 @@ func TestDeleteTagsBulk_MissingRepoID(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	errProjectIDRequired    = "project_id is required"
-	errRepoIDRequired       = "repository_id is required"
-	errExpectedAPI          = "expected API error, got nil"
-	jsonBadReq              = `{"message":"bad request"}`
+	// errProjectIDRequired identifies the err project ID required constant used by this package.
+	errProjectIDRequired = "project_id is required"
+	// errRepoIDRequired identifies the err repo ID required constant used by this package.
+	errRepoIDRequired = "repository_id is required"
+	// errExpectedAPI identifies the err expected API constant used by this package.
+	errExpectedAPI = "expected API error, got nil"
+	// jsonBadReq identifies the JSON bad req constant used by this package.
+	jsonBadReq = `{"message":"bad request"}`
+	// fmtExpectedProjectIDErr identifies the fmt expected project ID err constant used by this package.
 	fmtExpectedProjectIDErr = "expected project_id required error, got %v"
-	fmtExpectedRepoIDErr    = "expected repository_id required error, got %v"
-	fmtExpectedInMarkdown   = "expected %q in markdown, got:\n%s"
-	fmtExpectedEmptyMsg     = "expected empty message, got:\n%s"
-	testMethodNotAllowed    = "method not allowed"
-	testProdPattern         = "prod/*"
-	testStagingPattern      = "staging/*"
-	testCovRepoPath         = "g/p/img"
+	// fmtExpectedRepoIDErr identifies the fmt expected repo ID err constant used by this package.
+	fmtExpectedRepoIDErr = "expected repository_id required error, got %v"
+	// fmtExpectedInMarkdown identifies the fmt expected in markdown constant used by this package.
+	fmtExpectedInMarkdown = "expected %q in markdown, got:\n%s"
+	// fmtExpectedEmptyMsg identifies the fmt expected empty msg constant used by this package.
+	fmtExpectedEmptyMsg = "expected empty message, got:\n%s"
+	// testMethodNotAllowed identifies the test method not allowed constant used by this package.
+	testMethodNotAllowed = "method not allowed"
+	// testProdPattern identifies the test prod pattern constant used by this package.
+	testProdPattern = "prod/*"
+	// testStagingPattern identifies the test staging pattern constant used by this package.
+	testStagingPattern = "staging/*"
+	// testCovRepoPath identifies the test cov repo path constant used by this package.
+	testCovRepoPath = "g/p/img"
 )
 
 // ---------------------------------------------------------------------------
 // Constants — prefixed with cov to avoid collisions with existing tests
 // ---------------------------------------------------------------------------.
 
+// covRepoJSON identifies the cov repo JSON constant used by this package.
 const covRepoJSON = `{
 	"id":100,"name":"cov-img","path":"group/project/cov-img",
 	"project_id":42,"location":"registry.example.com/group/project/cov-img",
@@ -417,6 +431,7 @@ const covRepoJSON = `{
 	"cleanup_policy_started_at":"2026-01-16T12:00:00Z"
 }`
 
+// covTagJSON identifies the cov tag JSON constant used by this package.
 const covTagJSON = `{
 	"name":"v1.0","path":"group/project/cov-img:v1.0",
 	"location":"registry.example.com/group/project/cov-img:v1.0",
@@ -424,6 +439,7 @@ const covTagJSON = `{
 	"total_size":4096,"created_at":"2026-02-01T08:00:00Z"
 }`
 
+// covRuleJSON identifies the cov rule JSON constant used by this package.
 const covRuleJSON = `{
 	"id":77,"project_id":42,
 	"repository_path_pattern":"prod/*",
@@ -435,7 +451,7 @@ const covRuleJSON = `{
 // convertRepository — cover optional-field branches
 // ---------------------------------------------------------------------------.
 
-// TestConvertRepository_AllFields verifies the behavior of cov convert repository all fields.
+// TestConvertRepository_AllFields verifies ConvertRepository when all fields.
 func TestConvertRepository_AllFields(t *testing.T) {
 	now := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	cleanup := time.Date(2026, 1, 16, 12, 0, 0, 0, time.UTC)
@@ -460,7 +476,7 @@ func TestConvertRepository_AllFields(t *testing.T) {
 	}
 }
 
-// TestConvertRepository_NilOptionalFields verifies the behavior of cov convert repository nil optional fields.
+// TestConvertRepository_NilOptionalFields verifies ConvertRepository when nil optional fields.
 func TestConvertRepository_NilOptionalFields(t *testing.T) {
 	r := &gl.RegistryRepository{ID: 1, Name: "n", Path: "p", ProjectID: 1}
 	out := convertRepository(r)
@@ -479,7 +495,7 @@ func TestConvertRepository_NilOptionalFields(t *testing.T) {
 // convertTag — cover optional-field branches
 // ---------------------------------------------------------------------------.
 
-// TestConvertTag_AllFields verifies the behavior of cov convert tag all fields.
+// TestConvertTag_AllFields verifies ConvertTag when all fields.
 func TestConvertTag_AllFields(t *testing.T) {
 	now := time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC)
 	tag := &gl.RegistryRepositoryTag{
@@ -493,7 +509,7 @@ func TestConvertTag_AllFields(t *testing.T) {
 	}
 }
 
-// TestConvertTag_NilCreatedAt verifies the behavior of cov convert tag nil created at.
+// TestConvertTag_NilCreatedAt verifies ConvertTag when nil created at.
 func TestConvertTag_NilCreatedAt(t *testing.T) {
 	tag := &gl.RegistryRepositoryTag{Name: "latest"}
 	out := convertTag(tag)
@@ -506,7 +522,7 @@ func TestConvertTag_NilCreatedAt(t *testing.T) {
 // FormatRepositoryMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryMarkdown_Full verifies the behavior of cov format repository markdown full.
+// TestFormatRepositoryMarkdown_Full verifies FormatRepositoryMarkdown when full.
 func TestFormatRepositoryMarkdown_Full(t *testing.T) {
 	out := RepositoryOutput{
 		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
@@ -527,7 +543,7 @@ func TestFormatRepositoryMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatRepositoryMarkdown_EmptyOptionalFields verifies the behavior of cov format repository markdown empty optional fields.
+// TestFormatRepositoryMarkdown_EmptyOptionalFields verifies FormatRepositoryMarkdown when empty optional fields.
 func TestFormatRepositoryMarkdown_EmptyOptionalFields(t *testing.T) {
 	out := RepositoryOutput{ID: 1, Name: "n", Path: "p", ProjectID: 1}
 	md := FormatRepositoryMarkdown(out)
@@ -546,7 +562,7 @@ func TestFormatRepositoryMarkdown_EmptyOptionalFields(t *testing.T) {
 // FormatRepositoryListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryListMarkdown_WithItems verifies the behavior of cov format repository list markdown with items.
+// TestFormatRepositoryListMarkdown_WithItems verifies FormatRepositoryListMarkdown when with items.
 func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 	out := RepositoryListOutput{
 		Repositories: []RepositoryOutput{
@@ -568,7 +584,7 @@ func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatRepositoryListMarkdown_Empty verifies the behavior of cov format repository list markdown empty.
+// TestFormatRepositoryListMarkdown_Empty verifies FormatRepositoryListMarkdown when empty.
 func TestFormatRepositoryListMarkdown_Empty(t *testing.T) {
 	out := RepositoryListOutput{}
 	md := FormatRepositoryListMarkdown(out)
@@ -581,7 +597,7 @@ func TestFormatRepositoryListMarkdown_Empty(t *testing.T) {
 // FormatTagMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagMarkdown_Full verifies the behavior of cov format tag markdown full.
+// TestFormatTagMarkdown_Full verifies FormatTagMarkdown when full.
 func TestFormatTagMarkdown_Full(t *testing.T) {
 	out := TagOutput{
 		Name: "v1.0", Path: "p", Location: "loc",
@@ -596,7 +612,7 @@ func TestFormatTagMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatTagMarkdown_EmptyOptionalFields verifies the behavior of cov format tag markdown empty optional fields.
+// TestFormatTagMarkdown_EmptyOptionalFields verifies FormatTagMarkdown when empty optional fields.
 func TestFormatTagMarkdown_EmptyOptionalFields(t *testing.T) {
 	out := TagOutput{Name: "latest", Path: "p", Location: "loc"}
 	md := FormatTagMarkdown(out)
@@ -615,7 +631,7 @@ func TestFormatTagMarkdown_EmptyOptionalFields(t *testing.T) {
 // FormatTagListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagListMarkdown_WithItems verifies the behavior of cov format tag list markdown with items.
+// TestFormatTagListMarkdown_WithItems verifies FormatTagListMarkdown when with items.
 func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 	out := TagListOutput{
 		Tags: []TagOutput{
@@ -629,7 +645,7 @@ func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatTagListMarkdown_Empty verifies the behavior of cov format tag list markdown empty.
+// TestFormatTagListMarkdown_Empty verifies FormatTagListMarkdown when empty.
 func TestFormatTagListMarkdown_Empty(t *testing.T) {
 	out := TagListOutput{}
 	md := FormatTagListMarkdown(out)
@@ -642,7 +658,7 @@ func TestFormatTagListMarkdown_Empty(t *testing.T) {
 // FormatProtectionRuleListMarkdown — empty case
 // ---------------------------------------------------------------------------.
 
-// TestFormatProtectionRuleListMarkdown_Empty verifies the behavior of cov format protection rule list markdown empty.
+// TestFormatProtectionRuleListMarkdown_Empty verifies FormatProtectionRuleListMarkdown when empty.
 func TestFormatProtectionRuleListMarkdown_Empty(t *testing.T) {
 	out := ProtectionRuleListOutput{}
 	md := FormatProtectionRuleListMarkdown(out)
@@ -655,7 +671,7 @@ func TestFormatProtectionRuleListMarkdown_Empty(t *testing.T) {
 // ListProject — API error, with Tags/TagsCount options
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies the behavior of cov list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -666,7 +682,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_WithTagOptions verifies the behavior of cov list project with tag options.
+// TestListProject_WithTagOptions verifies ListProject when with tag options.
 func TestListProject_WithTagOptions(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
@@ -693,7 +709,7 @@ func TestListProject_WithTagOptions(t *testing.T) {
 // ListGroup — API error
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_APIError verifies the behavior of cov list group a p i error.
+// TestListGroup_APIError verifies ListGroup when API error.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -708,7 +724,7 @@ func TestListGroup_APIError(t *testing.T) {
 // GetRepository — API error, with Tags/TagsCount options
 // ---------------------------------------------------------------------------.
 
-// TestGetRepository_APIError verifies the behavior of cov get repository a p i error.
+// TestGetRepository_APIError verifies GetRepository when API error.
 func TestGetRepository_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -719,7 +735,7 @@ func TestGetRepository_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRepository_WithTagOptions verifies the behavior of cov get repository with tag options.
+// TestGetRepository_WithTagOptions verifies GetRepository when with tag options.
 func TestGetRepository_WithTagOptions(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/registry/repositories/99", func(w http.ResponseWriter, r *http.Request) {
@@ -741,7 +757,7 @@ func TestGetRepository_WithTagOptions(t *testing.T) {
 // DeleteRepository — missing project_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteRepository_MissingProjectID verifies the behavior of cov delete repository missing project i d.
+// TestDeleteRepository_MissingProjectID verifies DeleteRepository when missing project ID.
 func TestDeleteRepository_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteRepository(context.Background(), client, DeleteRepositoryInput{RepositoryID: 1})
@@ -750,7 +766,7 @@ func TestDeleteRepository_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteRepository_APIError verifies the behavior of cov delete repository a p i error.
+// TestDeleteRepository_APIError verifies DeleteRepository when API error.
 func TestDeleteRepository_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -767,7 +783,7 @@ func TestDeleteRepository_APIError(t *testing.T) {
 // ListTags — missing project_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestListTags_MissingProjectID verifies the behavior of cov list tags missing project i d.
+// TestListTags_MissingProjectID verifies ListTags when missing project ID.
 func TestListTags_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListTags(context.Background(), client, ListTagsInput{RepositoryID: 1})
@@ -776,7 +792,7 @@ func TestListTags_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestListTags_APIError verifies the behavior of cov list tags a p i error.
+// TestListTags_APIError verifies ListTags when API error.
 func TestListTags_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -791,7 +807,7 @@ func TestListTags_APIError(t *testing.T) {
 // GetTag — missing project_id, missing repository_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestGetTag_MissingProjectID verifies the behavior of cov get tag missing project i d.
+// TestGetTag_MissingProjectID verifies GetTag when missing project ID.
 func TestGetTag_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetTag(context.Background(), client, GetTagInput{RepositoryID: 1, TagName: "x"})
@@ -800,7 +816,7 @@ func TestGetTag_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetTag_MissingRepositoryID verifies the behavior of cov get tag missing repository i d.
+// TestGetTag_MissingRepositoryID verifies GetTag when missing repository ID.
 func TestGetTag_MissingRepositoryID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetTag(context.Background(), client, GetTagInput{ProjectID: "1", TagName: "x"})
@@ -809,7 +825,7 @@ func TestGetTag_MissingRepositoryID(t *testing.T) {
 	}
 }
 
-// TestGetTag_APIError verifies the behavior of cov get tag a p i error.
+// TestGetTag_APIError verifies GetTag when API error.
 func TestGetTag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -824,7 +840,7 @@ func TestGetTag_APIError(t *testing.T) {
 // DeleteTag — missing project_id, missing repository_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTag_MissingProjectID verifies the behavior of cov delete tag missing project i d.
+// TestDeleteTag_MissingProjectID verifies DeleteTag when missing project ID.
 func TestDeleteTag_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTag(context.Background(), client, DeleteTagInput{RepositoryID: 1, TagName: "x"})
@@ -833,7 +849,7 @@ func TestDeleteTag_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteTag_MissingRepositoryID verifies the behavior of cov delete tag missing repository i d.
+// TestDeleteTag_MissingRepositoryID verifies DeleteTag when missing repository ID.
 func TestDeleteTag_MissingRepositoryID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTag(context.Background(), client, DeleteTagInput{ProjectID: "1", TagName: "x"})
@@ -842,7 +858,7 @@ func TestDeleteTag_MissingRepositoryID(t *testing.T) {
 	}
 }
 
-// TestDeleteTag_APIError verifies the behavior of cov delete tag a p i error.
+// TestDeleteTag_APIError verifies DeleteTag when API error.
 func TestDeleteTag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -857,7 +873,7 @@ func TestDeleteTag_APIError(t *testing.T) {
 // DeleteTagsBulk — missing project_id, API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTagsBulk_MissingProjectID verifies the behavior of cov delete tags bulk missing project i d.
+// TestDeleteTagsBulk_MissingProjectID verifies DeleteTagsBulk when missing project ID.
 func TestDeleteTagsBulk_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTagsBulk(context.Background(), client, DeleteTagsBulkInput{RepositoryID: 1})
@@ -866,7 +882,7 @@ func TestDeleteTagsBulk_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteTagsBulk_APIError verifies the behavior of cov delete tags bulk a p i error.
+// TestDeleteTagsBulk_APIError verifies DeleteTagsBulk when API error.
 func TestDeleteTagsBulk_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -879,7 +895,7 @@ func TestDeleteTagsBulk_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteTagsBulk_AllOptionalFields verifies the behavior of cov delete tags bulk all optional fields.
+// TestDeleteTagsBulk_AllOptionalFields verifies DeleteTagsBulk when all optional fields.
 func TestDeleteTagsBulk_AllOptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
@@ -907,7 +923,7 @@ func TestDeleteTagsBulk_AllOptionalFields(t *testing.T) {
 // ListProtectionRules — API error
 // ---------------------------------------------------------------------------.
 
-// TestListProtectionRules_APIError verifies the behavior of cov list protection rules a p i error.
+// TestListProtectionRules_APIError verifies ListProtectionRules when API error.
 func TestListProtectionRules_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -922,7 +938,7 @@ func TestListProtectionRules_APIError(t *testing.T) {
 // CreateProtectionRule — API error, no access levels
 // ---------------------------------------------------------------------------.
 
-// TestCreateProtectionRule_APIError verifies the behavior of cov create protection rule a p i error.
+// TestCreateProtectionRule_APIError verifies CreateProtectionRule when API error.
 func TestCreateProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -935,7 +951,7 @@ func TestCreateProtectionRule_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateProtectionRule_NoAccessLevels verifies the behavior of cov create protection rule no access levels.
+// TestCreateProtectionRule_NoAccessLevels verifies CreateProtectionRule when no access levels.
 func TestCreateProtectionRule_NoAccessLevels(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
@@ -962,7 +978,7 @@ func TestCreateProtectionRule_NoAccessLevels(t *testing.T) {
 // UpdateProtectionRule — API error, with access levels
 // ---------------------------------------------------------------------------.
 
-// TestUpdateProtectionRule_APIError verifies the behavior of cov update protection rule a p i error.
+// TestUpdateProtectionRule_APIError verifies UpdateProtectionRule when API error.
 func TestUpdateProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -975,7 +991,7 @@ func TestUpdateProtectionRule_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateProtectionRule_AllOptionalFields verifies the behavior of cov update protection rule all optional fields.
+// TestUpdateProtectionRule_AllOptionalFields verifies UpdateProtectionRule when all optional fields.
 func TestUpdateProtectionRule_AllOptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/registry/protection/repository/rules/77", func(w http.ResponseWriter, r *http.Request) {
@@ -1005,7 +1021,7 @@ func TestUpdateProtectionRule_AllOptionalFields(t *testing.T) {
 // DeleteProtectionRule — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProtectionRule_APIError verifies the behavior of cov delete protection rule a p i error.
+// TestDeleteProtectionRule_APIError verifies DeleteProtectionRule when API error.
 func TestDeleteProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1019,11 +1035,23 @@ func TestDeleteProtectionRule_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for container registry actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := registrySpecsByTool(t, specs)
+
+	if len(specs) != 12 {
+		t.Fatalf("len(ActionSpecs) = %d, want 12", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete"} {
+		if !byTool[toolName].Route.Destructive {
+			t.Fatalf("%s should be destructive", toolName)
+		}
+	}
 }
 
 // newRegistryMCPTestMux creates a ServeMux that handles all registry API endpoints
@@ -1069,7 +1097,7 @@ func newRegistryMCPTestMux() *http.ServeMux {
 	return mux
 }
 
-// covTagsHandler is an internal helper for the containerregistry package.
+// covTagsHandler supports cov tags handler assertions in containerregistry tests.
 func covTagsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1082,7 +1110,7 @@ func covTagsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// covSingleTagHandler is an internal helper for the containerregistry package.
+// covSingleTagHandler supports cov single tag handler assertions in containerregistry tests.
 func covSingleTagHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1094,7 +1122,7 @@ func covSingleTagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// covProtectionRulesHandler is an internal helper for the containerregistry package.
+// covProtectionRulesHandler supports cov protection rules handler assertions in containerregistry tests.
 func covProtectionRulesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1107,7 +1135,7 @@ func covProtectionRulesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// covProtectionRuleHandler is an internal helper for the containerregistry package.
+// covProtectionRuleHandler supports cov protection rule handler assertions in containerregistry tests.
 func covProtectionRuleHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPatch:
@@ -1120,24 +1148,12 @@ func covProtectionRuleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — exercises all 12 individual tool handlers via RegisterTools
+// ActionSpecs route coverage for all 12 individual tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	client := testutil.NewTestClient(t, newRegistryMCPTestMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+// TestActionSpecs_CallAllRoutes validates container registry routes through canonical specs.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := registrySpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, newRegistryMCPTestMux())))
 
 	tools := []struct {
 		name string
@@ -1159,29 +1175,42 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
+				t.Fatalf("Route.Handler(%s): nil result", tc.name)
 			}
 		})
 	}
 }
 
+// registrySpecsByTool supports registry specs by tool assertions in containerregistry tests.
+func registrySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
+	}
+	return byTool
+}
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
-
-// Ensure unused import is consumed.
-var _ = toolutil.ReadAnnotations
 
 // ---------------------------------------------------------------------------
 // Additional formatter tests for TASK-053 improvements
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryMarkdown_FallbackToName verifies the behavior of cov format repository markdown fallback to name.
+// TestFormatRepositoryMarkdown_FallbackToName verifies FormatRepositoryMarkdown when fallback to name.
 func TestFormatRepositoryMarkdown_FallbackToName(t *testing.T) {
 	out := RepositoryOutput{ID: 1, Name: "my-img", Path: ""}
 	md := FormatRepositoryMarkdown(out)
@@ -1190,7 +1219,7 @@ func TestFormatRepositoryMarkdown_FallbackToName(t *testing.T) {
 	}
 }
 
-// TestFormatProtectionRuleMarkdown_NoNumericIDs verifies the behavior of cov format protection rule markdown no numeric i ds.
+// TestFormatProtectionRuleMarkdown_NoNumericIDs verifies FormatProtectionRuleMarkdown when no numeric IDs.
 func TestFormatProtectionRuleMarkdown_NoNumericIDs(t *testing.T) {
 	out := ProtectionRuleOutput{
 		ID: 77, ProjectID: 42,
@@ -1215,7 +1244,7 @@ func TestFormatProtectionRuleMarkdown_NoNumericIDs(t *testing.T) {
 	}
 }
 
-// TestFormatProtectionRuleListMarkdown_NoNumericIDs verifies the behavior of cov format protection rule list markdown no numeric i ds.
+// TestFormatProtectionRuleListMarkdown_NoNumericIDs verifies FormatProtectionRuleListMarkdown when no numeric IDs.
 func TestFormatProtectionRuleListMarkdown_NoNumericIDs(t *testing.T) {
 	out := ProtectionRuleListOutput{
 		Rules: []ProtectionRuleOutput{

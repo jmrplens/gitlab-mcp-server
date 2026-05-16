@@ -15,7 +15,7 @@ En modo individual, el servidor registra una herramienta por operación de GitLa
 
 ### Modo meta-herramientas (predeterminado)
 
-En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **32 meta-herramientas base**, **47 en Enterprise/Premium autoalojado**, o **48 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
+En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **33 meta-herramientas base**, **47 en Enterprise/Premium autoalojado**, o **48 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
 ```json
 {
@@ -51,7 +51,7 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 - **Meta-herramientas**: `gitlab_{domain}` (p. ej., `gitlab_issue`, `gitlab_project`)
 - **Acciones dinámicas**: IDs canónicos `domain.action` ejecutados mediante `gitlab_execute_tool` (p. ej., `issue.create`, `merge_request.list`)
 
-## Meta-herramientas base (32)
+## Meta-herramientas base (33)
 
 ### Gestión de proyectos
 
@@ -129,7 +129,7 @@ Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_s
 
 Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 15 meta-herramientas adicionales para funciones Premium y Ultimate en instancias autoalojadas:
 
-`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
+`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_finding`
 
 En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con cinco acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `query` y `graph_status`.
 

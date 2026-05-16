@@ -390,7 +390,7 @@ func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
 		}
 	}
 	fmt.Printf("## RegisterMeta Definition Inventory\n\n")
-	fmt.Printf("This section is enforced. Package-level `RegisterMeta` definitions are allowed only for delegated meta-tools that capture routes through `internal/tools/register_meta.go`.\n\n")
+	fmt.Printf("This section is enforced. Package-level `RegisterMeta` definitions are no longer an approved catalog-first runtime pattern.\n\n")
 	fmt.Printf("| Metric | Count |\n")
 	fmt.Printf("| --- | ---: |\n")
 	fmt.Printf("| Package-level RegisterMeta definitions | %d |\n", len(definitions))

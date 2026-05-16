@@ -11,10 +11,9 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// featureFlagJSON identifies the feature flag JSON constant used by this package.
 const featureFlagJSON = `{
 	"name": "my-flag",
 	"description": "Test feature flag",
@@ -33,11 +32,12 @@ const featureFlagJSON = `{
 	]
 }`
 
+// featureFlagListJSON identifies the feature flag list JSON constant used by this package.
 const featureFlagListJSON = `[` + featureFlagJSON + `]`
 
 // -- List --.
 
-// TestListFeatureFlags_Success verifies the behavior of list feature flags success.
+// TestListFeatureFlags_Success verifies ListFeatureFlags when success.
 func TestListFeatureFlags_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +64,7 @@ func TestListFeatureFlags_Success(t *testing.T) {
 	}
 }
 
-// TestListFeatureFlags_MissingProjectID verifies the behavior of list feature flags missing project i d.
+// TestListFeatureFlags_MissingProjectID verifies ListFeatureFlags when missing project ID.
 func TestListFeatureFlags_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListFeatureFlags(context.Background(), client, ListInput{})
@@ -75,7 +75,7 @@ func TestListFeatureFlags_MissingProjectID(t *testing.T) {
 
 // -- Get --.
 
-// TestGetFeatureFlag_Success verifies the behavior of get feature flag success.
+// TestGetFeatureFlag_Success verifies GetFeatureFlag when success.
 func TestGetFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +101,7 @@ func TestGetFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestGetFeatureFlag_MissingParams verifies the behavior of get feature flag missing params.
+// TestGetFeatureFlag_MissingParams verifies GetFeatureFlag when missing params.
 func TestGetFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetFeatureFlag(context.Background(), client, GetInput{})
@@ -116,7 +116,7 @@ func TestGetFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Create --.
 
-// TestCreateFeatureFlag_Success verifies the behavior of create feature flag success.
+// TestCreateFeatureFlag_Success verifies CreateFeatureFlag when success.
 func TestCreateFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +138,7 @@ func TestCreateFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_WithStrategies verifies the behavior of create feature flag with strategies.
+// TestCreateFeatureFlag_WithStrategies verifies CreateFeatureFlag when with strategies.
 func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +160,7 @@ func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_InvalidStrategies verifies the behavior of create feature flag invalid strategies.
+// TestCreateFeatureFlag_InvalidStrategies verifies CreateFeatureFlag when invalid strategies.
 func TestCreateFeatureFlag_InvalidStrategies(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{
@@ -173,7 +173,7 @@ func TestCreateFeatureFlag_InvalidStrategies(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_MissingParams verifies the behavior of create feature flag missing params.
+// TestCreateFeatureFlag_MissingParams verifies CreateFeatureFlag when missing params.
 func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{})
@@ -188,7 +188,7 @@ func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Update --.
 
-// TestUpdateFeatureFlag_Success verifies the behavior of update feature flag success.
+// TestUpdateFeatureFlag_Success verifies UpdateFeatureFlag when success.
 func TestUpdateFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +209,7 @@ func TestUpdateFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_MissingParams verifies the behavior of update feature flag missing params.
+// TestUpdateFeatureFlag_MissingParams verifies UpdateFeatureFlag when missing params.
 func TestUpdateFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{})
@@ -224,7 +224,7 @@ func TestUpdateFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Delete --.
 
-// TestDeleteFeatureFlag_Success verifies the behavior of delete feature flag success.
+// TestDeleteFeatureFlag_Success verifies DeleteFeatureFlag when success.
 func TestDeleteFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +241,7 @@ func TestDeleteFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteFeatureFlag_MissingParams verifies the behavior of delete feature flag missing params.
+// TestDeleteFeatureFlag_MissingParams verifies DeleteFeatureFlag when missing params.
 func TestDeleteFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteFeatureFlag(context.Background(), client, DeleteInput{})
@@ -256,7 +256,7 @@ func TestDeleteFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatFeatureFlagMarkdown verifies the behavior of format feature flag markdown.
+// TestFormatFeatureFlagMarkdown verifies FormatFeatureFlagMarkdown.
 func TestFormatFeatureFlagMarkdown(t *testing.T) {
 	out := Output{
 		Name:        "my-flag",
@@ -292,7 +292,7 @@ func TestFormatFeatureFlagMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListFeatureFlagsMarkdown verifies the behavior of format list feature flags markdown.
+// TestFormatListFeatureFlagsMarkdown verifies FormatListFeatureFlagsMarkdown.
 func TestFormatListFeatureFlagsMarkdown(t *testing.T) {
 	out := ListOutput{
 		FeatureFlags: []Output{
@@ -310,7 +310,7 @@ func TestFormatListFeatureFlagsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListFeatureFlagsMarkdown_Empty verifies the behavior of format list feature flags markdown empty.
+// TestFormatListFeatureFlagsMarkdown_Empty verifies FormatListFeatureFlagsMarkdown when empty.
 func TestFormatListFeatureFlagsMarkdown_Empty(t *testing.T) {
 	out := ListOutput{FeatureFlags: []Output{}}
 	md := FormatListFeatureFlagsMarkdown(out)
@@ -319,12 +319,12 @@ func TestFormatListFeatureFlagsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// contains is an internal helper for the featureflags package.
+// contains reports whether contains.
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsStr(s, sub))
 }
 
-// containsStr is an internal helper for the featureflags package.
+// containsStr reports whether contains str.
 func containsStr(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {
@@ -336,8 +336,10 @@ func containsStr(s, sub string) bool {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // covFeatureFlagJSON is a minimal feature flag JSON for coverage tests.
@@ -362,7 +364,7 @@ const covFeatureFlagJSON = `{
 // ListFeatureFlags — API error, scope param
 // ---------------------------------------------------------------------------.
 
-// TestListFeatureFlags_APIError verifies the behavior of cov list feature flags a p i error.
+// TestListFeatureFlags_APIError verifies ListFeatureFlags when API error.
 func TestListFeatureFlags_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -373,7 +375,7 @@ func TestListFeatureFlags_APIError(t *testing.T) {
 	}
 }
 
-// TestListFeatureFlags_WithScope verifies the behavior of cov list feature flags with scope.
+// TestListFeatureFlags_WithScope verifies ListFeatureFlags when with scope.
 func TestListFeatureFlags_WithScope(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +404,7 @@ func TestListFeatureFlags_WithScope(t *testing.T) {
 // GetFeatureFlag — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetFeatureFlag_APIError verifies the behavior of cov get feature flag a p i error.
+// TestGetFeatureFlag_APIError verifies GetFeatureFlag when API error.
 func TestGetFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -417,7 +419,7 @@ func TestGetFeatureFlag_APIError(t *testing.T) {
 // CreateFeatureFlag — API error, Active param
 // ---------------------------------------------------------------------------.
 
-// TestCreateFeatureFlag_APIError verifies the behavior of cov create feature flag a p i error.
+// TestCreateFeatureFlag_APIError verifies CreateFeatureFlag when API error.
 func TestCreateFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -428,7 +430,7 @@ func TestCreateFeatureFlag_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_WithActive verifies the behavior of cov create feature flag with active.
+// TestCreateFeatureFlag_WithActive verifies CreateFeatureFlag when with active.
 func TestCreateFeatureFlag_WithActive(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, _ *http.Request) {
@@ -454,7 +456,7 @@ func TestCreateFeatureFlag_WithActive(t *testing.T) {
 // UpdateFeatureFlag — API error, NewName, Active, Strategies, invalid strategies
 // ---------------------------------------------------------------------------.
 
-// TestUpdateFeatureFlag_APIError verifies the behavior of cov update feature flag a p i error.
+// TestUpdateFeatureFlag_APIError verifies UpdateFeatureFlag when API error.
 func TestUpdateFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -465,7 +467,7 @@ func TestUpdateFeatureFlag_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_AllOptionalFields verifies the behavior of cov update feature flag all optional fields.
+// TestUpdateFeatureFlag_AllOptionalFields verifies UpdateFeatureFlag when all optional fields.
 func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("PUT /api/v4/projects/1/feature_flags/cov-flag", func(w http.ResponseWriter, _ *http.Request) {
@@ -491,7 +493,7 @@ func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_InvalidStrategies verifies the behavior of cov update feature flag invalid strategies.
+// TestUpdateFeatureFlag_InvalidStrategies verifies UpdateFeatureFlag when invalid strategies.
 func TestUpdateFeatureFlag_InvalidStrategies(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{
@@ -508,7 +510,7 @@ func TestUpdateFeatureFlag_InvalidStrategies(t *testing.T) {
 // DeleteFeatureFlag — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteFeatureFlag_APIError verifies the behavior of cov delete feature flag a p i error.
+// TestDeleteFeatureFlag_APIError verifies DeleteFeatureFlag when API error.
 func TestDeleteFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -523,7 +525,7 @@ func TestDeleteFeatureFlag_APIError(t *testing.T) {
 // formatParameters — all parameter branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatParameters_AllFields verifies the behavior of cov format parameters all fields.
+// TestFormatParameters_AllFields verifies FormatParameters when all fields.
 func TestFormatParameters_AllFields(t *testing.T) {
 	p := &StrategyParameterOutput{
 		Percentage: "50",
@@ -540,14 +542,14 @@ func TestFormatParameters_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatParameters_Nil verifies the behavior of cov format parameters nil.
+// TestFormatParameters_Nil verifies FormatParameters when nil.
 func TestFormatParameters_Nil(t *testing.T) {
 	if got := formatParameters(nil); got != "-" {
 		t.Errorf("expected '-', got %q", got)
 	}
 }
 
-// TestFormatParameters_Empty verifies the behavior of cov format parameters empty.
+// TestFormatParameters_Empty verifies FormatParameters when empty.
 func TestFormatParameters_Empty(t *testing.T) {
 	if got := formatParameters(&StrategyParameterOutput{}); got != "-" {
 		t.Errorf("expected '-' for empty params, got %q", got)
@@ -558,14 +560,14 @@ func TestFormatParameters_Empty(t *testing.T) {
 // formatScopes — empty and multiple scopes
 // ---------------------------------------------------------------------------.
 
-// TestFormatScopes_Empty verifies the behavior of cov format scopes empty.
+// TestFormatScopes_Empty verifies FormatScopes when empty.
 func TestFormatScopes_Empty(t *testing.T) {
 	if got := formatScopes(nil); got != "-" {
 		t.Errorf("expected '-', got %q", got)
 	}
 }
 
-// TestFormatScopes_Multiple verifies the behavior of cov format scopes multiple.
+// TestFormatScopes_Multiple verifies FormatScopes when multiple.
 func TestFormatScopes_Multiple(t *testing.T) {
 	scopes := []ScopeOutput{
 		{ID: 1, EnvironmentScope: "production"},
@@ -581,7 +583,7 @@ func TestFormatScopes_Multiple(t *testing.T) {
 // FormatFeatureFlagMarkdown — no strategies, no dates
 // ---------------------------------------------------------------------------.
 
-// TestFormatFeatureFlagMarkdown_Minimal verifies the behavior of cov format feature flag markdown minimal.
+// TestFormatFeatureFlagMarkdown_Minimal verifies FormatFeatureFlagMarkdown when minimal.
 func TestFormatFeatureFlagMarkdown_Minimal(t *testing.T) {
 	out := Output{
 		Name:    "bare-flag",
@@ -607,7 +609,7 @@ func TestFormatFeatureFlagMarkdown_Minimal(t *testing.T) {
 // FormatListFeatureFlagsMarkdown — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListFeatureFlagsMarkdown_WithPagination verifies the behavior of cov format list feature flags markdown with pagination.
+// TestFormatListFeatureFlagsMarkdown_WithPagination verifies FormatListFeatureFlagsMarkdown when with pagination.
 func TestFormatListFeatureFlagsMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		FeatureFlags: []Output{
@@ -622,29 +624,40 @@ func TestFormatListFeatureFlagsMarkdown_WithPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic
+// ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for feature flag actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := featureFlagSpecsByTool(t, specs)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "featureflags" {
+			t.Fatalf("OwnerPackage for %s = %q, want featureflags", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — all 5 individual tools
+// ActionSpecs route coverage for all 5 tools
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallAllRoutes validates feature flag routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	byTool := covNewFeatureFlagSpecsByTool(t)
 
 	tools := []struct {
 		name string
@@ -660,31 +673,23 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Helper: MCP session factory
+// Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
-// covNewMCPSession is an internal helper for the featureflags package.
-func covNewMCPSession(t *testing.T) *mcp.ClientSession {
+// covNewFeatureFlagSpecsByTool supports cov new feature flag specs by tool assertions in featureflags tests.
+func covNewFeatureFlagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -706,30 +711,11 @@ func covNewMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return featureFlagSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestFeatureFlagGet_EmbedsCanonicalResource asserts
-// gitlab_feature_flag_get attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/feature_flag/{name}.
-func TestFeatureFlagGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_FeatureFlagGetRoute verifies the canonical feature flag get route output.
+func TestActionSpecs_FeatureFlagGetRoute(t *testing.T) {
 	const respJSON = `{"name":"experimental_ui","description":"","active":true,"version":"new_version_flag"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/feature_flags/experimental_ui") {
@@ -738,7 +724,28 @@ func TestFeatureFlagGet_EmbedsCanonicalResource(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "name": "experimental_ui"}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_feature_flag_get", args, "gitlab://project/42/feature_flag/experimental_ui", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := featureFlagSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_feature_flag_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "name": "experimental_ui"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.Name != "experimental_ui" || !out.Active {
+		t.Fatalf("feature flag output = %#v, want active experimental_ui", out)
+	}
+}
+
+// featureFlagSpecsByTool supports feature flag specs by tool assertions in featureflags tests.
+func featureFlagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

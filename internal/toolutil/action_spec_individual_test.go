@@ -10,6 +10,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
+// TestIndividualToolFromActionSpec_ProjectsMetadata verifies IndividualToolFromActionSpec projects metadata.
 func TestIndividualToolFromActionSpec_ProjectsMetadata(t *testing.T) {
 	route := ActionRoute{
 		InputSchema:  testActionSpecSchema("project_id"),
@@ -65,6 +66,7 @@ func TestIndividualToolFromActionSpec_ProjectsMetadata(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTitle verifies IndividualToolFromActionSpec falls back to option description and generated title.
 func TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTitle(t *testing.T) {
 	spec := NewActionSpec("delete", ActionRoute{
 		Destructive:  true,
@@ -93,6 +95,7 @@ func TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTi
 	}
 }
 
+// TestIndividualToolFromActionSpec_AppliesAnnotationOverrides verifies IndividualToolFromActionSpec applies annotation overrides.
 func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	overrideReadOnly := true
 	overrideDestructive := false
@@ -135,6 +138,7 @@ func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromActionSpec_LockdownsInputSchema verifies IndividualToolFromActionSpec when lockdowns input schema.
 func TestIndividualToolFromActionSpec_LockdownsInputSchema(t *testing.T) {
 	inputSchema := map[string]any{
 		"type": "object",
@@ -179,6 +183,7 @@ func TestIndividualToolFromActionSpec_LockdownsInputSchema(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields verifies IndividualToolFromActionSpec preserves individual required fields.
 func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testing.T) {
 	type input struct {
 		ProjectID        string `json:"project_id" jsonschema:"Project ID,required"`
@@ -213,6 +218,7 @@ func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testi
 	}
 }
 
+// TestIndividualToolFromSpecs_ProjectsMatchingSpec verifies IndividualToolFromSpecs projects matching spec.
 func TestIndividualToolFromSpecs_ProjectsMatchingSpec(t *testing.T) {
 	specs := []ActionSpec{
 		NewActionSpec("list", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
@@ -234,6 +240,7 @@ func TestIndividualToolFromSpecs_ProjectsMatchingSpec(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec verifies IndividualToolFromSpecs rejects missing or duplicate spec.
 func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 	specs := []ActionSpec{
 		NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
@@ -254,6 +261,7 @@ func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromActionSpec_RejectsIncompleteMetadata covers IndividualToolFromActionSpec with table-driven subtests for rejects incomplete metadata.
 func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -290,6 +298,7 @@ func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 	}
 }
 
+// testActionSpecSchema supports test action spec schema assertions in toolutil tests.
 func testActionSpecSchema(properties ...string) map[string]any {
 	props := make(map[string]any, len(properties))
 	for _, name := range properties {

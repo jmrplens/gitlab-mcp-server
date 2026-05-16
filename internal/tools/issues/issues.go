@@ -1,6 +1,3 @@
-// Package issues implements GitLab issue operations including create, get, list,
-// update, and delete. It exposes typed input/output structs and handler
-// functions that interact with the GitLab Issues API v4.
 package issues
 
 import (

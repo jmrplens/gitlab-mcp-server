@@ -4,7 +4,6 @@
 package securefiles
 
 import (
-	"context"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -13,17 +12,18 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testFileName identifies the test file name constant used by this package.
 const testFileName = "key.pem"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files" || r.Method != http.MethodGet {
@@ -41,7 +41,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -52,7 +52,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestShow verifies the behavior of show.
+// TestShow verifies Show.
 func TestShow(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files/1" || r.Method != http.MethodGet {
@@ -70,7 +70,7 @@ func TestShow(t *testing.T) {
 	}
 }
 
-// TestShow_Error verifies the behavior of show error.
+// TestShow_Error verifies Show when error.
 func TestShow_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -81,7 +81,7 @@ func TestShow_Error(t *testing.T) {
 	}
 }
 
-// TestShow_InvalidFileID verifies the behavior of show invalid file i d.
+// TestShow_InvalidFileID verifies Show when invalid file ID.
 func TestShow_InvalidFileID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -95,7 +95,7 @@ func TestShow_InvalidFileID(t *testing.T) {
 	}
 }
 
-// TestRemove_InvalidFileID verifies the behavior of remove invalid file i d.
+// TestRemove_InvalidFileID verifies Remove when invalid file ID.
 func TestRemove_InvalidFileID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -109,7 +109,7 @@ func TestRemove_InvalidFileID(t *testing.T) {
 	}
 }
 
-// TestCreate verifies the behavior of create.
+// TestCreate verifies Create.
 func TestCreate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -128,7 +128,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -206,7 +206,7 @@ func TestCreate_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestRemove verifies the behavior of remove.
+// TestRemove verifies Remove.
 func TestRemove(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files/1" || r.Method != http.MethodDelete {
@@ -221,7 +221,7 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-// TestRemove_Error verifies the behavior of remove error.
+// TestRemove_Error verifies Remove when error.
 func TestRemove_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -232,7 +232,7 @@ func TestRemove_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{{ID: 1, Name: testFileName}}})
 	if md == "" {
@@ -240,7 +240,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatShowMarkdown verifies the behavior of format show markdown.
+// TestFormatShowMarkdown verifies FormatShowMarkdown.
 func TestFormatShowMarkdown(t *testing.T) {
 	md := FormatShowMarkdown(SecureFileItem{ID: 1, Name: testFileName})
 	if md == "" {
@@ -254,7 +254,7 @@ func TestFormatShowMarkdown(t *testing.T) {
 // List — pagination branch (Page > 0 || PerPage > 0)
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of cov list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files" || r.Method != http.MethodGet {
@@ -282,7 +282,7 @@ func TestList_WithPagination(t *testing.T) {
 // FormatListMarkdown — empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No secure files found") {
@@ -297,7 +297,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies the behavior of cov format list markdown with pagination.
+// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Files: []SecureFileItem{
@@ -310,222 +310,5 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip for all 4 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := covNewSecureFilesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_secure_files", map[string]any{"project_id": "1", "page": 1, "per_page": 20}},
-		{"show", "gitlab_show_secure_file", map[string]any{"project_id": "1", "file_id": 1}},
-		{"create", "gitlab_create_secure_file", map[string]any{"project_id": "1", "name": "cert.pem", "content_base64": "ZGF0YQ=="}},
-		{"remove", "gitlab_remove_secure_file", map[string]any{"project_id": "1", "file_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — MCP round-trip error paths
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_ErrorPaths validates cov register tools error paths across multiple scenarios using table-driven subtests.
-func TestRegisterTools_ErrorPaths(t *testing.T) {
-	session := covNewSecureFilesErrorMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list_error", "gitlab_list_secure_files", map[string]any{"project_id": "1", "page": 1, "per_page": 20}},
-		{"show_error", "gitlab_show_secure_file", map[string]any{"project_id": "1", "file_id": 1}},
-		{"create_error", "gitlab_create_secure_file", map[string]any{"project_id": "1", "name": "x", "content_base64": "ZGF0YQ=="}},
-		{"remove_error", "gitlab_remove_secure_file", map[string]any{"project_id": "1", "file_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
-			}
-			if !result.IsError {
-				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (success paths)
-// ---------------------------------------------------------------------------.
-
-// covNewSecureFilesMCPSession is an internal helper for the securefiles package.
-func covNewSecureFilesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	covFileJSON := `{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256"}`
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/secure_files", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+covFileJSON+`]`)
-	})
-
-	handler.HandleFunc("GET /api/v4/projects/1/secure_files/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covFileJSON)
-	})
-
-	handler.HandleFunc("POST /api/v4/projects/1/secure_files", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"name":"cert.pem","checksum":"def","checksum_algorithm":"sha256"}`)
-	})
-
-	handler.HandleFunc("DELETE /api/v4/projects/1/secure_files/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session for RegisterTools (error paths)
-// ---------------------------------------------------------------------------.
-
-// covNewSecureFilesErrorMCPSession is an internal helper for the securefiles package.
-func covNewSecureFilesErrorMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the secure file delete handler when the user declines confirmation.
-func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_remove_secure_file",
-		Arguments: map[string]any{"project_id": "1", "file_id": 1},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
 	}
 }

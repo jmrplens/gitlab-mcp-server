@@ -1,5 +1,3 @@
-// Package groupepicboards implements GitLab group epic board operations
-// including listing and getting board details.
 package groupepicboards
 
 import (

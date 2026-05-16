@@ -113,7 +113,7 @@ Show complete tool implementation with:
 - Input validation with actionable error messages
 - Context checking
 - Error handling
-- Tool registration
+- Catalog-backed tool registration
 
 ### Transport Setup
 

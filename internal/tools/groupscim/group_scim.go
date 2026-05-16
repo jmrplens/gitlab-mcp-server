@@ -1,5 +1,3 @@
-// Package groupscim implements GitLab SCIM identity operations for groups
-// including list, get, update, and delete.
 package groupscim
 
 import (

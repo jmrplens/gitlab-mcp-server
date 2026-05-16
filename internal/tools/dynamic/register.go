@@ -8,13 +8,12 @@ import (
 	"maps"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -28,8 +27,6 @@ const (
 	describeToolName = "gitlab_describe_tools"
 	findToolName     = "gitlab_find_action"
 	executeToolName  = "gitlab_execute_tool"
-
-	actionFeatureFlagsUserListList = "feature_flags.ff_user_list_list"
 
 	defaultLimit     = 20
 	maxLimit         = 50
@@ -253,7 +250,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
 func NewRegistry(routes map[string]toolutil.ActionMap) *Registry {
-	return NewRegistryFromCatalog(actioncatalog.FromActionMaps(routes))
+	return newRegistry(routes, actionAliases())
 }
 
 func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *Registry {
@@ -263,14 +260,14 @@ func newRegistry(routes map[string]toolutil.ActionMap, aliases []actionAlias) *R
 // NewRegistryFromCatalog builds a deterministic dynamic action index from the
 // canonical action catalog.
 func NewRegistryFromCatalog(catalog *actioncatalog.Catalog) *Registry {
-	return newRegistryFromCatalog(catalog, actionAliases())
+	return newRegistryFromCatalog(catalog, nil)
 }
 
 func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlias) *Registry {
 	if catalog == nil {
 		catalog = actioncatalog.NewCatalog()
 	}
-	compatibilityAliasesByCanonical := aliasesByCanonical(aliases)
+	compatibilityAliasesByCanonical := aliasesByCanonical(append(catalogActionAliases(catalog), aliases...))
 	registry := &Registry{
 		byID:             make(map[string]actionEntry),
 		aliases:          make(map[string]string),
@@ -462,7 +459,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	params, actionParamExplanations := NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
 	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
-			if existingStateEvent, converted := issueStateEventValue(existing); converted && existingStateEvent != stateEvent {
+			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {
 				return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: action %q implies state_event=%q, but params.state_event was %q. Use the canonical issue.update action for explicit state_event control.", requestedActionID, stateEvent, existingStateEvent)), nil, nil
 			}
 		} else {
@@ -495,182 +492,10 @@ func NormalizeActionScopedParams(actionID string, params, schema map[string]any)
 	return normalized
 }
 
-type actionScopedParamAlias struct {
-	ActionID  string
-	Alias     string
-	Canonical string
-	Notes     string
-}
-
-func actionScopedParamAliases() []actionScopedParamAlias {
-	return []actionScopedParamAlias{
-		{ActionID: "job.list", Alias: "status", Canonical: "scope", Notes: "job.list uses scope for job status filtering"},
-		{ActionID: "repository.file_get", Alias: "branch", Canonical: "ref", Notes: "repository.file_get reads file content at a ref"},
-		{ActionID: "issue.link_create", Alias: "linked_issue_iid", Canonical: "target_issue_iid", Notes: "issue.link_create uses target_issue_iid for the linked issue"},
-		{ActionID: "issue.link_create", Alias: "project_id", Canonical: "target_project_id", Notes: "same-project issue links reuse project_id as target_project_id"},
-		{ActionID: "issue.update", Alias: "state_event", Canonical: "state_event", Notes: "normalized issue state event value"},
-		{ActionID: "pipeline.schedule_create", Alias: "name", Canonical: "description", Notes: "pipeline schedules use description as the display name"},
-		{ActionID: "pipeline.schedule_update", Alias: "name", Canonical: "description", Notes: "pipeline schedules use description as the display name"},
-		{ActionID: "branch.protect", Alias: "push_access_level", Canonical: "push_access_level", Notes: "normalized GitLab access level name to numeric level"},
-		{ActionID: "branch.protect", Alias: "merge_access_level", Canonical: "merge_access_level", Notes: "normalized GitLab access level name to numeric level"},
-		{ActionID: "feature_flags.feature_flag_create", Alias: "new_version_flag", Canonical: "version", Notes: "feature flag creation uses version for the flag API version"},
-		{ActionID: actionFeatureFlagsUserListList, Alias: "name", Canonical: "removed", Notes: "feature flag user-list listing is project-scoped and does not accept a feature flag name"},
-		{ActionID: "group.group_label_update", Alias: "name", Canonical: "new_name", Notes: "group label update renames labels with new_name"},
-		{ActionID: "project.member_add", Alias: "access_level", Canonical: "access_level", Notes: "normalized GitLab access level name to numeric level"},
-		{ActionID: "project.member_edit", Alias: "access_level", Canonical: "access_level", Notes: "normalized GitLab access level name to numeric level"},
-		{ActionID: "release.link_create", Alias: "release_tag_name", Canonical: "tag_name", Notes: "release link actions use tag_name for the parent release"},
-		{ActionID: "release.link_delete", Alias: "release_tag_name", Canonical: "tag_name", Notes: "release link actions use tag_name for the parent release"},
-		{ActionID: "release.link_get", Alias: "release_tag_name", Canonical: "tag_name", Notes: "release link actions use tag_name for the parent release"},
-		{ActionID: "release.link_list", Alias: "release_tag_name", Canonical: "tag_name", Notes: "release link actions use tag_name for the parent release"},
-		{ActionID: "release.link_update", Alias: "release_tag_name", Canonical: "tag_name", Notes: "release link actions use tag_name for the parent release"},
-		{ActionID: "runner.update", Alias: "paused", Canonical: "paused", Notes: "normalized string boolean to bool"},
-		{ActionID: "snippet.project_create", Alias: "file_name/content", Canonical: "files", Notes: "project snippet creation uses files entries in dynamic mode"},
-		{ActionID: "snippet.project_create", Alias: "files.file_name", Canonical: "files.file_path", Notes: "snippet file entries use file_path"},
-		{ActionID: "snippet.project_create", Alias: "files.action", Canonical: "files", Notes: "project snippet creation file entries do not include an action field"},
-	}
-}
-
 // NormalizeActionScopedParamsWithExplanation returns normalized params plus
 // name-only metadata for action-scoped compatibility aliases and coercions.
 func NormalizeActionScopedParamsWithExplanation(actionID string, params, schema map[string]any) (map[string]any, []toolutil.ParamAliasExplanation) {
-	if len(params) == 0 {
-		return params, nil
-	}
-	fields := actionSchemaProperties(schema)
-	out := params
-	cloned := false
-	explanations := make([]toolutil.ParamAliasExplanation, 0)
-	clone := func() map[string]any {
-		if !cloned {
-			out = maps.Clone(params)
-			cloned = true
-		}
-		return out
-	}
-	record := func(alias, canonical, notes string) {
-		explanations = append(explanations, toolutil.ParamAliasExplanation{Alias: alias, Canonical: canonical, Source: "dynamic_action_scoped", Notes: notes})
-	}
-	accepts := func(name string) bool {
-		_, ok := fields[name]
-		return ok
-	}
-	switch actionID {
-	case "job.list":
-		if value, ok := out["status"]; ok && accepts("scope") && !accepts("status") {
-			if _, hasScope := out["scope"]; !hasScope {
-				updated := clone()
-				updated["scope"] = value
-				delete(updated, "status")
-				record("status", "scope", "job.list uses scope for job status filtering")
-			}
-		}
-	case "repository.file_get":
-		if value, ok := out["branch"]; ok && accepts("ref") && !accepts("branch") {
-			if _, hasRef := out["ref"]; !hasRef {
-				updated := clone()
-				updated["ref"] = value
-				delete(updated, "branch")
-				record("branch", "ref", "repository.file_get reads file content at a ref")
-			}
-		}
-	case "issue.link_create":
-		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
-			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
-				updated := clone()
-				updated["target_issue_iid"] = value
-				delete(updated, "linked_issue_iid")
-				record("linked_issue_iid", "target_issue_iid", "issue.link_create uses target_issue_iid for the linked issue")
-			}
-		}
-		if value, ok := out["project_id"]; ok && accepts("target_project_id") {
-			if _, hasTargetProjectID := out["target_project_id"]; !hasTargetProjectID {
-				clone()["target_project_id"] = value
-				record("project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id")
-			}
-		}
-	case "issue.update":
-		if value, ok := out["state_event"]; ok && accepts("state_event") {
-			if stateEvent, converted := issueStateEventValue(value); converted {
-				clone()["state_event"] = stateEvent
-				record("state_event", "state_event", "normalized issue state event value")
-			}
-		}
-	case "pipeline.schedule_create", "pipeline.schedule_update":
-		if value, ok := out["name"]; ok && accepts("description") && !accepts("name") {
-			updated := clone()
-			if _, hasDescription := out["description"]; !hasDescription {
-				updated["description"] = value
-			}
-			delete(updated, "name")
-			record("name", "description", "pipeline schedules use description as the display name")
-		}
-	case "branch.protect":
-		for _, name := range []string{"push_access_level", "merge_access_level"} {
-			if value, ok := out[name]; ok && accepts(name) {
-				if accessLevel, converted := gitlabAccessLevelValue(value); converted {
-					clone()[name] = accessLevel
-					record(name, name, "normalized GitLab access level name to numeric level")
-				}
-			}
-		}
-	case "feature_flags.feature_flag_create":
-		if value, ok := out["new_version_flag"]; ok && accepts("version") && !accepts("new_version_flag") {
-			if _, hasVersion := out["version"]; !hasVersion {
-				updated := clone()
-				updated["version"] = value
-				delete(updated, "new_version_flag")
-				record("new_version_flag", "version", "feature flag creation uses version for the flag API version")
-			}
-		}
-	case actionFeatureFlagsUserListList:
-		if _, ok := out["name"]; ok && !accepts("name") {
-			delete(clone(), "name")
-			record("name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name")
-		}
-	case "group.group_label_update":
-		if value, ok := out["name"]; ok {
-			if _, hasNewName := out["new_name"]; !hasNewName {
-				updated := clone()
-				updated["new_name"] = value
-				delete(updated, "name")
-				record("name", "new_name", "group label update renames labels with new_name")
-			}
-		}
-	case "project.member_add", "project.member_edit":
-		if value, ok := out["access_level"]; ok && accepts("access_level") {
-			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
-				clone()["access_level"] = accessLevel
-				record("access_level", "access_level", "normalized GitLab access level name to numeric level")
-			}
-		}
-	case "release.link_create", "release.link_delete", "release.link_get", "release.link_list", "release.link_update":
-		if value, ok := out["release_tag_name"]; ok && accepts("tag_name") && !accepts("release_tag_name") {
-			if _, hasTagName := out["tag_name"]; !hasTagName {
-				updated := clone()
-				updated["tag_name"] = value
-				delete(updated, "release_tag_name")
-				record("release_tag_name", "tag_name", "release link actions use tag_name for the parent release")
-			}
-		}
-	case "runner.update":
-		if value, ok := out["paused"]; ok && accepts("paused") {
-			if paused, converted := boolStringValue(value); converted {
-				clone()["paused"] = paused
-				record("paused", "paused", "normalized string boolean to bool")
-			}
-		}
-	case "snippet.project_create":
-		if accepts("files") && (!accepts("file_name") || !accepts("content")) && buildSnippetCreateFilesFromSingleFileParams(clone, out) {
-			record("file_name/content", "files", "project snippet creation uses files entries in dynamic mode")
-		}
-		if accepts("files") && normalizeSnippetFileNameFields(clone, out) {
-			record("files.file_name", "files.file_path", "snippet file entries use file_path")
-		}
-		if accepts("files") && stripSnippetCreateFileActions(clone, out) {
-			record("files.action", "files", "project snippet creation file entries do not include an action field")
-		}
-	}
-	return out, explanations
+	return actioncompat.NormalizeParamsWithExplanation(actionID, params, schema)
 }
 
 func issueLifecycleAliasStateEvent(actionID string) (string, bool) {
@@ -682,99 +507,6 @@ func issueLifecycleAliasStateEvent(actionID string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func buildSnippetCreateFilesFromSingleFileParams(clone func() map[string]any, params map[string]any) bool {
-	if _, hasFiles := params["files"]; hasFiles {
-		return false
-	}
-	fileName, hasFileName := nonEmptyStringParam(params, "file_name")
-	content, hasContent := nonEmptyStringParam(params, "content")
-	if !hasFileName || !hasContent {
-		return false
-	}
-	updated := clone()
-	updated["files"] = []any{map[string]any{"file_path": fileName, "content": content}}
-	delete(updated, "file_name")
-	delete(updated, "content")
-	return true
-}
-
-func nonEmptyStringParam(params map[string]any, name string) (string, bool) {
-	value, ok := params[name].(string)
-	if !ok {
-		return "", false
-	}
-	value = strings.TrimSpace(value)
-	return value, value != ""
-}
-
-func normalizeSnippetFileNameFields(clone func() map[string]any, params map[string]any) bool {
-	files, ok := params["files"].([]any)
-	if !ok || len(files) == 0 {
-		return false
-	}
-	var updatedFiles []any
-	changed := false
-	for index, file := range files {
-		fileMap, mapOK := file.(map[string]any)
-		if !mapOK {
-			continue
-		}
-		fileName, hasFileName := nonEmptyStringParam(fileMap, "file_name")
-		if !hasFileName {
-			continue
-		}
-		if updatedFiles == nil {
-			updatedFiles = append([]any(nil), files...)
-		}
-		updatedFile := maps.Clone(fileMap)
-		if _, hasFilePath := updatedFile["file_path"]; !hasFilePath {
-			updatedFile["file_path"] = fileName
-		}
-		delete(updatedFile, "file_name")
-		updatedFiles[index] = updatedFile
-		changed = true
-	}
-	if changed {
-		clone()["files"] = updatedFiles
-	}
-	return changed
-}
-
-func stripSnippetCreateFileActions(clone func() map[string]any, params map[string]any) bool {
-	files, ok := params["files"].([]any)
-	if !ok || len(files) == 0 {
-		return false
-	}
-	var updatedFiles []any
-	changed := false
-	for index, file := range files {
-		fileMap, mapOK := file.(map[string]any)
-		if !mapOK {
-			continue
-		}
-		action, hasAction := fileMap["action"]
-		if !hasAction || !isCreateFileAction(action) {
-			continue
-		}
-		if updatedFiles == nil {
-			updatedFiles = append([]any(nil), files...)
-		}
-		updatedFile := maps.Clone(fileMap)
-		delete(updatedFile, "action")
-		updatedFiles[index] = updatedFile
-		changed = true
-	}
-	if changed {
-		clone()["files"] = updatedFiles
-	}
-	return changed
-}
-
-func isCreateFileAction(value any) bool {
-	text, ok := value.(string)
-	return ok && strings.EqualFold(strings.TrimSpace(text), "create")
 }
 
 func validateDynamicExecuteParams(entry actionEntry, params map[string]any) *mcp.CallToolResult {
@@ -926,90 +658,12 @@ func closestDynamicParamName(name string, validParams []string) string {
 	return best
 }
 
-func issueStateEventValue(value any) (string, bool) {
-	text, ok := value.(string)
-	if !ok {
-		return "", false
-	}
-	switch strings.ToLower(strings.TrimSpace(text)) {
-	case "close", "closed":
-		return "close", true
-	case "reopen", "open", "opened":
-		return "reopen", true
-	default:
-		return "", false
-	}
-}
-
 func actionSchemaProperties(schema map[string]any) map[string]any {
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
 		return nil
 	}
 	return properties
-}
-
-func gitlabAccessLevelValue(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return validGitLabAccessLevel(typed)
-	case int64:
-		return validGitLabAccessLevel(int(typed))
-	case float64:
-		accessLevel := int(typed)
-		if typed == float64(accessLevel) {
-			return validGitLabAccessLevel(accessLevel)
-		}
-		return 0, false
-	}
-	text, ok := value.(string)
-	if !ok {
-		return 0, false
-	}
-	normalized := strings.ToLower(strings.TrimSpace(text))
-	if accessLevel, err := strconv.Atoi(normalized); err == nil {
-		switch accessLevel {
-		case 10, 20, 30, 40, 50:
-			return accessLevel, true
-		default:
-			return 0, false
-		}
-	}
-	switch normalized {
-	case "guest":
-		return 10, true
-	case "reporter":
-		return 20, true
-	case "developer":
-		return 30, true
-	case "maintainer":
-		return 40, true
-	case "owner":
-		return 50, true
-	default:
-		return 0, false
-	}
-}
-
-func validGitLabAccessLevel(accessLevel int) (int, bool) {
-	switch accessLevel {
-	case 10, 20, 30, 40, 50:
-		return accessLevel, true
-	default:
-		return 0, false
-	}
-}
-
-func boolStringValue(value any) (parsed, ok bool) {
-	text, ok := value.(string)
-	if !ok {
-		return false, false
-	}
-	parsed, err := strconv.ParseBool(strings.TrimSpace(text))
-	if err != nil {
-		return false, false
-	}
-	return parsed, true
 }
 
 func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnnotations {
@@ -1738,10 +1392,6 @@ func termMatchesResourceSignal(term string, document searchDocument) bool {
 	return false
 }
 
-func (r *Registry) segmentedSearchMatches(terms []searchTerm) []scoredActionEntry {
-	return r.segmentedSearchMatchesWithScorer(terms, defaultLimit, scoreEntryWithoutExplanation)
-}
-
 func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit int, scorer searchScorer) []scoredActionEntry {
 	if !shouldRunSegmentedSearch(terms, limit) {
 		return nil
@@ -2208,182 +1858,60 @@ func (actionAlias actionAlias) searchable() bool {
 	return actionAlias.Searchable || actionAlias.Source == ""
 }
 
+func catalogActionAliases(catalog *actioncatalog.Catalog) []actionAlias {
+	if catalog == nil {
+		return nil
+	}
+	aliases := make([]actionAlias, 0)
+	for _, group := range catalog.Groups() {
+		for _, action := range group.ActionsInOrder() {
+			for _, alias := range action.Compatibility.ActionAliases {
+				aliases = append(aliases, actionAlias{
+					Alias:      alias.Alias,
+					Canonical:  string(action.ID),
+					Source:     sourceForCompatibilityAlias(alias.Source, alias.Deprecated),
+					Searchable: alias.Searchable,
+					Notes:      alias.Reason,
+				})
+			}
+		}
+	}
+	return aliases
+}
+
 func actionAliases() []actionAlias {
-	return annotateCompatibilityAliases([]actionAlias{
-		{Alias: "badge.create", Canonical: "project.badge_add"},
-		{Alias: "badge.delete", Canonical: "project.badge_delete"},
-		{Alias: "broadcast_message.create", Canonical: "admin.broadcast_message_create"},
-		{Alias: "broadcast_message.delete", Canonical: "admin.broadcast_message_delete"},
-		{Alias: "ci_catalog.resource_list", Canonical: "ci_catalog.list"},
-		{Alias: "ci_job_token_scope.inbound_allowlist.list", Canonical: "job.token_scope_list_inbound"},
-		{Alias: "deploy_key.create", Canonical: "access.deploy_key_add"},
-		{Alias: "deploy_key.delete", Canonical: "access.deploy_key_delete"},
-		{Alias: "deploy_key.get", Canonical: "access.deploy_key_get"},
-		{Alias: "deploy_key.list", Canonical: "access.deploy_key_list_project"},
-		{Alias: "deploy_key.update", Canonical: "access.deploy_key_update"},
-		{Alias: "deploy_token.create", Canonical: "access.deploy_token_create_project"},
-		{Alias: "deploy_token.delete", Canonical: "access.deploy_token_delete_project"},
-		{Alias: "deploy_token.get", Canonical: "access.deploy_token_get_project"},
-		{Alias: "deploy_token.list", Canonical: "access.deploy_token_list_project"},
-		{Alias: "branch.protected_list", Canonical: "branch.get_protected"},
-		{Alias: "branch.update_protection", Canonical: "branch.update_protected"},
-		{Alias: "enterprise_user.group_list", Canonical: "enterprise_user.list"},
-		{Alias: "external_status_check.list_project_checks", Canonical: "external_status_check.list_project"},
-		{Alias: "feature_flag.list", Canonical: "feature_flags.feature_flag_list"},
-		{Alias: "geo.node_list", Canonical: "geo.list"},
-		{Alias: "gitlab_server.health_check", Canonical: "server.health_check"},
-		{Alias: "feature_flag_user_list.create", Canonical: "feature_flags.ff_user_list_create"},
-		{Alias: "feature_flag_user_list.delete", Canonical: "feature_flags.ff_user_list_delete"},
-		{Alias: "feature_flag_user_list.get", Canonical: "feature_flags.ff_user_list_get"},
-		{Alias: "feature_flag_user_list.list", Canonical: actionFeatureFlagsUserListList},
-		{Alias: "feature_flag_user_list.update", Canonical: "feature_flags.ff_user_list_update"},
-		{Alias: "feature_flags.feature_flag_user_list", Canonical: actionFeatureFlagsUserListList},
-		{Alias: "feature_flags.feature_flag_user_list_list", Canonical: actionFeatureFlagsUserListList},
-		{Alias: "feature_flags.feature_flag_user_lists_list", Canonical: actionFeatureFlagsUserListList},
-		{Alias: "gitlab_issue.create", Canonical: "issue.create"},
-		{Alias: "gitlab_issue.delete", Canonical: "issue.delete"},
-		{Alias: "group.custom_member_roles_list", Canonical: "member_role.list_group"},
-		{Alias: "group.ldap_link_delete", Canonical: "group.ldap_link_delete_for_provider"},
-		{Alias: "issue.note.create", Canonical: "issue.note_create"},
-		{Alias: "issue.note.delete", Canonical: "issue.note_delete"},
-		{Alias: "issue.note.get", Canonical: "issue.note_get"},
-		{Alias: "issue.note.list", Canonical: "issue.note_list"},
-		{Alias: "issue.note.update", Canonical: "issue.note_update"},
-		{Alias: "issue.close", Canonical: "issue.update"},
-		{Alias: "issue_note.get", Canonical: "issue.note_get"},
-		{Alias: "issue_note.list", Canonical: "issue.note_list"},
-		{Alias: "issue_note.delete", Canonical: "issue.note_delete"},
-		{Alias: "issue_note.update", Canonical: "issue.note_update"},
-		{Alias: "issue.notes", Canonical: "issue.note_list"},
-		{Alias: "issue.notes.list", Canonical: "issue.note_list"},
-		{Alias: "issue.reopen", Canonical: "issue.update"},
-		{Alias: "job.artifact_download", Canonical: "job.download_single_artifact"},
-		{Alias: "pipeline.jobs", Canonical: "job.list"},
-		{Alias: "merge_train.list", Canonical: "merge_train.list_project"},
-		{Alias: "merge_request.accept", Canonical: "merge_request.merge"},
-		{Alias: "merge_request.changes", Canonical: "mr_review.changes_get"},
-		{Alias: "merge_request.emoji_award_create", Canonical: "merge_request.emoji_mr_create"},
-		{Alias: "merge_request.emoji_award_delete", Canonical: "merge_request.emoji_mr_delete"},
-		{Alias: "merge_request.emoji_mr_award_create", Canonical: "merge_request.emoji_mr_create"},
-		{Alias: "merge_request.emoji_mr_award_delete", Canonical: "merge_request.emoji_mr_delete"},
-		{Alias: "merge_request_note.create", Canonical: "mr_review.note_create"},
-		{Alias: "merge_request_note.delete", Canonical: "mr_review.note_delete"},
-		{Alias: "merge_request_note.get", Canonical: "mr_review.note_get"},
-		{Alias: "merge_request_note.update", Canonical: "mr_review.note_update"},
-		{Alias: "merge_request.add_spent_time", Canonical: "merge_request.spent_time_add"},
-		{Alias: "merge_request.set_time_estimate", Canonical: "merge_request.time_estimate_set"},
-		{Alias: "merge_request.time_estimate", Canonical: "merge_request.time_estimate_set"},
-		{Alias: "merge_request.time_spent_add", Canonical: "merge_request.spent_time_add"},
-		{Alias: "mr_review.draft_notes_publish", Canonical: "mr_review.draft_note_publish_all"},
-		{Alias: "mr_review.publish", Canonical: "mr_review.draft_note_publish_all"},
-		{Alias: "package.files", Canonical: "package.file_list"},
-		{Alias: "package.list_generic", Canonical: "package.list"},
-		{Alias: "personal_snippet.raw", Canonical: "snippet.content"},
-		{Alias: "project.releases.list", Canonical: "release.list"},
-		{Alias: "project.hooks.list", Canonical: "project.hook_list"},
-		{Alias: "project.member_remove", Canonical: "project.member_delete"},
-		{Alias: "project.member_update", Canonical: "project.member_edit"},
-		{Alias: "project.schedule_storage_move", Canonical: "storage_move.schedule_project"},
-		{Alias: "project.status_check_list", Canonical: "external_status_check.list_project"},
-		{Alias: "project.status_checks.list", Canonical: "external_status_check.list_project"},
-		{Alias: "project_member.add", Canonical: "project.member_add"},
-		{Alias: "project_member.delete", Canonical: "project.member_delete"},
-		{Alias: "project_member.edit", Canonical: "project.member_edit"},
-		{Alias: "project_member.get", Canonical: "project.member_get"},
-		{Alias: "project_member.remove", Canonical: "project.member_delete"},
-		{Alias: "project_member.update", Canonical: "project.member_edit"},
-		{Alias: "project_access_token.create", Canonical: "access.token_project_create"},
-		{Alias: "project_access_token.revoke", Canonical: "access.token_project_revoke"},
-		{Alias: "repository_tree", Canonical: "repository.tree", Source: aliasSourceCompatibility, Searchable: false, Notes: "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."},
-		{Alias: "repository_tree.list", Canonical: "repository.tree", Source: aliasSourceCompatibility, Searchable: false, Notes: "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."},
-		{Alias: "repository_file.create", Canonical: "repository.file_create"},
-		{Alias: "repository_file.delete", Canonical: "repository.file_delete"},
-		{Alias: "repository_file.get", Canonical: "repository.file_get"},
-		{Alias: "repository_file.read", Canonical: "repository.file_get"},
-		{Alias: "repository_files.get_raw_file", Canonical: "repository.file_raw"},
-		{Alias: "issue.link", Canonical: "issue.link_create"},
-		{Alias: "pipeline.schedule_variable_create", Canonical: "pipeline.schedule_create_variable"},
-		{Alias: "pipeline.schedule_variable_delete", Canonical: "pipeline.schedule_delete_variable"},
-		{Alias: "pipeline.schedule_variable_update", Canonical: "pipeline.schedule_edit_variable"},
-		{Alias: "project.badge_update", Canonical: "project.badge_edit"},
-		{Alias: "merge_request.time_spent_reset", Canonical: "merge_request.spent_time_reset"},
-		{Alias: "generic_package.list", Canonical: "package.list"},
-		{Alias: "issue_note.create", Canonical: "issue.note_create"},
-		{Alias: "release.create_link", Canonical: "release.link_create"},
-		{Alias: "release.asset_link.create", Canonical: "release.link_create"},
-		{Alias: "release.asset_link.delete", Canonical: "release.link_delete"},
-		{Alias: "release.asset_link.get", Canonical: "release.link_get"},
-		{Alias: "release.asset_link.list", Canonical: "release.link_list"},
-		{Alias: "release.asset_link.update", Canonical: "release.link_update"},
-		{Alias: "release_link.link_list", Canonical: "release.link_list"},
-		{Alias: "release.generate_notes", Canonical: "analyze.release_notes"},
-		{Alias: "package.list_project", Canonical: "package.list"},
-		{Alias: "package.list_project_packages", Canonical: "package.list"},
-		{Alias: "variable.create", Canonical: "ci_variable.create"},
-		{Alias: "group.variable.create", Canonical: "ci_variable.group_create"},
-		{Alias: "group.audit_events", Canonical: "audit_event.list_group"},
-		{Alias: "gitlab_discover_project", Canonical: "discover_project.resolve"},
-		{Alias: "interactive_issue.create", Canonical: "interactive.issue_create"},
-		{Alias: "interactive_issue_create", Canonical: "interactive.issue_create"},
-		{Alias: "gitlab_interactive_issue.create", Canonical: "interactive.issue_create"},
-		{Alias: "gitlab_interactive_issue_create", Canonical: "interactive.issue_create"},
-		{Alias: "gitlab_interactive_mr_create", Canonical: "interactive.mr_create"},
-		{Alias: "gitlab_interactive_project_create", Canonical: "interactive.project_create"},
-		{Alias: "gitlab_interactive_release_create", Canonical: "interactive.release_create"},
-		{Alias: "job.token_scope_remove_inbound", Canonical: "job.token_scope_remove_project"},
-		{Alias: "mr_review.draft_notes_publish_all", Canonical: "mr_review.draft_note_publish_all"},
-		{Alias: "repository.tag.delete", Canonical: "tag.delete"},
-		{Alias: "runner.delete", Canonical: "runner.remove"},
-		{Alias: "wiki.show", Canonical: "wiki.get"},
-		{Alias: "webhook.add", Canonical: "project.hook_add"},
-		{Alias: "webhook.create", Canonical: "project.hook_add"},
-		{Alias: "webhook.delete", Canonical: "project.hook_delete"},
-	})
+	return actionCompatAliases(actioncompat.ActionAliases())
+}
+
+func actionCompatAliases(aliases []actioncompat.ActionAlias) []actionAlias {
+	out := make([]actionAlias, 0, len(aliases))
+	for _, alias := range aliases {
+		out = append(out, actionAlias{
+			Alias:      alias.Alias,
+			Canonical:  alias.Canonical,
+			Source:     sourceForCompatibilityAlias(alias.Source, alias.Deprecated),
+			Searchable: alias.Searchable,
+			Notes:      alias.Reason,
+		})
+	}
+	return out
+}
+
+func sourceForCompatibilityAlias(source string, deprecated bool) aliasSource {
+	if deprecated {
+		return aliasSourceDeprecated
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return aliasSourceCompatibility
+	}
+	return aliasSource(source)
 }
 
 // NormalizeCompatibilityActionAlias canonicalizes an unambiguous built-in
 // dynamic compatibility alias without requiring a registry instance.
 func NormalizeCompatibilityActionAlias(actionID string) (string, bool) {
-	actionID = strings.ToLower(strings.TrimSpace(actionID))
-	if actionID == "" {
-		return "", false
-	}
-	matches := compatibilityAliasTargetIndex()[actionID]
-	if len(matches) != 1 {
-		return actionID, false
-	}
-	return matches[0], true
-}
-
-var (
-	compatibilityAliasTargetIndexOnce sync.Once
-	compatibilityAliasTargets         map[string][]string
-)
-
-func compatibilityAliasTargetIndex() map[string][]string {
-	compatibilityAliasTargetIndexOnce.Do(func() {
-		targets := make(map[string][]string)
-		for _, alias := range actionAliases() {
-			targets[alias.Alias] = append(targets[alias.Alias], alias.Canonical)
-		}
-		for alias, matches := range targets {
-			targets[alias] = dedupeSortedStrings(matches)
-		}
-		compatibilityAliasTargets = targets
-	})
-	return compatibilityAliasTargets
-}
-
-func annotateCompatibilityAliases(aliases []actionAlias) []actionAlias {
-	for index := range aliases {
-		if aliases[index].Source == "" {
-			aliases[index].Source = aliasSourceCompatibility
-		}
-		if aliases[index].Source != aliasSourceDeprecated && aliases[index].Notes == "" && !aliases[index].Searchable {
-			aliases[index].Searchable = true
-		}
-	}
-	return aliases
+	return actioncompat.NormalizeActionAlias(actionID)
 }
 
 func scoreEntry(entry actionEntry, terms []searchTerm) int {

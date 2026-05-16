@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		userListReadSpec("ff_user_list_get", toolutil.RouteAction(client, GetUserList), "gitlab_ff_user_list_get"),
 		userListCreateSpec("ff_user_list_create", toolutil.RouteAction(client, CreateUserList), "gitlab_ff_user_list_create"),
 		userListUpdateSpec("ff_user_list_update", toolutil.RouteAction(client, UpdateUserList), "gitlab_ff_user_list_update"),
-		userListDeleteSpec("ff_user_list_delete", toolutil.DestructiveVoidAction(client, DeleteUserList), "gitlab_ff_user_list_delete"),
+		userListDeleteSpec("ff_user_list_delete", toolutil.DestructiveAction(client, deleteUserListOutput), "gitlab_ff_user_list_delete"),
 	}
 }
 

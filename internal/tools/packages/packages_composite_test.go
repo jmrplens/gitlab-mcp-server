@@ -17,7 +17,7 @@ import (
 
 // PublishAndLink tests.
 
-// TestPackagePublishAndLink_Success verifies that PackagePublishAndLink handles the success scenario correctly.
+// TestPackagePublishAndLink_Success verifies PackagePublishAndLink when success.
 func TestPackagePublishAndLink_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -59,7 +59,7 @@ func TestPackagePublishAndLink_Success(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_DefaultLinkName verifies that PackagePublishAndLink handles the default link name scenario correctly.
+// TestPackagePublishAndLink_DefaultLinkName verifies PackagePublishAndLink when default link name.
 func TestPackagePublishAndLink_DefaultLinkName(t *testing.T) {
 	var capturedLinkName string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +100,7 @@ func TestPackagePublishAndLink_DefaultLinkName(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_CustomLinkType verifies that PackagePublishAndLink handles the custom link type scenario correctly.
+// TestPackagePublishAndLink_CustomLinkType verifies PackagePublishAndLink when custom link type.
 func TestPackagePublishAndLink_CustomLinkType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -138,7 +138,7 @@ func TestPackagePublishAndLink_CustomLinkType(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_MissingTagName verifies that PackagePublishAndLink handles the missing tag name scenario correctly.
+// TestPackagePublishAndLink_MissingTagName verifies PackagePublishAndLink when missing tag name.
 func TestPackagePublishAndLink_MissingTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -160,7 +160,7 @@ func TestPackagePublishAndLink_MissingTagName(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_PublishFails verifies that PackagePublishAndLink handles the publish fails scenario correctly.
+// TestPackagePublishAndLink_PublishFails verifies PackagePublishAndLink when publish fails.
 func TestPackagePublishAndLink_PublishFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -183,7 +183,7 @@ func TestPackagePublishAndLink_PublishFails(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_LinkFails_ReturnsPackageInfo verifies that PackagePublishAndLink handles the link fails_ returns package info scenario correctly.
+// TestPackagePublishAndLink_LinkFails_ReturnsPackageInfo verifies PackagePublishAndLink returns package info with link fails.
 func TestPackagePublishAndLink_LinkFails_ReturnsPackageInfo(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -216,7 +216,7 @@ func TestPackagePublishAndLink_LinkFails_ReturnsPackageInfo(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_ContextCancelled verifies that PackagePublishAndLink handles the context cancelled scenario correctly.
+// TestPackagePublishAndLink_ContextCancelled verifies PackagePublishAndLink when context cancelled.
 func TestPackagePublishAndLink_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -239,7 +239,7 @@ func TestPackagePublishAndLink_ContextCancelled(t *testing.T) {
 
 // PublishDirectory tests.
 
-// TestPackagePublishDirectory_Success verifies that PackagePublishDirectory handles the success scenario correctly.
+// TestPackagePublishDirectory_Success verifies PackagePublishDirectory when success.
 func TestPackagePublishDirectory_Success(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md"} {
@@ -287,7 +287,7 @@ func TestPackagePublishDirectory_Success(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_WithPattern verifies that PackagePublishDirectory handles the with pattern scenario correctly.
+// TestPackagePublishDirectory_WithPattern verifies PackagePublishDirectory when with pattern.
 func TestPackagePublishDirectory_WithPattern(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md", "notes.txt"} {
@@ -324,7 +324,7 @@ func TestPackagePublishDirectory_WithPattern(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_NoMatchingFiles verifies that PackagePublishDirectory handles the no matching files scenario correctly.
+// TestPackagePublishDirectory_NoMatchingFiles verifies PackagePublishDirectory when no matching files.
 func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "readme.md"), []byte("text"), 0644)
@@ -348,7 +348,7 @@ func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_EmptyDir verifies that PackagePublishDirectory handles the empty dir scenario correctly.
+// TestPackagePublishDirectory_EmptyDir verifies PackagePublishDirectory when empty dir.
 func TestPackagePublishDirectory_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 
@@ -367,7 +367,7 @@ func TestPackagePublishDirectory_EmptyDir(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_NotADirectory verifies that PackagePublishDirectory handles the not a directory scenario correctly.
+// TestPackagePublishDirectory_NotADirectory verifies PackagePublishDirectory when not a directory.
 func TestPackagePublishDirectory_NotADirectory(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "not-a-dir.txt")
 	os.WriteFile(tmpFile, []byte("file"), 0644)
@@ -390,7 +390,7 @@ func TestPackagePublishDirectory_NotADirectory(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_MissingDirectoryPath verifies that PackagePublishDirectory handles the missing dir path scenario correctly.
+// TestPackagePublishDirectory_MissingDirectoryPath verifies PackagePublishDirectory when missing directory path.
 func TestPackagePublishDirectory_MissingDirectoryPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -409,7 +409,7 @@ func TestPackagePublishDirectory_MissingDirectoryPath(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_InvalidGlobPattern verifies that PackagePublishDirectory handles the invalid glob pattern scenario correctly.
+// TestPackagePublishDirectory_InvalidGlobPattern verifies PackagePublishDirectory when invalid glob pattern.
 func TestPackagePublishDirectory_InvalidGlobPattern(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0644)
@@ -433,7 +433,7 @@ func TestPackagePublishDirectory_InvalidGlobPattern(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_PartialFailure verifies that PackagePublishDirectory handles the partial failure scenario correctly.
+// TestPackagePublishDirectory_PartialFailure verifies PackagePublishDirectory when partial failure.
 func TestPackagePublishDirectory_PartialFailure(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"good.bin", "bad.bin"} {
@@ -477,7 +477,7 @@ func TestPackagePublishDirectory_PartialFailure(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_ContextCancelled verifies that PackagePublishDirectory handles the context cancelled scenario correctly.
+// TestPackagePublishDirectory_ContextCancelled verifies PackagePublishDirectory when context cancelled.
 func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.bin"), []byte("data"), 0644)
@@ -499,7 +499,7 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestPackagePublishDirectory_SkipsSubdirectories verifies that PackagePublishDirectory handles the skips subdirectories scenario correctly.
+// TestPackagePublishDirectory_SkipsSubdirectories verifies PackagePublishDirectory when skips subdirectories.
 func TestPackagePublishDirectory_SkipsSubdirectories(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "file.bin"), []byte("content"), 0644)

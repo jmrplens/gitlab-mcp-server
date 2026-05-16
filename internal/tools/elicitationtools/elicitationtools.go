@@ -1,7 +1,3 @@
-// Package elicitationtools implements interactive MCP tool handlers powered by
-// the elicitation capability. These tools guide users through step-by-step
-// prompts to create GitLab issues, merge requests, releases, and projects with
-// confirmation before execution.
 package elicitationtools
 
 import (
@@ -23,8 +19,10 @@ import (
 )
 
 const (
+	// fmtCollectingDesc identifies the fmt collecting desc constant used by this package.
 	fmtCollectingDesc = "collecting description: %w"
-	fmtDescSummary    = "\n**Description**: %.100s..."
+	// fmtDescSummary identifies the fmt desc summary constant used by this package.
+	fmtDescSummary = "\n**Description**: %.100s..."
 )
 
 // Input types.
@@ -256,7 +254,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	})
 }
 
-// collectMROptions is an internal helper for the elicitationtools package.
+// collectMROptions asks for optional merge request labels and merge behavior.
 func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _, _ *bool, _ error) {
 	labelsStr, err := ec.PromptText(ctx, "Enter comma-separated labels (or leave empty)", "labels")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
@@ -279,6 +277,7 @@ func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _
 	return labels, removeSource, squash, nil
 }
 
+// optionalBoolChoice holds optional bool choice data for the elicitationtools package.
 type optionalBoolChoice struct {
 	Value *bool
 }

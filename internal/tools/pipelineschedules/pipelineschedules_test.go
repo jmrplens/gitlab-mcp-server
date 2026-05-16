@@ -11,27 +11,31 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
 const errExpMissingProjectID = "expected error for missing project_id"
 
+// errExpZeroScheduleID identifies the err exp zero schedule ID constant used by this package.
 const errExpZeroScheduleID = "expected error for zero schedule_id"
 
+// errExpMissingKey identifies the err exp missing key constant used by this package.
 const errExpMissingKey = "expected error for missing key"
 
 const (
+	// testPathSchedules identifies the test path schedules constant used by this package.
 	testPathSchedules = "/api/v4/projects/123/pipeline_schedules"
+	// testPathSchedule1 identifies the test path schedule 1 constant used by this package.
 	testPathSchedule1 = "/api/v4/projects/123/pipeline_schedules/1"
-	testUpdatedDesc   = "Updated desc"
+	// testUpdatedDesc identifies the test updated desc constant used by this package.
+	testUpdatedDesc = "Updated desc"
 )
 
 // ---------------------------------------------------------------------------
 // Pipeline Schedule List
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleList_Success verifies the behavior of pipeline schedule list success.
+// TestPipelineScheduleList_Success verifies PipelineScheduleList when success.
 func TestPipelineScheduleList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules && r.Method == http.MethodGet {
@@ -60,7 +64,7 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleList_WithScope verifies the behavior of pipeline schedule list with scope.
+// TestPipelineScheduleList_WithScope verifies PipelineScheduleList when with scope.
 func TestPipelineScheduleList_WithScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules {
@@ -82,7 +86,7 @@ func TestPipelineScheduleList_WithScope(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleList_MissingProjectID verifies the behavior of pipeline schedule list missing project i d.
+// TestPipelineScheduleList_MissingProjectID verifies PipelineScheduleList when missing project ID.
 func TestPipelineScheduleList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := List(context.Background(), client, ListInput{})
@@ -91,7 +95,7 @@ func TestPipelineScheduleList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleList_CancelledContext verifies the behavior of pipeline schedule list cancelled context.
+// TestPipelineScheduleList_CancelledContext verifies PipelineScheduleList when cancelled context.
 func TestPipelineScheduleList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -105,7 +109,7 @@ func TestPipelineScheduleList_CancelledContext(t *testing.T) {
 // Pipeline Schedule Get
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleGet_Success verifies the behavior of pipeline schedule get success.
+// TestPipelineScheduleGet_Success verifies PipelineScheduleGet when success.
 func TestPipelineScheduleGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -132,7 +136,7 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_GetZeroID verifies the behavior of pipeline schedule get zero i d.
+// TestPipelineSchedule_GetZeroID verifies PipelineSchedule when get zero ID.
 func TestPipelineSchedule_GetZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := Get(context.Background(), client, GetInput{
@@ -143,7 +147,7 @@ func TestPipelineSchedule_GetZeroID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleGet_CancelledContext verifies the behavior of pipeline schedule get cancelled context.
+// TestPipelineScheduleGet_CancelledContext verifies PipelineScheduleGet when cancelled context.
 func TestPipelineScheduleGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -157,7 +161,7 @@ func TestPipelineScheduleGet_CancelledContext(t *testing.T) {
 // Pipeline Schedule Create
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleCreate_Success verifies the behavior of pipeline schedule create success.
+// TestPipelineScheduleCreate_Success verifies PipelineScheduleCreate when success.
 func TestPipelineScheduleCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules && r.Method == http.MethodPost {
@@ -183,7 +187,7 @@ func TestPipelineScheduleCreate_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleCreate_MissingFields validates pipeline schedule create missing fields across multiple scenarios using table-driven subtests.
+// TestPipelineScheduleCreate_MissingFields covers PipelineScheduleCreate with table-driven subtests for missing fields.
 func TestPipelineScheduleCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	tests := []struct {
@@ -205,7 +209,7 @@ func TestPipelineScheduleCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleCreate_CancelledContext verifies the behavior of pipeline schedule create cancelled context.
+// TestPipelineScheduleCreate_CancelledContext verifies PipelineScheduleCreate when cancelled context.
 func TestPipelineScheduleCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -221,7 +225,7 @@ func TestPipelineScheduleCreate_CancelledContext(t *testing.T) {
 // Pipeline Schedule Update
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleUpdate_Success verifies the behavior of pipeline schedule update success.
+// TestPipelineScheduleUpdate_Success verifies PipelineScheduleUpdate when success.
 func TestPipelineScheduleUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodPut {
@@ -246,7 +250,7 @@ func TestPipelineScheduleUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_UpdateZeroID verifies the behavior of pipeline schedule update zero i d.
+// TestPipelineSchedule_UpdateZeroID verifies PipelineSchedule when update zero ID.
 func TestPipelineSchedule_UpdateZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := Update(context.Background(), client, UpdateInput{
@@ -257,7 +261,7 @@ func TestPipelineSchedule_UpdateZeroID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleUpdate_CancelledContext verifies the behavior of pipeline schedule update cancelled context.
+// TestPipelineScheduleUpdate_CancelledContext verifies PipelineScheduleUpdate when cancelled context.
 func TestPipelineScheduleUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -273,7 +277,7 @@ func TestPipelineScheduleUpdate_CancelledContext(t *testing.T) {
 // Pipeline Schedule Delete
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleDelete_Success verifies the behavior of pipeline schedule delete success.
+// TestPipelineScheduleDelete_Success verifies PipelineScheduleDelete when success.
 func TestPipelineScheduleDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodDelete {
@@ -291,7 +295,7 @@ func TestPipelineScheduleDelete_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_DeleteZeroID verifies the behavior of pipeline schedule delete zero i d.
+// TestPipelineSchedule_DeleteZeroID verifies PipelineSchedule when delete zero ID.
 func TestPipelineSchedule_DeleteZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	err := Delete(context.Background(), client, DeleteInput{
@@ -302,7 +306,7 @@ func TestPipelineSchedule_DeleteZeroID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleDelete_CancelledContext verifies the behavior of pipeline schedule delete cancelled context.
+// TestPipelineScheduleDelete_CancelledContext verifies PipelineScheduleDelete when cancelled context.
 func TestPipelineScheduleDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -318,7 +322,7 @@ func TestPipelineScheduleDelete_CancelledContext(t *testing.T) {
 // Pipeline Schedule Run
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleRun_Success verifies the behavior of pipeline schedule run success.
+// TestPipelineScheduleRun_Success verifies PipelineScheduleRun when success.
 func TestPipelineScheduleRun_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -344,7 +348,7 @@ func TestPipelineScheduleRun_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_RunZeroID verifies the behavior of pipeline schedule run zero i d.
+// TestPipelineSchedule_RunZeroID verifies PipelineSchedule when run zero ID.
 func TestPipelineSchedule_RunZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := Run(context.Background(), client, RunInput{
@@ -355,7 +359,7 @@ func TestPipelineSchedule_RunZeroID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleRun_CancelledContext verifies the behavior of pipeline schedule run cancelled context.
+// TestPipelineScheduleRun_CancelledContext verifies PipelineScheduleRun when cancelled context.
 func TestPipelineScheduleRun_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	ctx := testutil.CancelledCtx(t)
@@ -371,9 +375,10 @@ func TestPipelineScheduleRun_CancelledContext(t *testing.T) {
 // Take Ownership
 // ---------------------------------------------------------------------------.
 
+// scheduleJSON identifies the schedule JSON constant used by this package.
 const scheduleJSON = `{"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"newowner"}}`
 
-// TestTakeOwnership_Success verifies the behavior of take ownership success.
+// TestTakeOwnership_Success verifies TakeOwnership when success.
 func TestTakeOwnership_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/take_ownership" {
@@ -391,7 +396,7 @@ func TestTakeOwnership_Success(t *testing.T) {
 	}
 }
 
-// TestTakeOwnership_MissingProjectID verifies the behavior of take ownership missing project i d.
+// TestTakeOwnership_MissingProjectID verifies TakeOwnership when missing project ID.
 func TestTakeOwnership_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := TakeOwnership(context.Background(), client, TakeOwnershipInput{ScheduleID: 1})
@@ -400,7 +405,7 @@ func TestTakeOwnership_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestTakeOwnership_ZeroScheduleID verifies the behavior of take ownership zero schedule i d.
+// TestTakeOwnership_ZeroScheduleID verifies TakeOwnership when zero schedule ID.
 func TestTakeOwnership_ZeroScheduleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := TakeOwnership(context.Background(), client, TakeOwnershipInput{ProjectID: "42"})
@@ -413,7 +418,7 @@ func TestTakeOwnership_ZeroScheduleID(t *testing.T) {
 // Create Variable
 // ---------------------------------------------------------------------------.
 
-// TestCreateVariable_Success verifies the behavior of create variable success.
+// TestCreateVariable_Success verifies CreateVariable when success.
 func TestCreateVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/variables" {
@@ -436,7 +441,7 @@ func TestCreateVariable_Success(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_MissingKey verifies the behavior of create variable missing key.
+// TestCreateVariable_MissingKey verifies CreateVariable when missing key.
 func TestCreateVariable_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := CreateVariable(context.Background(), client, CreateVariableInput{
@@ -447,7 +452,7 @@ func TestCreateVariable_MissingKey(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_MissingValue verifies the behavior of create variable missing value.
+// TestCreateVariable_MissingValue verifies CreateVariable when missing value.
 func TestCreateVariable_MissingValue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := CreateVariable(context.Background(), client, CreateVariableInput{
@@ -462,7 +467,7 @@ func TestCreateVariable_MissingValue(t *testing.T) {
 // Edit Variable
 // ---------------------------------------------------------------------------.
 
-// TestEditVariable_Success verifies the behavior of edit variable success.
+// TestEditVariable_Success verifies EditVariable when success.
 func TestEditVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/variables/DEPLOY_ENV" {
@@ -482,7 +487,7 @@ func TestEditVariable_Success(t *testing.T) {
 	}
 }
 
-// TestEditVariable_MissingKey verifies the behavior of edit variable missing key.
+// TestEditVariable_MissingKey verifies EditVariable when missing key.
 func TestEditVariable_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := EditVariable(context.Background(), client, EditVariableInput{
@@ -497,7 +502,7 @@ func TestEditVariable_MissingKey(t *testing.T) {
 // Delete Variable
 // ---------------------------------------------------------------------------.
 
-// TestDeleteVariable_Success verifies the behavior of delete variable success.
+// TestDeleteVariable_Success verifies DeleteVariable when success.
 func TestDeleteVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/variables/DEPLOY_ENV" {
@@ -514,7 +519,7 @@ func TestDeleteVariable_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteVariable_MissingKey verifies the behavior of delete variable missing key.
+// TestDeleteVariable_MissingKey verifies DeleteVariable when missing key.
 func TestDeleteVariable_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	err := DeleteVariable(context.Background(), client, DeleteVariableInput{
@@ -525,7 +530,7 @@ func TestDeleteVariable_MissingKey(t *testing.T) {
 	}
 }
 
-// TestDeleteVariable_APIError verifies the behavior of delete variable a p i error.
+// TestDeleteVariable_APIError verifies DeleteVariable when API error.
 func TestDeleteVariable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -542,7 +547,7 @@ func TestDeleteVariable_APIError(t *testing.T) {
 // List Triggered Pipelines
 // ---------------------------------------------------------------------------.
 
-// TestListTriggeredPipelines_Success verifies the behavior of list triggered pipelines success.
+// TestListTriggeredPipelines_Success verifies ListTriggeredPipelines when success.
 func TestListTriggeredPipelines_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
@@ -570,7 +575,7 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	}
 }
 
-// TestListTriggeredPipelines_MissingProjectID verifies the behavior of list triggered pipelines missing project i d.
+// TestListTriggeredPipelines_MissingProjectID verifies ListTriggeredPipelines when missing project ID.
 func TestListTriggeredPipelines_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{ScheduleID: 1})
@@ -579,7 +584,7 @@ func TestListTriggeredPipelines_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestListTriggeredPipelines_ZeroScheduleID verifies the behavior of list triggered pipelines zero schedule i d.
+// TestListTriggeredPipelines_ZeroScheduleID verifies ListTriggeredPipelines when zero schedule ID.
 func TestListTriggeredPipelines_ZeroScheduleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
 	_, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{ProjectID: "42"})
@@ -666,17 +671,20 @@ func TestScheduleIDRequired_Validation(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleList_APIError verifies the behavior of pipeline schedule list a p i error.
+// TestPipelineScheduleList_APIError verifies PipelineScheduleList when API error.
 func TestPipelineScheduleList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -691,7 +699,7 @@ func TestPipelineScheduleList_APIError(t *testing.T) {
 // Get — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleGet_APIError verifies the behavior of pipeline schedule get a p i error.
+// TestPipelineScheduleGet_APIError verifies PipelineScheduleGet when API error.
 func TestPipelineScheduleGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -702,7 +710,7 @@ func TestPipelineScheduleGet_APIError(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleGet_MissingProjectID verifies the behavior of pipeline schedule get missing project i d.
+// TestPipelineScheduleGet_MissingProjectID verifies PipelineScheduleGet when missing project ID.
 func TestPipelineScheduleGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{ScheduleID: 1})
@@ -715,7 +723,7 @@ func TestPipelineScheduleGet_MissingProjectID(t *testing.T) {
 // Create — API error, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleCreate_APIError verifies the behavior of pipeline schedule create a p i error.
+// TestPipelineScheduleCreate_APIError verifies PipelineScheduleCreate when API error.
 func TestPipelineScheduleCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -728,7 +736,7 @@ func TestPipelineScheduleCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleCreate_WithOptionalFields verifies the behavior of pipeline schedule create with optional fields.
+// TestPipelineScheduleCreate_WithOptionalFields verifies PipelineScheduleCreate when with optional fields.
 func TestPipelineScheduleCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/pipeline_schedules" {
@@ -764,7 +772,7 @@ func TestPipelineScheduleCreate_WithOptionalFields(t *testing.T) {
 // Update — API error, missing project_id, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleUpdate_APIError verifies the behavior of pipeline schedule update a p i error.
+// TestPipelineScheduleUpdate_APIError verifies PipelineScheduleUpdate when API error.
 func TestPipelineScheduleUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -775,7 +783,7 @@ func TestPipelineScheduleUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleUpdate_MissingProjectID verifies the behavior of pipeline schedule update missing project i d.
+// TestPipelineScheduleUpdate_MissingProjectID verifies PipelineScheduleUpdate when missing project ID.
 func TestPipelineScheduleUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{ScheduleID: 1})
@@ -784,7 +792,7 @@ func TestPipelineScheduleUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleUpdate_AllOptionalFields verifies the behavior of pipeline schedule update all optional fields.
+// TestPipelineScheduleUpdate_AllOptionalFields verifies PipelineScheduleUpdate when all optional fields.
 func TestPipelineScheduleUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/pipeline_schedules/1" {
@@ -821,7 +829,7 @@ func TestPipelineScheduleUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleDelete_APIError verifies the behavior of pipeline schedule delete a p i error.
+// TestPipelineScheduleDelete_APIError verifies PipelineScheduleDelete when API error.
 func TestPipelineScheduleDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -832,7 +840,7 @@ func TestPipelineScheduleDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleDelete_MissingProjectID verifies the behavior of pipeline schedule delete missing project i d.
+// TestPipelineScheduleDelete_MissingProjectID verifies PipelineScheduleDelete when missing project ID.
 func TestPipelineScheduleDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(context.Background(), client, DeleteInput{ScheduleID: 1})
@@ -845,7 +853,7 @@ func TestPipelineScheduleDelete_MissingProjectID(t *testing.T) {
 // Run — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleRun_APIError verifies the behavior of pipeline schedule run a p i error.
+// TestPipelineScheduleRun_APIError verifies PipelineScheduleRun when API error.
 func TestPipelineScheduleRun_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -856,7 +864,7 @@ func TestPipelineScheduleRun_APIError(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleRun_MissingProjectID verifies the behavior of pipeline schedule run missing project i d.
+// TestPipelineScheduleRun_MissingProjectID verifies PipelineScheduleRun when missing project ID.
 func TestPipelineScheduleRun_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Run(context.Background(), client, RunInput{ScheduleID: 1})
@@ -865,7 +873,7 @@ func TestPipelineScheduleRun_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_RunGetAfterPlayFails verifies the behavior of pipeline schedule run get after play fails.
+// TestPipelineSchedule_RunGetAfterPlayFails verifies PipelineSchedule when run get after play fails.
 func TestPipelineSchedule_RunGetAfterPlayFails(t *testing.T) {
 	callCount := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -888,7 +896,7 @@ func TestPipelineSchedule_RunGetAfterPlayFails(t *testing.T) {
 // TakeOwnership — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestTakeOwnership_APIError verifies the behavior of take ownership a p i error.
+// TestTakeOwnership_APIError verifies TakeOwnership when API error.
 func TestTakeOwnership_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -899,7 +907,7 @@ func TestTakeOwnership_APIError(t *testing.T) {
 	}
 }
 
-// TestTakeOwnership_CancelledContext verifies the behavior of take ownership cancelled context.
+// TestTakeOwnership_CancelledContext verifies TakeOwnership when cancelled context.
 func TestTakeOwnership_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -913,7 +921,7 @@ func TestTakeOwnership_CancelledContext(t *testing.T) {
 // CreateVariable — API error, missing fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateVariable_APIError verifies the behavior of create variable a p i error.
+// TestCreateVariable_APIError verifies CreateVariable when API error.
 func TestCreateVariable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -926,7 +934,7 @@ func TestCreateVariable_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_MissingProjectID verifies the behavior of create variable missing project i d.
+// TestCreateVariable_MissingProjectID verifies CreateVariable when missing project ID.
 func TestCreateVariable_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateVariable(context.Background(), client, CreateVariableInput{
@@ -937,7 +945,7 @@ func TestCreateVariable_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_ZeroScheduleID verifies the behavior of create variable zero schedule i d.
+// TestCreateVariable_ZeroScheduleID verifies CreateVariable when zero schedule ID.
 func TestCreateVariable_ZeroScheduleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateVariable(context.Background(), client, CreateVariableInput{
@@ -948,7 +956,7 @@ func TestCreateVariable_ZeroScheduleID(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_CancelledContext verifies the behavior of create variable cancelled context.
+// TestCreateVariable_CancelledContext verifies CreateVariable when cancelled context.
 func TestCreateVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -960,7 +968,7 @@ func TestCreateVariable_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateVariable_WithVariableType verifies the behavior of create variable with variable type.
+// TestCreateVariable_WithVariableType verifies CreateVariable when with variable type.
 func TestCreateVariable_WithVariableType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/pipeline_schedules/1/variables" {
@@ -984,7 +992,7 @@ func TestCreateVariable_WithVariableType(t *testing.T) {
 // EditVariable — API error, missing fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestEditVariable_APIError verifies the behavior of edit variable a p i error.
+// TestEditVariable_APIError verifies EditVariable when API error.
 func TestEditVariable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -997,7 +1005,7 @@ func TestEditVariable_APIError(t *testing.T) {
 	}
 }
 
-// TestEditVariable_MissingProjectID verifies the behavior of edit variable missing project i d.
+// TestEditVariable_MissingProjectID verifies EditVariable when missing project ID.
 func TestEditVariable_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditVariable(context.Background(), client, EditVariableInput{
@@ -1008,7 +1016,7 @@ func TestEditVariable_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEditVariable_ZeroScheduleID verifies the behavior of edit variable zero schedule i d.
+// TestEditVariable_ZeroScheduleID verifies EditVariable when zero schedule ID.
 func TestEditVariable_ZeroScheduleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditVariable(context.Background(), client, EditVariableInput{
@@ -1019,7 +1027,7 @@ func TestEditVariable_ZeroScheduleID(t *testing.T) {
 	}
 }
 
-// TestEditVariable_MissingValue verifies the behavior of edit variable missing value.
+// TestEditVariable_MissingValue verifies EditVariable when missing value.
 func TestEditVariable_MissingValue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditVariable(context.Background(), client, EditVariableInput{
@@ -1030,7 +1038,7 @@ func TestEditVariable_MissingValue(t *testing.T) {
 	}
 }
 
-// TestEditVariable_CancelledContext verifies the behavior of edit variable cancelled context.
+// TestEditVariable_CancelledContext verifies EditVariable when cancelled context.
 func TestEditVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1042,7 +1050,7 @@ func TestEditVariable_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEditVariable_WithVariableType verifies the behavior of edit variable with variable type.
+// TestEditVariable_WithVariableType verifies EditVariable when with variable type.
 func TestEditVariable_WithVariableType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/pipeline_schedules/1/variables/SECRET" {
@@ -1066,7 +1074,7 @@ func TestEditVariable_WithVariableType(t *testing.T) {
 // DeleteVariable — missing project_id, zero schedule_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteVariable_MissingProjectID verifies the behavior of delete variable missing project i d.
+// TestDeleteVariable_MissingProjectID verifies DeleteVariable when missing project ID.
 func TestDeleteVariable_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteVariable(context.Background(), client, DeleteVariableInput{
@@ -1077,7 +1085,7 @@ func TestDeleteVariable_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteVariable_ZeroScheduleID verifies the behavior of delete variable zero schedule i d.
+// TestDeleteVariable_ZeroScheduleID verifies DeleteVariable when zero schedule ID.
 func TestDeleteVariable_ZeroScheduleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteVariable(context.Background(), client, DeleteVariableInput{
@@ -1088,7 +1096,7 @@ func TestDeleteVariable_ZeroScheduleID(t *testing.T) {
 	}
 }
 
-// TestDeleteVariable_CancelledContext verifies the behavior of delete variable cancelled context.
+// TestDeleteVariable_CancelledContext verifies DeleteVariable when cancelled context.
 func TestDeleteVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1104,7 +1112,7 @@ func TestDeleteVariable_CancelledContext(t *testing.T) {
 // ListTriggeredPipelines — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListTriggeredPipelines_APIError verifies the behavior of list triggered pipelines a p i error.
+// TestListTriggeredPipelines_APIError verifies ListTriggeredPipelines when API error.
 func TestListTriggeredPipelines_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1117,7 +1125,7 @@ func TestListTriggeredPipelines_APIError(t *testing.T) {
 	}
 }
 
-// TestListTriggeredPipelines_CancelledContext verifies the behavior of list triggered pipelines cancelled context.
+// TestListTriggeredPipelines_CancelledContext verifies ListTriggeredPipelines when cancelled context.
 func TestListTriggeredPipelines_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1129,7 +1137,7 @@ func TestListTriggeredPipelines_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListTriggeredPipelines_WithPagination verifies the behavior of list triggered pipelines with pagination.
+// TestListTriggeredPipelines_WithPagination verifies ListTriggeredPipelines when with pagination.
 func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/pipeline_schedules/1/pipelines" {
@@ -1159,7 +1167,7 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 // toOutput — all optional fields (owner, timestamps)
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields verifies the behavior of to output all optional fields.
+// TestToOutput_AllOptionalFields verifies ToOutput when all optional fields.
 func TestToOutput_AllOptionalFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
 		ID:           1,
@@ -1196,7 +1204,7 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_ZeroID verifies the behavior of format output markdown zero i d.
+// TestFormatOutputMarkdown_ZeroID verifies FormatOutputMarkdown when zero ID.
 func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -1204,7 +1212,7 @@ func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:          5,
@@ -1234,7 +1242,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithSchedules verifies the behavior of format list markdown with schedules.
+// TestFormatListMarkdown_WithSchedules verifies FormatListMarkdown when with schedules.
 func TestFormatListMarkdown_WithSchedules(t *testing.T) {
 	out := ListOutput{
 		Schedules: []Output{
@@ -1262,7 +1270,7 @@ func TestFormatListMarkdown_WithSchedules(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No pipeline schedules found") {
@@ -1277,7 +1285,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatVariableMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatVariableMarkdown_WithType verifies the behavior of format variable markdown with type.
+// TestFormatVariableMarkdown_WithType verifies FormatVariableMarkdown when with type.
 func TestFormatVariableMarkdown_WithType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var"})
 
@@ -1293,7 +1301,7 @@ func TestFormatVariableMarkdown_WithType(t *testing.T) {
 	}
 }
 
-// TestFormatVariableMarkdown_WithoutType verifies the behavior of format variable markdown without type.
+// TestFormatVariableMarkdown_WithoutType verifies FormatVariableMarkdown when without type.
 func TestFormatVariableMarkdown_WithoutType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "K", Value: "V"})
 	if strings.Contains(md, "**Type**") {
@@ -1308,7 +1316,7 @@ func TestFormatVariableMarkdown_WithoutType(t *testing.T) {
 // FormatTriggeredPipelinesMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTriggeredPipelinesMarkdown_WithData verifies the behavior of format triggered pipelines markdown with data.
+// TestFormatTriggeredPipelinesMarkdown_WithData verifies FormatTriggeredPipelinesMarkdown when with data.
 func TestFormatTriggeredPipelinesMarkdown_WithData(t *testing.T) {
 	out := TriggeredPipelinesListOutput{
 		Pipelines: []TriggeredPipelineOutput{
@@ -1335,7 +1343,7 @@ func TestFormatTriggeredPipelinesMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatTriggeredPipelinesMarkdown_Empty verifies the behavior of format triggered pipelines markdown empty.
+// TestFormatTriggeredPipelinesMarkdown_Empty verifies FormatTriggeredPipelinesMarkdown when empty.
 func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
 	md := FormatTriggeredPipelinesMarkdown(TriggeredPipelinesListOutput{})
 	if !strings.Contains(md, "No triggered pipelines found") {
@@ -1344,156 +1352,6 @@ func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
 	if strings.Contains(md, "| ID |") {
 		t.Error("should not contain table header when empty")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterToolsCallAllThroughMCP — full MCP roundtrip for all 11 tools
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newSchedulesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_pipeline_schedule_list", map[string]any{"project_id": "1"}},
-		{"get", "gitlab_pipeline_schedule_get", map[string]any{"project_id": "1", "schedule_id": 1}},
-		{"create", "gitlab_pipeline_schedule_create", map[string]any{"project_id": "1", "description": "nightly", "ref": "main", "cron": "0 1 * * *"}},
-		{"update", "gitlab_pipeline_schedule_update", map[string]any{"project_id": "1", "schedule_id": 1, "description": "updated"}},
-		{"delete", "gitlab_pipeline_schedule_delete", map[string]any{"project_id": "1", "schedule_id": 1}},
-		{"run", "gitlab_pipeline_schedule_run", map[string]any{"project_id": "1", "schedule_id": 1}},
-		{"take_ownership", "gitlab_pipeline_schedule_take_ownership", map[string]any{"project_id": "1", "schedule_id": 1}},
-		{"create_variable", "gitlab_pipeline_schedule_create_variable", map[string]any{"project_id": "1", "schedule_id": 1, "key": "K", "value": "V"}},
-		{"edit_variable", "gitlab_pipeline_schedule_edit_variable", map[string]any{"project_id": "1", "schedule_id": 1, "key": "K", "value": "V2"}},
-		{"delete_variable", "gitlab_pipeline_schedule_delete_variable", map[string]any{"project_id": "1", "schedule_id": 1, "key": "K"}},
-		{"list_triggered_pipelines", "gitlab_pipeline_schedule_list_triggered_pipelines", map[string]any{"project_id": "1", "schedule_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
-
-// newSchedulesMCPSession is an internal helper for the pipelineschedules package.
-func newSchedulesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	scheduleJSON := `{"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}}`
-	variableJSON := `{"key":"K","value":"V","variable_type":"env_var"}`
-
-	handler := http.NewServeMux()
-
-	// List pipeline schedules
-	handler.HandleFunc("GET /api/v4/projects/1/pipeline_schedules", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+scheduleJSON+`]`)
-	})
-
-	// Get pipeline schedule
-	handler.HandleFunc("GET /api/v4/projects/1/pipeline_schedules/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, scheduleJSON)
-	})
-
-	// Create pipeline schedule
-	handler.HandleFunc("POST /api/v4/projects/1/pipeline_schedules", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, scheduleJSON)
-	})
-
-	// Update pipeline schedule
-	handler.HandleFunc("PUT /api/v4/projects/1/pipeline_schedules/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, scheduleJSON)
-	})
-
-	// Delete pipeline schedule
-	handler.HandleFunc("DELETE /api/v4/projects/1/pipeline_schedules/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Run (play) pipeline schedule
-	handler.HandleFunc("POST /api/v4/projects/1/pipeline_schedules/1/play", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	// Take ownership
-	handler.HandleFunc("POST /api/v4/projects/1/pipeline_schedules/1/take_ownership", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, scheduleJSON)
-	})
-
-	// Create variable
-	handler.HandleFunc("POST /api/v4/projects/1/pipeline_schedules/1/variables", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, variableJSON)
-	})
-
-	// Edit variable
-	handler.HandleFunc("PUT /api/v4/projects/1/pipeline_schedules/1/variables/K", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"key":"K","value":"V2","variable_type":"env_var"}`)
-	})
-
-	// Delete variable
-	handler.HandleFunc("DELETE /api/v4/projects/1/pipeline_schedules/1/variables/K", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, variableJSON)
-	})
-
-	// List triggered pipelines
-	handler.HandleFunc("GET /api/v4/projects/1/pipeline_schedules/1/pipelines", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"iid":10,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100"}]`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // TestPipelineScheduleGet_WithTimestamps covers the NextRunAt/CreatedAt/UpdatedAt

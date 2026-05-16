@@ -1,4 +1,18 @@
-// Package config loads and validates server configuration from environment variables.
+// Package config loads, normalizes, and validates runtime configuration for the
+// GitLab MCP server.
+//
+// Configuration comes from environment variables, .env files, and CLI flags in
+// cmd/server. The package centralizes defaults and bounds for stdio mode, HTTP
+// mode, OAuth token verification, auto-update behavior, upload limits, safe
+// mode, read-only mode, rate limiting, tool surfaces, capability surfaces, and
+// meta-tool schema detail.
+//
+// # Validation Model
+//
+// Loaders keep user-facing configuration forgiving while preserving hard bounds
+// that protect runtime behavior: URL values are parsed and normalized, duration
+// and size fields are clamped to documented limits, and invalid enum values are
+// reported before server registration begins.
 package config
 
 import (
@@ -474,6 +488,23 @@ func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, met
 		return "", false, parseErr
 	}
 	return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
+}
+
+// LegacyMetaToolsSelectorInUse reports whether a configuration relies on the
+// deprecated META_TOOLS selector instead of the canonical TOOL_SURFACE selector.
+func LegacyMetaToolsSelectorInUse(toolSurfaceValue, metaToolsValue string) bool {
+	return strings.TrimSpace(toolSurfaceValue) == "" && strings.TrimSpace(metaToolsValue) != ""
+}
+
+// LegacyMetaToolsReplacement returns the canonical TOOL_SURFACE value that
+// corresponds to a legacy META_TOOLS value. It returns an empty string when the
+// legacy value is invalid.
+func LegacyMetaToolsReplacement(metaToolsValue string) string {
+	mode, err := parseToolSurfaceValue(metaToolsValue, "META_TOOLS")
+	if err != nil {
+		return ""
+	}
+	return mode
 }
 
 func parseToolSurfaceValue(value, name string) (string, error) {

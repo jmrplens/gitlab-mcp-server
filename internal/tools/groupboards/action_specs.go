@@ -1,6 +1,8 @@
 package groupboards
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -12,13 +14,27 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupBoardReadSpec("group_board_get", toolutil.RouteAction(client, GetGroupBoard), "gitlab_group_board_get"),
 		groupBoardCreateSpec("group_board_create", toolutil.RouteAction(client, CreateGroupBoard), "gitlab_group_board_create"),
 		groupBoardUpdateSpec("group_board_update", toolutil.RouteAction(client, UpdateGroupBoard), "gitlab_group_board_update"),
-		groupBoardDeleteSpec("group_board_delete", toolutil.DestructiveVoidAction(client, DeleteGroupBoard), "gitlab_group_board_delete"),
+		groupBoardDeleteSpec("group_board_delete", toolutil.DestructiveAction(client, deleteGroupBoardOutput), "gitlab_group_board_delete"),
 		groupBoardReadSpec("group_board_list_lists", toolutil.RouteAction(client, ListGroupBoardLists), "gitlab_group_board_list_lists"),
 		groupBoardReadSpec("group_board_get_list", toolutil.RouteAction(client, GetGroupBoardList), "gitlab_group_board_list_get"),
 		groupBoardCreateSpec("group_board_create_list", toolutil.RouteAction(client, CreateGroupBoardList), "gitlab_group_board_list_create"),
 		groupBoardUpdateSpec("group_board_update_list", toolutil.RouteAction(client, UpdateGroupBoardList), "gitlab_group_board_list_update"),
-		groupBoardDeleteSpec("group_board_delete_list", toolutil.DestructiveVoidAction(client, DeleteGroupBoardList), "gitlab_group_board_list_delete"),
+		groupBoardDeleteSpec("group_board_delete_list", toolutil.DestructiveAction(client, deleteGroupBoardListOutput), "gitlab_group_board_list_delete"),
 	}
+}
+
+func deleteGroupBoardOutput(ctx context.Context, client *gitlabclient.Client, input DeleteGroupBoardInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteGroupBoard(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group board."}, nil
+}
+
+func deleteGroupBoardListOutput(ctx context.Context, client *gitlabclient.Client, input DeleteGroupBoardListInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteGroupBoardList(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group board list."}, nil
 }
 
 func groupBoardReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

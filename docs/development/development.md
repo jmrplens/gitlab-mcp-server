@@ -41,10 +41,10 @@ gitlab-mcp-server/
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
-│   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 32 domain meta-tools (47 self-managed Enterprise/Premium, 48 GitLab.com Enterprise/Premium with Orbit)
+│   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
+│   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
-│   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
+│   │   ├── markdown.go          # markdownForResult delegator to toolutil.MarkdownForResult
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
@@ -59,7 +59,7 @@ gitlab-mcp-server/
 └── .env                         # Local secrets (gitignored)
 ```
 
-Meta-tool counts are additive: 32 core/domain meta-tools, plus 15 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
+Meta-tool counts are additive: 33 base tools, 14 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
 
 ## Architecture
 
@@ -68,7 +68,20 @@ graph TD
     MAIN[cmd/server/main.go] -->|loads| CFG[config.Load]
     MAIN -->|creates| GL[gitlab.NewClient]
     MAIN -->|creates| SRV[mcp.NewServer]
-    MAIN -->|registers| TOOLS[tools.RegisterAll / RegisterAllMeta]
+    MAIN -->|selects surface| SURFACE{TOOL_SURFACE}
+    SPECS[CollectActionSpecs<br/>domain ActionSpecs] --> CATALOG[BuildActionCatalog]
+    MAIN -->|builds| CATALOG
+    CATALOG --> IND[individual projection<br/>tools.RegisterAll]
+    CATALOG --> META[meta projection<br/>tools.RegisterAllMeta]
+    CATALOG --> DYN[dynamic projection<br/>dynamic.RegisterCatalogTools]
+    STANDALONE[StandaloneSurfaceToolSpecs<br/>project discovery + interactive flows] -.->|dynamic route injection| DYN
+    SURFACE -->|individual| IND
+    SURFACE -->|meta| META
+    SURFACE -->|dynamic / dynamic-3| DYN
+    IND --> PROJECTION[Catalog-backed ActionRoute handlers]
+    META --> PROJECTION
+    DYN --> PROJECTION
+    MAIN -->|registers standalone| STANDALONE
     MAIN -->|registers| RES[resources.Register]
     MAIN -->|registers| PROMPTS[prompts.Register]
     MAIN -->|setup| LOG[logging]
@@ -76,18 +89,19 @@ graph TD
     MAIN -->|setup| ROOTS[roots]
     SRV -->|runs| STDIO[StdioTransport]
     SRV -->|runs| HTTP[StreamableHTTPHandler]
-    TOOLS --> GL
-    TOOLS --> PROG[progress]
-    TOOLS --> SAMP[sampling]
-    TOOLS --> ELIC[elicitation]
+    PROJECTION --> GL
+    PROJECTION --> PROG[progress]
+    PROJECTION --> SAMP[sampling]
+    STANDALONE --> ELIC[elicitation]
+    ELIC --> GL
     RES --> GL
     PROMPTS --> GL
 ```
 
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
-3. **Tools** register handlers via `mcp.AddTool()` with typed input/output structs
-4. **Meta-tools** optionally group individual tools into 32 domain meta-tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
+3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
+4. **Meta-tools** group catalog actions into 33 base tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation
@@ -291,15 +305,16 @@ make fmt     # gofmt -s -w .
 
 All error wrapping functions live in `internal/toolutil/errors.go`. Choose the right function based on this decision tree:
 
-```text
-Is the operation read-only (list, get, search)?
-  └─ YES → WrapErr(op, err)
-  └─ NO (mutating: create, update, delete) →
-       Do you know a specific corrective action for a likely status code?
-         └─ YES → Does the hint apply to a single HTTP status code?
-              └─ YES → WrapErrWithStatusHint(op, err, code, hint)
-              └─ NO  → Check status with IsHTTPStatus(), then WrapErrWithHint(op, err, hint)
-         └─ NO  → WrapErrWithMessage(op, err)
+```mermaid
+flowchart TD
+    start{Is the operation read-only?}
+    start -->|list / get / search| wrapErr[WrapErr]
+    start -->|create / update / delete| hasHint{Known corrective action?}
+    hasHint -->|No| wrapMsg[WrapErrWithMessage]
+    hasHint -->|Yes| statusHint{Hint applies to one HTTP status?}
+    statusHint -->|Yes| wrapStatus[WrapErrWithStatusHint]
+    statusHint -->|No| checkStatus[Check IsHTTPStatus]
+    checkStatus --> wrapHint[WrapErrWithHint]
 ```
 
 ### Quick reference
@@ -339,20 +354,18 @@ See [Error Handling](../error-handling.md) for the full architecture.
 
 ## Adding a New Tool
 
-With the modular sub-package architecture (ADR-0004):
+With the catalog-first modular sub-package architecture:
 
 1. **Create sub-package**: `internal/tools/{domain}/`
 2. **Create handler file**: `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace)
 3. **Create test file**: `{domain}_test.go` with table-driven tests using `testutil.NewTestClient`
-4. **Create register file**: `register.go` with `RegisterTools(server, client)` for the individual tool surface
+4. **Create ActionSpecs**: define `ActionSpecs(client, ...)` or update the owning aggregation builder with typed `ActionRoute` constructors and individual projection metadata
 5. **Create markdown formatters**: register output formatters from the sub-package with `toolutil.RegisterMarkdown` or `toolutil.RegisterMarkdownResult`
-6. **Wire in orchestration**:
-    - Add to `internal/tools/register.go` (call `{domain}.RegisterTools()`)
-    - Add catalog-backed action routes to `internal/tools/register_meta.go` or an approved delegated meta group
+6. **Regenerate catalog manifest**: run `make gen-action-catalog-manifest` when the source-defined builder set changes, then run `make check-action-catalog-manifest`
 7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
-When adding a normal GitLab operation, define the route once with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Avoid adding dynamic-only copies of ordinary GitLab actions.
+When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Do not create package-local `RegisterTools` functions or dynamic-only copies of ordinary GitLab actions.
 
 See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 
@@ -385,21 +398,26 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 ```
 
 ```go
-// internal/tools/branches/register.go
+// internal/tools/branches/action_specs.go
 
 package branches
 
-func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
-    mcp.AddTool(server, &mcp.Tool{
-        Name:        "gitlab_create_branch",
-        Description: "Create a new branch in a GitLab project.",
-        Annotations: toolutil.CreateAnnotations,
-    }, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
-        start := time.Now()
-        out, err := Create(ctx, client, input)
-        toolutil.LogToolCallAll(ctx, req, "gitlab_create_branch", start, err)
-        return toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err
-    })
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+    route := toolutil.RouteAction(client, Create).
+        WithUsage("Use to create a branch from an existing branch, tag, or commit SHA.")
+
+    return []toolutil.ActionSpec{
+        toolutil.NewActionSpec("create", route, toolutil.ActionSpecOptions{
+            ReadOnly:     false,
+            Idempotent:   false,
+            OwnerPackage: "branches",
+            IndividualTool: toolutil.IndividualToolSpec{
+                Name:        "gitlab_create_branch",
+                Title:       "Create branch",
+                Description: "Create a new branch in a GitLab project.",
+            },
+        }),
+    }
 }
 ```
 
@@ -427,7 +445,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
         "GITLAB_URL": "https://your-gitlab",
         "GITLAB_TOKEN": "glpat-your-token",
         "GITLAB_SKIP_TLS_VERIFY": "true",
-        "META_TOOLS": "true"
+        "TOOL_SURFACE": "meta"
       }
     }
   }

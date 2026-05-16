@@ -1,12 +1,3 @@
-// Package epics implements GitLab group epic operations using the Work Items
-// GraphQL API. Epics are high-level planning items attached to groups.
-//
-// This package was migrated from the deprecated Epics REST API (deprecated
-// GitLab 17.0, removal planned 19.0) to the Work Items GraphQL API per
-// ADR-0009 (progressive GraphQL migration).
-//
-// The GetLinks handler remains on REST because client-go v2 does not yet
-// expose a GraphQL query for work item children.
 package epics
 
 import (

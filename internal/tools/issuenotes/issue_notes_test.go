@@ -1,7 +1,3 @@
-// Package issuenotes contains unit tests for GitLab issue note (comment)
-// operations (create and list). Tests use httptest to mock the GitLab API
-// and verify success paths, internal notes, system notes, pagination, and
-// error handling.
 package issuenotes
 
 import (
@@ -14,7 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -32,7 +27,7 @@ const (
 	testUpdatedText       = "Updated text"
 )
 
-// TestIssueNoteCreate_Success verifies the behavior of issue note create success.
+// TestIssueNoteCreate_Success verifies IssueNoteCreate when success.
 func TestIssueNoteCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
@@ -67,7 +62,7 @@ func TestIssueNoteCreate_Success(t *testing.T) {
 	}
 }
 
-// TestIssueNote_CreateInternal verifies the behavior of issue note create internal.
+// TestIssueNote_CreateInternal verifies IssueNote when create internal.
 func TestIssueNote_CreateInternal(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
@@ -91,7 +86,7 @@ func TestIssueNote_CreateInternal(t *testing.T) {
 	}
 }
 
-// TestIssueNoteCreate_APIError verifies the behavior of issue note create a p i error.
+// TestIssueNoteCreate_APIError verifies IssueNoteCreate when API error.
 func TestIssueNoteCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -107,7 +102,7 @@ func TestIssueNoteCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestIssueNoteCreate_CancelledContext verifies the behavior of issue note create cancelled context.
+// TestIssueNoteCreate_CancelledContext verifies IssueNoteCreate when cancelled context.
 func TestIssueNoteCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -125,7 +120,7 @@ func TestIssueNoteCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestIssueNoteList_Success verifies the behavior of issue note list success.
+// TestIssueNoteList_Success verifies IssueNoteList when success.
 func TestIssueNoteList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssueNotes {
@@ -155,7 +150,7 @@ func TestIssueNoteList_Success(t *testing.T) {
 	}
 }
 
-// TestIssueNoteList_Empty verifies the behavior of issue note list empty.
+// TestIssueNoteList_Empty verifies IssueNoteList when empty.
 func TestIssueNoteList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssueNotes {
@@ -177,7 +172,7 @@ func TestIssueNoteList_Empty(t *testing.T) {
 	}
 }
 
-// TestIssueNoteList_Pagination verifies the behavior of issue note list pagination.
+// TestIssueNoteList_Pagination verifies IssueNoteList when pagination.
 func TestIssueNoteList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssueNotes {
@@ -209,7 +204,7 @@ func TestIssueNoteList_Pagination(t *testing.T) {
 	}
 }
 
-// TestIssueNoteCreate_SuccessEnrichedFields verifies the behavior of issue note create success enriched fields.
+// TestIssueNoteCreate_SuccessEnrichedFields verifies IssueNoteCreate when success enriched fields.
 func TestIssueNoteCreate_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
@@ -249,7 +244,7 @@ func TestIssueNoteCreate_SuccessEnrichedFields(t *testing.T) {
 	}
 }
 
-// TestIssueNoteList_APIError verifies the behavior of issue note list a p i error.
+// TestIssueNoteList_APIError verifies IssueNoteList when API error.
 func TestIssueNoteList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -266,9 +261,10 @@ func TestIssueNoteList_APIError(t *testing.T) {
 
 // Tests for GetNote, Update, Delete.
 
+// pathIssueNote100 identifies the path issue note 100 constant used by this package.
 const pathIssueNote100 = "/api/v4/projects/42/issues/10/notes/100"
 
-// TestGetNote_Success verifies the behavior of get note success.
+// TestGetNote_Success verifies GetNote when success.
 func TestGetNote_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathIssueNote100 {
@@ -294,7 +290,7 @@ func TestGetNote_Success(t *testing.T) {
 	}
 }
 
-// TestGetNote_MissingProjectID verifies the behavior of get note missing project i d.
+// TestGetNote_MissingProjectID verifies GetNote when missing project ID.
 func TestGetNote_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -306,7 +302,7 @@ func TestGetNote_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssueNote100 {
@@ -333,7 +329,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -345,7 +341,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathIssueNote100 {
@@ -365,7 +361,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies the behavior of delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -460,7 +456,7 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Populated validates format output markdown populated across multiple scenarios using table-driven subtests.
+// TestFormatOutputMarkdown_Populated covers FormatOutputMarkdown with table-driven subtests for populated.
 func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
 		ID:         200,
@@ -493,7 +489,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ResolvableUnresolved verifies the behavior of format output markdown resolvable unresolved.
+// TestFormatOutputMarkdown_ResolvableUnresolved verifies FormatOutputMarkdown when resolvable unresolved.
 func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	out := Output{
 		ID:         201,
@@ -516,7 +512,7 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Minimal verifies the behavior of format output markdown minimal.
+// TestFormatOutputMarkdown_Minimal verifies FormatOutputMarkdown when minimal.
 func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if !strings.Contains(md, "## Issue Note #0") {
@@ -537,7 +533,7 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Populated validates format list markdown populated across multiple scenarios using table-driven subtests.
+// TestFormatListMarkdown_Populated covers FormatListMarkdown with table-driven subtests for populated.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Notes: []Output{
@@ -564,7 +560,7 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No issue notes found.") {
@@ -576,7 +572,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // ToOutput - full fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllFields verifies the behavior of to output all fields.
+// TestToOutput_AllFields verifies ToOutput when all fields.
 func TestToOutput_AllFields(t *testing.T) {
 	ts1 := mustParseTime(t, "2026-03-01T09:00:00Z")
 	ts2 := mustParseTime(t, "2026-03-01T10:00:00Z")
@@ -651,7 +647,7 @@ func TestToOutput_AllFields(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilTimestamps verifies the behavior of to output nil timestamps.
+// TestToOutput_NilTimestamps verifies ToOutput when nil timestamps.
 func TestToOutput_NilTimestamps(t *testing.T) {
 	n := &gl.Note{
 		ID:     300,
@@ -671,7 +667,7 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 // Context cancellation - handlers not yet covered
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -683,7 +679,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetNote_CancelledContext verifies the behavior of get note cancelled context.
+// TestGetNote_CancelledContext verifies GetNote when cancelled context.
 func TestGetNote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
@@ -695,7 +691,7 @@ func TestGetNote_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
@@ -707,7 +703,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -723,7 +719,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // API error - handlers not yet covered
 // ---------------------------------------------------------------------------.
 
-// TestGetNote_APIError verifies the behavior of get note a p i error.
+// TestGetNote_APIError verifies GetNote when API error.
 func TestGetNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, "{\"message\":\"500 Internal Server Error\"}")
@@ -734,7 +730,7 @@ func TestGetNote_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, "{\"message\":\"500 Internal Server Error\"}")
@@ -745,7 +741,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, "{\"message\":\"500 Internal Server Error\"}")
@@ -760,7 +756,7 @@ func TestDelete_APIError(t *testing.T) {
 // List with all optional parameters
 // ---------------------------------------------------------------------------.
 
-// TestList_AllOptionalParams verifies the behavior of list all optional params.
+// TestList_AllOptionalParams verifies List when all optional params.
 func TestList_AllOptionalParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -793,7 +789,7 @@ func TestList_AllOptionalParams(t *testing.T) {
 // Missing project_id for Create and List
 // ---------------------------------------------------------------------------.
 
-// TestCreate_MissingProjectID verifies the behavior of create missing project i d.
+// TestCreate_MissingProjectID verifies Create when missing project ID.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -804,7 +800,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -816,102 +812,10 @@ func TestList_MissingProjectID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP integration - RegisterTools + CallTool
-// ---------------------------------------------------------------------------.
-
-// newIssueNotesMCPSession is an internal helper for the issuenotes package.
-func newIssueNotesMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodPost && path == pathIssueNotes:
-			testutil.RespondJSON(w, http.StatusCreated, noteJSONSimple)
-		case r.Method == http.MethodGet && path == pathIssueNotes:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSONSimple+"]",
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-		case r.Method == http.MethodGet && path == pathIssueNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
-		case r.Method == http.MethodPut && path == pathIssueNote100:
-			testutil.RespondJSON(w, http.StatusOK, noteJSONSimple)
-		case r.Method == http.MethodDelete && path == pathIssueNote100:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueNotesMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_note_create", map[string]any{"project_id": "42", "issue_iid": 10, "body": "test note"}},
-		{"gitlab_issue_note_list", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_issue_note_get", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100}},
-		{"gitlab_issue_note_update", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100, "body": "updated"}},
-		{"gitlab_issue_note_delete", map[string]any{"project_id": "42", "issue_iid": 10, "note_id": 100}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// mustParseTime is an internal helper for the issuenotes package.
+// mustParseTime prepares parse time test fixtures and fails the test on error.
 func mustParseTime(t *testing.T, s string) *time.Time {
 	t.Helper()
 	ts, err := time.Parse(time.RFC3339, s)

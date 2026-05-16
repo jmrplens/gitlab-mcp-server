@@ -234,10 +234,10 @@ func AllClients() []ClientInfo {
 // envMapPreferences builds the non-secret environment variables (feature toggles and preferences).
 func envMapPreferences(cfg ServerConfig) map[string]string {
 	env := make(map[string]string)
-	if cfg.ToolSurface != "" && cfg.ToolSurface != config.DefaultToolSurface {
+	if cfg.ToolSurface != "" {
 		env["TOOL_SURFACE"] = cfg.ToolSurface
 	} else if cfg.MetaTools {
-		env["META_TOOLS"] = "true"
+		env["TOOL_SURFACE"] = config.ToolSurfaceMeta
 	}
 	if cfg.CapabilitySurface != "" && cfg.CapabilitySurface != config.DefaultCapabilitySurface {
 		env["CAPABILITY_SURFACE"] = cfg.CapabilitySurface

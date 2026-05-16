@@ -38,8 +38,8 @@ func IndividualToolFromSpecs(specs []ActionSpec, individualName string, opts Ind
 }
 
 // MustIndividualToolFromSpecs projects an individual tool or panics on invalid
-// registration metadata. Use it from package RegisterTools functions, where a
-// missing spec is a startup-time programming error.
+// registration metadata. Use it from catalog-backed startup paths where a
+// missing spec is a programming error.
 func MustIndividualToolFromSpecs(specs []ActionSpec, individualName string, opts IndividualToolProjectionOptions) *mcp.Tool {
 	tool, err := IndividualToolFromSpecs(specs, individualName, opts)
 	if err != nil {
@@ -66,6 +66,7 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 		return nil, fmt.Errorf("individual tool %q output schema is required", name)
 	}
 	applyIndividualRequiredFields(route)
+	route.InputSchema = enrichDestructiveSchema(route.InputSchema, route.Destructive)
 	normalizeSchemaDescriptions(route.InputSchema)
 	lockdownSchemaNode(route.InputSchema)
 	title := strings.TrimSpace(spec.IndividualTool.Title)

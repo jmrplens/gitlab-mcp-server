@@ -161,7 +161,7 @@ docs(readme): update tool count after wiki tools
 
 ```text
 internal/tools/
-├── register.go              # RegisterAll() — delegates to sub-package RegisterTools()
+├── register.go              # RegisterAll() — projects individual tools from the canonical catalog
 ├── register_meta.go         # RegisterAllMeta() — meta-tool registration
 ├── metatool.go              # Meta-tool registration infrastructure
 ├── pagination.go            # Pagination type aliases
@@ -169,7 +169,7 @@ internal/tools/
 ├── markdown.go              # Markdown formatting (bridge to toolutil)
 ├── logging.go               # Tool call logging (bridge to toolutil)
 └── <domain>/                # 163 domain sub-packages
-    ├── register.go          # RegisterTools() for this domain
+    ├── action_specs.go      # Canonical ActionSpecs for catalog-backed tool surfaces
     ├── <domain>.go          # Typed input/output structs + handlers
     ├── <domain>_test.go     # Table-driven unit tests
     └── markdown.go          # Markdown formatters (self-registered via init())

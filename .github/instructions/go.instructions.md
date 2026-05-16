@@ -301,7 +301,7 @@ func TestApproveGroup_MissingUserID_ReturnsError(t *testing.T) { ... }
 
 // ✅ ACCEPTABLE: 2-part names when scenario is self-descriptive
 func TestBranchList_APIError(t *testing.T) { ... }
-func TestRegisterTools_NoPanic(t *testing.T) { ... }
+func TestActionSpecs_Complete(t *testing.T) { ... }
 
 // ❌ BAD: no-underscore CamelCase
 func TestCreateBranchEmptyNameReturnsError(t *testing.T) { ... }

@@ -15,8 +15,7 @@ func FormatListMarkdown(out ListOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Project Iterations\n\n")
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("| ID | IID | Title | State | Start | Due | URL |\n")
-	sb.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Title", "State", "Start", "Due", "URL"))
 	for _, it := range out.Iterations {
 		state := iterationState(it.State)
 		url := toolutil.EscapeMdTableCell(it.WebURL)
@@ -36,8 +35,8 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Iteration #%d — %s\n\n", out.IID, toolutil.EscapeMdTableCell(out.Title))
-	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
+	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
+	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
 	fmt.Fprintf(&sb, "| IID | %d |\n", out.IID)
 	fmt.Fprintf(&sb, "| Title | %s |\n", toolutil.EscapeMdTableCell(out.Title))
 	fmt.Fprintf(&sb, "| State | %s |\n", iterationState(out.State))
@@ -45,9 +44,9 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&sb, "| Start | %s |\n", toolutil.FormatTime(out.StartDate))
 	fmt.Fprintf(&sb, "| Due | %s |\n", toolutil.FormatTime(out.DueDate))
 	if out.WebURL != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdURL, out.WebURL)
+		fmt.Fprintf(&sb, "| URL | [%[1]s](%[1]s) |\n", out.WebURL)
 	}
-	fmt.Fprintf(&sb, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
+	fmt.Fprintf(&sb, "| Created | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	if out.Description != "" {
 		sb.WriteString("\n### Description\n\n")
 		sb.WriteString(toolutil.WrapGFMBody(out.Description))

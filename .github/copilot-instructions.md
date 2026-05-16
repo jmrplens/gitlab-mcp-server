@@ -41,8 +41,8 @@ gitlab-mcp-server/
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/              # Tool orchestration layer + 163 domain sub-packages
-│   │   ├── register.go     # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go # RegisterAllMeta() — builds meta route groups for the canonical action catalog
+│   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
+│   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/        # Low-token dynamic search/describe/execute tool surface
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
@@ -80,13 +80,13 @@ gitlab-mcp-server/
 
 ### MCP Patterns
 
-- Each GitLab operation = one MCP tool with typed input/output structs
+- Each GitLab operation is defined once as a typed `ActionSpec` and projected into meta, dynamic, schema, and individual surfaces
 - Use `jsonschema` struct tags for tool input documentation
-- Register tools via `mcp.AddTool()` with descriptive names
+- Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
 - Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. Keep `dynamic-2` experimental unless explicitly requested.
-- When adding GitLab actions, register route metadata once through the canonical action catalog route definitions in `internal/tools/register_meta.go` or an approved delegated meta group using typed `ActionRoute` constructors. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and audits consume that catalog. Individual `RegisterTools` remains a separate compatibility surface.
+- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
 ### GitLab Integration
@@ -191,8 +191,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
-| `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
-| `TOOL_SURFACE`           | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides `META_TOOLS` | _(empty)_          |
+| `META_TOOLS`             | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs | _(unset)_          |
+| `TOOL_SURFACE`           | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides legacy `META_TOOLS` | _(empty)_          |
 | `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
 | `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |

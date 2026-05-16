@@ -54,7 +54,7 @@ func TestGetOrCreate_EmptyToken(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_NewToken verifies that GetOrCreate handles the new token scenario correctly.
+// TestGetOrCreate_NewToken verifies GetOrCreate when new token.
 func TestGetOrCreate_NewToken(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
@@ -226,7 +226,7 @@ func TestGetOrCreate_EnterpriseConfigOverridesDetection(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_SameToken verifies that GetOrCreate handles the same token scenario correctly.
+// TestGetOrCreate_SameToken verifies GetOrCreate when same token.
 func TestGetOrCreate_SameToken(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
@@ -249,7 +249,7 @@ func TestGetOrCreate_SameToken(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_DifferentTokens verifies that GetOrCreate handles the different tokens scenario correctly.
+// TestGetOrCreate_DifferentTokens verifies GetOrCreate when different tokens.
 func TestGetOrCreate_DifferentTokens(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
@@ -272,7 +272,7 @@ func TestGetOrCreate_DifferentTokens(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_LRUEviction verifies that GetOrCreate handles the l r u eviction scenario correctly.
+// TestGetOrCreate_LRUEviction verifies GetOrCreate when lru eviction.
 func TestGetOrCreate_LRUEviction(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(2))
@@ -311,7 +311,7 @@ func TestGetOrCreate_LRUEviction(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_LRUPromotes verifies that GetOrCreate handles the l r u promotes scenario correctly.
+// TestGetOrCreate_LRUPromotes verifies GetOrCreate when lru promotes.
 func TestGetOrCreate_LRUPromotes(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(2))
@@ -337,7 +337,7 @@ func TestGetOrCreate_LRUPromotes(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_Concurrent verifies that GetOrCreate handles the concurrent scenario correctly.
+// TestGetOrCreate_Concurrent verifies GetOrCreate when concurrent.
 func TestGetOrCreate_Concurrent(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(20))
@@ -370,7 +370,7 @@ func TestGetOrCreate_Concurrent(t *testing.T) {
 	}
 }
 
-// TestClose verifies the behavior of close.
+// TestClose verifies Close.
 func TestClose(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
@@ -385,7 +385,7 @@ func TestClose(t *testing.T) {
 	}
 }
 
-// TestTokenHash verifies the behavior of token hash.
+// TestTokenHash verifies TokenHash.
 func TestTokenHash(t *testing.T) {
 	hash1 := tokenHash("glpat-abc123")
 	hash2 := tokenHash("glpat-abc123")
@@ -402,7 +402,7 @@ func TestTokenHash(t *testing.T) {
 	}
 }
 
-// TestTokenSuffix validates token suffix across multiple scenarios using table-driven subtests.
+// TestTokenSuffix covers TokenSuffix with table-driven subtests.
 func TestTokenSuffix(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -426,7 +426,7 @@ func TestTokenSuffix(t *testing.T) {
 	}
 }
 
-// TestWithMaxSize verifies the behavior of with max size.
+// TestWithMaxSize verifies WithMaxSize.
 func TestWithMaxSize(t *testing.T) {
 	cfg := testConfig("http://localhost")
 
@@ -530,6 +530,7 @@ func TestStartRevalidation_CancelledContext(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
+// TestGetOrCreate_FactoryError_ReturnsError verifies GetOrCreate returns error with factory error.
 func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
 	cfg := testConfig("https://gitlab.example.com")
 	factoryErr := errors.New("catalog unavailable")
@@ -555,6 +556,7 @@ func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestGetOrCreate_NilFactory_ReturnsError verifies GetOrCreate returns error with nil factory.
 func TestGetOrCreate_NilFactory_ReturnsError(t *testing.T) {
 	cfg := testConfig("https://gitlab.example.com")
 	pool := New(cfg, nil)

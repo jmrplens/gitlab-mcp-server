@@ -92,20 +92,11 @@ func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 // TestDynamicSearchMetrics_ReportsIndexAndAliasCounts verifies static dynamic
 // search metrics are available without adding visible MCP tools.
 func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
-	routes := map[string]toolutil.ActionMap{
-		"gitlab_repository": {
-			"tree": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
-		},
-		"gitlab_project": {
-			"delete":   {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }, Destructive: true},
-			"hook_add": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
-		},
-	}
-	catalog := actioncatalog.FromActionMaps(routes)
+	catalog := dynamicActionCatalog(newAuditMetricsClient(t), false)
 
 	metrics := dynamicSearchMetrics(catalog)
-	if metrics.ActionCount != 3 {
-		t.Fatalf("ActionCount = %d, want 3", metrics.ActionCount)
+	if metrics.ActionCount == 0 {
+		t.Fatal("ActionCount is zero, want catalog actions")
 	}
 	if metrics.IndexTokenCount == 0 || metrics.IndexPostingCount == 0 {
 		t.Fatalf("metrics = %+v, want populated search index metrics", metrics)
@@ -150,13 +141,13 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 }
 
 // TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta verifies the audit
-// separates spec-backed enterprise actions from legacy route-only actions.
+// separates spec-backed enterprise actions from actions missing ActionSpecs.
 func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
 	base := catalogWithActions(t, catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true})
 	selfManagedEnterprise := catalogWithActions(t,
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
-		catalogActionFixture{toolName: "gitlab_legacy", actionName: "list"},
+		catalogActionFixture{toolName: "gitlab_missing_spec", actionName: "list"},
 	)
 	gitLabComEnterprise := catalogWithActions(t,
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
@@ -168,8 +159,8 @@ func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
 	if !slices.Equal(audit.SpecBacked, []string{"geo.list", "orbit.status"}) {
 		t.Fatalf("SpecBacked = %v, want [geo.list orbit.status]", audit.SpecBacked)
 	}
-	if !slices.Equal(audit.LegacyRouteOnly, []string{"legacy.list"}) {
-		t.Fatalf("LegacyRouteOnly = %v, want [legacy.list]", audit.LegacyRouteOnly)
+	if !slices.Equal(audit.MissingSpec, []string{"missing_spec.list"}) {
+		t.Fatalf("MissingSpec = %v, want [missing_spec.list]", audit.MissingSpec)
 	}
 }
 
@@ -187,8 +178,8 @@ func TestAuditEnterpriseActionSpecs_RealCatalogHasNoLegacyRoutes(t *testing.T) {
 		dynamicActionCatalog(selfManagedClient, true),
 		dynamicActionCatalog(gitLabComClient, true),
 	)
-	if len(audit.LegacyRouteOnly) != 0 {
-		t.Fatalf("LegacyRouteOnly = %v, want none", audit.LegacyRouteOnly)
+	if len(audit.MissingSpec) != 0 {
+		t.Fatalf("MissingSpec = %v, want none", audit.MissingSpec)
 	}
 	if len(audit.SpecBacked) == 0 {
 		t.Fatal("SpecBacked is empty, want enterprise actions")
@@ -198,9 +189,9 @@ func TestAuditEnterpriseActionSpecs_RealCatalogHasNoLegacyRoutes(t *testing.T) {
 	}
 }
 
-// TestPrintEnterpriseActionSpecAudit_IncludesLegacyZeroSection verifies the
-// audit output includes both lists, including the explicit zero legacy state.
-func TestPrintEnterpriseActionSpecAudit_IncludesLegacyZeroSection(t *testing.T) {
+// TestPrintEnterpriseActionSpecAudit_IncludesMissingSpecZeroSection verifies the
+// audit output includes both lists, including the explicit zero missing-spec state.
+func TestPrintEnterpriseActionSpecAudit_IncludesMissingSpecZeroSection(t *testing.T) {
 	output := captureStdout(t, func() {
 		printEnterpriseActionSpecAudit(enterpriseActionSpecAudit{SpecBacked: []string{"geo.list"}})
 	})
@@ -208,7 +199,7 @@ func TestPrintEnterpriseActionSpecAudit_IncludesLegacyZeroSection(t *testing.T) 
 		"Enterprise ActionSpec Audit",
 		"Spec-backed enterprise actions (1)",
 		"geo.list",
-		"Legacy route-only enterprise actions (0)",
+		"Enterprise actions missing ActionSpec (0)",
 		"none",
 	} {
 		if !strings.Contains(output, want) {

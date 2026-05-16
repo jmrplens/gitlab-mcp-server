@@ -10,17 +10,18 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
-	errExpectedNil        = "expected error, got nil"
+	// errExpectedNil identifies the err expected nil constant used by this package.
+	errExpectedNil = "expected error, got nil"
+	// pathProjectMilestones identifies the path project milestones constant used by this package.
 	pathProjectMilestones = "/api/v4/projects/42/milestones"
-	fmtMilestoneListErr   = "milestoneList() unexpected error: %v"
+	// fmtMilestoneListErr identifies the fmt milestone list err constant used by this package.
+	fmtMilestoneListErr = "milestoneList() unexpected error: %v"
 )
 
-// TestMilestoneList_Success verifies the behavior of milestone list success.
+// TestMilestoneList_Success verifies MilestoneList when success.
 func TestMilestoneList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones {
@@ -80,7 +81,7 @@ func TestMilestoneList_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneList_WithStateFilter verifies the behavior of milestone list with state filter.
+// TestMilestoneList_WithStateFilter verifies MilestoneList when with state filter.
 func TestMilestoneList_WithStateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones {
@@ -106,7 +107,7 @@ func TestMilestoneList_WithStateFilter(t *testing.T) {
 	}
 }
 
-// TestMilestoneList_WithSearch verifies the behavior of milestone list with search.
+// TestMilestoneList_WithSearch verifies MilestoneList when with search.
 func TestMilestoneList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones {
@@ -132,7 +133,7 @@ func TestMilestoneList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestMilestoneList_EmptyProjectID verifies the behavior of milestone list empty project i d.
+// TestMilestoneList_EmptyProjectID verifies MilestoneList when empty project ID.
 func TestMilestoneList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -144,7 +145,7 @@ func TestMilestoneList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestMilestoneListServer_Error verifies the behavior of milestone list server error.
+// TestMilestoneListServer_Error verifies MilestoneListServer when error.
 func TestMilestoneListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Internal Server Error"}`)
@@ -160,7 +161,7 @@ func TestMilestoneListServer_Error(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestMilestoneGet_Success verifies the behavior of milestone get success.
+// TestMilestoneGet_Success verifies MilestoneGet when success.
 func TestMilestoneGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -193,7 +194,7 @@ func TestMilestoneGet_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneGet_MissingParams verifies the behavior of milestone get missing params.
+// TestMilestoneGet_MissingParams verifies MilestoneGet when missing params.
 func TestMilestoneGet_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -207,7 +208,7 @@ func TestMilestoneGet_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneGetServer_Error verifies the behavior of milestone get server error.
+// TestMilestoneGetServer_Error verifies MilestoneGetServer when error.
 func TestMilestoneGetServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -221,7 +222,7 @@ func TestMilestoneGetServer_Error(t *testing.T) {
 
 // ---------- Create ----------.
 
-// TestMilestoneCreate_Success verifies the behavior of milestone create success.
+// TestMilestoneCreate_Success verifies MilestoneCreate when success.
 func TestMilestoneCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectMilestones {
@@ -255,7 +256,7 @@ func TestMilestoneCreate_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneCreate_MissingParams verifies the behavior of milestone create missing params.
+// TestMilestoneCreate_MissingParams verifies MilestoneCreate when missing params.
 func TestMilestoneCreate_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -269,7 +270,7 @@ func TestMilestoneCreate_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneCreate_InvalidDate verifies the behavior of milestone create invalid date.
+// TestMilestoneCreate_InvalidDate verifies MilestoneCreate when invalid date.
 func TestMilestoneCreate_InvalidDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -287,7 +288,7 @@ func TestMilestoneCreate_InvalidDate(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestMilestoneUpdate_Success verifies the behavior of milestone update success.
+// TestMilestoneUpdate_Success verifies MilestoneUpdate when success.
 func TestMilestoneUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -320,7 +321,7 @@ func TestMilestoneUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneUpdate_MissingParams verifies the behavior of milestone update missing params.
+// TestMilestoneUpdate_MissingParams verifies MilestoneUpdate when missing params.
 func TestMilestoneUpdate_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -334,7 +335,7 @@ func TestMilestoneUpdate_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneUpdate_InvalidDate verifies the behavior of milestone update invalid date.
+// TestMilestoneUpdate_InvalidDate verifies MilestoneUpdate when invalid date.
 func TestMilestoneUpdate_InvalidDate(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, r *http.Request) {
@@ -444,7 +445,7 @@ func TestMilestoneGetMergeRequests_ResolveError(t *testing.T) {
 
 // ---------- Delete ----------.
 
-// TestMilestoneDelete_Success verifies the behavior of milestone delete success.
+// TestMilestoneDelete_Success verifies MilestoneDelete when success.
 func TestMilestoneDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -464,7 +465,7 @@ func TestMilestoneDelete_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneDelete_MissingParams verifies the behavior of milestone delete missing params.
+// TestMilestoneDelete_MissingParams verifies MilestoneDelete when missing params.
 func TestMilestoneDelete_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -478,7 +479,7 @@ func TestMilestoneDelete_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneDeleteServer_Error verifies the behavior of milestone delete server error.
+// TestMilestoneDeleteServer_Error verifies MilestoneDeleteServer when error.
 func TestMilestoneDeleteServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -492,7 +493,7 @@ func TestMilestoneDeleteServer_Error(t *testing.T) {
 
 // ---------- GetIssues ----------.
 
-// TestMilestoneGetIssues_Success verifies the behavior of milestone get issues success.
+// TestMilestoneGetIssues_Success verifies MilestoneGetIssues when success.
 func TestMilestoneGetIssues_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -524,7 +525,7 @@ func TestMilestoneGetIssues_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneGetIssues_MissingParams verifies the behavior of milestone get issues missing params.
+// TestMilestoneGetIssues_MissingParams verifies MilestoneGetIssues when missing params.
 func TestMilestoneGetIssues_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -538,7 +539,7 @@ func TestMilestoneGetIssues_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneGetIssuesServer_Error verifies the behavior of milestone get issues server error.
+// TestMilestoneGetIssuesServer_Error verifies MilestoneGetIssuesServer when error.
 func TestMilestoneGetIssuesServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -552,7 +553,7 @@ func TestMilestoneGetIssuesServer_Error(t *testing.T) {
 
 // ---------- GetMergeRequests ----------.
 
-// TestMilestoneGetMergeRequests_Success verifies the behavior of milestone get merge requests success.
+// TestMilestoneGetMergeRequests_Success verifies MilestoneGetMergeRequests when success.
 func TestMilestoneGetMergeRequests_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -587,7 +588,7 @@ func TestMilestoneGetMergeRequests_Success(t *testing.T) {
 	}
 }
 
-// TestMilestoneGetMergeRequests_MissingParams verifies the behavior of milestone get merge requests missing params.
+// TestMilestoneGetMergeRequests_MissingParams verifies MilestoneGetMergeRequests when missing params.
 func TestMilestoneGetMergeRequests_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -601,7 +602,7 @@ func TestMilestoneGetMergeRequests_MissingParams(t *testing.T) {
 	}
 }
 
-// TestMilestoneGetMergeRequestsServer_Error verifies the behavior of milestone get merge requests server error.
+// TestMilestoneGetMergeRequestsServer_Error verifies MilestoneGetMergeRequestsServer when error.
 func TestMilestoneGetMergeRequestsServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -613,7 +614,7 @@ func TestMilestoneGetMergeRequestsServer_Error(t *testing.T) {
 	}
 }
 
-// TestMilestoneList_CancelledContext verifies the behavior of milestone list cancelled context.
+// TestMilestoneList_CancelledContext verifies MilestoneList when cancelled context.
 func TestMilestoneList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -634,25 +635,29 @@ func TestMilestoneList_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	errExpCancelledCtx      = "expected error for canceled context"
-	fmtUnexpErr             = "unexpected error: %v"
-	covMilestoneJSON        = `{"id":1,"iid":1,"project_id":42,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-03-31","web_url":"https://gitlab.example.com/-/milestones/1","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T10:00:00Z","expired":false}`
-	covMilestoneMinimalJSON = `{"id":2,"iid":2,"project_id":42,"title":"v2.0","state":"closed"}`
-	covMilestoneGroupJSON   = `{"id":3,"iid":3,"project_id":42,"title":"v3.0","state":"active","group_id":99}`
-	covMilestoneListJSON    = `[` + covMilestoneJSON + `]`
-	covIssuePath            = "/api/v4/projects/42/milestones/1/issues"
-	covMRPath               = "/api/v4/projects/42/milestones/1/merge_requests"
-	covIssueJSON            = `[{"id":10,"iid":1,"title":"Bug","state":"opened","web_url":"https://example.com/issues/1","created_at":"2026-01-05T00:00:00Z"}]`
-	covIssueNoDateJSON      = `[{"id":11,"iid":2,"title":"Feature","state":"closed"}]`
-	covMRJSON               = `[{"id":20,"iid":1,"title":"Feature X","state":"merged","source_branch":"feat-x","target_branch":"main","web_url":"https://example.com/mr/1","created_at":"2026-02-01T00:00:00Z"}]`
-	covMRNoDateJSON         = `[{"id":21,"iid":2,"title":"Fix Y","state":"opened","source_branch":"fix-y","target_branch":"main"}]`
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
+	errExpCancelledCtx = "expected error for canceled context"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// covMilestoneJSON identifies the cov milestone JSON constant used by this package.
+	covMilestoneJSON = `{"id":1,"iid":1,"project_id":42,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-03-31","web_url":"https://gitlab.example.com/-/milestones/1","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T10:00:00Z","expired":false}`
+	// covMilestoneListJSON identifies the cov milestone list JSON constant used by this package.
+	covMilestoneListJSON = `[` + covMilestoneJSON + `]`
+	// covIssueJSON identifies the cov issue JSON constant used by this package.
+	covIssueJSON = `[{"id":10,"iid":1,"title":"Bug","state":"opened","web_url":"https://example.com/issues/1","created_at":"2026-01-05T00:00:00Z"}]`
+	// covIssueNoDateJSON identifies the cov issue no date JSON constant used by this package.
+	covIssueNoDateJSON = `[{"id":11,"iid":2,"title":"Feature","state":"closed"}]`
+	// covMRJSON identifies the cov mrjson constant used by this package.
+	covMRJSON = `[{"id":20,"iid":1,"title":"Feature X","state":"merged","source_branch":"feat-x","target_branch":"main","web_url":"https://example.com/mr/1","created_at":"2026-02-01T00:00:00Z"}]`
+	// covMRNoDateJSON identifies the cov MR no date JSON constant used by this package.
+	covMRNoDateJSON = `[{"id":21,"iid":2,"title":"Fix Y","state":"opened","source_branch":"fix-y","target_branch":"main"}]`
 )
 
 // ---------------------------------------------------------------------------
 // List — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestList_IncludeAncestors verifies the behavior of cov list include ancestors.
+// TestList_IncludeAncestors verifies List when include ancestors.
 func TestList_IncludeAncestors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("include_ancestors") != "true" {
@@ -666,7 +671,7 @@ func TestList_IncludeAncestors(t *testing.T) {
 	}
 }
 
-// TestList_WithIIDs verifies the behavior of cov list with i i ds.
+// TestList_WithIIDs verifies List when with ii ds.
 func TestList_WithIIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -683,7 +688,7 @@ func TestList_WithIIDs(t *testing.T) {
 	}
 }
 
-// TestList_WithTitleFilter verifies the behavior of cov list with title filter.
+// TestList_WithTitleFilter verifies List when with title filter.
 func TestList_WithTitleFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("title") != "v1.0" {
@@ -697,7 +702,7 @@ func TestList_WithTitleFilter(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of cov list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -725,7 +730,7 @@ func TestList_WithPagination(t *testing.T) {
 // Get — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of cov get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -741,7 +746,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Create — server error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreate_ServerError verifies the behavior of cov create server error.
+// TestCreate_ServerError verifies Create when server error.
 func TestCreate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -752,7 +757,7 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of cov create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -768,7 +773,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 // Update — state_event, server error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_WithStateEvent verifies the behavior of cov update with state event.
+// TestUpdate_WithStateEvent verifies Update when with state event.
 func TestUpdate_WithStateEvent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -785,7 +790,7 @@ func TestUpdate_WithStateEvent(t *testing.T) {
 	}
 }
 
-// TestUpdate_ServerError verifies the behavior of cov update server error.
+// TestUpdate_ServerError verifies Update when server error.
 func TestUpdate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -796,7 +801,7 @@ func TestUpdate_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of cov update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -812,7 +817,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 // Delete — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_CancelledContext verifies the behavior of cov delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -828,7 +833,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // GetIssues — canceled context, pagination, no created_at
 // ---------------------------------------------------------------------------.
 
-// TestGetIssues_CancelledContext verifies the behavior of cov get issues cancelled context.
+// TestGetIssues_CancelledContext verifies GetIssues when cancelled context.
 func TestGetIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -840,7 +845,7 @@ func TestGetIssues_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetIssues_WithPagination verifies the behavior of cov get issues with pagination.
+// TestGetIssues_WithPagination verifies GetIssues when with pagination.
 func TestGetIssues_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -866,7 +871,7 @@ func TestGetIssues_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGetIssues_NoCreatedAt verifies the behavior of cov get issues no created at.
+// TestGetIssues_NoCreatedAt verifies GetIssues when no created at.
 func TestGetIssues_NoCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -888,7 +893,7 @@ func TestGetIssues_NoCreatedAt(t *testing.T) {
 // GetMergeRequests — canceled context, pagination, no created_at
 // ---------------------------------------------------------------------------.
 
-// TestGetMergeRequests_CancelledContext verifies the behavior of cov get merge requests cancelled context.
+// TestGetMergeRequests_CancelledContext verifies GetMergeRequests when cancelled context.
 func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -900,7 +905,7 @@ func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_WithPagination verifies the behavior of cov get merge requests with pagination.
+// TestGetMergeRequests_WithPagination verifies GetMergeRequests when with pagination.
 func TestGetMergeRequests_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -926,7 +931,7 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_NoCreatedAt verifies the behavior of cov get merge requests no created at.
+// TestGetMergeRequests_NoCreatedAt verifies GetMergeRequests when no created at.
 func TestGetMergeRequests_NoCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -948,7 +953,7 @@ func TestGetMergeRequests_NoCreatedAt(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies the behavior of cov format markdown all fields.
+// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, IID: 1, ProjectID: 42, Title: "v1.0", Description: "First release",
@@ -964,7 +969,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies the behavior of cov format markdown minimal.
+// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	o := Output{ID: 2, IID: 2, Title: "v2.0", State: "closed"}
 	md := FormatMarkdown(o)
@@ -982,7 +987,7 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of cov format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No milestones found") {
@@ -990,7 +995,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithExpired verifies the behavior of cov format list markdown string with expired.
+// TestFormatListMarkdownString_WithExpired verifies FormatListMarkdownString when with expired.
 func TestFormatListMarkdownString_WithExpired(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{
@@ -1011,7 +1016,7 @@ func TestFormatListMarkdownString_WithExpired(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of cov format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{{IID: 1, Title: "v1.0", State: "active"}},
@@ -1060,7 +1065,7 @@ func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdownString_Empty verifies the behavior of cov format issues markdown string empty.
+// TestFormatIssuesMarkdownString_Empty verifies FormatIssuesMarkdownString when empty.
 func TestFormatIssuesMarkdownString_Empty(t *testing.T) {
 	md := FormatIssuesMarkdownString(MilestoneIssuesOutput{})
 	if !strings.Contains(md, "No issues found") {
@@ -1068,7 +1073,7 @@ func TestFormatIssuesMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdownString_WithIssues verifies the behavior of cov format issues markdown string with issues.
+// TestFormatIssuesMarkdownString_WithIssues verifies FormatIssuesMarkdownString when with issues.
 func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 	out := MilestoneIssuesOutput{
 		Issues: []IssueItem{
@@ -1086,7 +1091,7 @@ func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdown verifies the behavior of cov format issues markdown.
+// TestFormatIssuesMarkdown verifies FormatIssuesMarkdown.
 func TestFormatIssuesMarkdown(t *testing.T) {
 	out := MilestoneIssuesOutput{
 		Issues:     []IssueItem{{IID: 1, Title: "x", State: "opened"}},
@@ -1098,7 +1103,7 @@ func TestFormatIssuesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdownString_Empty verifies the behavior of cov format merge requests markdown string empty.
+// TestFormatMergeRequestsMarkdownString_Empty verifies FormatMergeRequestsMarkdownString when empty.
 func TestFormatMergeRequestsMarkdownString_Empty(t *testing.T) {
 	md := FormatMergeRequestsMarkdownString(MilestoneMergeRequestsOutput{})
 	if !strings.Contains(md, "No merge requests found") {
@@ -1106,7 +1111,7 @@ func TestFormatMergeRequestsMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdownString_WithMRs verifies the behavior of cov format merge requests markdown string with m rs.
+// TestFormatMergeRequestsMarkdownString_WithMRs verifies FormatMergeRequestsMarkdownString when with MRs.
 func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	out := MilestoneMergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{
@@ -1127,7 +1132,7 @@ func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdown verifies the behavior of cov format merge requests markdown.
+// TestFormatMergeRequestsMarkdown verifies FormatMergeRequestsMarkdown.
 func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	out := MilestoneMergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{{IID: 1, Title: "x", State: "merged", SourceBranch: "a", TargetBranch: "main"}},
@@ -1140,18 +1145,30 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools — no panic + MCP round-trip
+// ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
+// TestActionSpecs_Metadata verifies canonical metadata for milestone actions.
+func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
+	specs := ActionSpecs(client)
+	byTool := milestoneSpecsByTool(t, specs)
+
+	if len(specs) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "milestones" {
+			t.Fatalf("OwnerPackage for %s = %q, want milestones", spec.Name, spec.OwnerPackage)
+		}
+	}
 }
 
-// TestRegisterTools_CallAllThroughMCP validates cov register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
+// TestActionSpecs_CallAllRoutes validates milestone routes across multiple scenarios.
+func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	const milestonePath = "/api/v4/projects/42/milestones"
 
 	mux := http.NewServeMux()
@@ -1188,18 +1205,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	ctx := context.Background()
-	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {
 		name string
@@ -1216,24 +1222,19 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			var result *mcp.CallToolResult
-			result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			result, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s): %v", tc.name, err)
+				t.Fatalf("Route.Handler(%s): %v", tc.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s): nil result", tc.name)
+				t.Fatalf("Route.Handler(%s): nil result", tc.name)
 			}
 		})
 	}
 }
 
-// TestMilestoneGet_EmbedsCanonicalResource asserts gitlab_milestone_get
-// attaches an EmbeddedResource block with URI
-// gitlab://project/{id}/milestone/{iid}. The handler resolves IID to global
-// ID via ListMilestones with iids filter, then GetMilestone, so two mock
-// endpoints are required.
-func TestMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
+// TestActionSpecs_MilestoneGetRoute verifies the canonical milestone get route output.
+func TestActionSpecs_MilestoneGetRoute(t *testing.T) {
 	const listJSON = `[{"id":99,"iid":3,"project_id":42,"title":"M3","description":"","state":"active"}]`
 	const getJSON = `{"id":99,"iid":3,"project_id":42,"title":"M3","description":"","state":"active"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1250,7 +1251,28 @@ func TestMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	})
-	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "milestone_iid": 3}
-	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_milestone_get", args, "gitlab://project/42/milestone/3", toolutil.EnableEmbeddedResources)
+	client := testutil.NewTestClient(t, handler)
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 3})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(Output)
+	if !ok {
+		t.Fatalf("result type = %T, want Output", result)
+	}
+	if out.IID != 3 || out.ID != 99 {
+		t.Fatalf("milestone output = %#v, want IID 3 ID 99", out)
+	}
+}
+
+// milestoneSpecsByTool supports milestone specs by tool assertions in milestones tests.
+func milestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }

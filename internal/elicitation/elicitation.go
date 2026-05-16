@@ -5,6 +5,8 @@
 // no-op when the connected MCP client does not support elicitation. This
 // mirrors the pattern used by sampling.Client and progress.Tracker.
 //
+// # Validation and Safety
+//
 // SECURITY: All responses are validated against the expected JSON Schema.
 // User input is never trusted and must be sanitized by the caller before
 // use in API calls.

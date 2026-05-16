@@ -1,5 +1,3 @@
-// Package groupwikis implements MCP tool handlers for GitLab group wiki
-// operations including list, get, create, edit, and delete pages.
 package groupwikis
 
 import (

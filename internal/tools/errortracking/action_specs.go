@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		errorTrackingUpdateSpec("error_tracking_update_settings", toolutil.RouteAction(client, EnableDisable), "gitlab_enable_disable_error_tracking"),
 		errorTrackingReadSpec("error_tracking_list", toolutil.RouteAction(client, ListClientKeys), "gitlab_list_error_tracking_client_keys"),
 		errorTrackingCreateSpec("error_tracking_create", toolutil.RouteAction(client, CreateClientKey), "gitlab_create_error_tracking_client_key"),
-		errorTrackingDeleteSpec("error_tracking_delete", toolutil.DestructiveVoidAction(client, DeleteClientKey), "gitlab_delete_error_tracking_client_key"),
+		errorTrackingDeleteSpec("error_tracking_delete", toolutil.DestructiveAction(client, deleteClientKeyOutput), "gitlab_delete_error_tracking_client_key"),
 	}
 }
 

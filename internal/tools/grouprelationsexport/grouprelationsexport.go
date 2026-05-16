@@ -1,4 +1,3 @@
-// Package grouprelationsexport implements MCP tools for GitLab group relations export operations.
 package grouprelationsexport
 
 import (

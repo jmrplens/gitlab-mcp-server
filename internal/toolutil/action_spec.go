@@ -16,6 +16,7 @@ type ActionSpec struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
+	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
 	ReadOnly               bool
 	Destructive            bool
@@ -31,6 +32,35 @@ type ActionSpec struct {
 	RichResultPolicy       string
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
+}
+
+// ActionAliasSpec describes a compatibility alias that resolves to a canonical
+// action owned by an ActionSpec.
+type ActionAliasSpec struct {
+	Alias          string
+	Target         string
+	Source         string
+	Searchable     bool
+	Deprecated     bool
+	RemovalVersion string
+	Reason         string
+}
+
+// ParameterAliasSpec describes a compatibility alias for one action parameter.
+type ParameterAliasSpec struct {
+	Alias          string
+	Target         string
+	Source         string
+	Searchable     bool
+	Deprecated     bool
+	RemovalVersion string
+	Reason         string
+}
+
+// CompatibilityPolicy carries compatibility aliases and their ownership policy.
+type CompatibilityPolicy struct {
+	ActionAliases    []ActionAliasSpec
+	ParameterAliases []ParameterAliasSpec
 }
 
 // IndividualToolSpec carries compatibility metadata for the individual-tool surface.
@@ -78,6 +108,7 @@ type ActionSpecOptions struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
+	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
 	ReadOnly               bool
 	Destructive            bool
@@ -108,6 +139,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		Tags:                   mergeActionSpecStrings(route.Tags, opts.Tags),
 		Usage:                  firstNonEmptyString(opts.Usage, route.Usage),
 		RelatedActions:         mergeActionSpecStrings(route.RelatedActions, opts.RelatedActions),
+		Compatibility:          CloneCompatibilityPolicy(opts.Compatibility),
 		ParameterGuidance:      cloneParameterGuidanceMap(opts.ParameterGuidance),
 		ReadOnly:               opts.ReadOnly,
 		Destructive:            route.Destructive,
@@ -124,6 +156,87 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		SchemaValidationNotes:  normalizeActionSpecNotes(opts.SchemaValidationNotes),
 		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
 	}
+}
+
+// CloneActionSpec returns a defensive copy of spec and all mutable metadata it owns.
+func CloneActionSpec(spec ActionSpec) ActionSpec {
+	return NewActionSpec(spec.Name, spec.Route, actionSpecOptionsFromSpec(spec))
+}
+
+// CloneActionSpecs returns defensive copies of specs in their original order.
+func CloneActionSpecs(specs []ActionSpec) []ActionSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]ActionSpec, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, CloneActionSpec(spec))
+	}
+	return out
+}
+
+func actionSpecOptionsFromSpec(spec ActionSpec) ActionSpecOptions {
+	return ActionSpecOptions{
+		Aliases:                spec.Aliases,
+		Tags:                   spec.Tags,
+		Usage:                  spec.Usage,
+		RelatedActions:         spec.RelatedActions,
+		Compatibility:          spec.Compatibility,
+		ParameterGuidance:      spec.ParameterGuidance,
+		ReadOnly:               spec.ReadOnly,
+		Destructive:            spec.Destructive,
+		Idempotent:             spec.Idempotent,
+		OpenWorld:              spec.OpenWorld,
+		Edition:                spec.Edition,
+		GitLabDotComOnly:       spec.GitLabDotComOnly,
+		OwnerPackage:           spec.OwnerPackage,
+		IndividualTool:         spec.IndividualTool,
+		ContentKind:            spec.ContentKind,
+		NotFoundPolicy:         spec.NotFoundPolicy,
+		EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
+		RichResultPolicy:       spec.RichResultPolicy,
+		SchemaValidationNotes:  spec.SchemaValidationNotes,
+		RuntimeValidationNotes: spec.RuntimeValidationNotes,
+	}
+}
+
+// CloneCompatibilityPolicy returns a defensive copy of compatibility metadata.
+func CloneCompatibilityPolicy(policy CompatibilityPolicy) CompatibilityPolicy {
+	policy.ActionAliases = cloneActionAliasSpecs(policy.ActionAliases)
+	policy.ParameterAliases = cloneParameterAliasSpecs(policy.ParameterAliases)
+	return policy
+}
+
+func cloneActionAliasSpecs(aliases []ActionAliasSpec) []ActionAliasSpec {
+	if len(aliases) == 0 {
+		return nil
+	}
+	out := make([]ActionAliasSpec, 0, len(aliases))
+	for _, alias := range aliases {
+		alias.Alias = strings.TrimSpace(strings.ToLower(alias.Alias))
+		alias.Target = strings.TrimSpace(strings.ToLower(alias.Target))
+		alias.Source = strings.TrimSpace(alias.Source)
+		alias.RemovalVersion = strings.TrimSpace(alias.RemovalVersion)
+		alias.Reason = strings.TrimSpace(alias.Reason)
+		out = append(out, alias)
+	}
+	return out
+}
+
+func cloneParameterAliasSpecs(aliases []ParameterAliasSpec) []ParameterAliasSpec {
+	if len(aliases) == 0 {
+		return nil
+	}
+	out := make([]ParameterAliasSpec, 0, len(aliases))
+	for _, alias := range aliases {
+		alias.Alias = strings.TrimSpace(strings.ToLower(alias.Alias))
+		alias.Target = strings.TrimSpace(alias.Target)
+		alias.Source = strings.TrimSpace(alias.Source)
+		alias.RemovalVersion = strings.TrimSpace(alias.RemovalVersion)
+		alias.Reason = strings.TrimSpace(alias.Reason)
+		out = append(out, alias)
+	}
+	return out
 }
 
 // CloneIndividualToolSpec returns a defensive copy of individual-tool metadata.
@@ -161,6 +274,9 @@ func (spec ActionSpec) Validate() error {
 		return err
 	}
 	if err := validateActionSpecAliases(spec); err != nil {
+		return err
+	}
+	if err := validateActionSpecCompatibility(spec); err != nil {
 		return err
 	}
 	for _, tag := range spec.Tags {
@@ -422,6 +538,77 @@ func validateActionSpecAliasesAgainstNames(spec ActionSpec, canonicalNames map[s
 		if _, ok := canonicalNames[alias]; ok {
 			return fmt.Errorf("action spec %q alias %q duplicates canonical action name", spec.Name, alias)
 		}
+	}
+	return nil
+}
+
+func validateActionSpecCompatibility(spec ActionSpec) error {
+	if err := validateActionAliasSpecs(spec.Name, spec.Compatibility.ActionAliases); err != nil {
+		return err
+	}
+	return validateParameterAliasSpecs(spec.Name, spec.Route.InputSchema, spec.Compatibility.ParameterAliases)
+}
+
+func validateActionAliasSpecs(actionName string, aliases []ActionAliasSpec) error {
+	canonicalName := strings.ToLower(strings.TrimSpace(actionName))
+	seen := make(map[string]string, len(aliases))
+	for _, alias := range aliases {
+		aliasName := strings.TrimSpace(strings.ToLower(alias.Alias))
+		target := strings.TrimSpace(strings.ToLower(alias.Target))
+		if aliasName == "" {
+			return fmt.Errorf("action spec %q has compatibility action alias without alias", actionName)
+		}
+		if target == "" {
+			return fmt.Errorf("action spec %q compatibility action alias %q has no target", actionName, aliasName)
+		}
+		if target != canonicalName {
+			return fmt.Errorf("action spec %q compatibility action alias %q targets %q", actionName, aliasName, target)
+		}
+		if strings.TrimSpace(alias.Source) == "" {
+			return fmt.Errorf("action spec %q compatibility action alias %q has no source", actionName, aliasName)
+		}
+		if strings.TrimSpace(alias.Reason) == "" {
+			return fmt.Errorf("action spec %q compatibility action alias %q has no reason", actionName, aliasName)
+		}
+		if alias.Deprecated && strings.TrimSpace(alias.RemovalVersion) == "" {
+			return fmt.Errorf("action spec %q deprecated compatibility action alias %q has no removal version", actionName, aliasName)
+		}
+		if existingTarget, ok := seen[aliasName]; ok && existingTarget != target {
+			return fmt.Errorf("action spec %q compatibility action alias %q targets both %q and %q", actionName, aliasName, existingTarget, target)
+		}
+		seen[aliasName] = target
+	}
+	return nil
+}
+
+func validateParameterAliasSpecs(actionName string, inputSchema map[string]any, aliases []ParameterAliasSpec) error {
+	fields := schemaPropertyNames(inputSchema)
+	seen := make(map[string]string, len(aliases))
+	for _, alias := range aliases {
+		aliasName := strings.TrimSpace(strings.ToLower(alias.Alias))
+		target := strings.TrimSpace(alias.Target)
+		if aliasName == "" {
+			return fmt.Errorf("action spec %q has compatibility parameter alias without alias", actionName)
+		}
+		if target == "" {
+			return fmt.Errorf("action spec %q compatibility parameter alias %q has no target", actionName, aliasName)
+		}
+		if _, ok := fields[target]; !ok {
+			return fmt.Errorf("action spec %q compatibility parameter alias %q targets unknown parameter %q", actionName, aliasName, target)
+		}
+		if strings.TrimSpace(alias.Source) == "" {
+			return fmt.Errorf("action spec %q compatibility parameter alias %q has no source", actionName, aliasName)
+		}
+		if strings.TrimSpace(alias.Reason) == "" {
+			return fmt.Errorf("action spec %q compatibility parameter alias %q has no reason", actionName, aliasName)
+		}
+		if alias.Deprecated && strings.TrimSpace(alias.RemovalVersion) == "" {
+			return fmt.Errorf("action spec %q deprecated compatibility parameter alias %q has no removal version", actionName, aliasName)
+		}
+		if existingTarget, ok := seen[aliasName]; ok && existingTarget != target {
+			return fmt.Errorf("action spec %q compatibility parameter alias %q targets both %q and %q", actionName, aliasName, existingTarget, target)
+		}
+		seen[aliasName] = target
 	}
 	return nil
 }

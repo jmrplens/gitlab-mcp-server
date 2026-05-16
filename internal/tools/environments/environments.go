@@ -1,6 +1,3 @@
-// Package environments implements MCP tool handlers for GitLab environment
-// lifecycle management including list, get, create, update, delete, and stop.
-// It wraps the Environments service from client-go v2.
 package environments
 
 import (

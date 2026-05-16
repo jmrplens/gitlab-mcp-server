@@ -57,7 +57,7 @@ graph LR
     MCP -->|HTTPS| GQL
 ```
 
-AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab API calls (REST for ~155 domains, GraphQL for 7 domains) and returns structured responses. See [GraphQL Integration](graphql.md) for details on which domains use GraphQL and why.
+AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab API calls (primarily REST v4, with GraphQL for domains where REST is deprecated, unavailable, or less efficient) and returns structured responses. See [GraphQL Integration](graphql.md) for details on which domains use GraphQL and why.
 
 ## Container View
 
@@ -67,12 +67,14 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
+        SPECS[domain ActionSpecs<br/>163 domain sub-packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
-        META[metatool<br/>32 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
-        DYN[dynamic<br/>3 visible tools over canonical action catalog]
-        SAMP[sampling_tools<br/>11 LLM-assisted tools]
-        ELIC[elicitation_tools<br/>4 interactive tools]
+        STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
+        IND[individual projection<br/>1006 self-managed / 1011 GitLab.com Enterprise tools]
+        META[meta projection<br/>33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise tools]
+        DYN[dynamic projection<br/>3 visible search / describe / execute tools]
+        SAMP[sampling support<br/>11 LLM-assisted actions]
+        ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>46 resource handlers]
         PROMPTS[prompts<br/>38 prompt handlers]
         LOG[logging<br/>Session logging]
@@ -94,24 +96,30 @@ graph TD
     SRV --> STDIO
     HTTP --> POOL
     POOL -->|one server per token+URL| SRV
-    TOOLS --> GL
-    META --> CATALOG
-    DYN --> CATALOG
-    CATALOG --> TOOLS
+    SPECS --> CATALOG
+    CATALOG --> IND
+    CATALOG --> META
+    CATALOG --> DYN
+    CATALOG --> SAMP
+    STANDALONE --> ELIC
+    STANDALONE -.->|dynamic route injection| DYN
+    IND --> GL
+    META --> GL
+    DYN --> GL
     SAMP --> GL
+    ELIC --> GL
     SAMP --> SAMPLING
     ELIC --> ELICIT
-    ELIC --> GL
     RES --> GL
     PROMPTS --> GL
-    MAIN -->|register| TOOLS
-    MAIN -->|register| META
-    MAIN -->|register| DYN
-    MAIN -->|register| SAMP
-    MAIN -->|register| ELIC
+    MAIN -->|builds| CATALOG
+    MAIN -->|selects| IND
+    MAIN -->|selects| META
+    MAIN -->|selects| DYN
+    MAIN -->|registers standalone| STANDALONE
     MAIN -->|register| RES
     MAIN -->|register| PROMPTS
-    TOOLS -.->|icons| ICN
+    CATALOG -.->|icons| ICN
     RES -.->|icons| ICN
     PROMPTS -.->|icons| ICN
     MAIN -->|setup| LOG
@@ -153,7 +161,8 @@ Loads settings from environment variables with optional `.env` file support (via
 | `GITLAB_URL`             | No       | `https://gitlab.com` | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
-| `META_TOOLS`             | No       | `true`  | Use meta-tools instead of individual tools            |
+| `TOOL_SURFACE`           | No       | `meta`  | Canonical tool catalog selector (`meta`, `individual`, `dynamic`, `dynamic-2`, `dynamic-3`) |
+| `META_TOOLS`             | No       | —       | Deprecated compatibility selector mapped to `TOOL_SURFACE` when `TOOL_SURFACE` is absent |
 | `ISSUE_REPORTS`          | No       | `false` | Auto-generate GitLab issues on tool errors            |
 | `YOLO_MODE`              | No       | `false` | Skip destructive action confirmations                |
 | `UPLOAD_MAX_FILE_SIZE`   | No       | `2GB`   | Maximum allowed upload file size                     |
@@ -169,7 +178,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
+The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -177,13 +186,13 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 
 | File               | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
-| `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
-| `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive (+ 15 enterprise inline, + 1 GitLab.com Enterprise Orbit) |
+| `register.go`      | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection |
+| `register_meta.go` | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces |
 | `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, schema resources, audits, and generators |
 | `meta_catalog.go`  | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog |
 | `actioncatalog/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
-| `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
+| `markdown.go`      | Thin `markdownForResult` delegator to the type-based Markdown registry |
 | `pagination.go`    | Shared pagination type aliases                                |
 | `errors.go`        | Error helpers (`wrapErr`, `handleGitLabError`)                |
 | `logging.go`       | `logToolCall` helper                                          |
@@ -210,7 +219,8 @@ Infrastructure shared by all tool sub-packages:
 
 | File               | Purpose                                                        |
 | ------------------ | -------------------------------------------------------------- |
-| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `ActionMap`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute` |
+| `action_spec.go`   | `ActionSpec`, compatibility policy, individual projection metadata, and schema/result policy fields |
+| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute` |
 | `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
 | `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks` |
 | `addtool.go`       | `AddTool` wrapper — suppresses structuredContent for individual tools |
@@ -258,7 +268,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base tools total. The Enterprise/Premium catalog adds 14 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -277,7 +287,7 @@ sequenceDiagram
     TOOL->>GL: GET /api/v4/projects?owned=true
     GL-->>TOOL: JSON response
     TOOL-->>META: ListOutput
-    META->>META: markdownForResult(ListOutput)
+    META->>META: toolutil.MarkdownForResult(ListOutput)
     META-->>MCP: CallToolResult (Markdown + structured JSON)
     MCP-->>LLM: JSON-RPC response
 ```
@@ -448,15 +458,13 @@ This pattern provides:
 The meta-tool pattern applies the **Strategy pattern** — a single endpoint dispatches to different handler functions based on the `action` parameter:
 
 ```go
-routes := toolutil.ActionMap{
-    "create": toolutil.RouteAction(client, Create),
-    "get":    toolutil.RouteAction(client, Get),
-    "list":   toolutil.RouteAction(client, List),
-    "delete": toolutil.DestructiveVoidAction(client, Delete),
-}
+spec := toolutil.NewActionSpec("create", toolutil.RouteAction(client, Create), toolutil.ActionSpecOptions{
+    OwnerPackage: "projects",
+    IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_create_project"},
+})
 ```
 
-The `ActionRoute` type pairs each handler with a `Destructive bool` field. `DeriveAnnotations(routes)` auto-computes tool-level annotations from route metadata:
+The `ActionSpec` wraps an `ActionRoute`, so handler schemas, destructive classification, aliases, usage hints, result policies, and individual projection metadata travel through the same catalog entry. Meta-tools still dispatch through `MakeMetaHandler`, but their route maps are projected from the canonical catalog:
 
 ```mermaid
 graph TD
@@ -465,7 +473,7 @@ graph TD
     ROUTE --> WRAP["RouteAction[I, O]<br/>(generic adapter)"]
     WRAP --> UNMARSHAL["JSON unmarshal<br/>params → InputStruct"]
     UNMARSHAL --> HANDLER["Typed handler<br/>func(ctx, client, input)"]
-    HANDLER --> MARKDOWN["markdownForResult<br/>(format output)"]
+    HANDLER --> MARKDOWN["toolutil.MarkdownForResult<br/>(registered formatter)"]
 ```
 
 ### Pattern 3: Destructive Action Confirmation
@@ -580,7 +588,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (32/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (33/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 14 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |

@@ -1,7 +1,3 @@
-// Package projectimportexport implements MCP tool handlers for the GitLab
-// Project Import/Export API. It wraps the ProjectImportExportService from
-// client-go v2 to schedule exports, check export/import status, download
-// export archives, and import projects from file archives.
 package projectimportexport
 
 import (
