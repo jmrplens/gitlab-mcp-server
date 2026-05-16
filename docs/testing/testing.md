@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,905 |
-| Unit test functions | 9,656 |
+| Total test functions | 9,908 |
+| Unit test functions | 9,659 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.7% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.8% |
 | Overall coverage (`go test ./internal/...`) | 97.9% |
 | Average package coverage | 94.9% |
 
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,895 | 89.8% |
-| `TestFunc` (no underscore) | 729 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,897 | 89.8% |
+| `TestFunc` (no underscore) | 730 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,248 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,251 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,905** | **567** |  |
+| **Total** | **9,908** | **567** |  |
 
 ### Core Packages
 
@@ -79,7 +79,7 @@
 | Sub-package | Tests | Coverage | Tools |
 | --- | ---: | ---: | ---: |
 | projects | 328 | 95.3% | 54 |
-| mergerequests | 212 | 96.1% | 30 |
+| mergerequests | 214 | 96.7% | 30 |
 | issues | 200 | 97.1% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
@@ -211,7 +211,7 @@
 | markdown | 8 | 1 | 100.0% | 1 |
 | memberroles | 40 | 3 | 100.0% | 6 |
 | members | 59 | 2 | 100.0% | 6 |
-| mergerequests | 212 | 1 | 96.1% | 30 |
+| mergerequests | 214 | 1 | 96.7% | 30 |
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
 | milestones | 67 | 1 | 97.8% | 7 |
@@ -225,7 +225,7 @@
 | mrnotes | 37 | 2 | 100.0% | 5 |
 | namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
-| orbit | 25 | 1 | 99.7% | 5 |
+| orbit | 26 | 1 | 100.0% | 5 |
 | packages | 103 | 5 | 97.3% | 8 |
 | pages | 54 | 2 | 100.0% | 9 |
 | pipelines | 101 | 2 | 99.2% | 12 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,248** | **337** |  | **1,106** |
+| **Total** | **7,251** | **337** |  | **1,106** |
 
 </details>
 
@@ -434,7 +434,7 @@
 | markdown | 100.0% |
 | memberroles | 100.0% |
 | members | 100.0% |
-| mergerequests | 96.1% |
+| mergerequests | 96.7% |
 | mergetrains | 100.0% |
 | metadata | 100.0% |
 | milestones | 97.8% |
@@ -448,7 +448,7 @@
 | mrnotes | 100.0% |
 | namespaces | 98.9% |
 | notifications | 100.0% |
-| orbit | 99.7% |
+| orbit | 100.0% |
 | packages | 97.3% |
 | pages | 100.0% |
 | pipelines | 99.2% |

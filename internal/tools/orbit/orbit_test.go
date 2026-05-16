@@ -709,6 +709,14 @@ func TestOrbitMarkdownFormatters_UseSafeFences(t *testing.T) {
 	}
 }
 
+// TestOrbitMarkdownFormatters_AnonymousFence verifies fenced blocks without a language marker.
+func TestOrbitMarkdownFormatters_AnonymousFence(t *testing.T) {
+	got := fencedBlock("", "plain text")
+	if got != "```\nplain text\n```\n" {
+		t.Fatalf("fencedBlock() = %q, want anonymous fence", got)
+	}
+}
+
 // TestOrbitMarkdownFormatters_EscapeTableCells verifies that markdown table
 // cells escape pipes and normalize newlines from Orbit data.
 func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {

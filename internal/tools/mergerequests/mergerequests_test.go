@@ -4251,6 +4251,39 @@ func TestActionSpecs_MRGetNotFound(t *testing.T) {
 	}
 }
 
+// TestFormatMergeRequestNotFound verifies not-found result formatting for merge requests.
+func TestFormatMergeRequestNotFound(t *testing.T) {
+	result := formatMergeRequestNotFound(mergeRequestNotFoundOutput{Identifier: "!5 in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatMergeRequestNotFound() = %+v, want error result", result)
+	}
+}
+
+// TestActionSpecs_DeleteOutputErrors verifies MR delete-style wrappers propagate backend failures.
+func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+	}))
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	tests := []struct {
+		tool string
+		args map[string]any
+	}{
+		{"gitlab_mr_unapprove", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_delete", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_dependency_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "blocking_merge_request_id": 100}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("expected route error for %s", tt.tool)
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_DestructiveConfirmDeclined verifies destructive MR tools return early when confirmation is declined.
 func TestCatalogSurface_DestructiveConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
