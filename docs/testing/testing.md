@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,727 |
-| Unit test functions | 9,480 |
+| Total test functions | 9,726 |
+| Unit test functions | 9,479 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
 | Test files (internal/) | 433 |
@@ -37,7 +37,7 @@
 | --- | ---: | ---: |
 | `TestFunc_Scenario` (2-part) | 8,738 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
+| `TestFunc_Scenario_Expected` (3+ part) | 279 | 2.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,117 | 335 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,116 | 335 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,727** | **559** |  |
+| **Total** | **9,726** | **559** |  |
 
 ### Core Packages
 
@@ -81,7 +81,7 @@
 | projects | 328 | 95.3% | 54 |
 | mergerequests | 212 | 96.1% | 30 |
 | issues | 199 | 97.1% | 21 |
-| users | 185 | 100.0% | 36 |
+| users | 184 | 99.9% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
 | groups | 123 | 99.6% | 18 |
 | dynamic | 121 | 98.9% | 4 |
@@ -274,11 +274,11 @@
 | usagedata | 27 | 1 | 100.0% | 6 |
 | useremails | 24 | 2 | 100.0% | 6 |
 | usergpgkeys | 44 | 2 | 100.0% | 8 |
-| users | 185 | 12 | 100.0% | 36 |
+| users | 184 | 12 | 99.9% | 36 |
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,117** | **335** |  | **1,018** |
+| **Total** | **7,116** | **335** |  | **1,018** |
 
 </details>
 
@@ -288,7 +288,7 @@
 
 | Package | Coverage |
 | --- | ---: |
-| cmd/audit_action_spec_coverage | 78.8% |
+| cmd/audit_action_spec_coverage | 76.1% |
 | cmd/audit_godocs | 50.7% |
 | cmd/audit_meta_schema | 80.2% |
 | cmd/audit_metrics | 28.4% |
@@ -491,7 +491,7 @@
 | usagedata | 100.0% |
 | useremails | 100.0% |
 | usergpgkeys | 100.0% |
-| users | 100.0% |
+| users | 99.9% |
 | vulnerabilities | 98.4% |
 | wikis | 98.7% |
 | workitems | 100.0% |
@@ -511,8 +511,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/eval_meta_tools** (59.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **surfaces** (75.3%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
+- **cmd/audit_action_spec_coverage** (76.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (77.8%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
-- **cmd/audit_action_spec_coverage** (78.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_meta_schema** (80.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.
 - **wizard** (87.2%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.

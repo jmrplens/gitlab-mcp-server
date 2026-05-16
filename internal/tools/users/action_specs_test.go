@@ -1,5 +1,4 @@
-// register_management_test.go tests MCP roundtrip for all management tools
-// (admin, CRUD, SSH keys, misc, service accounts) to cover the register_ closures.
+// action_specs_test.go contains canonical-route tests for user actions.
 package users
 
 import (
@@ -7,24 +6,31 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRegisterManagementTools_MCPRoundtrip validates that all management tools
-// (admin state, CRUD, SSH keys, misc, service accounts) are reachable and
-// return non-error results via the MCP protocol.
-func TestRegisterManagementTools_MCPRoundtrip(t *testing.T) {
-	session := newManagementMCPSession(t)
-	ctx := context.Background()
+// TestActionSpecs_CallRoutes exercises user actions through their canonical routes.
+func TestActionSpecs_CallRoutes(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
 
-	tools := []struct {
+	tests := []struct {
 		name string
 		tool string
 		args map[string]any
 	}{
-		// Admin state actions
+		{"current_user", "gitlab_user_current", map[string]any{}},
+		{"list_users", "gitlab_list_users", map[string]any{}},
+		{"get_user", "gitlab_get_user", map[string]any{"user_id": 42}},
+		{"get_user_status", "gitlab_get_user_status", map[string]any{"user_id": 42}},
+		{"set_user_status", "gitlab_set_user_status", map[string]any{"emoji": "coffee", "message": "Working"}},
+		{"list_ssh_keys", "gitlab_list_ssh_keys", map[string]any{}},
+		{"list_emails", "gitlab_list_emails", map[string]any{}},
+		{"list_contribution_events", "gitlab_list_user_contribution_events", map[string]any{"user_id": 42}},
+		{"get_associations_count", "gitlab_get_user_associations_count", map[string]any{"user_id": 42}},
 		{"block_user", "gitlab_block_user", map[string]any{"user_id": 42}},
 		{"unblock_user", "gitlab_unblock_user", map[string]any{"user_id": 42}},
 		{"ban_user", "gitlab_ban_user", map[string]any{"user_id": 42}},
@@ -34,11 +40,9 @@ func TestRegisterManagementTools_MCPRoundtrip(t *testing.T) {
 		{"approve_user", "gitlab_approve_user", map[string]any{"user_id": 42}},
 		{"reject_user", "gitlab_reject_user", map[string]any{"user_id": 42}},
 		{"disable_2fa", "gitlab_disable_two_factor", map[string]any{"user_id": 42}},
-		// CRUD
 		{"create_user", "gitlab_create_user", map[string]any{"email": "new@test.com", "name": "New", "username": "newu"}},
 		{"modify_user", "gitlab_modify_user", map[string]any{"user_id": 42, "bio": "Updated"}},
 		{"delete_user", "gitlab_delete_user", map[string]any{"user_id": 42}},
-		// SSH keys
 		{"list_ssh_keys_for_user", "gitlab_list_ssh_keys_for_user", map[string]any{"user_id": 42}},
 		{"get_ssh_key", "gitlab_get_ssh_key", map[string]any{"key_id": 1}},
 		{"get_ssh_key_for_user", "gitlab_get_ssh_key_for_user", map[string]any{"user_id": 42, "key_id": 1}},
@@ -46,59 +50,140 @@ func TestRegisterManagementTools_MCPRoundtrip(t *testing.T) {
 		{"add_ssh_key_for_user", "gitlab_add_ssh_key_for_user", map[string]any{"user_id": 42, "title": "k", "key": "ssh-rsa AAA"}},
 		{"delete_ssh_key", "gitlab_delete_ssh_key", map[string]any{"key_id": 1}},
 		{"delete_ssh_key_for_user", "gitlab_delete_ssh_key_for_user", map[string]any{"user_id": 42, "key_id": 1}},
-		// Misc
 		{"current_user_status", "gitlab_current_user_status", map[string]any{}},
 		{"get_activities", "gitlab_get_user_activities", map[string]any{}},
 		{"get_memberships", "gitlab_get_user_memberships", map[string]any{"user_id": 42}},
 		{"create_runner", "gitlab_create_user_runner", map[string]any{"runner_type": "instance_type"}},
 		{"delete_identity", "gitlab_delete_user_identity", map[string]any{"user_id": 42, "provider": "ldap"}},
-		// Service accounts
 		{"create_svc", "gitlab_create_service_account", map[string]any{"name": "svc", "username": "svc"}},
 		{"list_svc", "gitlab_list_service_accounts", map[string]any{}},
 		{"create_pat", "gitlab_create_current_user_pat", map[string]any{"name": "pat", "scopes": []string{"api"}}},
 	}
 
-	for _, tt := range tools {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
+			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
+				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
 			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
+			if result == nil {
+				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
 	}
 }
 
-// newManagementMCPSession creates an MCP client session with all user tools
-// registered including management tools.
-func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
+// TestActionSpecs_GetUserNotFound verifies get_user preserves NotFoundResult details.
+func TestActionSpecs_GetUserNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
+	}))
+	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+
+	result, err := byTool["gitlab_get_user"].Route.Handler(t.Context(), map[string]any{"user_id": 999})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_get_user) error: %v", err)
+	}
+	out, ok := result.(userNotFoundOutput)
+	if !ok {
+		t.Fatalf("Route.Handler(gitlab_get_user) returned %T, want userNotFoundOutput", result)
+	}
+	if out.Identifier != "ID 999" {
+		t.Fatalf("identifier = %q", out.Identifier)
+	}
+}
+
+// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API when confirm is declined")
+	}))
+	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_user"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test user destructive confirmation.",
+		Icons:       toolutil.IconUser,
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+
+	result, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_user",
+		Arguments: map[string]any{"user_id": 42},
+	})
+	if callErr != nil {
+		t.Fatalf("CallTool error: %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestMarkdownForResult_ManagementOutputs verifies management outputs have markdown formatters.
+func TestMarkdownForResult_ManagementOutputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		result any
+	}{
+		{"admin", AdminActionOutput{UserID: 42, Action: "blocked", Success: true}},
+		{"delete_user", DeleteOutput{UserID: 42, Deleted: true}},
+		{"delete_ssh_key", DeleteSSHKeyOutput{KeyID: 1, Deleted: true}},
+		{"activities", UserActivitiesOutput{}},
+		{"memberships", UserMembershipsOutput{}},
+		{"runner", UserRunnerOutput{ID: 101, Token: "glrt-abc"}},
+		{"delete_identity", DeleteUserIdentityOutput{UserID: 42, Provider: "ldap", Deleted: true}},
+		{"service_accounts", ServiceAccountListOutput{}},
+		{"current_pat", CurrentUserPATOutput{ID: 10, Name: "pat", Active: true, Scopes: []string{"api"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callResult := toolutil.MarkdownForResult(tt.result)
+			if callResult == nil {
+				t.Fatal("MarkdownForResult returned nil")
+			}
+			if len(callResult.Content) == 0 {
+				t.Fatal("MarkdownForResult returned no content")
+			}
+		})
+	}
+}
+
+func newUserActionSpecClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 
-	uJSON := `{"id":42,"username":"testuser","email":"test@example.com","name":"Test User","state":"active","web_url":"https://gitlab.example.com/testuser"}`
+	userJSON := `{"id":42,"username":"testuser","email":"test@example.com","name":"Test User","state":"active","web_url":"https://gitlab.example.com/testuser","avatar_url":"https://gitlab.example.com/avatar.png","is_admin":false,"bio":"Developer"}`
 	statusJSON := `{"emoji":"coffee","message":"Working","availability":"busy"}`
 	sshKeyJSON := `{"id":1,"title":"key","key":"ssh-rsa AAA","created_at":"2026-01-01T00:00:00Z"}`
 
 	handler := http.NewServeMux()
-
-	// Core user routes (needed for tools registered in registerCoreTools)
 	handler.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, uJSON)
+		testutil.RespondJSON(w, http.StatusOK, userJSON)
 	})
 	handler.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+uJSON+`]`)
+		testutil.RespondJSON(w, http.StatusOK, `[`+userJSON+`]`)
 	})
 	handler.HandleFunc("GET /api/v4/users/42", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, uJSON)
+		testutil.RespondJSON(w, http.StatusOK, userJSON)
 	})
 	handler.HandleFunc("GET /api/v4/users/42/status", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, statusJSON)
@@ -110,16 +195,14 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 		testutil.RespondJSON(w, http.StatusOK, `[`+sshKeyJSON+`]`)
 	})
 	handler.HandleFunc("GET /api/v4/user/emails", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"email":"test@example.com"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"email":"test@example.com","confirmed_at":"2026-01-01T00:00:00Z"}]`)
 	})
 	handler.HandleFunc("GET /api/v4/users/42/events", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","created_at":"2026-06-01T12:00:00Z"}]`)
 	})
 	handler.HandleFunc("GET /api/v4/users/42/associations_count", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"groups_count":0,"projects_count":0,"issues_count":0,"merge_requests_count":0}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"groups_count":5,"projects_count":12,"issues_count":45,"merge_requests_count":30}`)
 	})
-
-	// Admin state actions (POST)
 	for _, action := range []string{"block", "unblock", "ban", "unban", "activate", "deactivate", "approve"} {
 		handler.HandleFunc("POST /api/v4/users/42/"+action, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusCreated)
@@ -131,19 +214,15 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 	handler.HandleFunc("PATCH /api/v4/users/42/disable_two_factor", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-
-	// CRUD
 	handler.HandleFunc("POST /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, uJSON)
+		testutil.RespondJSON(w, http.StatusCreated, userJSON)
 	})
 	handler.HandleFunc("PUT /api/v4/users/42", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, uJSON)
+		testutil.RespondJSON(w, http.StatusOK, userJSON)
 	})
 	handler.HandleFunc("DELETE /api/v4/users/42", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-
-	// SSH keys for user
 	handler.HandleFunc("GET /api/v4/users/42/keys", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+sshKeyJSON+`]`)
 	})
@@ -165,8 +244,6 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 	handler.HandleFunc("DELETE /api/v4/users/42/keys/1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-
-	// Misc
 	handler.HandleFunc("GET /api/v4/user/status", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, statusJSON)
 	})
@@ -182,10 +259,8 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 	handler.HandleFunc("DELETE /api/v4/users/42/identities/ldap", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-
-	// Service accounts
 	handler.HandleFunc("POST /api/v4/service_accounts", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, uJSON)
+		testutil.RespondJSON(w, http.StatusCreated, userJSON)
 	})
 	handler.HandleFunc("GET /api/v4/service_accounts", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"svc-1","name":"Service 1"}]`)
@@ -194,62 +269,24 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"pat","active":true,"token":"glpat-t","scopes":["api"],"revoked":false,"user_id":1}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test-mgmt", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-	RegisterEnterpriseTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	_ = mcpClient // used below
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	return testutil.NewTestClient(t, handler)
 }
 
-// TestRegisterTools_GetUser_NotFound covers the 404 branch in the
-// gitlab_get_user handler closure in register.go, which returns a
-// NotFoundResult instead of propagating the error.
-func TestRegisterTools_GetUser_NotFound(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/users/{id}", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
-	})
-
-	client := testutil.NewTestClient(t, mux)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
+func userSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	t.Helper()
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		toolName := spec.IndividualTool.Name
+		if toolName == "" {
+			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
+		}
+		if _, exists := byTool[toolName]; exists {
+			if toolName == "gitlab_user_current" {
+				continue
+			}
+			t.Fatalf("duplicate individual tool %q", toolName)
+		}
+		byTool[toolName] = spec
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_get_user",
-		Arguments: map[string]any{"user_id": float64(99999)},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil || !result.IsError {
-		t.Error("expected IsError=true for not-found user")
-	}
+	return byTool
 }

@@ -1,6 +1,10 @@
 package users
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -11,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		userReadSpec("current", toolutil.RouteAction(client, Current), "gitlab_user_current"),
 		userReadSpec("me", toolutil.RouteAction(client, Current), "gitlab_user_current"),
 		userReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_users"),
-		userReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_get_user"),
+		userReadSpec("get", userGetRoute(client), "gitlab_get_user"),
 		userReadSpec("get_status", toolutil.RouteAction(client, GetStatus), "gitlab_get_user_status"),
 		userUpdateSpec("set_status", toolutil.RouteAction(client, SetStatus), "gitlab_set_user_status"),
 		userReadSpec("ssh_keys", toolutil.RouteAction(client, ListSSHKeys), "gitlab_list_ssh_keys"),
@@ -51,6 +55,19 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		)
 	}
 	return specs
+}
+
+func userGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Get)
+	baseHandler := route.Handler
+	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+		result, err := baseHandler(ctx, input)
+		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return userNotFoundOutput{Identifier: fmt.Sprintf("ID %v", input["user_id"])}, nil
+		}
+		return result, err
+	}
+	return route
 }
 
 func userReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
