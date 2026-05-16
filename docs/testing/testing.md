@@ -22,7 +22,7 @@
 | Unit test functions | 9,472 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 427 |
+| Test files (internal/) | 428 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,109 | 329 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,109 | 330 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,719** | **553** |  |
+| **Total** | **9,719** | **554** |  |
 
 ### Core Packages
 
@@ -235,7 +235,7 @@
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
 | projectimportexport | 30 | 1 | 94.0% | 5 |
 | projectiterations | 18 | 1 | 100.0% | 1 |
-| projectmirrors | 55 | 1 | 94.7% | 7 |
+| projectmirrors | 55 | 2 | 93.7% | 7 |
 | projects | 328 | 3 | 95.3% | 54 |
 | projectstatistics | 8 | 2 | 100.0% | 1 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,109** | **329** |  | **1,018** |
+| **Total** | **7,109** | **330** |  | **1,018** |
 
 </details>
 
@@ -452,7 +452,7 @@
 | projectdiscovery | 100.0% |
 | projectimportexport | 94.0% |
 | projectiterations | 100.0% |
-| projectmirrors | 94.7% |
+| projectmirrors | 93.7% |
 | projects | 95.3% |
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
