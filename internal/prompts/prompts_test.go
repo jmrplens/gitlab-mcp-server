@@ -1732,7 +1732,7 @@ func TestGenerateReleaseNotesPrompt_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "generate_release_notes",
-		Arguments: map[string]string{"project_id": "42", "tag": "v1.0"},
+		Arguments: map[string]string{"project_id": "42", "from": "v1.0", "to": "v2.0"},
 	})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)

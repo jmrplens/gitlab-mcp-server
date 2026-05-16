@@ -25,9 +25,9 @@ const (
 // TestSearchProjects verifies that [searchProjects] returns formatted project
 // entries matching the given query.
 func TestSearchProjects(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"path_with_namespace":"group/alpha"},
 				{"id":2,"path_with_namespace":"group/beta"}
 			]`)
@@ -51,12 +51,12 @@ func TestSearchProjects(t *testing.T) {
 // TestSearchProjects_EmptyQuery verifies that [searchProjects] omits the search
 // parameter when the query is empty.
 func TestSearchProjects_EmptyQuery(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects" {
 			if r.URL.Query().Get("search") != "" {
 				t.Errorf("expected no search param for empty query, got %q", r.URL.Query().Get("search"))
 			}
-			respondJSON(w, http.StatusOK, `[{"id":1,"path_with_namespace":"team/repo"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"path_with_namespace":"team/repo"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -74,7 +74,7 @@ func TestSearchProjects_EmptyQuery(t *testing.T) {
 // TestSearchProjects_APIError verifies that [searchProjects] returns an error
 // when the GitLab API responds with a failure status.
 func TestSearchProjects_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -87,9 +87,9 @@ func TestSearchProjects_APIError(t *testing.T) {
 // TestSearchGroups verifies that [searchGroups] returns formatted group entries
 // matching the given query.
 func TestSearchGroups(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups" {
-			respondJSON(w, http.StatusOK, `[{"id":10,"full_path":"engineering/platform"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"full_path":"engineering/platform"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -110,7 +110,7 @@ func TestSearchGroups(t *testing.T) {
 // TestSearchGroups_APIError verifies that [searchGroups] returns an error when
 // the GitLab API responds with a failure status.
 func TestSearchGroups_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -122,9 +122,9 @@ func TestSearchGroups_APIError(t *testing.T) {
 
 // TestSearchUsers verifies that [searchUsers] returns matching usernames.
 func TestSearchUsers(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users" {
-			respondJSON(w, http.StatusOK, `[{"id":1,"username":"alice"},{"id":2,"username":"alicia"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice"},{"id":2,"username":"alicia"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -145,7 +145,7 @@ func TestSearchUsers(t *testing.T) {
 // TestSearchUsers_APIError verifies that [searchUsers] returns an error when
 // the GitLab API responds with a failure status.
 func TestSearchUsers_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -158,9 +158,9 @@ func TestSearchUsers_APIError(t *testing.T) {
 // TestSearchMRs verifies that [searchMRs] returns merge request entries
 // filtered by IID prefix, using subtests for prefix match and unfiltered queries.
 func TestSearchMRs(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"iid":1,"title":"Fix critical bug"},
 				{"iid":12,"title":"Add documentation"},
 				{"iid":23,"title":"Refactor auth"}
@@ -194,7 +194,7 @@ func TestSearchMRs(t *testing.T) {
 // TestSearchMRs_APIError verifies that [searchMRs] returns an error when the
 // GitLab API responds with a failure status.
 func TestSearchMRs_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -207,9 +207,9 @@ func TestSearchMRs_APIError(t *testing.T) {
 // TestSearchIssues verifies that [searchIssues] returns issue entries filtered
 // by IID prefix, using subtests for matching and non-matching queries.
 func TestSearchIssues(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/issues" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":100,"iid":5,"title":"Login broken"},
 				{"id":101,"iid":50,"title":"Performance issue"}
 			]`)
@@ -242,7 +242,7 @@ func TestSearchIssues(t *testing.T) {
 // TestSearchIssues_APIError verifies that [searchIssues] returns an error when
 // the GitLab API responds with a failure status.
 func TestSearchIssues_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -255,9 +255,9 @@ func TestSearchIssues_APIError(t *testing.T) {
 // TestSearchBranches verifies that [searchBranches] returns branch names
 // matching the given query.
 func TestSearchBranches(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/branches" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"name":"main","default":true},
 				{"name":"feature/auth","default":false}
 			]`)
@@ -281,12 +281,12 @@ func TestSearchBranches(t *testing.T) {
 // TestSearchBranches_EmptyQuery verifies that [searchBranches] omits the search
 // parameter when the query is empty.
 func TestSearchBranches_EmptyQuery(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/branches" {
 			if r.URL.Query().Get("search") != "" {
 				t.Errorf("expected no search param for empty query")
 			}
-			respondJSON(w, http.StatusOK, `[{"name":"main","default":true}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"name":"main","default":true}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -304,7 +304,7 @@ func TestSearchBranches_EmptyQuery(t *testing.T) {
 // TestSearchBranches_APIError verifies that [searchBranches] returns an error
 // when the GitLab API responds with a failure status.
 func TestSearchBranches_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -317,9 +317,9 @@ func TestSearchBranches_APIError(t *testing.T) {
 // TestSearchTags verifies that [searchTags] returns tag names matching the
 // given query.
 func TestSearchTags(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/tags" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"name":"v1.0.0"},
 				{"name":"v1.1.0"},
 				{"name":"v2.0.0"}
@@ -341,7 +341,7 @@ func TestSearchTags(t *testing.T) {
 // TestSearchTags_APIError verifies that [searchTags] returns an error when the
 // GitLab API responds with a failure status.
 func TestSearchTags_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -355,7 +355,7 @@ func TestSearchTags_APIError(t *testing.T) {
 // search functions return a context cancellation error when given a canceled
 // context.
 func TestSearch_ContextCancelled(t *testing.T) {
-	client := newTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	ctx := testutil.CancelledCtx(t)
 
 	tests := []struct {
@@ -385,9 +385,9 @@ func TestSearch_ContextCancelled(t *testing.T) {
 // TestSearchPipelines verifies that [searchPipelines] returns pipeline entries
 // filtered by ID prefix.
 func TestSearchPipelines(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/pipelines" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":100,"ref":"main","status":"success"},
 				{"id":101,"ref":"develop","status":"running"},
 				{"id":23,"ref":"feature","status":"failed"}
@@ -424,7 +424,7 @@ func TestSearchPipelines(t *testing.T) {
 // TestSearchPipelines_APIError verifies that [searchPipelines] returns an error
 // when the GitLab API responds with a failure status.
 func TestSearchPipelines_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -437,9 +437,9 @@ func TestSearchPipelines_APIError(t *testing.T) {
 // TestSearchCommits verifies that [searchCommits] returns commit entries
 // filtered by SHA prefix.
 func TestSearchCommits(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/commits" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":"abc123def456","short_id":"abc123d","title":"Fix login bug"},
 				{"id":"def789abc012","short_id":"def789a","title":"Add tests"},
 				{"id":"abc999aaa111","short_id":"abc999a","title":"Update docs"}
@@ -476,7 +476,7 @@ func TestSearchCommits(t *testing.T) {
 // TestSearchCommits_APIError verifies that [searchCommits] returns an error
 // when the GitLab API responds with a failure status.
 func TestSearchCommits_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -489,9 +489,9 @@ func TestSearchCommits_APIError(t *testing.T) {
 // TestSearchLabels verifies that [searchLabels] returns label names matching
 // the query.
 func TestSearchLabels(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/labels" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"name":"bug","color":"#d9534f"},
 				{"id":2,"name":"enhancement","color":"#5cb85c"},
 				{"id":3,"name":"documentation","color":"#0275d8"}
@@ -529,7 +529,7 @@ func TestSearchLabels(t *testing.T) {
 // TestSearchLabels_APIError verifies that [searchLabels] returns an error when
 // the GitLab API responds with a failure status.
 func TestSearchLabels_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -542,9 +542,9 @@ func TestSearchLabels_APIError(t *testing.T) {
 // TestSearchMilestones verifies that [searchMilestones] returns milestone
 // entries matching the query.
 func TestSearchMilestones(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/milestones" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"title":"v1.0","state":"active"},
 				{"id":2,"title":"v2.0","state":"active"}
 			]`)
@@ -568,7 +568,7 @@ func TestSearchMilestones(t *testing.T) {
 // TestSearchMilestones_APIError verifies that [searchMilestones] returns an
 // error when the GitLab API responds with a failure status.
 func TestSearchMilestones_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -581,9 +581,9 @@ func TestSearchMilestones_APIError(t *testing.T) {
 // TestSearchJobs verifies that [searchJobs] returns job entries for a pipeline,
 // filtered by ID prefix.
 func TestSearchJobs(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/pipelines/10/jobs" {
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":501,"name":"build","status":"success","pipeline":{"id":10}},
 				{"id":502,"name":"test","status":"running","pipeline":{"id":10}},
 				{"id":601,"name":"deploy","status":"pending","pipeline":{"id":10}}
@@ -620,7 +620,7 @@ func TestSearchJobs(t *testing.T) {
 // TestSearchJobs_APIError verifies that [searchJobs] returns an error when the
 // GitLab API responds with a failure status.
 func TestSearchJobs_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
@@ -633,7 +633,7 @@ func TestSearchJobs_APIError(t *testing.T) {
 // TestSearchNew_ContextCancelled uses table-driven subtests to verify that
 // the new search functions return a context cancellation error.
 func TestSearchNew_ContextCancelled(t *testing.T) {
-	client := newTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	ctx := testutil.CancelledCtx(t)
 
 	tests := []struct {
@@ -667,13 +667,13 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 // from the response body.
 func TestSearchMilestoneTitles(t *testing.T) {
 	var gotSearch string
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/milestones" {
 			http.NotFound(w, r)
 			return
 		}
 		gotSearch = r.URL.Query().Get("search")
-		respondJSON(w, http.StatusOK, `[
+		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id":1,"title":"v1.0","state":"active"},
 			{"id":2,"title":"v1.1","state":"active"}
 		]`)
@@ -699,13 +699,13 @@ func TestSearchMilestoneTitles(t *testing.T) {
 // `if query != ""`).
 func TestSearchMilestoneTitles_EmptyQuery(t *testing.T) {
 	var hadSearch bool
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/milestones" {
 			http.NotFound(w, r)
 			return
 		}
 		_, hadSearch = r.URL.Query()["search"]
-		respondJSON(w, http.StatusOK, `[]`)
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
 	_, _, err := searchMilestoneTitles(context.Background(), client, "42", "")
@@ -720,7 +720,7 @@ func TestSearchMilestoneTitles_EmptyQuery(t *testing.T) {
 // TestSearchMilestoneTitles_APIError verifies that an error from the GitLab
 // API is wrapped and returned. Uses 403 (not 5xx) to avoid client-go retries.
 func TestSearchMilestoneTitles_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
@@ -738,13 +738,13 @@ func TestSearchMilestoneTitles_APIError(t *testing.T) {
 func TestSearchGroupMilestoneTitles(t *testing.T) {
 	t.Run("search with query", func(t *testing.T) {
 		var gotSearch string
-		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/api/v4/groups/99/milestones" {
 				http.NotFound(w, r)
 				return
 			}
 			gotSearch = r.URL.Query().Get("search")
-			respondJSON(w, http.StatusOK, `[
+			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"title":"v1.0","state":"active"},
 				{"id":2,"title":"v1.1","state":"active"}
 			]`)
@@ -767,13 +767,13 @@ func TestSearchGroupMilestoneTitles(t *testing.T) {
 
 	t.Run("empty query", func(t *testing.T) {
 		var hadSearch bool
-		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/api/v4/groups/99/milestones" {
 				http.NotFound(w, r)
 				return
 			}
 			_, hadSearch = r.URL.Query()["search"]
-			respondJSON(w, http.StatusOK, `[]`)
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
 		}))
 
 		_, _, err := searchGroupMilestoneTitles(context.Background(), client, "99", "")
@@ -789,7 +789,7 @@ func TestSearchGroupMilestoneTitles(t *testing.T) {
 // TestSearchGroupMilestoneTitles_APIError verifies group milestone API errors
 // are wrapped with search context.
 func TestSearchGroupMilestoneTitles_APIError(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
@@ -903,9 +903,9 @@ func TestSearch_PropagatesXTotalHeader(t *testing.T) {
 					return
 				}
 				w.Header().Set("X-Total", itoa(tc.wantTot))
-				respondJSON(w, http.StatusOK, tc.body)
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
 			})
-			client := newTestClient(t, handler)
+			client := testutil.NewTestClient(t, handler)
 			got, err := tc.invoke(client)
 			if err != nil {
 				t.Fatalf(fmtUnexpectedErr, err)
