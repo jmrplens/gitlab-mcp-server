@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -191,6 +192,91 @@ func TestCanonicalImportArchivePath_AllowsConfiguredDirectory(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("canonical path = %q, want %q", got, want)
+	}
+}
+
+// TestCanonicalImportArchivePath_RejectsInvalidInputs verifies archive path
+// validation branches before allowlist checks.
+func TestCanonicalImportArchivePath_RejectsInvalidInputs(t *testing.T) {
+	t.Run("empty path", func(t *testing.T) {
+		_, err := CanonicalImportArchivePath("")
+		if err == nil || !strings.Contains(err.Error(), "archive path is required") {
+			t.Fatalf("error = %v, want required path error", err)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		_, err := CanonicalImportArchivePath(filepath.Join(t.TempDir(), "missing.tar.gz"))
+		if err == nil || !strings.Contains(err.Error(), "resolve archive symlinks") {
+			t.Fatalf("error = %v, want symlink resolution error", err)
+		}
+	})
+
+	t.Run("directory archive", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "project-export.tar.gz")
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		_, err := CanonicalImportArchivePath(dir)
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Fatalf("error = %v, want regular-file validation error", err)
+		}
+	})
+}
+
+// TestCanonicalImportArchivePath_RejectsUnsafePermissions verifies import
+// archives cannot be group- or world-writable on Unix-like systems.
+func TestCanonicalImportArchivePath_RejectsUnsafePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not enforced on Windows")
+	}
+	path := filepath.Join(t.TempDir(), "project-export.tar.gz")
+	if err := os.WriteFile(path, []byte("archive"), 0666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CanonicalImportArchivePath(path)
+	if err == nil || !strings.Contains(err.Error(), "group/world-writable") {
+		t.Fatalf("error = %v, want unsafe permissions error", err)
+	}
+}
+
+// TestAllowedImportArchiveDirs_SkipsInvalidConfiguredDirectory verifies invalid
+// allowlist entries are ignored while valid roots remain available.
+func TestAllowedImportArchiveDirs_SkipsInvalidConfiguredDirectory(t *testing.T) {
+	base := t.TempDir()
+	invalid := filepath.Join(base, "not-a-directory")
+	if err := os.WriteFile(invalid, []byte("file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(ImportArchiveAllowlistEnv, invalid)
+
+	allowed := allowedImportArchiveDirs()
+	for _, dir := range allowed {
+		if dir == invalid {
+			t.Fatalf("allowedImportArchiveDirs() included invalid configured file %q", invalid)
+		}
+	}
+}
+
+// TestCanonicalDirPath_RejectsInvalidDirectories covers direct directory
+// canonicalization errors used by import-archive allowlisting.
+func TestCanonicalDirPath_RejectsInvalidDirectories(t *testing.T) {
+	if _, err := canonicalDirPath(""); err == nil {
+		t.Fatal("canonicalDirPath(empty) error = nil, want error")
+	}
+	if _, err := canonicalDirPath(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Fatal("canonicalDirPath(missing) error = nil, want error")
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonicalDirPath(file); err == nil || !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("canonicalDirPath(file) error = %v, want not-a-directory", err)
 	}
 }
 

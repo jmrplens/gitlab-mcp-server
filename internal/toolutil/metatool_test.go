@@ -28,6 +28,18 @@ type testInput struct {
 	ID   int    `json:"id"`
 }
 
+// routeRequestTestInput avoids sharing schema cache state with testInput.
+type routeRequestTestInput struct {
+	Name string `json:"name"`
+	ID   int    `json:"id"`
+}
+
+// destructiveFuncTestInput avoids sharing schema cache state with testInput.
+type destructiveFuncTestInput struct {
+	Name string `json:"name"`
+	ID   int    `json:"id"`
+}
+
 // testInt64Input defines parameters for the test int64 operation.
 type testInt64Input struct {
 	ProjectID StringOrInt `json:"project_id"`
@@ -1786,6 +1798,72 @@ func TestDestructiveRoute_CreatesDestructiveRoute(t *testing.T) {
 	}
 }
 
+// TestRouteRequestFunc_InvokesHandlerWithRequest verifies request-aware routes
+// decode input, attach schemas, and forward the MCP request from context.
+func TestRouteRequestFunc_InvokesHandlerWithRequest(t *testing.T) {
+	request := &mcp.CallToolRequest{}
+	var receivedRequest *mcp.CallToolRequest
+	route := RouteRequestFunc(func(_ context.Context, req *mcp.CallToolRequest, input routeRequestTestInput) (testOutput, error) {
+		receivedRequest = req
+		return testOutput{Result: input.Name}, nil
+	})
+
+	if route.Destructive {
+		t.Fatal("RouteRequestFunc() Destructive = true, want false")
+	}
+	if route.InputSchema == nil || route.OutputSchema == nil || route.InputType == nil {
+		t.Fatalf("route schemas/input type must be populated: %+v", route)
+	}
+
+	result, err := route.Handler(ContextWithRequest(context.Background(), request), map[string]any{"name": "project", "id": float64(7)})
+	if err != nil {
+		t.Fatalf("route handler error = %v", err)
+	}
+	output, ok := result.(testOutput)
+	if !ok || output.Result != "project" {
+		t.Fatalf("route handler result = %#v, want project output", result)
+	}
+	if receivedRequest != request {
+		t.Fatalf("received request = %p, want %p", receivedRequest, request)
+	}
+}
+
+// TestRouteRequestFunc_InvalidParamsReturnsZero verifies typed route wrappers
+// return the zero output value when decoding input fails.
+func TestRouteRequestFunc_InvalidParamsReturnsZero(t *testing.T) {
+	route := RouteRequestFunc(func(_ context.Context, _ *mcp.CallToolRequest, input routeRequestTestInput) (testOutput, error) {
+		return testOutput{Result: input.Name}, nil
+	})
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": []any{"bad"}})
+	if err == nil {
+		t.Fatal("route handler error = nil, want decode error")
+	}
+	if result != (testOutput{}) {
+		t.Fatalf("route handler result = %#v, want zero testOutput", result)
+	}
+}
+
+// TestDestructiveFunc_SetsDestructive verifies DestructiveFunc keeps typed
+// route behavior while marking the route as destructive.
+func TestDestructiveFunc_SetsDestructive(t *testing.T) {
+	route := DestructiveFunc(func(_ context.Context, input destructiveFuncTestInput) (testOutput, error) {
+		return testOutput{Result: input.Name}, nil
+	})
+	if !route.Destructive {
+		t.Fatal("DestructiveFunc() Destructive = false, want true")
+	}
+
+	result, err := route.Handler(context.Background(), map[string]any{"name": "delete", "id": float64(1)})
+	if err != nil {
+		t.Fatalf("route handler error = %v", err)
+	}
+	output, ok := result.(testOutput)
+	if !ok || output.Result != "delete" {
+		t.Fatalf("route handler result = %#v, want delete output", result)
+	}
+}
+
 // TestDeriveAnnotations_AllNonDestructive verifies that DeriveAnnotations returns
 // NonDestructiveMetaAnnotations when no route is destructive.
 func TestDeriveAnnotations_AllNonDestructive(t *testing.T) {
@@ -2388,6 +2466,22 @@ func TestSetMetaParamSchemaMode_InvalidCoercesToOpaque(t *testing.T) {
 	SetMetaParamSchemaMode("nonsense")
 	if got := currentMetaParamSchemaMode(); got != MetaParamSchemaOpaque {
 		t.Errorf("invalid mode should coerce to opaque, got %q", got)
+	}
+}
+
+// TestSetMetaParamSchemaModeScoped_RestoresPreviousMode verifies scoped mode
+// overrides restore the prior global setting.
+func TestSetMetaParamSchemaModeScoped_RestoresPreviousMode(t *testing.T) {
+	SetMetaParamSchemaMode(MetaParamSchemaCompact)
+	t.Cleanup(func() { SetMetaParamSchemaMode(MetaParamSchemaOpaque) })
+
+	restore := SetMetaParamSchemaModeScoped(MetaParamSchemaFull)
+	if got := currentMetaParamSchemaMode(); got != MetaParamSchemaFull {
+		t.Fatalf("currentMetaParamSchemaMode() = %q, want %q", got, MetaParamSchemaFull)
+	}
+	restore()
+	if got := currentMetaParamSchemaMode(); got != MetaParamSchemaCompact {
+		t.Fatalf("restored mode = %q, want %q", got, MetaParamSchemaCompact)
 	}
 }
 

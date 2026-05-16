@@ -91,6 +91,70 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	}
 }
 
+// TestCloneActionSpecs_DefensiveCopiesMetadata verifies CloneActionSpec and
+// CloneActionSpecs preserve normalized metadata without sharing mutable state.
+func TestCloneActionSpecs_DefensiveCopiesMetadata(t *testing.T) {
+	if got := CloneActionSpecs(nil); got != nil {
+		t.Fatalf("CloneActionSpecs(nil) = %#v, want nil", got)
+	}
+
+	spec := NewActionSpec(" get ", ActionRoute{
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+		},
+	}, ActionSpecOptions{
+		Aliases:        []string{" Show "},
+		Tags:           []string{" Projects "},
+		RelatedActions: []string{"Project.List"},
+		Compatibility: CompatibilityPolicy{
+			ActionAliases:    []ActionAliasSpec{{Alias: "Show", Target: "get", Source: "dynamic", Reason: "legacy wording"}},
+			ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic", Reason: "legacy parameter"}},
+		},
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {CommonConfusions: []string{"namespace_id"}}},
+		ReadOnly:          true,
+		Idempotent:        true,
+		OwnerPackage:      "projects",
+		IndividualTool:    IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a GitLab project."},
+	})
+
+	clone := CloneActionSpec(spec)
+	clones := CloneActionSpecs([]ActionSpec{spec})
+	if len(clones) != 1 {
+		t.Fatalf("CloneActionSpecs() length = %d, want 1", len(clones))
+	}
+
+	spec.Route.InputSchema["properties"].(map[string]any)["project_id"].(map[string]any)["type"] = "integer"
+	spec.Aliases[0] = "changed"
+	spec.Tags[0] = "changed"
+	spec.RelatedActions[0] = "changed"
+	spec.Compatibility.ActionAliases[0].Alias = "changed"
+	spec.Compatibility.ParameterAliases[0].Alias = "changed"
+	spec.ParameterGuidance["project_id"] = ParameterGuidance{CommonConfusions: []string{"changed"}}
+
+	assertClonedSpec := func(t *testing.T, got ActionSpec) {
+		t.Helper()
+		if got.Name != "get" || !got.ReadOnly || !got.Idempotent {
+			t.Fatalf("clone metadata = %+v, want normalized read-only get action", got)
+		}
+		if got.Route.InputSchema["properties"].(map[string]any)["project_id"].(map[string]any)["type"] != "string" {
+			t.Fatalf("clone shares input schema with source: %#v", got.Route.InputSchema)
+		}
+		if got.Aliases[0] != "show" || got.Tags[0] != "projects" || got.RelatedActions[0] != "project.list" {
+			t.Fatalf("clone normalized slices = aliases:%v tags:%v related:%v", got.Aliases, got.Tags, got.RelatedActions)
+		}
+		if got.Compatibility.ActionAliases[0].Alias != "show" || got.Compatibility.ParameterAliases[0].Alias != "project" {
+			t.Fatalf("clone compatibility = %+v", got.Compatibility)
+		}
+		if got.ParameterGuidance["project_id"].CommonConfusions[0] != "namespace_id" {
+			t.Fatalf("clone parameter guidance = %+v", got.ParameterGuidance)
+		}
+	}
+
+	assertClonedSpec(t, clone)
+	assertClonedSpec(t, clones[0])
+}
+
 // TestActionSpecValidate_CompatibilityPolicy verifies ActionSpecValidate when compatibility policy.
 func TestActionSpecValidate_CompatibilityPolicy(t *testing.T) {
 	spec := NewActionSpec("delete", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{
@@ -145,6 +209,58 @@ func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			spec := NewActionSpec("delete", ActionRoute{InputSchema: testActionSpecSchema("project_id", "namespace_id")}, tc.opts)
+			err := spec.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestActionSpecValidate_RejectsMalformedCompatibilityAliases covers malformed
+// action and parameter alias metadata that would otherwise produce ambiguous
+// dynamic-tool compatibility mappings.
+func TestActionSpecValidate_RejectsMalformedCompatibilityAliases(t *testing.T) {
+	testCases := []struct {
+		name string
+		opts ActionSpecOptions
+		want string
+	}{
+		{
+			name: "action alias missing alias",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Target: "get", Source: "dynamic", Reason: "missing alias"}}}},
+			want: "without alias",
+		},
+		{
+			name: "action alias missing target",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Alias: "show", Source: "dynamic", Reason: "missing target"}}}},
+			want: "has no target",
+		},
+		{
+			name: "action alias missing reason",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ActionAliases: []ActionAliasSpec{{Alias: "show", Target: "get", Source: "dynamic"}}}},
+			want: "has no reason",
+		},
+		{
+			name: "parameter alias missing alias",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Target: "project_id", Source: "dynamic", Reason: "missing alias"}}}},
+			want: "without alias",
+		},
+		{
+			name: "parameter alias missing target",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Alias: "project", Source: "dynamic", Reason: "missing target"}}}},
+			want: "has no target",
+		},
+		{
+			name: "parameter alias missing reason",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic"}}}},
+			want: "has no reason",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, tc.opts)
 			err := spec.Validate()
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
@@ -230,6 +346,16 @@ func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	_, err := ActionSpecsToMapWithError(specs)
 	if err == nil || !strings.Contains(err.Error(), "duplicate action spec") {
 		t.Fatalf("ActionSpecsToMapWithError() error = %v, want duplicate rejection", err)
+	}
+}
+
+// TestActionSpecsToMapWithError_CollectsInvalidSpecError verifies map
+// projection reports validation failures from otherwise named specs.
+func TestActionSpecsToMapWithError_CollectsInvalidSpecError(t *testing.T) {
+	spec := NewActionSpec("get", ActionRoute{}, ActionSpecOptions{ContentKind: "invalid"})
+	_, err := ActionSpecsToMapWithError([]ActionSpec{spec})
+	if err == nil || !strings.Contains(err.Error(), "unsupported content kind") {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v, want validation error", err)
 	}
 }
 
