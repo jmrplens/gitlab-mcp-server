@@ -293,6 +293,42 @@ func TestBuildActionCatalog_AcceptsExplicitSpecGroupActions(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_DuplicateMCPGroupReturnsContext verifies IncludeMCP
+// reports duplicate server-group registration with MCP action context.
+func TestBuildActionCatalog_DuplicateMCPGroupReturnsContext(t *testing.T) {
+	spec := toolutil.NewActionSpec("custom_status", testCatalogActionRoute(), toolutil.ActionSpecOptions{})
+
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{
+		IncludeMCP: true,
+		SpecGroups: []ActionSpecGroup{{
+			ToolName:    "gitlab_server",
+			Description: "Custom server group.",
+			Actions:     []toolutil.ActionSpec{spec},
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected duplicate MCP group error")
+	}
+	if !strings.Contains(err.Error(), "add MCP action group") {
+		t.Fatalf("BuildActionCatalog() error = %v, want MCP group context", err)
+	}
+}
+
+// TestBuildActionCatalog_ActionSpecMapErrorReturnsContext verifies invalid
+// explicit actions fail while deriving a generated group description.
+func TestBuildActionCatalog_ActionSpecMapErrorReturnsContext(t *testing.T) {
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{
+		ToolName: "gitlab_invalid",
+		Actions:  []toolutil.ActionSpec{{Name: ""}},
+	}}})
+	if err == nil {
+		t.Fatal("expected invalid action spec error")
+	}
+	if !strings.Contains(err.Error(), `build catalog group "gitlab_invalid"`) {
+		t.Fatalf("BuildActionCatalog() error = %v, want group context", err)
+	}
+}
+
 // TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata verifies MergeActionSpecGroupOverrides handles blank override metadata.
 func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T) {
 	base := []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{
@@ -310,6 +346,23 @@ func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T
 	}
 	if len(merged[1].Actions) != 3 || merged[1].Actions[0].Name != "list" || merged[1].Actions[2].Name != "get" {
 		t.Fatalf("merged specs = %+v, want list, invalid override, then get", merged[1].Actions)
+	}
+}
+
+// TestMergeActionSpecGroupOverrides_PreservesInvalidBaseGroup verifies base
+// groups without a tool name are carried through for downstream validation.
+func TestMergeActionSpecGroupOverrides_PreservesInvalidBaseGroup(t *testing.T) {
+	base := []ActionSpecGroup{{ToolName: " "}}
+	overrides := []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{
+		toolutil.NewActionSpec("list", testCatalogActionRoute(), toolutil.ActionSpecOptions{}),
+	}}}
+
+	merged := mergeActionSpecGroupOverrides(base, overrides)
+	if len(merged) != 2 {
+		t.Fatalf("merged groups = %+v, want invalid base plus override", merged)
+	}
+	if strings.TrimSpace(merged[0].ToolName) != "" {
+		t.Fatalf("first merged group = %+v, want invalid base first", merged[0])
 	}
 }
 

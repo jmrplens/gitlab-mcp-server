@@ -236,6 +236,49 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	}
 }
 
+// TestRegisterIndividualCatalogTools_NilInputs verifies nil server or catalog
+// inputs are ignored without panicking.
+func TestRegisterIndividualCatalogTools_NilInputs(t *testing.T) {
+	RegisterIndividualCatalogTools(nil, nil, IndividualCatalogRegisterOptions{})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterIndividualCatalogTools(server, nil, IndividualCatalogRegisterOptions{})
+}
+
+// TestIndividualCatalogGroupEligible_SurfaceAndEditionGates verifies group
+// surface and edition gates used before individual tool projection.
+func TestIndividualCatalogGroupEligible_SurfaceAndEditionGates(t *testing.T) {
+	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility}, IndividualCatalogRegisterOptions{}) {
+		t.Fatal("runtime utility should require standalone utilities opt-in")
+	}
+	if !individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility}, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}) {
+		t.Fatal("runtime utility should be eligible when standalone utilities are included")
+	}
+	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: "unknown"}, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}) {
+		t.Fatal("unknown surface kind should be rejected")
+	}
+	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, EnterpriseOnly: true}, IndividualCatalogRegisterOptions{ApplyEditionFilters: true}) {
+		t.Fatal("enterprise-only group should be rejected without enterprise mode")
+	}
+	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, GitLabDotComOnly: true}, IndividualCatalogRegisterOptions{ApplyEditionFilters: true, Enterprise: true}) {
+		t.Fatal("GitLab.com-only group should be rejected without GitLab.com mode")
+	}
+}
+
+// TestStringSet_TrimsAndSkipsEmpty verifies stringSet normalizes configured
+// allow and deny lists.
+func TestStringSet_TrimsAndSkipsEmpty(t *testing.T) {
+	if got := stringSet(nil); got != nil {
+		t.Fatalf("stringSet(nil) = %+v, want nil", got)
+	}
+	set := stringSet([]string{" gitlab_get_project ", "", "\t", "gitlab_list_projects"})
+	if len(set) != 2 {
+		t.Fatalf("stringSet size = %d, want 2", len(set))
+	}
+	if _, ok := set["gitlab_get_project"]; !ok {
+		t.Fatal("trimmed tool name missing from set")
+	}
+}
+
 // testIndividualCatalog supports test individual catalog assertions in tools tests.
 func testIndividualCatalog(t *testing.T, specs ...toolutil.ActionSpec) *actioncatalog.Catalog {
 	t.Helper()

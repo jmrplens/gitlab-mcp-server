@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,010 |
-| Unit test functions | 9,761 |
+| Total test functions | 10,020 |
+| Unit test functions | 9,771 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,14 +28,14 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 88.3% |
-| Overall coverage (`go test ./internal/...`) | 98.6% |
+| Overall coverage (`go test ./internal/...`) | 98.7% |
 | Average package coverage | 95.2% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,987 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,997 | 89.8% |
 | `TestFunc` (no underscore) | 742 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -46,11 +46,11 @@
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
 | Core packages | 1,680 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tools orchestration | 271 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (168) | 7,313 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,010** | **567** |  |
+| **Total** | **10,020** | **567** |  |
 
 ### Core Packages
 
@@ -333,7 +333,7 @@
 
 | Package | Coverage |
 | --- | ---: |
-| tools (orch.) | 91.5% |
+| tools (orch.) | 95.3% |
 | accessrequests | 100.0% |
 | accesstokens | 100.0% |
 | actioncatalog | 98.6% |

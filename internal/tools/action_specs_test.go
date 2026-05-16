@@ -147,6 +147,47 @@ func TestCollectedActionSpecs_ClassifySamplingUtility(t *testing.T) {
 	}
 }
 
+// TestActionSpecGroup_EmptySpecsReturnsNil verifies empty groups are omitted
+// before catalog construction.
+func TestActionSpecGroup_EmptySpecsReturnsNil(t *testing.T) {
+	if groups := actionSpecGroup("gitlab_empty", nil); groups != nil {
+		t.Fatalf("actionSpecGroup(empty) = %+v, want nil", groups)
+	}
+}
+
+// TestActionSpecGroupsByTool_RejectsInvalidSpecs verifies grouping reports
+// blank tool names, blank actions, duplicates, and still sorts valid specs.
+func TestActionSpecGroupsByTool_RejectsInvalidSpecs(t *testing.T) {
+	groups := []ActionSpecGroup{
+		{ToolName: " ", Actions: []toolutil.ActionSpec{toolutil.NewActionSpec("ignored", testCatalogActionRoute(), toolutil.ActionSpecOptions{})}},
+		{ToolName: "gitlab_test", Actions: []toolutil.ActionSpec{
+			toolutil.NewActionSpec("zeta", testCatalogActionRoute(), toolutil.ActionSpecOptions{}),
+			{Name: ""},
+			toolutil.NewActionSpec("alpha", testCatalogActionRoute(), toolutil.ActionSpecOptions{}),
+			toolutil.NewActionSpec("alpha", testCatalogActionRoute(), toolutil.ActionSpecOptions{}),
+		}},
+	}
+
+	byTool, err := actionSpecGroupsByTool(groups)
+	if err == nil {
+		t.Fatal("expected grouped validation errors")
+	}
+	specs := byTool["gitlab_test"]
+	if len(specs) != 4 {
+		t.Fatalf("gitlab_test specs = %d, want 4", len(specs))
+	}
+	if specs[1].Name != "alpha" || specs[3].Name != "zeta" {
+		t.Fatalf("sorted specs = %+v, want blank, alpha, alpha, zeta", specs)
+	}
+}
+
+// TestSortedActionSpecGroups_EmptyReturnsNil verifies nil inputs are preserved.
+func TestSortedActionSpecGroups_EmptyReturnsNil(t *testing.T) {
+	if got := sortedActionSpecGroups(nil); got != nil {
+		t.Fatalf("sortedActionSpecGroups(nil) = %+v, want nil", got)
+	}
+}
+
 // sourceToolPackageNames supports source tool package names assertions in tools tests.
 func sourceToolPackageNames(t *testing.T) map[string]struct{} {
 	t.Helper()
