@@ -18,11 +18,11 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,725 |
-| Unit test functions | 9,478 |
+| Total test functions | 9,727 |
+| Unit test functions | 9,480 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 432 |
+| Test files (internal/) | 433 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,736 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,738 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,115 | 334 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,117 | 335 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,725** | **558** |  |
+| **Total** | **9,727** | **559** |  |
 
 ### Core Packages
 
@@ -97,7 +97,7 @@
 | accesstokens | 85 | 98.6% | 18 |
 | branches | 80 | 97.7% | 10 |
 | pipelineschedules | 80 | 97.0% | 11 |
-| files | 75 | 93.6% | 8 |
+| files | 77 | 94.8% | 8 |
 | tags | 75 | 97.6% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
 | snippets | 73 | 97.8% | 15 |
@@ -163,7 +163,7 @@
 | featureflags | 36 | 2 | 97.8% | 5 |
 | features | 20 | 2 | 96.2% | 4 |
 | ffuserlists | 26 | 2 | 96.2% | 5 |
-| files | 75 | 2 | 93.6% | 8 |
+| files | 77 | 3 | 94.8% | 8 |
 | freezeperiods | 32 | 2 | 98.1% | 5 |
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,115** | **334** |  | **1,018** |
+| **Total** | **7,117** | **335** |  | **1,018** |
 
 </details>
 
@@ -380,7 +380,7 @@
 | featureflags | 97.8% |
 | features | 96.2% |
 | ffuserlists | 96.2% |
-| files | 93.6% |
+| files | 94.8% |
 | freezeperiods | 98.1% |
 | geo | 100.0% |
 | gitignoretemplates | 100.0% |

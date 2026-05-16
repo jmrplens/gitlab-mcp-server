@@ -4,10 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const fmtSizeBytes = "- **Size**: %d bytes\n"
+
+type fileNotFoundOutput struct {
+	Identifier string `json:"identifier"`
+}
+
+func formatFileNotFound(out fileNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("File", out.Identifier,
+		"Use gitlab_file_metadata to verify the path and ref",
+		"Use gitlab_repository_tree to list repository paths")
+}
 
 // FormatOutputMarkdown renders file metadata as a Markdown summary.
 // For image and binary files, it includes content type information instead of content.
@@ -34,6 +46,18 @@ func FormatOutputMarkdown(f Output) string {
 		"Use action 'file_delete' to remove this file",
 	)
 	return b.String()
+}
+
+func fileGetResult(out Output) *mcp.CallToolResult {
+	md := FormatOutputMarkdown(out)
+	switch out.ContentCategory {
+	case "image":
+		return toolutil.ToolResultWithImage(md, toolutil.ContentDetail, out.ImageData, out.ImageMIMEType)
+	case "binary":
+		return toolutil.ToolResultAnnotated(md, toolutil.ContentDetail)
+	default:
+		return toolutil.ToolResultAnnotated(md, toolutil.ContentDetail)
+	}
 }
 
 // FormatFileInfoMarkdown renders file info (create/update result).
@@ -143,10 +167,25 @@ func FormatRawBinaryMarkdown(out RawOutput) string {
 	return b.String()
 }
 
+func fileRawResult(out RawOutput) *mcp.CallToolResult {
+	switch out.ContentCategory {
+	case "image":
+		md := FormatRawImageMarkdown(out)
+		return toolutil.ToolResultWithImage(md, toolutil.ContentAssistant, out.ImageData, out.ImageMIMEType)
+	case "binary":
+		md := FormatRawBinaryMarkdown(out)
+		return toolutil.ToolResultAnnotated(md, toolutil.ContentAssistant)
+	default:
+		md := FormatRawMarkdown(out)
+		return toolutil.ToolResultAnnotated(md, toolutil.ContentAssistant)
+	}
+}
+
 func init() {
-	toolutil.RegisterMarkdown(FormatOutputMarkdown)
+	toolutil.RegisterMarkdownResult(formatFileNotFound)
+	toolutil.RegisterMarkdownResult(fileGetResult)
 	toolutil.RegisterMarkdown(FormatFileInfoMarkdown)
 	toolutil.RegisterMarkdown(FormatBlameMarkdown)
 	toolutil.RegisterMarkdown(FormatMetaDataMarkdown)
-	toolutil.RegisterMarkdown(FormatRawMarkdown)
+	toolutil.RegisterMarkdownResult(fileRawResult)
 }
