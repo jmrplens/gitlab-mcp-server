@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
@@ -308,6 +310,93 @@ func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T
 	}
 	if len(merged[1].Actions) != 3 || merged[1].Actions[0].Name != "list" || merged[1].Actions[2].Name != "get" {
 		t.Fatalf("merged specs = %+v, want list, invalid override, then get", merged[1].Actions)
+	}
+}
+
+// TestMergeActionSpecGroup_MetadataOverrides verifies explicit groups can
+// override all group-level metadata while preserving base actions not replaced.
+func TestMergeActionSpecGroup_MetadataOverrides(t *testing.T) {
+	base := ActionSpecGroup{
+		ToolName:     "gitlab_project",
+		Title:        "Base title",
+		Description:  "Base description",
+		Actions:      []toolutil.ActionSpec{toolutil.NewActionSpec("list", testCatalogActionRoute(), toolutil.ActionSpecOptions{})},
+		OwnerPackage: "baseowner",
+	}
+	formatter := func(any) *mcp.CallToolResult { return &mcp.CallToolResult{} }
+	override := ActionSpecGroup{
+		ToolName:               " gitlab_project ",
+		Title:                  "Override title",
+		Description:            "Override description",
+		Icons:                  []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}},
+		ReadOnly:               true,
+		BaseDomain:             "project_override",
+		EnterpriseOnly:         true,
+		GitLabDotComOnly:       true,
+		CapabilityRequirements: []string{"roots"},
+		FormatResult:           formatter,
+		OwnerPackage:           "overrideowner",
+		SurfaceKind:            actioncatalog.SurfaceKindRuntimeUtility,
+		Actions:                []toolutil.ActionSpec{toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{})},
+	}
+
+	merged := mergeActionSpecGroup(base, override)
+	if merged.ToolName != "gitlab_project" || merged.Title != "Override title" || merged.Description != "Override description" {
+		t.Fatalf("merged basic metadata = %+v", merged)
+	}
+	if len(merged.Icons) != 1 || merged.Icons[0].Source == "" {
+		t.Fatalf("merged icons = %+v, want override icon", merged.Icons)
+	}
+	if !merged.ReadOnly || merged.BaseDomain != "project_override" || !merged.EnterpriseOnly || !merged.GitLabDotComOnly {
+		t.Fatalf("merged flags = %+v, want override flags", merged)
+	}
+	if !slices.Equal(merged.CapabilityRequirements, []string{"roots"}) {
+		t.Fatalf("capability requirements = %+v, want roots", merged.CapabilityRequirements)
+	}
+	if merged.FormatResult == nil || merged.FormatResult(nil) == nil {
+		t.Fatal("merged formatter was not preserved")
+	}
+	if merged.OwnerPackage != "overrideowner" || merged.SurfaceKind != actioncatalog.SurfaceKindRuntimeUtility {
+		t.Fatalf("merged owner/surface = %q/%q", merged.OwnerPackage, merged.SurfaceKind)
+	}
+	if len(merged.Actions) != 2 || merged.Actions[0].Name != "list" || merged.Actions[1].Name != "get" {
+		t.Fatalf("merged actions = %+v, want base list plus override get", merged.Actions)
+	}
+}
+
+// TestBuildActionCatalog_InvalidExplicitGroupReturnsContext verifies invalid
+// explicit groups fail with catalog-group context instead of surfacing raw validation errors.
+func TestBuildActionCatalog_InvalidExplicitGroupReturnsContext(t *testing.T) {
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{ToolName: "gitlab_invalid"}}})
+	if err == nil {
+		t.Fatal("BuildActionCatalog() error = nil, want invalid group error")
+	}
+	if !strings.Contains(err.Error(), `build catalog group "gitlab_invalid"`) {
+		t.Fatalf("BuildActionCatalog() error = %v, want group context", err)
+	}
+}
+
+// TestEnsureActionSpecOwners_FillsMissingOwnersDefensively verifies owner
+// defaults are applied to clones without mutating caller-owned specs.
+func TestEnsureActionSpecOwners_FillsMissingOwnersDefensively(t *testing.T) {
+	specs := []toolutil.ActionSpec{
+		toolutil.NewActionSpec("missing", testCatalogActionRoute(), toolutil.ActionSpecOptions{}),
+		toolutil.NewActionSpec("existing", testCatalogActionRoute(), toolutil.ActionSpecOptions{OwnerPackage: "custom"}),
+	}
+
+	got := ensureActionSpecOwners(specs, "fallback")
+	if len(got) != 2 {
+		t.Fatalf("ensureActionSpecOwners() returned %d specs, want 2", len(got))
+	}
+	if got[0].OwnerPackage != "fallback" || got[1].OwnerPackage != "custom" {
+		t.Fatalf("owners = %q/%q, want fallback/custom", got[0].OwnerPackage, got[1].OwnerPackage)
+	}
+	got[0].OwnerPackage = "mutated"
+	if specs[0].OwnerPackage != "" {
+		t.Fatalf("input spec owner mutated to %q", specs[0].OwnerPackage)
+	}
+	if ensureActionSpecOwners(nil, "fallback") != nil {
+		t.Fatal("ensureActionSpecOwners(nil) returned non-nil")
 	}
 }
 

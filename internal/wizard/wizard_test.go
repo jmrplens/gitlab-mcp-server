@@ -315,6 +315,42 @@ func TestApply_MergeFailure(t *testing.T) {
 	}
 }
 
+// TestApply_ConfigWriteFailureContinues verifies Apply reports a failed client
+// config write and still prints the final summary instead of aborting setup.
+func TestApply_ConfigWriteFailureContinues(t *testing.T) {
+	stubWriteEnvFile(t)
+	tmpDir := t.TempDir()
+	blocker := filepath.Join(tmpDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	original := allClientsFn
+	allClientsFn = func() []ClientInfo {
+		return []ClientInfo{{ID: ClientVSCode, Name: "Broken Client", ConfigPath: filepath.Join(blocker, "config.json")}}
+	}
+	t.Cleanup(func() { allClientsFn = original })
+
+	var buf bytes.Buffer
+	err := Apply(&buf, &Result{
+		Config: ServerConfig{
+			BinaryPath:  "/bin/test",
+			GitLabURL:   "https://gitlab.example.com",
+			GitLabToken: "test-token-xxx",
+		},
+		SelectedClients: []int{0},
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v, want nil for per-client merge failure", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "Broken Client") || !strings.Contains(output, "FAILED") {
+		t.Fatalf("Apply() output = %q, want failed client line", output)
+	}
+	if !strings.Contains(output, "No clients were configured") {
+		t.Fatalf("Apply() output = %q, want empty configured summary", output)
+	}
+}
+
 // TestMaskToken_ExactlyEight verifies that a token of exactly 8 chars is masked.
 func TestMaskToken_ExactlyEight(t *testing.T) {
 	got := MaskToken("12345678")

@@ -4,8 +4,39 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+// TestApplyToGroupSpecs_EmptyInputReturnsNil verifies empty catalog groups stay nil.
+func TestApplyToGroupSpecs_EmptyInputReturnsNil(t *testing.T) {
+	if groups := ApplyToGroupSpecs(nil); groups != nil {
+		t.Fatalf("ApplyToGroupSpecs(nil) = %+v, want nil", groups)
+	}
+}
+
+// TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies group projection clones inputs and falls back to the tool name domain.
+func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
+	route := toolutil.ActionRoute{
+		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		InputSchema: map[string]any{"properties": map[string]any{"scope": map[string]any{}}},
+	}
+	original := actioncatalog.CatalogGroupSpec{
+		ToolName: "gitlab_job",
+		Actions:  []toolutil.ActionSpec{toolutil.NewActionSpec("list", route, toolutil.ActionSpecOptions{})},
+	}
+
+	projected := ApplyToGroupSpec(original)
+	if len(projected.Actions) != 1 {
+		t.Fatalf("projected actions = %d, want 1", len(projected.Actions))
+	}
+	if len(projected.Actions[0].Compatibility.ActionAliases) != 1 {
+		t.Fatalf("action aliases = %+v, want pipeline.jobs compatibility alias", projected.Actions[0].Compatibility.ActionAliases)
+	}
+	if len(original.Actions[0].Compatibility.ActionAliases) != 0 {
+		t.Fatalf("original action aliases = %+v, want original group unchanged", original.Actions[0].Compatibility.ActionAliases)
+	}
+}
 
 // TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
@@ -28,6 +59,13 @@ func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	}
 	if len(compatibility.ParameterAliases) != 1 || compatibility.ParameterAliases[0].Alias != "status" || compatibility.ParameterAliases[0].Target != "scope" {
 		t.Fatalf("parameter aliases = %+v, want status -> scope", compatibility.ParameterAliases)
+	}
+}
+
+// TestApplyToActionSpecs_EmptyInputReturnsNil verifies action projection keeps empty specs nil.
+func TestApplyToActionSpecs_EmptyInputReturnsNil(t *testing.T) {
+	if specs := ApplyToActionSpecs("gitlab_job", "job", nil); specs != nil {
+		t.Fatalf("ApplyToActionSpecs(nil) = %+v, want nil", specs)
 	}
 }
 

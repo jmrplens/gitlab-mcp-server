@@ -3,6 +3,8 @@
 package testutil
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -106,6 +108,59 @@ func TestGraphQLHandler_Routing(t *testing.T) {
 	})
 }
 
+// TestGraphQLHandler_LongestKeyWinsAndRestoresBody verifies specific mutation
+// names win over shorter substrings and handlers can read the original body.
+func TestGraphQLHandler_LongestKeyWinsAndRestoresBody(t *testing.T) {
+	body := `{"query":"mutation { vulnerabilityDismiss(input: {id: \"1\"}) { vulnerability { id } } }"}`
+	var called string
+	handler := GraphQLHandler(map[string]http.HandlerFunc{
+		"vulnerability": func(w http.ResponseWriter, _ *http.Request) {
+			called = "short"
+			RespondGraphQL(w, http.StatusOK, `{}`)
+		},
+		"vulnerabilityDismiss": func(w http.ResponseWriter, r *http.Request) {
+			called = "long"
+			restored, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("ReadAll(restored body) error = %v", err)
+			}
+			if string(restored) != body {
+				t.Fatalf("restored body = %q, want %q", string(restored), body)
+			}
+			RespondGraphQL(w, http.StatusOK, `{"vulnerabilityDismiss":{"vulnerability":{"id":"1"}}}`)
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/graphql", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if called != "long" {
+		t.Fatalf("called = %q, want long", called)
+	}
+}
+
+type graphqlFailReader struct{}
+
+func (graphqlFailReader) Read([]byte) (int, error) { return 0, errors.New("read failed") }
+func (graphqlFailReader) Close() error             { return nil }
+
+// TestGraphQLHandler_ReadError verifies malformed request streams are rejected.
+func TestGraphQLHandler_ReadError(t *testing.T) {
+	handler := GraphQLHandler(map[string]http.HandlerFunc{
+		"query": func(w http.ResponseWriter, _ *http.Request) { RespondGraphQL(w, http.StatusOK, `{}`) },
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/graphql", nil)
+	req.Body = graphqlFailReader{}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 // TestParseGraphQLVariables verifies variable extraction from request body.
 func TestParseGraphQLVariables(t *testing.T) {
 	body := `{"query":"query($id: ID!) { vulnerability(id: $id) { title } }","variables":{"id":"gid://gitlab/Vulnerability/42","severity":"HIGH"}}`
@@ -122,6 +177,13 @@ func TestParseGraphQLVariables(t *testing.T) {
 	}
 	if vars["severity"] != "HIGH" {
 		t.Errorf("severity = %v, want HIGH", vars["severity"])
+	}
+	restored, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("ReadAll(restored body) error = %v", err)
+	}
+	if string(restored) != body {
+		t.Fatalf("restored body = %q, want original body", string(restored))
 	}
 }
 
@@ -171,6 +233,17 @@ func TestParseGraphQLVariables_InvalidJSON(t *testing.T) {
 	_, err := ParseGraphQLVariables(req)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON body")
+	}
+}
+
+// TestParseGraphQLVariables_ReadError verifies request body read failures are returned.
+func TestParseGraphQLVariables_ReadError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/graphql", nil)
+	req.Body = graphqlFailReader{}
+
+	_, err := ParseGraphQLVariables(req)
+	if err == nil {
+		t.Fatal("expected error for failing request body")
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,16 +23,21 @@ import (
 
 // main finds duplicated string literals that should be extracted to constants.
 func main() {
-	args := os.Args[1:]
+	if code := run(os.Args[1:], os.Stdout, os.Stderr); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/find_dupes/ <dir|file>...")
-		os.Exit(1)
+		fmt.Fprintln(stderr, "usage: go run ./cmd/find_dupes/ <dir|file>...")
+		return 1
 	}
 	var files []string
 	for _, arg := range args {
 		info, err := os.Stat(arg) // #nosec G703 -- CLI tool: user provides paths intentionally
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "stat error %s: %v\n", arg, err)
+			fmt.Fprintf(stderr, "stat error %s: %v\n", arg, err)
 			continue
 		}
 		if !info.IsDir() {
@@ -49,8 +55,9 @@ func main() {
 		})
 	}
 	for _, file := range files {
-		findDupes(file)
+		findDupes(file, stdout, stderr)
 	}
+	return 0
 }
 
 // entry pairs a string literal value with the number of times it appears.
@@ -61,16 +68,16 @@ type entry struct {
 
 // findDupes parses a single Go source file, counts string literal
 // occurrences, and prints those that appear three or more times.
-func findDupes(filename string) {
+func findDupes(filename string, stdout io.Writer, stderr io.Writer) {
 	fset := token.NewFileSet()
 	src, err := os.ReadFile(filename) // #nosec G304,G703 -- CLI tool: user provides paths intentionally
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "read error %s: %v\n", filename, err)
+		fmt.Fprintf(stderr, "read error %s: %v\n", filename, err)
 		return
 	}
 	node, err := parser.ParseFile(fset, filename, src, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "parse error %s: %v\n", filename, err)
+		fmt.Fprintf(stderr, "parse error %s: %v\n", filename, err)
 		return
 	}
 
@@ -83,7 +90,7 @@ func findDupes(filename string) {
 	})
 
 	if len(dupes) > 0 {
-		printDuplicates(filename, dupes)
+		printDuplicates(stdout, filename, dupes)
 	}
 }
 
@@ -160,7 +167,7 @@ func filterDuplicates(counts map[string]int, constValues map[string]bool) []entr
 
 // printDuplicates writes a formatted section for filename listing each
 // duplicated string literal and its occurrence count.
-func printDuplicates(filename string, dupes []entry) {
+func printDuplicates(stdout io.Writer, filename string, dupes []entry) {
 	short := filename
 	if idx := strings.LastIndex(short, "/"); idx >= 0 {
 		short = short[idx+1:]
@@ -168,9 +175,9 @@ func printDuplicates(filename string, dupes []entry) {
 	if idx := strings.LastIndex(short, "\\"); idx >= 0 {
 		short = short[idx+1:]
 	}
-	fmt.Printf("\n=== %s ===\n", short)
+	fmt.Fprintf(stdout, "\n=== %s ===\n", short)
 	for _, d := range dupes {
-		fmt.Printf("  [%dx] %q\n", d.count, d.val)
+		fmt.Fprintf(stdout, "  [%dx] %q\n", d.count, d.val)
 	}
 }
 

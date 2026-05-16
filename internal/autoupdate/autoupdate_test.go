@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -1096,9 +1097,6 @@ func TestPeriodicCheckOnce_ModeAuto_WindowsFallbackRenameFails(t *testing.T) {
 // TestPeriodicFallbackDownload_DownloadError verifies the error path in
 // periodicFallbackDownload when downloadToStaging fails.
 func TestPeriodicFallbackDownload_DownloadError(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	src := &downloadableMockSource{
 		releases:    []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
 		downloadErr: errors.New("network timeout"),
@@ -1116,9 +1114,6 @@ func TestPeriodicFallbackDownload_DownloadError(t *testing.T) {
 // TestCheckOnceFallbackDownload_DownloadError verifies checkOnceFallbackDownload
 // returns a combined error when downloadToStaging fails.
 func TestCheckOnceFallbackDownload_DownloadError(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("checkOnceFallbackDownload is Windows-only")
-	}
 	src := &downloadableMockSource{
 		releases:    []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
 		downloadErr: errors.New("download failed"),
@@ -1144,9 +1139,6 @@ func TestCheckOnceFallbackDownload_DownloadError(t *testing.T) {
 // TestCheckOnceFallbackDownload_InvalidBinary verifies checkOnceFallbackDownload
 // returns a combined error when the downloaded binary fails validation.
 func TestCheckOnceFallbackDownload_InvalidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("checkOnceFallbackDownload is Windows-only")
-	}
 	badData := make([]byte, minBinarySize+1)
 	src := &downloadableMockSource{
 		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
@@ -1167,9 +1159,6 @@ func TestCheckOnceFallbackDownload_InvalidBinary(t *testing.T) {
 // TestPeriodicFallbackDownload_InvalidBinary verifies periodicFallbackDownload
 // logs error when the downloaded binary has invalid content.
 func TestPeriodicFallbackDownload_InvalidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	badData := make([]byte, minBinarySize+1)
 	src := &downloadableMockSource{
 		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
@@ -1188,9 +1177,6 @@ func TestPeriodicFallbackDownload_InvalidBinary(t *testing.T) {
 // TestPeriodicFallbackDownload_ValidBinary verifies periodicFallbackDownload
 // succeeds end-to-end when downloadToStaging produces a valid binary.
 func TestPeriodicFallbackDownload_ValidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	restoreTestBinary(t)
 
 	src := &downloadableMockSource{
@@ -1205,6 +1191,89 @@ func TestPeriodicFallbackDownload_ValidBinary(t *testing.T) {
 
 	// Should succeed or log error depending on binary locking.
 	u.periodicFallbackDownload(context.Background(), errors.New("apply failed"))
+}
+
+// TestCheckOnceFallbackDownload_ValidBinary verifies the direct fallback helper
+// can download and replace a staged binary when invoked independently of GOOS gating.
+func TestCheckOnceFallbackDownload_ValidBinary(t *testing.T) {
+	restoreTestBinary(t)
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	newVersion, updated, err := u.checkOnceFallbackDownload(context.Background(), errors.New("apply failed"))
+	if err != nil {
+		if !strings.Contains(err.Error(), "rename fallback") {
+			t.Fatalf("error = %q, want rename fallback context", err.Error())
+		}
+		return
+	}
+	if !updated {
+		t.Fatal("updated = false, want true")
+	}
+	if newVersion != "2.0.0" {
+		t.Fatalf("newVersion = %q, want 2.0.0", newVersion)
+	}
+}
+
+// TestCheckOnceFallbackDownload_RenameError verifies staging cleanup when the
+// downloaded binary is valid but replacing the current executable fails.
+func TestCheckOnceFallbackDownload_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	_, _, err := u.checkOnceFallbackDownload(context.Background(), errors.New("apply failed"))
+	if err == nil || !strings.Contains(err.Error(), "rename fallback") {
+		t.Fatalf("error = %v, want rename fallback", err)
+	}
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after rename failure, statErr=%v", statErr)
+	}
+}
+
+// TestPeriodicFallbackDownload_RenameError verifies the periodic fallback logs
+// and cleans up when a valid staged binary cannot replace the executable.
+func TestPeriodicFallbackDownload_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	u.periodicFallbackDownload(context.Background(), errors.New("apply failed"))
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after rename failure, statErr=%v", statErr)
+	}
 }
 
 // TestSelfupdateUpdater verifies that selfupdateUpdater returns

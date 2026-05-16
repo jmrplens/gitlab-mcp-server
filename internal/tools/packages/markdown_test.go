@@ -12,8 +12,88 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+// TestFormatPublishMarkdown_WithChecksumAndURL verifies publish markdown includes
+// file identifiers, checksum, URL, and follow-up hints for common workflows.
+func TestFormatPublishMarkdown_WithChecksumAndURL(t *testing.T) {
+	out := PublishOutput{
+		PackageFileID: 10,
+		PackageID:     20,
+		FileName:      "app.tar.gz",
+		Size:          4096,
+		SHA256:        "0123456789abcdef",
+		URL:           "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz",
+	}
+
+	got := FormatPublishMarkdown(out)
+	for _, want := range []string{
+		"## Package Published",
+		"**Package File ID**: 10",
+		"**Package ID**: 20",
+		"**File Name**: app.tar.gz",
+		"**Size**: 4096 bytes",
+		"**SHA256**: 0123456789abcdef",
+		"**URL**: [https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz](https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz)",
+		"publish_and_link",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FormatPublishMarkdown() = %q, want %q", got, want)
+		}
+	}
+}
+
+// TestFormatDownloadMarkdown_WithChecksum verifies download markdown reports the
+// local output path, byte count, checksum, and next actions.
+func TestFormatDownloadMarkdown_WithChecksum(t *testing.T) {
+	out := DownloadOutput{OutputPath: "/tmp/app.tar.gz", Size: 2048, SHA256: "abcdef"}
+
+	got := FormatDownloadMarkdown(out)
+	for _, want := range []string{
+		"## Package Downloaded",
+		"**Output Path**: /tmp/app.tar.gz",
+		"**Size**: 2048 bytes",
+		"**SHA256**: abcdef",
+		"file_list",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FormatDownloadMarkdown() = %q, want %q", got, want)
+		}
+	}
+}
+
+// TestFormatPublishAndLinkMarkdown_RendersBothSections verifies the composite
+// formatter keeps package and release-link details visible after a successful workflow.
+func TestFormatPublishAndLinkMarkdown_RendersBothSections(t *testing.T) {
+	out := PublishAndLinkOutput{
+		Package: PublishOutput{
+			PackageFileID: 11,
+			FileName:      "app.tar.gz",
+			Size:          1024,
+			URL:           "https://gitlab.example.com/package/app.tar.gz",
+		},
+		ReleaseLink: releaselinks.Output{ID: 22, Name: "app.tar.gz", URL: "https://gitlab.example.com/release/app.tar.gz"},
+	}
+
+	got := FormatPublishAndLinkMarkdown(out)
+	for _, want := range []string{
+		"## Package Published & Linked",
+		"### Package",
+		"**Package File ID**: 11",
+		"**File Name**: app.tar.gz",
+		"**URL**: [https://gitlab.example.com/package/app.tar.gz](https://gitlab.example.com/package/app.tar.gz)",
+		"### Release Link",
+		"**ID**: 22",
+		"**Name**: app.tar.gz",
+		"**URL**: [https://gitlab.example.com/release/app.tar.gz](https://gitlab.example.com/release/app.tar.gz)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FormatPublishAndLinkMarkdown() = %q, want %q", got, want)
+		}
+	}
+}
 
 // TestFormatPublishDirMarkdown_WithPublishedFiles verifies that
 // [FormatPublishDirMarkdown] renders a table of published files with SHA256

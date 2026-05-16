@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
@@ -16,28 +17,33 @@ import (
 // Severity, Problem, Alias, Canonical, Message. Findings with Severity="error"
 // fail the command; warnings and informational findings are printed for review.
 func main() {
+	os.Exit(run(os.Stdout, os.Stderr))
+}
+
+func run(stdout, stderr io.Writer) int {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "build action catalog: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "build action catalog: %v\n", err)
+		return 1
 	}
 	catalog, err = dynamic.AddStandaloneCatalog(catalog, nil, dynamic.StandaloneOptions{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "add standalone dynamic catalog: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "add standalone dynamic catalog: %v\n", err)
+		return 1
 	}
 
 	findings := dynamic.AuditDefaultActionAliases(catalog)
 	errorCount := 0
 	for _, finding := range findings {
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Message)
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Message)
 		if finding.Severity == "error" {
 			errorCount++
 		}
 	}
 	if errorCount > 0 {
-		fmt.Fprintf(os.Stderr, "dynamic alias audit failed: %d error(s)\n", errorCount)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "dynamic alias audit failed: %d error(s)\n", errorCount)
+		return 1
 	}
-	fmt.Printf("dynamic alias audit passed: %d finding(s)\n", len(findings))
+	fmt.Fprintf(stdout, "dynamic alias audit passed: %d finding(s)\n", len(findings))
+	return 0
 }
