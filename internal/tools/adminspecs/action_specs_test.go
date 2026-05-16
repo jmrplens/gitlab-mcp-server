@@ -73,9 +73,9 @@ func TestActionSpecs_SelectedActionSemantics(t *testing.T) {
 		{name: "topic_create", individualTool: "gitlab_create_topic"},
 		{name: "topic_update", idempotent: true, individualTool: "gitlab_update_topic"},
 		{name: "topic_delete", destructive: true, idempotent: true, individualTool: "gitlab_delete_topic"},
-		{name: "feature_set", idempotent: true, individualTool: "gitlab_set_feature_flag", individualIdempotent: boolPtr(false)},
-		{name: "db_migration_mark", destructive: true, idempotent: true, individualTool: "gitlab_mark_migration", individualDestructive: boolPtr(false)},
-		{name: "system_hook_test", individualTool: "gitlab_test_system_hook", individualReadOnly: boolPtr(true), individualIdempotent: boolPtr(true)},
+		{name: "feature_set", idempotent: true, individualTool: "gitlab_set_feature_flag", individualIdempotent: new(false)},
+		{name: "db_migration_mark", destructive: true, idempotent: true, individualTool: "gitlab_mark_migration", individualDestructive: new(false)},
+		{name: "system_hook_test", individualTool: "gitlab_test_system_hook", individualReadOnly: new(true), individualIdempotent: new(true)},
 	}
 
 	for _, tt := range tests {
@@ -129,8 +129,4 @@ func assertBoolOverride(t *testing.T, name string, got *bool, want *bool) {
 	if *got != *want {
 		t.Fatalf("%s override = %v, want %v", name, *got, *want)
 	}
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }
