@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,821 |
-| Unit test functions | 9,572 |
+| Total test functions | 9,838 |
+| Unit test functions | 9,589 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,17 +27,17 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.4% |
-| Overall coverage (`go test ./internal/...`) | 97.6% |
-| Average package coverage | 94.6% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.6% |
+| Overall coverage (`go test ./internal/...`) | 97.7% |
+| Average package coverage | 94.7% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,824 | 89.8% |
-| `TestFunc` (no underscore) | 717 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
+| `TestFunc_Scenario` (2-part) | 8,840 | 89.9% |
+| `TestFunc` (no underscore) | 718 | 7.3% |
+| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,164 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,181 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,821** | **567** |  |
+| **Total** | **9,838** | **567** |  |
 
 ### Core Packages
 
@@ -113,8 +113,8 @@
 | --- | ---: | ---: | ---: | ---: |
 | accessrequests | 41 | 2 | 100.0% | 8 |
 | accesstokens | 85 | 2 | 98.6% | 18 |
-| actioncatalog | 21 | 4 | 92.5% | 0 |
-| actioncompat | 11 | 2 | 95.9% | 0 |
+| actioncatalog | 26 | 4 | 98.6% | 0 |
+| actioncompat | 13 | 2 | 100.0% | 0 |
 | adminspecs | 2 | 1 | 100.0% | 88 |
 | alertmanagement | 27 | 2 | 97.9% | 4 |
 | appearance | 10 | 1 | 100.0% | 2 |
@@ -146,7 +146,7 @@
 | dependencyproxy | 5 | 1 | 100.0% | 1 |
 | deploykeys | 65 | 2 | 100.0% | 9 |
 | deploymentmergerequests | 20 | 1 | 100.0% | 1 |
-| deployments | 48 | 2 | 96.5% | 6 |
+| deployments | 52 | 2 | 100.0% | 6 |
 | deploytokens | 63 | 2 | 100.0% | 9 |
 | dockerfiletemplates | 14 | 1 | 100.0% | 2 |
 | dorametrics | 8 | 2 | 100.0% | 2 |
@@ -162,8 +162,8 @@
 | events | 41 | 1 | 100.0% | 2 |
 | externalstatuschecks | 47 | 3 | 100.0% | 8 |
 | featureflags | 36 | 2 | 97.8% | 5 |
-| features | 20 | 2 | 96.2% | 4 |
-| ffuserlists | 26 | 2 | 96.2% | 5 |
+| features | 21 | 2 | 96.9% | 4 |
+| ffuserlists | 29 | 2 | 100.0% | 5 |
 | files | 78 | 3 | 100.0% | 8 |
 | freezeperiods | 32 | 2 | 98.1% | 5 |
 | geo | 47 | 2 | 100.0% | 8 |
@@ -265,7 +265,7 @@
 | snippetnotes | 42 | 2 | 100.0% | 5 |
 | snippets | 73 | 2 | 97.8% | 15 |
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
-| surfaces | 8 | 1 | 95.9% | 0 |
+| surfaces | 10 | 1 | 100.0% | 0 |
 | systemhooks | 23 | 2 | 99.2% | 5 |
 | tags | 77 | 2 | 100.0% | 9 |
 | terraformstates | 17 | 1 | 100.0% | 6 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,164** | **337** |  | **1,106** |
+| **Total** | **7,181** | **337** |  | **1,106** |
 
 </details>
 
@@ -336,8 +336,8 @@
 | tools (orch.) | 91.5% |
 | accessrequests | 100.0% |
 | accesstokens | 98.6% |
-| actioncatalog | 92.5% |
-| actioncompat | 95.9% |
+| actioncatalog | 98.6% |
+| actioncompat | 100.0% |
 | adminspecs | 100.0% |
 | alertmanagement | 97.9% |
 | appearance | 100.0% |
@@ -369,7 +369,7 @@
 | dependencyproxy | 100.0% |
 | deploykeys | 100.0% |
 | deploymentmergerequests | 100.0% |
-| deployments | 96.5% |
+| deployments | 100.0% |
 | deploytokens | 100.0% |
 | dockerfiletemplates | 100.0% |
 | dorametrics | 100.0% |
@@ -385,8 +385,8 @@
 | events | 100.0% |
 | externalstatuschecks | 100.0% |
 | featureflags | 97.8% |
-| features | 96.2% |
-| ffuserlists | 96.2% |
+| features | 96.9% |
+| ffuserlists | 100.0% |
 | files | 100.0% |
 | freezeperiods | 98.1% |
 | geo | 100.0% |
@@ -488,7 +488,7 @@
 | snippetnotes | 100.0% |
 | snippets | 97.8% |
 | snippetstoragemoves | 100.0% |
-| surfaces | 95.9% |
+| surfaces | 100.0% |
 | systemhooks | 99.2% |
 | tags | 100.0% |
 | terraformstates | 100.0% |

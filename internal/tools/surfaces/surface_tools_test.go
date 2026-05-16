@@ -136,6 +136,31 @@ func TestAddToolCatalog_DuplicateGroupIncludesActionLabel(t *testing.T) {
 	}
 }
 
+// TestAddToolCatalog_BuildGroupError verifies duplicate action names in one
+// surface group are reported while building the catalog group.
+func TestAddToolCatalog_BuildGroupError(t *testing.T) {
+	specs := []actioncatalog.SurfaceToolSpec{
+		testSurfaceToolSpec("gitlab_test_one", "run"),
+		testSurfaceToolSpec("gitlab_test_two", "run"),
+	}
+	_, err := AddToolCatalog(nil, specs, CatalogOptions{})
+	if err == nil {
+		t.Fatal("AddToolCatalog() error = nil, want duplicate action error")
+	}
+	if !strings.Contains(err.Error(), "build surface tool group gitlab_test") {
+		t.Fatalf("error = %v, want build group context", err)
+	}
+}
+
+// TestSurfaceGroupActionLabel_EmptyGroup verifies labels fall back to the tool
+// name when a group has no actions.
+func TestSurfaceGroupActionLabel_EmptyGroup(t *testing.T) {
+	label := surfaceGroupActionLabel(actioncatalog.Group{ToolName: "gitlab_empty"})
+	if label != "gitlab_empty" {
+		t.Fatalf("surfaceGroupActionLabel() = %q, want gitlab_empty", label)
+	}
+}
+
 // TestToolGroupSpecs_EmptyAndInvalidInputs verifies grouping handles empty input and fails fast on invalid specs.
 func TestToolGroupSpecs_EmptyAndInvalidInputs(t *testing.T) {
 	if groups := ToolGroupSpecs(nil); groups != nil {
@@ -174,6 +199,25 @@ func TestSurfaceGroupingHelpers_CoverReadOnlyAndStringSetBranches(t *testing.T) 
 	}
 	if _, ok := set[""]; ok {
 		t.Fatalf("stringSet() = %+v, want empty value skipped", set)
+	}
+
+	filtered := filterToolSpecs([]actioncatalog.SurfaceToolSpec{testSurfaceToolSpec("gitlab_test_one", "run")}, CatalogOptions{ExcludeToolNames: []string{"gitlab_test"}})
+	if len(filtered) != 0 {
+		t.Fatalf("filterToolSpecs(group exclusion) = %+v, want empty", filtered)
+	}
+}
+
+func testSurfaceToolSpec(name, actionName string) actioncatalog.SurfaceToolSpec {
+	return actioncatalog.SurfaceToolSpec{
+		Name:          name,
+		Description:   "Test surface.",
+		GroupToolName: "gitlab_test",
+		BaseDomain:    "test",
+		ActionName:    actionName,
+		SurfaceKind:   actioncatalog.SurfaceKindRuntimeUtility,
+		Route:         toolutil.RouteFunc(func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil }),
+		OwnerPackage:  "surfaces",
+		ReadOnly:      true,
 	}
 }
 

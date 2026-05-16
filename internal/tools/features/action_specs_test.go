@@ -79,6 +79,17 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DeleteOutputError verifies delete output propagates backend errors.
+func TestActionSpecs_DeleteOutputError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := deleteOutput(t.Context(), client, DeleteInput{Name: "flag1"})
+	if err == nil {
+		t.Fatal("deleteOutput() error = nil, want backend error")
+	}
+}
+
 // TestActionSpecs_ErrorsPropagate verifies route backend errors propagate directly.
 func TestActionSpecs_ErrorsPropagate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

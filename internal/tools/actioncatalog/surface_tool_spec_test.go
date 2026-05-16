@@ -2,6 +2,7 @@ package actioncatalog
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -81,5 +82,55 @@ func TestSurfaceToolSpec_Validate_RequiresSchemas(t *testing.T) {
 	}
 	if err := spec.Validate(); err == nil {
 		t.Fatal("Validate() error = nil, want missing schema error")
+	}
+}
+
+// TestSurfaceToolSpec_ValidateRejectsMissingMetadata covers each required
+// metadata field so catalog projection failures remain specific.
+func TestSurfaceToolSpec_ValidateRejectsMissingMetadata(t *testing.T) {
+	valid := SurfaceToolSpec{
+		Name:          "gitlab_test_surface",
+		Description:   "Test surface utility.",
+		GroupToolName: "gitlab_test",
+		BaseDomain:    "test",
+		ActionName:    "surface",
+		SurfaceKind:   SurfaceKindRuntimeUtility,
+		Route:         toolutil.RouteFunc(func(context.Context, surfaceSpecInput) (surfaceSpecOutput, error) { return surfaceSpecOutput{}, nil }),
+		OwnerPackage:  "actioncatalog",
+	}
+
+	tests := []struct {
+		name string
+		edit func(SurfaceToolSpec) SurfaceToolSpec
+		want string
+	}{
+		{name: "missing name", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.Name = ""; return spec }, want: "name is required"},
+		{name: "missing description", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.Description = ""; return spec }, want: "description is required"},
+		{name: "missing group", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.GroupToolName = ""; return spec }, want: "group tool name is required"},
+		{name: "missing domain", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.BaseDomain = ""; return spec }, want: "base domain is required"},
+		{name: "missing action", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.ActionName = ""; return spec }, want: "action name is required"},
+		{name: "missing owner", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.OwnerPackage = ""; return spec }, want: "owner package is required"},
+		{name: "invalid kind", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.SurfaceKind = SurfaceKind("legacy"); return spec }, want: "unsupported surface kind"},
+		{name: "missing handler", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.Route.Handler = nil; return spec }, want: "route handler is required"},
+		{name: "missing input schema", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.Route.InputSchema = nil; return spec }, want: "input schema is required"},
+		{name: "missing output schema", edit: func(spec SurfaceToolSpec) SurfaceToolSpec { spec.Route.OutputSchema = nil; return spec }, want: "output schema is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.edit(valid).Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate() error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestSurfaceToolSpec_ActionSpecRejectsInvalidSpec verifies ActionSpec returns
+// validation errors instead of projecting incomplete metadata.
+func TestSurfaceToolSpec_ActionSpecRejectsInvalidSpec(t *testing.T) {
+	_, err := (SurfaceToolSpec{}).ActionSpec()
+	if err == nil {
+		t.Fatal("ActionSpec() error = nil, want validation error")
 	}
 }

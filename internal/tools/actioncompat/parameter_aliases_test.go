@@ -163,6 +163,7 @@ func TestNormalizeParamsWithExplanation_NoChangeScenarios(t *testing.T) {
 		{name: "canonical scope wins", actionID: "job.list", params: map[string]any{"status": "failed", "scope": "success"}, schema: schemaWithProperties("scope")},
 		{name: "invalid issue state is left unchanged", actionID: "issue.update", params: map[string]any{"state_event": "paused"}, schema: schemaWithProperties("state_event")},
 		{name: "snippet single file requires content", actionID: "snippet.project_create", params: map[string]any{"file_name": "main.go"}, schema: schemaWithProperties("files")},
+		{name: "snippet file list ignores non-map entries", actionID: "snippet.project_create", params: map[string]any{"files": []any{"not-a-file-map"}}, schema: schemaWithProperties("files")},
 	}
 
 	for _, testCase := range testCases {
@@ -189,7 +190,11 @@ func TestParameterNormalizationHelpers_ParseValues(t *testing.T) {
 		{name: "int", value: 30, wantLevel: 30, wantOK: true},
 		{name: "int64", value: int64(40), wantLevel: 40, wantOK: true},
 		{name: "numeric string", value: "20", wantLevel: 20, wantOK: true},
+		{name: "invalid numeric string", value: "99", wantOK: false},
+		{name: "guest label", value: "guest", wantLevel: 10, wantOK: true},
+		{name: "reporter label", value: " reporter ", wantLevel: 20, wantOK: true},
 		{name: "label", value: " Developer ", wantLevel: 30, wantOK: true},
+		{name: "unknown label", value: "admin", wantOK: false},
 		{name: "fractional float", value: 30.5, wantOK: false},
 		{name: "invalid number", value: 99, wantOK: false},
 		{name: "unsupported type", value: true, wantOK: false},

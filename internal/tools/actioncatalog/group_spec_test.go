@@ -12,7 +12,7 @@ import (
 // TestCatalogGroupSpec_ValidateAndClone verifies CatalogGroupSpec when validate and clone.
 func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
-	capabilities := []string{"sampling", "sampling"}
+	capabilities := []string{"sampling", "", "sampling"}
 	actions := []toolutil.ActionSpec{toolutil.NewActionSpec("delete", testRoute(true), toolutil.ActionSpecOptions{
 		Destructive:  true,
 		Idempotent:   true,
@@ -61,6 +61,15 @@ func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	}
 }
 
+// TestCatalogGroupSpec_CloneDefaultsSurfaceKind verifies group specs default to
+// meta-group surface kind when no explicit kind is supplied.
+func TestCatalogGroupSpec_CloneDefaultsSurfaceKind(t *testing.T) {
+	cloned := CloneCatalogGroupSpec(CatalogGroupSpec{ToolName: "gitlab_project"})
+	if cloned.SurfaceKind != SurfaceKindMetaGroup {
+		t.Fatalf("SurfaceKind = %q, want %q", cloned.SurfaceKind, SurfaceKindMetaGroup)
+	}
+}
+
 // TestCatalogGroupSpec_RejectsInvalidMetadata covers CatalogGroupSpec with table-driven subtests for rejects invalid metadata.
 func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 	validAction := toolutil.NewActionSpec("get", testRoute(false), toolutil.ActionSpecOptions{ReadOnly: true, OwnerPackage: "projects"})
@@ -69,6 +78,22 @@ func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 		edit func(CatalogGroupSpec) CatalogGroupSpec
 		want string
 	}{
+		{
+			name: "missing tool name",
+			edit: func(spec CatalogGroupSpec) CatalogGroupSpec {
+				spec.ToolName = " "
+				return spec
+			},
+			want: errToolNameRequired,
+		},
+		{
+			name: "invalid action spec",
+			edit: func(spec CatalogGroupSpec) CatalogGroupSpec {
+				spec.Actions = []toolutil.ActionSpec{toolutil.NewActionSpec("get", testRoute(false), toolutil.ActionSpecOptions{OwnerPackage: "projects", ContentKind: "legacy"})}
+				return spec
+			},
+			want: "unsupported content kind",
+		},
 		{
 			name: "missing owner",
 			edit: func(spec CatalogGroupSpec) CatalogGroupSpec {
@@ -143,6 +168,23 @@ func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestValidateCatalogGroupAliases_EdgeCases covers alias normalization and
+// cross-action parameter alias conflicts after ActionSpec-level validation.
+func TestValidateCatalogGroupAliases_EdgeCases(t *testing.T) {
+	spec := CatalogGroupSpec{
+		ToolName: "gitlab_project",
+		Actions: []toolutil.ActionSpec{
+			{Name: "get", Compatibility: toolutil.CompatibilityPolicy{
+				ActionAliases:    []toolutil.ActionAliasSpec{{Alias: " "}, {Alias: "show"}},
+				ParameterAliases: []toolutil.ParameterAliasSpec{{Alias: " "}, {Alias: "project", Target: "project_id"}, {Alias: "project", Target: "id"}},
+			}},
+		},
+	}
+	if err := validateCatalogGroupAliases(spec); err == nil || !strings.Contains(err.Error(), "compatibility parameter alias \"project\" maps to both") {
+		t.Fatalf("validateCatalogGroupAliases() error = %v, want parameter conflict", err)
 	}
 }
 

@@ -190,6 +190,26 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	}
 }
 
+// TestCatalog_AddGroupInitializesZeroValueCatalog verifies AddGroup supports a
+// zero-value catalog and detects cross-group action ID collisions.
+func TestCatalog_AddGroupInitializesZeroValueCatalog(t *testing.T) {
+	var catalog Catalog
+	group := NewGroup(GroupOptions{ToolName: "gitlab_project", BaseDomain: "shared"})
+	group.SetAction(Action{Name: "get", Route: testRoute(false)})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if catalog.CountGroups() != 1 || catalog.CountActions() != 1 {
+		t.Fatalf("counts = groups %d actions %d, want 1/1", catalog.CountGroups(), catalog.CountActions())
+	}
+
+	colliding := NewGroup(GroupOptions{ToolName: "gitlab_group", BaseDomain: "shared"})
+	colliding.SetAction(Action{Name: "get", Route: testRoute(false)})
+	if err := catalog.AddGroup(colliding); err == nil {
+		t.Fatal("AddGroup(cross-group duplicate action ID) error = nil, want error")
+	}
+}
+
 // TestMustAddCatalogGroup_PanicsOnInvariantDrift verifies MustAddCatalogGroup when panics on invariant drift.
 func TestMustAddCatalogGroup_PanicsOnInvariantDrift(t *testing.T) {
 	defer func() {
@@ -317,6 +337,16 @@ func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 				{Name: "list", Route: testRoute(false), Aliases: []string{"project.show"}},
 			}),
 			want: "maps to both",
+		},
+		{
+			name:    "missing group tool name",
+			catalog: &Catalog{groups: map[string]Group{"": {ToolName: "", Actions: map[string]Action{"get": {Name: "get", Route: testRoute(false)}}}}},
+			want:    errToolNameRequired,
+		},
+		{
+			name:    "missing action name",
+			catalog: &Catalog{groups: map[string]Group{"gitlab_project": {ToolName: "gitlab_project", ActionOrder: []string{""}, Actions: map[string]Action{"": {Route: testRoute(false)}}}}},
+			want:    "action name is required",
 		},
 	}
 	for _, tt := range tests {
