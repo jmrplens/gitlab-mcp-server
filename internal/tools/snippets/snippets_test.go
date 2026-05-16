@@ -414,6 +414,37 @@ func TestAddSnippetCreateFileRequirement_EdgeCases(t *testing.T) {
 	}
 }
 
+// TestCreateInputSchemaMaps verifies snippet create schema maps expose the file requirement.
+func TestCreateInputSchemaMaps(t *testing.T) {
+	for name, schema := range map[string]map[string]any{
+		"personal": CreateInputSchemaMap(),
+		"project":  ProjectCreateInputSchemaMap(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if len(schema) == 0 {
+				t.Fatal("expected non-empty schema map")
+			}
+			if _, ok := schema["anyOf"]; !ok {
+				t.Fatalf("schema missing anyOf: %#v", schema)
+			}
+		})
+	}
+}
+
+// TestSnippetCreateInputSchemaPanicsForUnsupportedType verifies schema-generation failures are surfaced.
+func TestSnippetCreateInputSchemaPanicsForUnsupportedType(t *testing.T) {
+	type unsupportedSchemaInput struct {
+		Callback func() `json:"callback"`
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for unsupported schema type")
+		}
+	}()
+	_ = snippetCreateInputSchema[unsupportedSchemaInput]()
+}
+
 // TestFormatFileContentMarkdown verifies FormatFileContentMarkdown.
 func TestFormatFileContentMarkdown(t *testing.T) {
 	out := FileContentOutput{SnippetID: 42, Ref: "main", FileName: "test.go", Content: "package main"}

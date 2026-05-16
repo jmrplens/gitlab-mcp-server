@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,890 |
-| Unit test functions | 9,641 |
+| Total test functions | 9,893 |
+| Unit test functions | 9,644 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,888 | 89.9% |
-| `TestFunc` (no underscore) | 721 | 7.3% |
+| `TestFunc_Scenario` (2-part) | 8,889 | 89.9% |
+| `TestFunc` (no underscore) | 723 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,233 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,236 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,890** | **567** |  |
+| **Total** | **9,893** | **567** |  |
 
 ### Core Packages
 
@@ -98,8 +98,8 @@
 | pipelineschedules | 85 | 100.0% | 11 |
 | branches | 83 | 100.0% | 10 |
 | files | 78 | 100.0% | 8 |
+| snippets | 78 | 99.5% | 15 |
 | tags | 77 | 100.0% | 9 |
-| snippets | 76 | 99.2% | 15 |
 | containerregistry | 74 | 100.0% | 12 |
 | repository | 66 | 100.0% | 9 |
 | workitems | 66 | 100.0% | 5 |
@@ -222,7 +222,7 @@
 | mrcontextcommits | 22 | 1 | 100.0% | 3 |
 | mrdiscussions | 46 | 1 | 98.9% | 7 |
 | mrdraftnotes | 61 | 2 | 98.5% | 7 |
-| mrnotes | 37 | 2 | 99.2% | 5 |
+| mrnotes | 37 | 2 | 100.0% | 5 |
 | namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
@@ -230,7 +230,7 @@
 | pages | 54 | 2 | 100.0% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 85 | 2 | 100.0% | 11 |
-| pipelinetriggers | 48 | 2 | 99.3% | 6 |
+| pipelinetriggers | 49 | 2 | 100.0% | 6 |
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
 | projectdiscovery | 19 | 1 | 100.0% | 1 |
@@ -263,10 +263,10 @@
 | sidekiq | 18 | 2 | 100.0% | 4 |
 | snippetdiscussions | 29 | 2 | 100.0% | 6 |
 | snippetnotes | 42 | 2 | 100.0% | 5 |
-| snippets | 76 | 2 | 99.2% | 15 |
+| snippets | 78 | 2 | 99.5% | 15 |
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
 | surfaces | 10 | 1 | 100.0% | 0 |
-| systemhooks | 23 | 2 | 99.2% | 5 |
+| systemhooks | 23 | 2 | 100.0% | 5 |
 | tags | 77 | 2 | 100.0% | 9 |
 | terraformstates | 17 | 1 | 100.0% | 6 |
 | todos | 29 | 1 | 100.0% | 3 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,233** | **337** |  | **1,106** |
+| **Total** | **7,236** | **337** |  | **1,106** |
 
 </details>
 
@@ -445,7 +445,7 @@
 | mrcontextcommits | 100.0% |
 | mrdiscussions | 98.9% |
 | mrdraftnotes | 98.5% |
-| mrnotes | 99.2% |
+| mrnotes | 100.0% |
 | namespaces | 98.9% |
 | notifications | 100.0% |
 | orbit | 99.7% |
@@ -453,7 +453,7 @@
 | pages | 100.0% |
 | pipelines | 97.9% |
 | pipelineschedules | 100.0% |
-| pipelinetriggers | 99.3% |
+| pipelinetriggers | 100.0% |
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
 | projectdiscovery | 100.0% |
@@ -486,10 +486,10 @@
 | sidekiq | 100.0% |
 | snippetdiscussions | 100.0% |
 | snippetnotes | 100.0% |
-| snippets | 99.2% |
+| snippets | 99.5% |
 | snippetstoragemoves | 100.0% |
 | surfaces | 100.0% |
-| systemhooks | 99.2% |
+| systemhooks | 100.0% |
 | tags | 100.0% |
 | terraformstates | 100.0% |
 | todos | 100.0% |

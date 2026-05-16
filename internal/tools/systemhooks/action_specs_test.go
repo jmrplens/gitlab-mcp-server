@@ -53,6 +53,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_list_system_hooks", map[string]any{}},
 		{"gitlab_get_system_hook", map[string]any{"id": 1}},
 		{"gitlab_add_system_hook", map[string]any{"url": "https://example.com"}},
+		{"gitlab_delete_system_hook", map[string]any{"id": 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
