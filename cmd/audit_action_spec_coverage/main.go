@@ -375,7 +375,7 @@ func legacyRuntimeBridgeFindings(root string) ([]string, error) {
 	}
 	findings := make([]string, 0)
 	for path, forbidden := range checks {
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) // #nosec G304 -- paths are fixed repository files assembled from the discovered repository root.
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
@@ -392,7 +392,7 @@ func assertNoStaleAIContextGuidance(root string) error {
 	}
 	var findings []string
 	for _, path := range files {
-		content, readErr := os.ReadFile(path)
+		content, readErr := os.ReadFile(path) // #nosec G304 -- AI context paths are fixed repository files discovered under known project directories.
 		if readErr != nil {
 			return fmt.Errorf("read %s: %w", path, readErr)
 		}
@@ -478,7 +478,7 @@ func legacyBridgeFindingsInContent(path, content string, forbidden []string) []s
 
 func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
 	path := filepath.Join(root, "internal", "tools", "dynamic", "register.go")
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) // #nosec G304 -- path is a fixed repository file assembled from the discovered repository root.
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
@@ -540,7 +540,7 @@ func assertNoProductionSelectorCall(root, qualifier, selectorName string) error 
 }
 
 func assertActionCatalogHasNoLegacyReferences(path string) error {
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) // #nosec G304 -- caller passes the fixed action_catalog.go path under the discovered repository root.
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}

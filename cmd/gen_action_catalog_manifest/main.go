@@ -123,7 +123,7 @@ func generateManifest(builders []string) ([]byte, error) {
 }
 
 func checkManifest(path string, want []byte) error {
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(path) // #nosec G304 -- path is resolved from the local repository root and points to the generated manifest.
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
