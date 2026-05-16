@@ -1144,6 +1144,14 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatMilestoneNotFound verifies not-found result formatting for milestones.
+func TestFormatMilestoneNotFound(t *testing.T) {
+	result := formatMilestoneNotFound(milestoneNotFoundOutput{Identifier: "IID 9 in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatMilestoneNotFound() = %+v, want error result", result)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
@@ -1264,6 +1272,22 @@ func TestActionSpecs_MilestoneGetRoute(t *testing.T) {
 	}
 	if out.IID != 3 || out.ID != 99 {
 		t.Fatalf("milestone output = %#v, want IID 3 ID 99", out)
+	}
+}
+
+// TestActionSpecs_MilestoneGetRouteNotFound verifies get route converts 404 into a not-found result.
+func TestActionSpecs_MilestoneGetRouteNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 9})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if _, ok := result.(milestoneNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want milestoneNotFoundOutput", result)
 	}
 }
 

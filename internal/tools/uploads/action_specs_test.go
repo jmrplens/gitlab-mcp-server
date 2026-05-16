@@ -52,6 +52,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}{
 		{"gitlab_project_upload", map[string]any{"project_id": "p", "content_base64": base64.StdEncoding.EncodeToString([]byte("data")), "filename": "f.txt"}},
 		{"gitlab_project_upload_list", map[string]any{"project_id": "p"}},
+		{"gitlab_project_upload_delete", map[string]any{"project_id": "p", "upload_id": 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {

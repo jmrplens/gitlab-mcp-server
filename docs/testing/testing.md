@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,900 |
-| Unit test functions | 9,651 |
+| Total test functions | 9,905 |
+| Unit test functions | 9,656 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,894 | 89.8% |
-| `TestFunc` (no underscore) | 725 | 7.3% |
+| `TestFunc_Scenario` (2-part) | 8,895 | 89.8% |
+| `TestFunc` (no underscore) | 729 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,243 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,248 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,900** | **567** |  |
+| **Total** | **9,905** | **567** |  |
 
 ### Core Packages
 
@@ -90,7 +90,7 @@
 | awardemoji | 106 | 96.7% | 24 |
 | packages | 103 | 97.3% | 8 |
 | runners | 102 | 98.2% | 19 |
-| pipelines | 99 | 97.9% | 12 |
+| pipelines | 101 | 99.2% | 12 |
 | resourceevents | 98 | 100.0% | 15 |
 | commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
@@ -101,8 +101,8 @@
 | snippets | 78 | 99.5% | 15 |
 | tags | 77 | 100.0% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
+| milestones | 67 | 97.8% | 7 |
 | repository | 66 | 100.0% | 9 |
-| workitems | 66 | 100.0% | 5 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -214,7 +214,7 @@
 | mergerequests | 212 | 1 | 96.1% | 30 |
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
-| milestones | 65 | 1 | 96.6% | 7 |
+| milestones | 67 | 1 | 97.8% | 7 |
 | modelregistry | 5 | 3 | 100.0% | 1 |
 | mrapprovals | 60 | 3 | 100.0% | 7 |
 | mrapprovalsettings | 9 | 2 | 100.0% | 4 |
@@ -228,7 +228,7 @@
 | orbit | 25 | 1 | 99.7% | 5 |
 | packages | 103 | 5 | 97.3% | 8 |
 | pages | 54 | 2 | 100.0% | 9 |
-| pipelines | 99 | 2 | 97.9% | 12 |
+| pipelines | 101 | 2 | 99.2% | 12 |
 | pipelineschedules | 85 | 2 | 100.0% | 11 |
 | pipelinetriggers | 49 | 2 | 100.0% | 6 |
 | planlimits | 13 | 2 | 100.0% | 2 |
@@ -271,15 +271,15 @@
 | terraformstates | 17 | 1 | 100.0% | 6 |
 | todos | 29 | 1 | 100.0% | 3 |
 | topics | 26 | 2 | 100.0% | 5 |
-| uploads | 32 | 2 | 96.7% | 3 |
+| uploads | 32 | 2 | 97.8% | 3 |
 | usagedata | 27 | 1 | 100.0% | 6 |
 | useremails | 24 | 2 | 100.0% | 6 |
 | usergpgkeys | 44 | 2 | 100.0% | 8 |
 | users | 185 | 12 | 100.0% | 36 |
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
-| wikis | 58 | 2 | 98.7% | 6 |
+| wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,243** | **337** |  | **1,106** |
+| **Total** | **7,248** | **337** |  | **1,106** |
 
 </details>
 
@@ -437,7 +437,7 @@
 | mergerequests | 96.1% |
 | mergetrains | 100.0% |
 | metadata | 100.0% |
-| milestones | 96.6% |
+| milestones | 97.8% |
 | modelregistry | 100.0% |
 | mrapprovals | 100.0% |
 | mrapprovalsettings | 100.0% |
@@ -451,7 +451,7 @@
 | orbit | 99.7% |
 | packages | 97.3% |
 | pages | 100.0% |
-| pipelines | 97.9% |
+| pipelines | 99.2% |
 | pipelineschedules | 100.0% |
 | pipelinetriggers | 100.0% |
 | planlimits | 100.0% |
@@ -494,13 +494,13 @@
 | terraformstates | 100.0% |
 | todos | 100.0% |
 | topics | 100.0% |
-| uploads | 96.7% |
+| uploads | 97.8% |
 | usagedata | 100.0% |
 | useremails | 100.0% |
 | usergpgkeys | 100.0% |
 | users | 100.0% |
 | vulnerabilities | 98.4% |
-| wikis | 98.7% |
+| wikis | 99.4% |
 | workitems | 100.0% |
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:

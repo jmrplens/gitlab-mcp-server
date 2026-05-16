@@ -120,6 +120,14 @@ func TestWikiList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestFormatWikiNotFound verifies not-found result formatting for wiki pages.
+func TestFormatWikiNotFound(t *testing.T) {
+	result := formatWikiNotFound(wikiNotFoundOutput{Identifier: "home in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatWikiNotFound() = %+v, want error result", result)
+	}
+}
+
 // Get.
 
 // TestWikiGet_Success verifies WikiGet when success.
