@@ -13,29 +13,43 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errProjectIDRequired identifies the err project ID required constant used by this package.
 const errProjectIDRequired = "project_id is required"
 
+// errBoardIDRequired identifies the err board ID required constant used by this package.
 const errBoardIDRequired = "board_id is required"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 const (
-	pathBoard1              = "/api/v4/projects/10/boards/1"
-	pathBoardList100        = "/api/v4/projects/10/boards/1/lists/100"
-	fmtExpectedID1          = "expected ID 1, got %d"
-	fmtExpectedID100        = "expected ID 100, got %d"
+	// pathBoard1 identifies the path board 1 constant used by this package.
+	pathBoard1 = "/api/v4/projects/10/boards/1"
+	// pathBoardList100 identifies the path board list 100 constant used by this package.
+	pathBoardList100 = "/api/v4/projects/10/boards/1/lists/100"
+	// fmtExpectedID1 identifies the fmt expected ID 1 constant used by this package.
+	fmtExpectedID1 = "expected ID 1, got %d"
+	// fmtExpectedID100 identifies the fmt expected ID 100 constant used by this package.
+	fmtExpectedID100 = "expected ID 100, got %d"
+	// fmtExpectedProjectIDReq identifies the fmt expected project ID req constant used by this package.
 	fmtExpectedProjectIDReq = "expected project_id required, got %v"
-	fmtExpectedBoardIDReq   = "expected board_id required, got %v"
-	msgMethodNotAllowed     = "method not allowed"
-	errListIDRequired       = "list_id is required"
-	fmtExpectedListIDReq    = "expected list_id required, got %v"
-	fmtMDMissingContent     = "markdown missing expected content: %s"
+	// fmtExpectedBoardIDReq identifies the fmt expected board ID req constant used by this package.
+	fmtExpectedBoardIDReq = "expected board_id required, got %v"
+	// msgMethodNotAllowed identifies the msg method not allowed constant used by this package.
+	msgMethodNotAllowed = "method not allowed"
+	// errListIDRequired identifies the err list ID required constant used by this package.
+	errListIDRequired = "list_id is required"
+	// fmtExpectedListIDReq identifies the fmt expected list ID req constant used by this package.
+	fmtExpectedListIDReq = "expected list_id required, got %v"
+	// fmtMDMissingContent identifies the fmt md missing content constant used by this package.
+	fmtMDMissingContent = "markdown missing expected content: %s"
 )
 
 // ---------------------------------------------------------------------------
 // Shared JSON fixtures
 // ---------------------------------------------------------------------------.
 
+// boardJSON stores the package-level board JSON state.
 var boardJSON = `{
 	"id": 1,
 	"name": "Development",
@@ -51,8 +65,10 @@ var boardJSON = `{
 	]
 }`
 
+// boardListJSON stores the package-level board list JSON state.
 var boardListJSON = `[` + boardJSON + `]`
 
+// boardListItemJSON stores the package-level board list item JSON state.
 var boardListItemJSON = `{
 	"id": 100,
 	"label": {"id": 20, "name": "To Do"},
@@ -63,13 +79,14 @@ var boardListItemJSON = `{
 	"milestone": {"id": 5, "title": "v1.0"}
 }`
 
+// boardListsArrayJSON stores the package-level board lists array JSON state.
 var boardListsArrayJSON = `[` + boardListItemJSON + `]`
 
 // ---------------------------------------------------------------------------
 // Board CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListBoards_Success verifies the behavior of list boards success.
+// TestListBoards_Success verifies ListBoards when success.
 func TestListBoards_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +107,7 @@ func TestListBoards_Success(t *testing.T) {
 	}
 }
 
-// TestListBoards_MissingProjectID verifies the behavior of list boards missing project i d.
+// TestListBoards_MissingProjectID verifies ListBoards when missing project ID.
 func TestListBoards_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListBoards(context.Background(), client, ListBoardsInput{})
@@ -99,7 +116,7 @@ func TestListBoards_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetBoard_Success verifies the behavior of get board success.
+// TestGetBoard_Success verifies GetBoard when success.
 func TestGetBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +136,7 @@ func TestGetBoard_Success(t *testing.T) {
 	}
 }
 
-// TestGetBoard_MissingParams verifies the behavior of get board missing params.
+// TestGetBoard_MissingParams verifies GetBoard when missing params.
 func TestGetBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetBoard(context.Background(), client, GetBoardInput{})
@@ -132,7 +149,7 @@ func TestGetBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_Success verifies the behavior of create board success.
+// TestCreateBoard_Success verifies CreateBoard when success.
 func TestCreateBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +172,7 @@ func TestCreateBoard_Success(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_MissingParams verifies the behavior of create board missing params.
+// TestCreateBoard_MissingParams verifies CreateBoard when missing params.
 func TestCreateBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateBoard(context.Background(), client, CreateBoardInput{})
@@ -168,7 +185,7 @@ func TestCreateBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_Success verifies the behavior of update board success.
+// TestUpdateBoard_Success verifies UpdateBoard when success.
 func TestUpdateBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +208,7 @@ func TestUpdateBoard_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_MissingParams verifies the behavior of update board missing params.
+// TestUpdateBoard_MissingParams verifies UpdateBoard when missing params.
 func TestUpdateBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateBoard(context.Background(), client, UpdateBoardInput{})
@@ -204,7 +221,7 @@ func TestUpdateBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_Success verifies the behavior of delete board success.
+// TestDeleteBoard_Success verifies DeleteBoard when success.
 func TestDeleteBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +241,7 @@ func TestDeleteBoard_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_MissingParams verifies the behavior of delete board missing params.
+// TestDeleteBoard_MissingParams verifies DeleteBoard when missing params.
 func TestDeleteBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteBoard(context.Background(), client, DeleteBoardInput{})
@@ -241,7 +258,7 @@ func TestDeleteBoard_MissingParams(t *testing.T) {
 // Board List CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListBoardLists_Success verifies the behavior of list board lists success.
+// TestListBoardLists_Success verifies ListBoardLists when success.
 func TestListBoardLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +281,7 @@ func TestListBoardLists_Success(t *testing.T) {
 	}
 }
 
-// TestListBoardLists_MissingParams verifies the behavior of list board lists missing params.
+// TestListBoardLists_MissingParams verifies ListBoardLists when missing params.
 func TestListBoardLists_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListBoardLists(context.Background(), client, ListBoardListsInput{})
@@ -277,7 +294,7 @@ func TestListBoardLists_MissingParams(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_Success verifies the behavior of get board list success.
+// TestGetBoardList_Success verifies GetBoardList when success.
 func TestGetBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +313,7 @@ func TestGetBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_MissingParams verifies the behavior of get board list missing params.
+// TestGetBoardList_MissingParams verifies GetBoardList when missing params.
 func TestGetBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetBoardList(context.Background(), client, GetBoardListInput{})
@@ -317,7 +334,7 @@ func TestGetBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_Success verifies the behavior of create board list success.
+// TestCreateBoardList_Success verifies CreateBoardList when success.
 func TestCreateBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +357,7 @@ func TestCreateBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_MissingParams verifies the behavior of create board list missing params.
+// TestCreateBoardList_MissingParams verifies CreateBoardList when missing params.
 func TestCreateBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{})
@@ -353,7 +370,7 @@ func TestCreateBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_Success verifies the behavior of update board list success.
+// TestUpdateBoardList_Success verifies UpdateBoardList when success.
 func TestUpdateBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +393,7 @@ func TestUpdateBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_MissingParams verifies the behavior of update board list missing params.
+// TestUpdateBoardList_MissingParams verifies UpdateBoardList when missing params.
 func TestUpdateBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateBoardList(context.Background(), client, UpdateBoardListInput{})
@@ -397,7 +414,7 @@ func TestUpdateBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_Success verifies the behavior of delete board list success.
+// TestDeleteBoardList_Success verifies DeleteBoardList when success.
 func TestDeleteBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -417,7 +434,7 @@ func TestDeleteBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_MissingParams verifies the behavior of delete board list missing params.
+// TestDeleteBoardList_MissingParams verifies DeleteBoardList when missing params.
 func TestDeleteBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteBoardList(context.Background(), client, DeleteBoardListInput{})
@@ -442,7 +459,7 @@ func TestDeleteBoardList_MissingParams(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown verifies the behavior of format board markdown.
+// TestFormatBoardMarkdown verifies FormatBoardMarkdown.
 func TestFormatBoardMarkdown(t *testing.T) {
 	out := BoardOutput{
 		ID: 1, Name: "Dev", ProjectName: "P", ProjectPath: "group/p", ProjectID: 10,
@@ -465,7 +482,7 @@ func TestFormatBoardMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardsMarkdown verifies the behavior of format list boards markdown.
+// TestFormatListBoardsMarkdown verifies FormatListBoardsMarkdown.
 func TestFormatListBoardsMarkdown(t *testing.T) {
 	out := ListBoardsOutput{
 		Boards: []BoardOutput{{ID: 1, Name: "Dev", ProjectPath: "group/dev"}},
@@ -483,7 +500,7 @@ func TestFormatListBoardsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown verifies the behavior of format board list markdown.
+// TestFormatBoardListMarkdown verifies FormatBoardListMarkdown.
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{ID: 100, LabelName: "To Do", Position: 0, MaxIssueCount: 10}
 	md := FormatBoardListMarkdown(out)
@@ -503,7 +520,7 @@ func TestFormatBoardListMarkdown(t *testing.T) {
 // Comprehensive markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown_NoProject verifies the behavior of format board markdown no project.
+// TestFormatBoardMarkdown_NoProject verifies FormatBoardMarkdown when no project.
 func TestFormatBoardMarkdown_NoProject(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Board"}
 	md := FormatBoardMarkdown(out)
@@ -512,7 +529,7 @@ func TestFormatBoardMarkdown_NoProject(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_ProjectNameFallback verifies the behavior of format board markdown project name fallback.
+// TestFormatBoardMarkdown_ProjectNameFallback verifies FormatBoardMarkdown when project name fallback.
 func TestFormatBoardMarkdown_ProjectNameFallback(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Board", ProjectName: "MyProject", ProjectID: 5}
 	md := FormatBoardMarkdown(out)
@@ -521,7 +538,7 @@ func TestFormatBoardMarkdown_ProjectNameFallback(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_ListWithoutLabel verifies the behavior of format board markdown list without label.
+// TestFormatBoardMarkdown_ListWithoutLabel verifies FormatBoardMarkdown when list without label.
 func TestFormatBoardMarkdown_ListWithoutLabel(t *testing.T) {
 	out := BoardOutput{
 		ID: 1, Name: "Board",
@@ -533,7 +550,7 @@ func TestFormatBoardMarkdown_ListWithoutLabel(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardsMarkdown_FallbackToName verifies the behavior of format list boards markdown fallback to name.
+// TestFormatListBoardsMarkdown_FallbackToName verifies FormatListBoardsMarkdown when fallback to name.
 func TestFormatListBoardsMarkdown_FallbackToName(t *testing.T) {
 	out := ListBoardsOutput{
 		Boards: []BoardOutput{{ID: 1, Name: "Dev", ProjectName: "MyProject"}},
@@ -544,7 +561,7 @@ func TestFormatListBoardsMarkdown_FallbackToName(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_NoLabelFallback verifies the behavior of format board list markdown no label fallback.
+// TestFormatBoardListMarkdown_NoLabelFallback verifies FormatBoardListMarkdown when no label fallback.
 func TestFormatBoardListMarkdown_NoLabelFallback(t *testing.T) {
 	out := BoardListOutput{ID: 200, Position: 3}
 	md := FormatBoardListMarkdown(out)
@@ -553,7 +570,7 @@ func TestFormatBoardListMarkdown_NoLabelFallback(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_NoLabelFallback verifies the behavior of format list board lists markdown no label fallback.
+// TestFormatListBoardListsMarkdown_NoLabelFallback verifies FormatListBoardListsMarkdown when no label fallback.
 func TestFormatListBoardListsMarkdown_NoLabelFallback(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{{ID: 300, Position: 0}},
@@ -571,9 +588,13 @@ func TestFormatListBoardListsMarkdown_NoLabelFallback(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	errExpectedErr          = "expected error"
-	errExpCancelledCtx      = "expected error for canceled context"
-	covBoardMinimalJSON     = `{"id":2,"name":"Minimal","hide_backlog_list":false,"hide_closed_list":false}`
+	// errExpectedErr identifies the err expected err constant used by this package.
+	errExpectedErr = "expected error"
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
+	errExpCancelledCtx = "expected error for canceled context"
+	// covBoardMinimalJSON identifies the cov board minimal JSON constant used by this package.
+	covBoardMinimalJSON = `{"id":2,"name":"Minimal","hide_backlog_list":false,"hide_closed_list":false}`
+	// covBoardListMinimalJSON identifies the cov board list minimal JSON constant used by this package.
 	covBoardListMinimalJSON = `{"id":200,"position":1}`
 )
 
@@ -581,7 +602,7 @@ const (
 // Board CRUD — server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
-// TestListBoards_ServerError verifies the behavior of cov list boards server error.
+// TestListBoards_ServerError verifies ListBoards when server error.
 func TestListBoards_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -592,7 +613,7 @@ func TestListBoards_ServerError(t *testing.T) {
 	}
 }
 
-// TestListBoards_CancelledContext verifies the behavior of cov list boards cancelled context.
+// TestListBoards_CancelledContext verifies ListBoards when cancelled context.
 func TestListBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -604,7 +625,7 @@ func TestListBoards_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListBoards_WithPagination verifies the behavior of cov list boards with pagination.
+// TestListBoards_WithPagination verifies ListBoards when with pagination.
 func TestListBoards_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -625,7 +646,7 @@ func TestListBoards_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGetBoard_ServerError verifies the behavior of cov get board server error.
+// TestGetBoard_ServerError verifies GetBoard when server error.
 func TestGetBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -636,7 +657,7 @@ func TestGetBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestGetBoard_CancelledContext verifies the behavior of cov get board cancelled context.
+// TestGetBoard_CancelledContext verifies GetBoard when cancelled context.
 func TestGetBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -648,7 +669,7 @@ func TestGetBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_ServerError verifies the behavior of cov create board server error.
+// TestCreateBoard_ServerError verifies CreateBoard when server error.
 func TestCreateBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -659,7 +680,7 @@ func TestCreateBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_CancelledContext verifies the behavior of cov create board cancelled context.
+// TestCreateBoard_CancelledContext verifies CreateBoard when cancelled context.
 func TestCreateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -671,7 +692,7 @@ func TestCreateBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_AllOptionalFields verifies the behavior of cov update board all optional fields.
+// TestUpdateBoard_AllOptionalFields verifies UpdateBoard when all optional fields.
 func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -697,7 +718,7 @@ func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_ServerError verifies the behavior of cov update board server error.
+// TestUpdateBoard_ServerError verifies UpdateBoard when server error.
 func TestUpdateBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -708,7 +729,7 @@ func TestUpdateBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_CancelledContext verifies the behavior of cov update board cancelled context.
+// TestUpdateBoard_CancelledContext verifies UpdateBoard when cancelled context.
 func TestUpdateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -720,7 +741,7 @@ func TestUpdateBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_ServerError verifies the behavior of cov delete board server error.
+// TestDeleteBoard_ServerError verifies DeleteBoard when server error.
 func TestDeleteBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -731,7 +752,7 @@ func TestDeleteBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_CancelledContext verifies the behavior of cov delete board cancelled context.
+// TestDeleteBoard_CancelledContext verifies DeleteBoard when cancelled context.
 func TestDeleteBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -747,7 +768,7 @@ func TestDeleteBoard_CancelledContext(t *testing.T) {
 // Board List CRUD — server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
-// TestListBoardLists_ServerError verifies the behavior of cov list board lists server error.
+// TestListBoardLists_ServerError verifies ListBoardLists when server error.
 func TestListBoardLists_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -758,7 +779,7 @@ func TestListBoardLists_ServerError(t *testing.T) {
 	}
 }
 
-// TestListBoardLists_CancelledContext verifies the behavior of cov list board lists cancelled context.
+// TestListBoardLists_CancelledContext verifies ListBoardLists when cancelled context.
 func TestListBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -770,7 +791,7 @@ func TestListBoardLists_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_ServerError verifies the behavior of cov get board list server error.
+// TestGetBoardList_ServerError verifies GetBoardList when server error.
 func TestGetBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -781,7 +802,7 @@ func TestGetBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_CancelledContext verifies the behavior of cov get board list cancelled context.
+// TestGetBoardList_CancelledContext verifies GetBoardList when cancelled context.
 func TestGetBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -793,7 +814,7 @@ func TestGetBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_AllTypes verifies the behavior of cov create board list all types.
+// TestCreateBoardList_AllTypes verifies CreateBoardList when all types.
 func TestCreateBoardList_AllTypes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -813,7 +834,7 @@ func TestCreateBoardList_AllTypes(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_ServerError verifies the behavior of cov create board list server error.
+// TestCreateBoardList_ServerError verifies CreateBoardList when server error.
 func TestCreateBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -824,7 +845,7 @@ func TestCreateBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_CancelledContext verifies the behavior of cov create board list cancelled context.
+// TestCreateBoardList_CancelledContext verifies CreateBoardList when cancelled context.
 func TestCreateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -836,7 +857,7 @@ func TestCreateBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_ServerError verifies the behavior of cov update board list server error.
+// TestUpdateBoardList_ServerError verifies UpdateBoardList when server error.
 func TestUpdateBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -847,7 +868,7 @@ func TestUpdateBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_CancelledContext verifies the behavior of cov update board list cancelled context.
+// TestUpdateBoardList_CancelledContext verifies UpdateBoardList when cancelled context.
 func TestUpdateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -859,7 +880,7 @@ func TestUpdateBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_ServerError verifies the behavior of cov delete board list server error.
+// TestDeleteBoardList_ServerError verifies DeleteBoardList when server error.
 func TestDeleteBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -870,7 +891,7 @@ func TestDeleteBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_CancelledContext verifies the behavior of cov delete board list cancelled context.
+// TestDeleteBoardList_CancelledContext verifies DeleteBoardList when cancelled context.
 func TestDeleteBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -886,7 +907,7 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown_Minimal verifies the behavior of cov format board markdown minimal.
+// TestFormatBoardMarkdown_Minimal verifies FormatBoardMarkdown when minimal.
 func TestFormatBoardMarkdown_Minimal(t *testing.T) {
 	out := BoardOutput{ID: 2, Name: "Minimal"}
 	md := FormatBoardMarkdown(out)
@@ -916,7 +937,7 @@ func TestFormatBoardMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_WithWeight verifies the behavior of cov format board markdown with weight.
+// TestFormatBoardMarkdown_WithWeight verifies FormatBoardMarkdown when with weight.
 func TestFormatBoardMarkdown_WithWeight(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Dev", Weight: 5}
 	md := FormatBoardMarkdown(out)
@@ -925,7 +946,7 @@ func TestFormatBoardMarkdown_WithWeight(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown verifies the behavior of cov format list board lists markdown.
+// TestFormatListBoardListsMarkdown verifies FormatListBoardListsMarkdown.
 func TestFormatListBoardListsMarkdown(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -946,7 +967,7 @@ func TestFormatListBoardListsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_Empty verifies the behavior of cov format list board lists markdown empty.
+// TestFormatListBoardListsMarkdown_Empty verifies FormatListBoardListsMarkdown when empty.
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	out := ListBoardListsOutput{}
 	md := FormatListBoardListsMarkdown(out)
@@ -955,7 +976,7 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_AllFields verifies the behavior of cov format board list markdown all fields.
+// TestFormatBoardListMarkdown_AllFields verifies FormatBoardListMarkdown when all fields.
 func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
 		ID: 100, LabelName: "To Do", LabelID: 20, Position: 0,
@@ -974,7 +995,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_Minimal verifies the behavior of cov format board list markdown minimal.
+// TestFormatBoardListMarkdown_Minimal verifies FormatBoardListMarkdown when minimal.
 func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 	out := BoardListOutput{ID: 200, Position: 1}
 	md := FormatBoardListMarkdown(out)
@@ -1017,7 +1038,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// newBoardMux is an internal helper for the boards package.
+// newBoardMux constructs board mux test fixtures.
 func newBoardMux() *http.ServeMux {
 	const boardPath = "/api/v4/projects/10/boards"
 	mux := http.NewServeMux()
@@ -1130,6 +1151,7 @@ func TestActionSpecs_BoardGetRoute(t *testing.T) {
 	}
 }
 
+// boardSpecsByTool supports board specs by tool assertions in boards tests.
 func boardSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

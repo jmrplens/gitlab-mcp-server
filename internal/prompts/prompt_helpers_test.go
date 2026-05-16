@@ -11,13 +11,17 @@ import (
 )
 
 const (
+	// fmtExtractProjectPath identifies the fmt extract project path constant used by this package.
 	fmtExtractProjectPath = "extractProjectPath() = %q, want %q"
-	testGroupAlpha        = "group/alpha"
-	testGroupBeta         = "group/beta"
-	fmtMRAge              = "mrAge() = %q, want %q"
+	// testGroupAlpha identifies the test group alpha constant used by this package.
+	testGroupAlpha = "group/alpha"
+	// testGroupBeta identifies the test group beta constant used by this package.
+	testGroupBeta = "group/beta"
+	// fmtMRAge identifies the fmt MR age constant used by this package.
+	fmtMRAge = "mrAge() = %q, want %q"
 )
 
-// TestParseDays_ValidInput validates parse days valid input across multiple scenarios using table-driven subtests.
+// TestParseDays_ValidInput covers ParseDays with table-driven subtests for valid input.
 func TestParseDays_ValidInput(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -39,7 +43,7 @@ func TestParseDays_ValidInput(t *testing.T) {
 	}
 }
 
-// TestParseDays_InvalidInput validates parse days invalid input across multiple scenarios using table-driven subtests.
+// TestParseDays_InvalidInput covers ParseDays with table-driven subtests for invalid input.
 func TestParseDays_InvalidInput(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -62,7 +66,7 @@ func TestParseDays_InvalidInput(t *testing.T) {
 	}
 }
 
-// TestSinceDate_ReturnsUTCPast verifies the behavior of since date returns u t c past.
+// TestSinceDate_ReturnsUTCPast verifies SinceDate returns utc past.
 func TestSinceDate_ReturnsUTCPast(t *testing.T) {
 	before := time.Now().UTC().AddDate(0, 0, -7).Truncate(24 * time.Hour)
 	result := sinceDate(7)
@@ -76,7 +80,7 @@ func TestSinceDate_ReturnsUTCPast(t *testing.T) {
 	}
 }
 
-// TestExtractProjectPath_FromReferences verifies the behavior of extract project path from references.
+// TestExtractProjectPath_FromReferences verifies ExtractProjectPath when from references.
 func TestExtractProjectPath_FromReferences(t *testing.T) {
 	mr := &gl.BasicMergeRequest{
 		References: &gl.IssueReferences{Full: "group/project!42"},
@@ -88,7 +92,7 @@ func TestExtractProjectPath_FromReferences(t *testing.T) {
 	}
 }
 
-// TestExtractProjectPath_FromWebURL verifies the behavior of extract project path from web u r l.
+// TestExtractProjectPath_FromWebURL verifies ExtractProjectPath when from web URL.
 func TestExtractProjectPath_FromWebURL(t *testing.T) {
 	mr := &gl.BasicMergeRequest{
 		WebURL:    "https://gitlab.example.com/team/backend/-/merge_requests/99",
@@ -100,7 +104,7 @@ func TestExtractProjectPath_FromWebURL(t *testing.T) {
 	}
 }
 
-// TestExtractProjectPath_FallbackToProjectID verifies the behavior of extract project path fallback to project i d.
+// TestExtractProjectPath_FallbackToProjectID verifies ExtractProjectPath when fallback to project ID.
 func TestExtractProjectPath_FallbackToProjectID(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ProjectID: 789}
 	got := extractProjectPath(mr)
@@ -109,7 +113,7 @@ func TestExtractProjectPath_FallbackToProjectID(t *testing.T) {
 	}
 }
 
-// TestExtractIssueProjectPath_FromReferences verifies the behavior of extract issue project path from references.
+// TestExtractIssueProjectPath_FromReferences verifies ExtractIssueProjectPath when from references.
 func TestExtractIssueProjectPath_FromReferences(t *testing.T) {
 	issue := &gl.Issue{
 		References: &gl.IssueReferences{Full: "team/frontend#15"},
@@ -121,7 +125,7 @@ func TestExtractIssueProjectPath_FromReferences(t *testing.T) {
 	}
 }
 
-// TestGroupMRsByProject_MultipleProjects verifies the behavior of group m rs by project multiple projects.
+// TestGroupMRsByProject_MultipleProjects verifies GroupMRsByProject projects for multiple.
 func TestGroupMRsByProject_MultipleProjects(t *testing.T) {
 	mrs := []*gl.BasicMergeRequest{
 		{IID: 1, References: &gl.IssueReferences{Full: "group/alpha!1"}},
@@ -147,7 +151,7 @@ func TestGroupMRsByProject_MultipleProjects(t *testing.T) {
 	}
 }
 
-// TestGroupMRsByProject_EmptyInput verifies the behavior of group m rs by project empty input.
+// TestGroupMRsByProject_EmptyInput verifies GroupMRsByProject when empty input.
 func TestGroupMRsByProject_EmptyInput(t *testing.T) {
 	grouped := groupMRsByProject(nil)
 	if len(grouped) != 0 {
@@ -155,7 +159,7 @@ func TestGroupMRsByProject_EmptyInput(t *testing.T) {
 	}
 }
 
-// TestGroupIssuesByProject_MultipleProjects verifies the behavior of group issues by project multiple projects.
+// TestGroupIssuesByProject_MultipleProjects verifies GroupIssuesByProject projects for multiple.
 func TestGroupIssuesByProject_MultipleProjects(t *testing.T) {
 	issues := []*gl.Issue{
 		{IID: 1, References: &gl.IssueReferences{Full: "group/alpha#1"}},
@@ -176,7 +180,7 @@ func TestGroupIssuesByProject_MultipleProjects(t *testing.T) {
 	}
 }
 
-// TestMRAge_Days verifies the behavior of m r age days.
+// TestMRAge_Days verifies MRAge when days.
 func TestMRAge_Days(t *testing.T) {
 	created := time.Now().Add(-3 * 24 * time.Hour)
 	mr := &gl.BasicMergeRequest{CreatedAt: &created}
@@ -186,7 +190,7 @@ func TestMRAge_Days(t *testing.T) {
 	}
 }
 
-// TestMRAge_Weeks verifies the behavior of m r age weeks.
+// TestMRAge_Weeks verifies MRAge when weeks.
 func TestMRAge_Weeks(t *testing.T) {
 	created := time.Now().Add(-14 * 24 * time.Hour)
 	mr := &gl.BasicMergeRequest{CreatedAt: &created}
@@ -196,7 +200,7 @@ func TestMRAge_Weeks(t *testing.T) {
 	}
 }
 
-// TestMRAge_NilCreatedAt verifies the behavior of m r age nil created at.
+// TestMRAge_NilCreatedAt verifies MRAge when nil created at.
 func TestMRAge_NilCreatedAt(t *testing.T) {
 	mr := &gl.BasicMergeRequest{}
 	got := mrAge(mr)
@@ -205,7 +209,7 @@ func TestMRAge_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestIssueAge_Days verifies the behavior of issue age days.
+// TestIssueAge_Days verifies IssueAge when days.
 func TestIssueAge_Days(t *testing.T) {
 	created := time.Now().Add(-5 * 24 * time.Hour)
 	issue := &gl.Issue{CreatedAt: &created}
@@ -215,7 +219,7 @@ func TestIssueAge_Days(t *testing.T) {
 	}
 }
 
-// TestFormatAge_AllRanges validates format age all ranges across multiple scenarios using table-driven subtests.
+// TestFormatAge_AllRanges covers FormatAge with table-driven subtests for all ranges.
 func TestFormatAge_AllRanges(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -238,7 +242,7 @@ func TestFormatAge_AllRanges(t *testing.T) {
 	}
 }
 
-// TestPipelineEmoji_AllStatuses validates pipeline emoji all statuses across multiple scenarios using table-driven subtests.
+// TestPipelineEmoji_AllStatuses covers PipelineEmoji with table-driven subtests for all statuses.
 func TestPipelineEmoji_AllStatuses(t *testing.T) {
 	tests := []struct {
 		status   string
@@ -264,7 +268,7 @@ func TestPipelineEmoji_AllStatuses(t *testing.T) {
 	}
 }
 
-// TestWriteMRTable_Format verifies the behavior of write m r table format.
+// TestWriteMRTable_Format verifies WriteMRTable when format.
 func TestWriteMRTable_Format(t *testing.T) {
 	created := time.Now().Add(-2 * 24 * time.Hour)
 	mrs := []*gl.BasicMergeRequest{
@@ -298,7 +302,7 @@ func TestWriteMRTable_Format(t *testing.T) {
 	}
 }
 
-// TestWriteMRTable_EmptyList verifies the behavior of write m r table empty list.
+// TestWriteMRTable_EmptyList verifies WriteMRTable when empty list.
 func TestWriteMRTable_EmptyList(t *testing.T) {
 	var b strings.Builder
 	writeMRTable(&b, nil)
@@ -307,7 +311,7 @@ func TestWriteMRTable_EmptyList(t *testing.T) {
 	}
 }
 
-// TestWriteIssueTable_Format verifies the behavior of write issue table format.
+// TestWriteIssueTable_Format verifies WriteIssueTable when format.
 func TestWriteIssueTable_Format(t *testing.T) {
 	created := time.Now().Add(-5 * 24 * time.Hour)
 	dueDate := gl.ISOTime(time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC))
@@ -342,7 +346,7 @@ func TestWriteIssueTable_Format(t *testing.T) {
 	}
 }
 
-// TestWriteIssueTable_EmptyList verifies the behavior of write issue table empty list.
+// TestWriteIssueTable_EmptyList verifies WriteIssueTable when empty list.
 func TestWriteIssueTable_EmptyList(t *testing.T) {
 	var b strings.Builder
 	writeIssueTable(&b, nil)
@@ -351,7 +355,7 @@ func TestWriteIssueTable_EmptyList(t *testing.T) {
 	}
 }
 
-// TestMRStatusDraft_WithConflicts verifies the behavior of m r status draft with conflicts.
+// TestMRStatusDraft_WithConflicts verifies MRStatusDraft when with conflicts.
 func TestMRStatusDraft_WithConflicts(t *testing.T) {
 	mr := &gl.BasicMergeRequest{Draft: true, HasConflicts: true, DetailedMergeStatus: "mergeable"}
 	got := mrStatus(mr)
@@ -363,7 +367,7 @@ func TestMRStatusDraft_WithConflicts(t *testing.T) {
 	}
 }
 
-// TestMRStatus_NoFlags verifies the behavior of m r status no flags.
+// TestMRStatus_NoFlags verifies MRStatus flags for no.
 func TestMRStatus_NoFlags(t *testing.T) {
 	mr := &gl.BasicMergeRequest{}
 	got := mrStatus(mr)
@@ -372,7 +376,7 @@ func TestMRStatus_NoFlags(t *testing.T) {
 	}
 }
 
-// TestMergeDuration verifies the behavior of merge duration.
+// TestMergeDuration verifies MergeDuration.
 func TestMergeDuration(t *testing.T) {
 	created := time.Now().Add(-48 * time.Hour)
 	merged := time.Now()
@@ -383,7 +387,7 @@ func TestMergeDuration(t *testing.T) {
 	}
 }
 
-// TestMergeDuration_NilTimestamps verifies the behavior of merge duration nil timestamps.
+// TestMergeDuration_NilTimestamps verifies MergeDuration when nil timestamps.
 func TestMergeDuration_NilTimestamps(t *testing.T) {
 	mr := &gl.BasicMergeRequest{}
 	if d := mergeDuration(mr); d != 0 {
@@ -391,7 +395,7 @@ func TestMergeDuration_NilTimestamps(t *testing.T) {
 	}
 }
 
-// TestFormatDuration validates format duration across multiple scenarios using table-driven subtests.
+// TestFormatDuration covers FormatDuration with table-driven subtests.
 func TestFormatDuration(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -413,7 +417,7 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
-// TestAvgDuration verifies the behavior of avg duration.
+// TestAvgDuration verifies AvgDuration.
 func TestAvgDuration(t *testing.T) {
 	durations := []time.Duration{2 * time.Hour, 4 * time.Hour, 6 * time.Hour}
 	avg := avgDuration(durations)
@@ -422,14 +426,14 @@ func TestAvgDuration(t *testing.T) {
 	}
 }
 
-// TestAvgDuration_Empty verifies the behavior of avg duration empty.
+// TestAvgDuration_Empty verifies AvgDuration when empty.
 func TestAvgDuration_Empty(t *testing.T) {
 	if avg := avgDuration(nil); avg != 0 {
 		t.Errorf("avgDuration(nil) = %v, want 0", avg)
 	}
 }
 
-// TestMedianDuration validates median duration across multiple scenarios using table-driven subtests.
+// TestMedianDuration covers MedianDuration with table-driven subtests.
 func TestMedianDuration(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -451,7 +455,7 @@ func TestMedianDuration(t *testing.T) {
 	}
 }
 
-// TestProgressBar validates progress bar across multiple scenarios using table-driven subtests.
+// TestProgressBar covers ProgressBar with table-driven subtests.
 func TestProgressBar(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -475,7 +479,7 @@ func TestProgressBar(t *testing.T) {
 	}
 }
 
-// TestDeduplicateMRs verifies the behavior of deduplicate m rs.
+// TestDeduplicateMRs verifies DeduplicateMRs.
 func TestDeduplicateMRs(t *testing.T) {
 	mrs1 := []*gl.BasicMergeRequest{
 		{IID: 1, ProjectID: 100},
@@ -491,7 +495,7 @@ func TestDeduplicateMRs(t *testing.T) {
 	}
 }
 
-// TestGetArgOr verifies the behavior of get arg or.
+// TestGetArgOr verifies GetArgOr.
 func TestGetArgOr(t *testing.T) {
 	args := map[string]string{"state": "closed", "empty": ""}
 	if got := getArgOr(args, "state", "opened"); got != "closed" {
@@ -505,7 +509,7 @@ func TestGetArgOr(t *testing.T) {
 	}
 }
 
-// TestSortedKeys verifies the behavior of sorted keys.
+// TestSortedKeys verifies SortedKeys.
 func TestSortedKeys(t *testing.T) {
 	m := map[string]int{"charlie": 1, "alpha": 2, "bravo": 3}
 	keys := sortedKeys(m)

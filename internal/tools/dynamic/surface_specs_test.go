@@ -6,6 +6,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
+// TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies ControllerSurfaceSpecs when classify dynamic controllers.
 func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	specs := ControllerSurfaceSpecs(nil, true)
 	if len(specs) != 4 {
@@ -31,6 +32,7 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	}
 }
 
+// TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface verifies ControllerSurfaceSpecs excludes find for three tool surface.
 func TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface(t *testing.T) {
 	specs := ControllerSurfaceSpecs(nil, false)
 	if len(specs) != 3 {
@@ -43,6 +45,7 @@ func TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface(t *testing.T) {
 	}
 }
 
+// findDynamicSurfaceSpec locates dynamic surface spec fixture data for assertions.
 func findDynamicSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name string) actioncatalog.SurfaceToolSpec {
 	t.Helper()
 	for _, spec := range specs {

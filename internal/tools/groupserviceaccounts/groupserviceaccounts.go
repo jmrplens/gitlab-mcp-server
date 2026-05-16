@@ -335,7 +335,7 @@ func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
 	toolutil.WriteListSummary(&b, len(out.Accounts), out.Pagination)
-	b.WriteString("| ID | Name | Username | Email |\n| --- | --- | --- | --- |\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Email"))
 	for _, a := range out.Accounts {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
 			a.ID,
@@ -379,7 +379,7 @@ func FormatListPATMarkdown(out ListPATOutput) string {
 	var b strings.Builder
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
 	toolutil.WriteListSummary(&b, len(out.Tokens), out.Pagination)
-	b.WriteString("| ID | Name | Active | Revoked | Scopes |\n| --- | --- | --- | --- | --- |\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes"))
 	for _, t := range out.Tokens {
 		fmt.Fprintf(&b, "| %d | %s | %t | %t | %s |\n",
 			t.ID,

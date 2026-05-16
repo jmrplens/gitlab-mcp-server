@@ -14,15 +14,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
 const errExpMissingProjectID = "expected error for missing project_id"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ----------------------------------------------
 // ListTriggers
 // ----------------------------------------------.
 
-// TestListTriggers_Success verifies that ListTriggers handles the success scenario correctly.
+// TestListTriggers_Success verifies ListTriggers when success.
 func TestListTriggers_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/triggers", func(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +58,7 @@ func TestListTriggers_Success(t *testing.T) {
 	}
 }
 
-// TestListTriggers_MissingProjectID verifies that ListTriggers handles the missing project i d scenario correctly.
+// TestListTriggers_MissingProjectID verifies ListTriggers when missing project ID.
 func TestListTriggers_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListTriggers(context.Background(), client, ListInput{})
@@ -69,7 +71,7 @@ func TestListTriggers_MissingProjectID(t *testing.T) {
 // GetTrigger
 // ----------------------------------------------.
 
-// TestGetTrigger_Success verifies that GetTrigger handles the success scenario correctly.
+// TestGetTrigger_Success verifies GetTrigger when success.
 func TestGetTrigger_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/triggers/10", func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +91,7 @@ func TestGetTrigger_Success(t *testing.T) {
 	}
 }
 
-// TestGetTrigger_MissingProjectID verifies that GetTrigger handles the missing project i d scenario correctly.
+// TestGetTrigger_MissingProjectID verifies GetTrigger when missing project ID.
 func TestGetTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetTrigger(context.Background(), client, GetInput{TriggerID: 10})
@@ -98,7 +100,7 @@ func TestGetTrigger_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetTrigger_MissingTriggerID verifies that GetTrigger handles the missing trigger i d scenario correctly.
+// TestGetTrigger_MissingTriggerID verifies GetTrigger when missing trigger ID.
 func TestGetTrigger_MissingTriggerID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "1"})
@@ -111,7 +113,7 @@ func TestGetTrigger_MissingTriggerID(t *testing.T) {
 // CreateTrigger
 // ----------------------------------------------.
 
-// TestCreateTrigger_Success verifies that CreateTrigger handles the success scenario correctly.
+// TestCreateTrigger_Success verifies CreateTrigger when success.
 func TestCreateTrigger_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/triggers", func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +136,7 @@ func TestCreateTrigger_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTrigger_MissingDescription verifies that CreateTrigger handles the missing description scenario correctly.
+// TestCreateTrigger_MissingDescription verifies CreateTrigger when missing description.
 func TestCreateTrigger_MissingDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateTrigger(context.Background(), client, CreateInput{ProjectID: "1"})
@@ -147,7 +149,7 @@ func TestCreateTrigger_MissingDescription(t *testing.T) {
 // UpdateTrigger
 // ----------------------------------------------.
 
-// TestUpdateTrigger_Success verifies that UpdateTrigger handles the success scenario correctly.
+// TestUpdateTrigger_Success verifies UpdateTrigger when success.
 func TestUpdateTrigger_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/1/triggers/10", func(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +170,7 @@ func TestUpdateTrigger_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateTrigger_MissingTriggerID verifies that UpdateTrigger handles the missing trigger i d scenario correctly.
+// TestUpdateTrigger_MissingTriggerID verifies UpdateTrigger when missing trigger ID.
 func TestUpdateTrigger_MissingTriggerID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateTrigger(context.Background(), client, UpdateInput{ProjectID: "1"})
@@ -181,7 +183,7 @@ func TestUpdateTrigger_MissingTriggerID(t *testing.T) {
 // DeleteTrigger
 // ----------------------------------------------.
 
-// TestDeleteTrigger_Success verifies that DeleteTrigger handles the success scenario correctly.
+// TestDeleteTrigger_Success verifies DeleteTrigger when success.
 func TestDeleteTrigger_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/1/triggers/10", func(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +197,7 @@ func TestDeleteTrigger_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteTrigger_MissingProjectID verifies that DeleteTrigger handles the missing project i d scenario correctly.
+// TestDeleteTrigger_MissingProjectID verifies DeleteTrigger when missing project ID.
 func TestDeleteTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteTrigger(context.Background(), client, DeleteInput{TriggerID: 10})
@@ -208,7 +210,7 @@ func TestDeleteTrigger_MissingProjectID(t *testing.T) {
 // RunTrigger
 // ----------------------------------------------.
 
-// TestRunTrigger_Success verifies that RunTrigger handles the success scenario correctly.
+// TestRunTrigger_Success verifies RunTrigger when success.
 func TestRunTrigger_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +234,7 @@ func TestRunTrigger_Success(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_WithVariables verifies that RunTrigger handles the with variables scenario correctly.
+// TestRunTrigger_WithVariables verifies RunTrigger when with variables.
 func TestRunTrigger_WithVariables(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +260,7 @@ func TestRunTrigger_WithVariables(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_InvalidVariablesJSON verifies that RunTrigger handles the invalid variables j s o n scenario correctly.
+// TestRunTrigger_InvalidVariablesJSON verifies RunTrigger when invalid variables JSON.
 func TestRunTrigger_InvalidVariablesJSON(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RunTrigger(context.Background(), client, RunInput{
@@ -272,7 +274,7 @@ func TestRunTrigger_InvalidVariablesJSON(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_MissingRef verifies that RunTrigger handles the missing ref scenario correctly.
+// TestRunTrigger_MissingRef verifies RunTrigger when missing ref.
 func TestRunTrigger_MissingRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Token: "tok"})
@@ -281,7 +283,7 @@ func TestRunTrigger_MissingRef(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_MissingToken verifies that RunTrigger handles the missing token scenario correctly.
+// TestRunTrigger_MissingToken verifies RunTrigger when missing token.
 func TestRunTrigger_MissingToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main"})
@@ -294,7 +296,7 @@ func TestRunTrigger_MissingToken(t *testing.T) {
 // Markdown formatters
 // ----------------------------------------------.
 
-// TestFormatTriggerMarkdown verifies the behavior of format trigger markdown.
+// TestFormatTriggerMarkdown verifies FormatTriggerMarkdown.
 func TestFormatTriggerMarkdown(t *testing.T) {
 	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", OwnerName: "Admin", CreatedAt: "2026-01-01T00:00:00Z"})
 	if md == "" {
@@ -302,7 +304,7 @@ func TestFormatTriggerMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListTriggersMarkdown_Empty verifies that FormatListTriggersMarkdown handles the empty scenario correctly.
+// TestFormatListTriggersMarkdown_Empty verifies FormatListTriggersMarkdown when empty.
 func TestFormatListTriggersMarkdown_Empty(t *testing.T) {
 	md := FormatListTriggersMarkdown(ListOutput{})
 	if !contains(md, "No pipeline triggers found") {
@@ -310,7 +312,7 @@ func TestFormatListTriggersMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListTriggersMarkdown_WithData verifies that FormatListTriggersMarkdown handles the with data scenario correctly.
+// TestFormatListTriggersMarkdown_WithData verifies FormatListTriggersMarkdown when with data.
 func TestFormatListTriggersMarkdown_WithData(t *testing.T) {
 	md := FormatListTriggersMarkdown(ListOutput{
 		Triggers: []Output{{ID: 1, Description: "test", Token: "tok"}},
@@ -323,7 +325,7 @@ func TestFormatListTriggersMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatRunOutputMarkdown verifies the behavior of format run output markdown.
+// TestFormatRunOutputMarkdown verifies FormatRunOutputMarkdown.
 func TestFormatRunOutputMarkdown(t *testing.T) {
 	md := FormatRunOutputMarkdown(RunOutput{PipelineID: 99, SHA: "abc", Ref: "main", Status: "created", WebURL: "https://gl/p/1"})
 	if md == "" {
@@ -331,12 +333,12 @@ func TestFormatRunOutputMarkdown(t *testing.T) {
 	}
 }
 
-// contains is an internal helper for the pipelinetriggers package.
+// contains reports whether contains.
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsHelper(s, sub))
 }
 
-// containsHelper is an internal helper for the pipelinetriggers package.
+// containsHelper reports whether contains helper.
 func containsHelper(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {
@@ -348,15 +350,17 @@ func containsHelper(s, sub string) bool {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // ListTriggers — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListTriggers_APIError verifies the behavior of list triggers a p i error.
+// TestListTriggers_APIError verifies ListTriggers when API error.
 func TestListTriggers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -367,7 +371,7 @@ func TestListTriggers_APIError(t *testing.T) {
 	}
 }
 
-// TestListTriggers_CancelledContext verifies the behavior of list triggers cancelled context.
+// TestListTriggers_CancelledContext verifies ListTriggers when cancelled context.
 func TestListTriggers_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -377,7 +381,7 @@ func TestListTriggers_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListTriggers_WithPagination verifies the behavior of list triggers with pagination.
+// TestListTriggers_WithPagination verifies ListTriggers when with pagination.
 func TestListTriggers_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/triggers" {
@@ -408,7 +412,7 @@ func TestListTriggers_WithPagination(t *testing.T) {
 // GetTrigger — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetTrigger_APIError verifies the behavior of get trigger a p i error.
+// TestGetTrigger_APIError verifies GetTrigger when API error.
 func TestGetTrigger_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -419,7 +423,7 @@ func TestGetTrigger_APIError(t *testing.T) {
 	}
 }
 
-// TestGetTrigger_CancelledContext verifies the behavior of get trigger cancelled context.
+// TestGetTrigger_CancelledContext verifies GetTrigger when cancelled context.
 func TestGetTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -433,7 +437,7 @@ func TestGetTrigger_CancelledContext(t *testing.T) {
 // CreateTrigger — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateTrigger_APIError verifies the behavior of create trigger a p i error.
+// TestCreateTrigger_APIError verifies CreateTrigger when API error.
 func TestCreateTrigger_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -446,7 +450,7 @@ func TestCreateTrigger_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateTrigger_MissingProjectID verifies the behavior of create trigger missing project i d.
+// TestCreateTrigger_MissingProjectID verifies CreateTrigger when missing project ID.
 func TestCreateTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := CreateTrigger(context.Background(), client, CreateInput{Description: "test"})
@@ -455,7 +459,7 @@ func TestCreateTrigger_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateTrigger_CancelledContext verifies the behavior of create trigger cancelled context.
+// TestCreateTrigger_CancelledContext verifies CreateTrigger when cancelled context.
 func TestCreateTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -469,7 +473,7 @@ func TestCreateTrigger_CancelledContext(t *testing.T) {
 // UpdateTrigger — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdateTrigger_APIError verifies the behavior of update trigger a p i error.
+// TestUpdateTrigger_APIError verifies UpdateTrigger when API error.
 func TestUpdateTrigger_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -482,7 +486,7 @@ func TestUpdateTrigger_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateTrigger_MissingProjectID verifies the behavior of update trigger missing project i d.
+// TestUpdateTrigger_MissingProjectID verifies UpdateTrigger when missing project ID.
 func TestUpdateTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := UpdateTrigger(context.Background(), client, UpdateInput{TriggerID: 10})
@@ -491,7 +495,7 @@ func TestUpdateTrigger_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdateTrigger_CancelledContext verifies the behavior of update trigger cancelled context.
+// TestUpdateTrigger_CancelledContext verifies UpdateTrigger when cancelled context.
 func TestUpdateTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -501,7 +505,7 @@ func TestUpdateTrigger_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateTrigger_WithoutDescription verifies the behavior of update trigger without description.
+// TestUpdateTrigger_WithoutDescription verifies UpdateTrigger when without description.
 func TestUpdateTrigger_WithoutDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/triggers/10" {
@@ -525,7 +529,7 @@ func TestUpdateTrigger_WithoutDescription(t *testing.T) {
 // DeleteTrigger — API error, missing trigger_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTrigger_APIError verifies the behavior of delete trigger a p i error.
+// TestDeleteTrigger_APIError verifies DeleteTrigger when API error.
 func TestDeleteTrigger_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -536,7 +540,7 @@ func TestDeleteTrigger_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteTrigger_MissingTriggerID verifies the behavior of delete trigger missing trigger i d.
+// TestDeleteTrigger_MissingTriggerID verifies DeleteTrigger when missing trigger ID.
 func TestDeleteTrigger_MissingTriggerID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteTrigger(context.Background(), client, DeleteInput{ProjectID: "1"})
@@ -545,7 +549,7 @@ func TestDeleteTrigger_MissingTriggerID(t *testing.T) {
 	}
 }
 
-// TestDeleteTrigger_CancelledContext verifies the behavior of delete trigger cancelled context.
+// TestDeleteTrigger_CancelledContext verifies DeleteTrigger when cancelled context.
 func TestDeleteTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -559,7 +563,7 @@ func TestDeleteTrigger_CancelledContext(t *testing.T) {
 // RunTrigger — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestRunTrigger_APIError verifies the behavior of run trigger a p i error.
+// TestRunTrigger_APIError verifies RunTrigger when API error.
 func TestRunTrigger_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -572,7 +576,7 @@ func TestRunTrigger_APIError(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_MissingProjectID verifies the behavior of run trigger missing project i d.
+// TestRunTrigger_MissingProjectID verifies RunTrigger when missing project ID.
 func TestRunTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := RunTrigger(context.Background(), client, RunInput{Ref: "main", Token: "tok"})
@@ -581,7 +585,7 @@ func TestRunTrigger_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestRunTrigger_CancelledContext verifies the behavior of run trigger cancelled context.
+// TestRunTrigger_CancelledContext verifies RunTrigger when cancelled context.
 func TestRunTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -597,7 +601,7 @@ func TestRunTrigger_CancelledContext(t *testing.T) {
 // FormatTriggerMarkdown — all optional fields, minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatTriggerMarkdown_AllFields verifies the behavior of format trigger markdown all fields.
+// TestFormatTriggerMarkdown_AllFields verifies FormatTriggerMarkdown when all fields.
 func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 	md := FormatTriggerMarkdown(Output{
 		ID:          10,
@@ -625,7 +629,7 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatTriggerMarkdown_MinimalFields verifies the behavior of format trigger markdown minimal fields.
+// TestFormatTriggerMarkdown_MinimalFields verifies FormatTriggerMarkdown when minimal fields.
 func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 	md := FormatTriggerMarkdown(Output{
 		ID:          5,
@@ -650,7 +654,7 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 // FormatListTriggersMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatListTriggersMarkdown_DetailedContent verifies the behavior of format list triggers markdown detailed content.
+// TestFormatListTriggersMarkdown_DetailedContent verifies FormatListTriggersMarkdown when detailed content.
 func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 	out := ListOutput{
 		Triggers: []Output{
@@ -683,7 +687,7 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 // FormatRunOutputMarkdown — without web URL, empty values
 // ---------------------------------------------------------------------------.
 
-// TestFormatRunOutputMarkdown_WithoutWebURL verifies the behavior of format run output markdown without web u r l.
+// TestFormatRunOutputMarkdown_WithoutWebURL verifies FormatRunOutputMarkdown when without web URL.
 func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
 	md := FormatRunOutputMarkdown(RunOutput{
 		PipelineID: 50,
@@ -707,7 +711,7 @@ func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
 	}
 }
 
-// TestFormatRunOutputMarkdown_AllFields verifies the behavior of format run output markdown all fields.
+// TestFormatRunOutputMarkdown_AllFields verifies FormatRunOutputMarkdown when all fields.
 func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatRunOutputMarkdown(RunOutput{
 		PipelineID: 99,

@@ -296,7 +296,7 @@ func DeleteFeatureFlag(ctx context.Context, client *gitlabclient.Client, input D
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertFeatureFlag is an internal helper for the featureflags package.
+// convertFeatureFlag implements the convert feature flag helper used by featureflags.
 func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	out := Output{
 		Name:        f.Name,
@@ -316,7 +316,7 @@ func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	return out
 }
 
-// convertStrategy is an internal helper for the featureflags package.
+// convertStrategy implements the convert strategy helper used by featureflags.
 func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 	out := StrategyOutput{
 		ID:   s.ID,
@@ -344,7 +344,7 @@ func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 // Strategy parsing helpers
 // ──────────────────────────────────────────────.
 
-// parseStrategyInputs performs the parse strategy inputs operation using the GitLab API and returns [[]StrategyInput].
+// parseStrategyInputs handles parse strategy inputs and returns [[]StrategyInput].
 func parseStrategyInputs(jsonStr string) ([]StrategyInput, error) {
 	var strategies []StrategyInput
 	if err := json.Unmarshal([]byte(jsonStr), &strategies); err != nil {

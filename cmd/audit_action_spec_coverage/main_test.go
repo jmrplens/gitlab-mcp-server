@@ -9,6 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
+// TestBuildCoverageReport_ClassifiesKeyDomains verifies BuildCoverageReport classifies key domains.
 func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -56,6 +57,7 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 }
 
+// TestAuditCatalogFirstSource_CurrentProductionCodePasses verifies AuditCatalogFirstSource when current production code passes.
 func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -66,6 +68,7 @@ func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
 	}
 }
 
+// TestAssertActionSpecManifestCurrent_DetectsStaleManifest verifies AssertActionSpecManifestCurrent detects stale manifest.
 func TestAssertActionSpecManifestCurrent_DetectsStaleManifest(t *testing.T) {
 	root := t.TempDir()
 	toolsDir := filepath.Join(root, "internal", "tools")
@@ -91,6 +94,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	}
 }
 
+// TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences verifies LegacyBridgeFindingsInContent detects forbidden references.
 func TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences(t *testing.T) {
 	findings := legacyBridgeFindingsInContent("runtime.go", "package tools\nfunc f(){ registerAllLegacy() }", []string{"registerAllLegacy"})
 	if len(findings) != 1 || findings[0] != "runtime.go contains \"registerAllLegacy\"" {
@@ -98,6 +102,7 @@ func TestLegacyBridgeFindingsInContent_DetectsForbiddenReferences(t *testing.T) 
 	}
 }
 
+// TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance covers StaleAIContextLine with table-driven subtests for classifies legacy registration guidance.
 func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 	tests := []struct {
 		name string
@@ -120,6 +125,7 @@ func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 	}
 }
 
+// TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools verifies AssertCoverageInvariants detects package local register tools.
 func TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools(t *testing.T) {
 	err := assertCoverageInvariants([]domainCoverage{{
 		Package:          "example",
@@ -131,6 +137,7 @@ func TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools(t *testing.T)
 	}
 }
 
+// TestAssertCoverageInvariants_DetectsIndividualOnlyPackage verifies AssertCoverageInvariants detects individual only package.
 func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
 	err := assertCoverageInvariants([]domainCoverage{{
 		Package:               "example",
@@ -143,6 +150,7 @@ func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
 	}
 }
 
+// TestCatalogActionsMissingIndividualProjectionPolicy verifies CatalogActionsMissingIndividualProjectionPolicy.
 func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_example"})
@@ -157,6 +165,7 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 	}
 }
 
+// TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked verifies BuildCoverageReport when core source domains are spec backed.
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -183,6 +192,7 @@ func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_CICDDomainsAreSpecBacked verifies BuildCoverageReport when cicd domains are spec backed.
 func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -211,6 +221,7 @@ func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_CollaborationDomainsAreSpecBacked verifies BuildCoverageReport when collaboration domains are spec backed.
 func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -238,6 +249,7 @@ func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked verifies BuildCoverageReport when note and discussion domains are spec backed.
 func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -266,6 +278,7 @@ func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T)
 	})
 }
 
+// TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked verifies BuildCoverageReport when access and security domains are spec backed.
 func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -295,6 +308,7 @@ func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T)
 	})
 }
 
+// TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked verifies BuildCoverageReport when admin platform domains are spec backed.
 func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -328,6 +342,7 @@ func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 	})
 }
 
+// TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked verifies BuildCoverageReport when package deployment storage domains are spec backed.
 func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -362,6 +377,7 @@ func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *tes
 	})
 }
 
+// TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked verifies BuildCoverageReport when group project enterprise domains are spec backed.
 func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -393,6 +409,7 @@ func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testi
 	})
 }
 
+// TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked verifies BuildCoverageReport when utility template domains are spec backed.
 func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 	root, err := repositoryRoot("../..")
 	if err != nil {
@@ -420,6 +437,7 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 	assertSurfaceBackedDomain(t, report, "serverupdate", "server-maintenance", 2)
 }
 
+// TestWriteReport_WritesJSONFile verifies WriteReport writes JSON file.
 func TestWriteReport_WritesJSONFile(t *testing.T) {
 	report := coverageReport{SchemaVersion: schemaVersion, Summary: coverageSummary{DomainCount: 1}, Domains: []domainCoverage{{Package: "example"}}}
 	content, err := marshalReport(report)
@@ -447,6 +465,7 @@ func TestWriteReport_WritesJSONFile(t *testing.T) {
 	}
 }
 
+// requireDomain returns domain test data or fails the test.
 func requireDomain(t *testing.T, report coverageReport, packageName string) domainCoverage {
 	t.Helper()
 	for _, domain := range report.Domains {
@@ -458,6 +477,7 @@ func requireDomain(t *testing.T, report coverageReport, packageName string) doma
 	return domainCoverage{}
 }
 
+// assertSpecBackedDomains checks spec backed domains invariants for tests.
 func assertSpecBackedDomains(t *testing.T, report coverageReport, packageNames []string) {
 	t.Helper()
 	for _, packageName := range packageNames {
@@ -474,6 +494,7 @@ func assertSpecBackedDomains(t *testing.T, report coverageReport, packageNames [
 	}
 }
 
+// assertSourceSpecBackedDomains checks source spec backed domains invariants for tests.
 func assertSourceSpecBackedDomains(t *testing.T, report coverageReport, packageNames []string) {
 	t.Helper()
 	for _, packageName := range packageNames {
@@ -487,6 +508,7 @@ func assertSourceSpecBackedDomains(t *testing.T, report coverageReport, packageN
 	}
 }
 
+// assertSurfaceBackedDomain checks surface backed domain invariants for tests.
 func assertSurfaceBackedDomain(t *testing.T, report coverageReport, packageName, surfaceKind string, expectedUtilityActions int) {
 	t.Helper()
 	domain := requireDomain(t, report, packageName)
@@ -501,6 +523,7 @@ func assertSurfaceBackedDomain(t *testing.T, report coverageReport, packageName,
 	}
 }
 
+// writeAuditTestFile writes audit test file fixture data for tests.
 func writeAuditTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {

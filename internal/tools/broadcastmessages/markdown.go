@@ -18,8 +18,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		sb.WriteString("No broadcast messages found.\n")
 		return toolutil.ToolResultWithMarkdown(sb.String())
 	}
-	sb.WriteString("| ID | Message | Type | Active | Starts | Ends |\n")
-	sb.WriteString("|---|---|---|---|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Message", "Type", "Active", "Starts", "Ends"))
 	for _, m := range out.Messages {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %v | %s | %s |\n",
 			m.ID, toolutil.EscapeMdTableCell(m.Message), m.BroadcastType, m.Active, m.StartsAt, m.EndsAt)
@@ -33,7 +32,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "# Broadcast Message #%d\n\n", item.ID)
-	sb.WriteString("| Property | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&sb, "| Message | %s |\n", item.Message)
 	fmt.Fprintf(&sb, "| Type | %s |\n", item.BroadcastType)
 	fmt.Fprintf(&sb, "| Active | %v |\n", item.Active)

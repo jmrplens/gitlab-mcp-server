@@ -15,12 +15,18 @@ import (
 )
 
 const (
-	testProjectID    = "myproject"
-	pathMirrors      = "/api/v4/projects/myproject/remote_mirrors"
-	pathMirror42     = "/api/v4/projects/myproject/remote_mirrors/42"
-	pathMirrorKey42  = "/api/v4/projects/myproject/remote_mirrors/42/public_key"
+	// testProjectID identifies the test project ID constant used by this package.
+	testProjectID = "myproject"
+	// pathMirrors identifies the path mirrors constant used by this package.
+	pathMirrors = "/api/v4/projects/myproject/remote_mirrors"
+	// pathMirror42 identifies the path mirror 42 constant used by this package.
+	pathMirror42 = "/api/v4/projects/myproject/remote_mirrors/42"
+	// pathMirrorKey42 identifies the path mirror key 42 constant used by this package.
+	pathMirrorKey42 = "/api/v4/projects/myproject/remote_mirrors/42/public_key"
+	// pathMirrorSync42 identifies the path mirror sync 42 constant used by this package.
 	pathMirrorSync42 = "/api/v4/projects/myproject/remote_mirrors/42/sync"
 
+	// mirrorJSON identifies the mirror JSON constant used by this package.
 	mirrorJSON = `{
 		"id": 42,
 		"enabled": true,
@@ -36,6 +42,7 @@ const (
 		"last_update_started_at": "2026-03-10T08:59:00Z"
 	}`
 
+	// mirrorWithHostKeysJSON identifies the mirror with host keys JSON constant used by this package.
 	mirrorWithHostKeysJSON = `{
 		"id": 42,
 		"enabled": true,
@@ -52,9 +59,11 @@ const (
 		"host_keys": [{"fingerprint_sha256": "SHA256:abc123def456"}]
 	}`
 
+	// publicKeyJSON identifies the public key JSON constant used by this package.
 	publicKeyJSON = `{"public_key": "ssh-rsa AAAAB3..."}`
 )
 
+// TestRedactMirrorURL_RemovesEmbeddedCredentials verifies RedactMirrorURL when removes embedded credentials.
 func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
 	got := redactMirrorURL("https://user:token@example.com/group/repo.git")
 	if got != "https://redacted@example.com/group/repo.git" {
@@ -62,6 +71,7 @@ func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
 	}
 }
 
+// TestRedactMirrorError_RemovesEmbeddedCredentials verifies RedactMirrorError when removes embedded credentials.
 func TestRedactMirrorError_RemovesEmbeddedCredentials(t *testing.T) {
 	err := redactMirrorError(errors.New("mirror failed for https://user:secret-token@example.com/group/repo.git"))
 	if err == nil {
@@ -179,6 +189,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_RedactsCredentialsInOutput verifies Get when redacts credentials in output.
 func TestGet_RedactsCredentialsInOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
@@ -785,10 +796,12 @@ func TestForcePushUpdate_APIError(t *testing.T) {
 	}
 }
 
+// contains reports whether contains.
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && containsSubstring(s, substr)
 }
 
+// containsSubstring reports whether contains substring.
 func containsSubstring(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {

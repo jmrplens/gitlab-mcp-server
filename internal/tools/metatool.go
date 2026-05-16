@@ -25,17 +25,17 @@ var (
 	destructiveRoute = toolutil.DestructiveRoute
 )
 
-// unmarshalParams performs the unmarshal params operation using the GitLab API and returns [T].
+// unmarshalParams handles unmarshal params and returns [T].
 func unmarshalParams[T any](params map[string]any) (T, error) {
 	return toolutil.UnmarshalParams[T](params)
 }
 
-// wrapAction is an internal helper for the tools package.
+// wrapAction resolves wrap action for evaluator execution.
 func wrapAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionFunc {
 	return toolutil.WrapAction(client, fn)
 }
 
-// wrapVoidAction is an internal helper for the tools package.
+// wrapVoidAction resolves wrap void action for evaluator execution.
 func wrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) actionFunc {
 	return toolutil.WrapVoidAction(client, fn)
 }

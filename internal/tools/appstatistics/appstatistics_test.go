@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/application/statistics" {
@@ -40,7 +40,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -52,7 +52,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{ActiveUsers: 80, Projects: 45, Issues: 200}
 	md := FormatGetMarkdown(out)
@@ -69,9 +69,10 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// covStatsJSON identifies the cov stats JSON constant used by this package.
 const covStatsJSON = `{"forks":10,"issues":20,"merge_requests":30,"notes":40,"snippets":5,"ssh_keys":3,"milestones":7,"users":100,"groups":15,"projects":50,"active_users":80}`
 
-// TestGet_APIError_Coverage verifies the behavior of cov get a p i error.
+// TestGet_APIError_Coverage verifies Get when API error coverage.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -82,7 +83,7 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success_Coverage verifies the behavior of cov get success.
+// TestGet_Success_Coverage verifies Get when success coverage.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
@@ -96,7 +97,7 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Cov_Coverage verifies the behavior of cov format get markdown.
+// TestFormatGetMarkdown_Cov_Coverage verifies FormatGetMarkdown when cov coverage.
 func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	out := GetOutput{Projects: 50, ActiveUsers: 80, Users: 100, Issues: 20}
 	md := FormatGetMarkdown(out)

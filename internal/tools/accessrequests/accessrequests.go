@@ -36,7 +36,7 @@ type ListOutput struct {
 	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertAccessRequest is an internal helper for the accessrequests package.
+// convertAccessRequest implements the convert access request helper used by accessrequests.
 func convertAccessRequest(ar *gl.AccessRequest) Output {
 	o := Output{
 		ID:          ar.ID,

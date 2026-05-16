@@ -43,7 +43,7 @@ type ListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// timeStr is an internal helper for the deploytokens package.
+// timeStr implements the time str helper used by deploytokens.
 func timeStr(t *time.Time) string {
 	if t == nil {
 		return ""

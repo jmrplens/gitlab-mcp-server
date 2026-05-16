@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/avatar" || r.Method != http.MethodGet {
@@ -29,7 +29,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -40,7 +40,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	md := FormatMarkdown(GetOutput{AvatarURL: "https://example.com/avatar.png"})
 	if md == "" {
@@ -50,7 +50,7 @@ func TestFormatMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestGet_APIError_Coverage verifies the behavior of cov get a p i error.
+// TestGet_APIError_Coverage verifies Get when API error coverage.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -61,7 +61,7 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success_Coverage verifies the behavior of cov get success.
+// TestGet_Success_Coverage verifies Get when success coverage.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://img.example.com/a.png"}`)
@@ -75,7 +75,7 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Coverage verifies the behavior of cov format markdown.
+// TestFormatMarkdown_Coverage verifies FormatMarkdown when coverage.
 func TestFormatMarkdown_Coverage(t *testing.T) {
 	md := FormatMarkdown(GetOutput{AvatarURL: "https://img.example.com/a.png"})
 	if !strings.Contains(md, "https://img.example.com/a.png") {

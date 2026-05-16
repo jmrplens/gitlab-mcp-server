@@ -153,7 +153,7 @@ func GetCompoundMetrics(ctx context.Context, client *gitlabclient.Client, _ GetC
 // Conversion helpers
 // ---------------------------------------------------------------------------.
 
-// convertQueues is an internal helper for the sidekiq package.
+// convertQueues implements the convert queues helper used by sidekiq.
 func convertQueues(queues map[string]gl.QueueMetricsQueue) []QueueItem {
 	items := make([]QueueItem, 0, len(queues))
 	for name, q := range queues {
@@ -166,7 +166,7 @@ func convertQueues(queues map[string]gl.QueueMetricsQueue) []QueueItem {
 	return items
 }
 
-// convertProcesses is an internal helper for the sidekiq package.
+// convertProcesses implements the convert processes helper used by sidekiq.
 func convertProcesses(procs []gl.ProcessMetricsProcess) []ProcessItem {
 	items := make([]ProcessItem, 0, len(procs))
 	for _, p := range procs {

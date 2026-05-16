@@ -17,51 +17,84 @@ import (
 )
 
 const (
+	// defaultPublishResultsDoc identifies the default publish results doc constant used by this package.
 	defaultPublishResultsDoc = "docs/testing/model-results.md"
-	defaultPublishReadme     = "README.md"
+	// defaultPublishReadme identifies the default publish readme constant used by this package.
+	defaultPublishReadme = "README.md"
 
-	publishModeAppend         = "append"
+	// publishModeAppend identifies the publish mode append constant used by this package.
+	publishModeAppend = "append"
+	// publishModeReplaceCurrent identifies the publish mode replace current constant used by this package.
 	publishModeReplaceCurrent = "replace-current"
 
-	modelEvalMetaSummaryStart     = "<!-- START MODEL EVAL META SUMMARY -->"
-	modelEvalMetaSummaryEnd       = "<!-- END MODEL EVAL META SUMMARY -->"
+	// modelEvalMetaSummaryStart identifies the model eval meta summary start constant used by this package.
+	modelEvalMetaSummaryStart = "<!-- START MODEL EVAL META SUMMARY -->"
+	// modelEvalMetaSummaryEnd identifies the model eval meta summary end constant used by this package.
+	modelEvalMetaSummaryEnd = "<!-- END MODEL EVAL META SUMMARY -->"
+	// modelEvalDynamic3SummaryStart identifies the model eval dynamic 3 summary start constant used by this package.
 	modelEvalDynamic3SummaryStart = "<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->"
-	modelEvalDynamic3SummaryEnd   = "<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->"
-	modelEvalMetaResultsStart     = "<!-- START MODEL EVAL META RESULTS -->"
-	modelEvalMetaResultsEnd       = "<!-- END MODEL EVAL META RESULTS -->"
+	// modelEvalDynamic3SummaryEnd identifies the model eval dynamic 3 summary end constant used by this package.
+	modelEvalDynamic3SummaryEnd = "<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->"
+	// modelEvalMetaResultsStart identifies the model eval meta results start constant used by this package.
+	modelEvalMetaResultsStart = "<!-- START MODEL EVAL META RESULTS -->"
+	// modelEvalMetaResultsEnd identifies the model eval meta results end constant used by this package.
+	modelEvalMetaResultsEnd = "<!-- END MODEL EVAL META RESULTS -->"
+	// modelEvalDynamic3ResultsStart identifies the model eval dynamic 3 results start constant used by this package.
 	modelEvalDynamic3ResultsStart = "<!-- START MODEL EVAL DYNAMIC3 RESULTS -->"
-	modelEvalDynamic3ResultsEnd   = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
-	modelEvalSummaryStart         = "<!-- START MODEL EVAL SUMMARY -->"
-	modelEvalSummaryEnd           = "<!-- END MODEL EVAL SUMMARY -->"
-	modelEvalResultsStart         = "<!-- START MODEL EVAL RESULTS -->"
-	modelEvalResultsEnd           = "<!-- END MODEL EVAL RESULTS -->"
-	publishProjectResolveAction   = "discover_project.resolve"
-	publishProjectSearchAction    = "search.projects"
-	publishSamplingContinue       = "sampling_unsupported_continue"
-	publishElicitationContinue    = "elicitation_unsupported_continue"
+	// modelEvalDynamic3ResultsEnd identifies the model eval dynamic 3 results end constant used by this package.
+	modelEvalDynamic3ResultsEnd = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
+	// modelEvalSummaryStart identifies the model eval summary start constant used by this package.
+	modelEvalSummaryStart = "<!-- START MODEL EVAL SUMMARY -->"
+	// modelEvalSummaryEnd identifies the model eval summary end constant used by this package.
+	modelEvalSummaryEnd = "<!-- END MODEL EVAL SUMMARY -->"
+	// modelEvalResultsStart identifies the model eval results start constant used by this package.
+	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
+	// modelEvalResultsEnd identifies the model eval results end constant used by this package.
+	modelEvalResultsEnd = "<!-- END MODEL EVAL RESULTS -->"
+	// publishProjectResolveAction identifies the publish project resolve action constant used by this package.
+	publishProjectResolveAction = "discover_project.resolve"
+	// publishProjectSearchAction identifies the publish project search action constant used by this package.
+	publishProjectSearchAction = "search.projects"
+	// publishSamplingContinue identifies the publish sampling continue constant used by this package.
+	publishSamplingContinue = "sampling_unsupported_continue"
+	// publishElicitationContinue identifies the publish elicitation continue constant used by this package.
+	publishElicitationContinue = "elicitation_unsupported_continue"
 
-	publishSectionMeta       = "meta"
-	publishSectionDynamic2   = "dynamic2"
-	publishSectionDynamic3   = "dynamic3"
-	publishSectionUnknown    = "unknown"
+	// publishSectionMeta identifies the publish section meta constant used by this package.
+	publishSectionMeta = "meta"
+	// publishSectionDynamic2 identifies the publish section dynamic 2 constant used by this package.
+	publishSectionDynamic2 = "dynamic2"
+	// publishSectionDynamic3 identifies the publish section dynamic 3 constant used by this package.
+	publishSectionDynamic3 = "dynamic3"
+	// publishSectionUnknown identifies the publish section unknown constant used by this package.
+	publishSectionUnknown = "unknown"
+	// maxPublishTraceLineBytes identifies the max publish trace line bytes constant used by this package.
 	maxPublishTraceLineBytes = 64 << 20
 
-	usageModelRequests    = "Model requests"
+	// usageModelRequests identifies the usage model requests constant used by this package.
+	usageModelRequests = "Model requests"
+	// usageToolCallsEmitted identifies the usage tool calls emitted constant used by this package.
 	usageToolCallsEmitted = "Tool calls emitted"
-	usageToolCalls        = "Tool calls"
-	usageInputTokens      = "Input tokens"
-	usageOutputTokens     = "Output tokens"
-	usageEstimatedCost    = "Estimated cost"
+	// usageToolCalls identifies the usage tool calls constant used by this package.
+	usageToolCalls = "Tool calls"
+	// usageInputTokens identifies the usage input tokens constant used by this package.
+	usageInputTokens = "Input tokens"
+	// usageOutputTokens identifies the usage output tokens constant used by this package.
+	usageOutputTokens = "Output tokens"
+	// usageEstimatedCost identifies the usage estimated cost constant used by this package.
+	usageEstimatedCost = "Estimated cost"
+	// modelEvaluationSuffix identifies the model evaluation suffix constant used by this package.
 	modelEvaluationSuffix = " Model Evaluation"
 )
 
+// fullDockerAttemptsByPreset stores the package-level full docker attempts by preset state.
 var fullDockerAttemptsByPreset = map[string]int{
 	presetDockerRead:            40,
 	presetDockerMutatingSafe:    25,
 	presetDockerDestructiveSafe: 53,
 }
 
-// publishReport holds data for main operations.
+// publishReport captures publish report data for published evaluation reports.
 type publishReport struct {
 	Path                   string
 	Date                   string
@@ -78,7 +111,7 @@ type publishReport struct {
 	Rows                   []publishRow
 }
 
-// publishRow holds data for main operations.
+// publishRow captures publish row data for published evaluation reports.
 type publishRow struct {
 	SourcePath        string
 	Model             string
@@ -103,7 +136,7 @@ type publishRow struct {
 	Date              string
 }
 
-// publishTaskStats holds data for main operations.
+// publishTaskStats captures publish task stats data for published evaluation reports.
 type publishTaskStats struct {
 	Attempts        int
 	ExpectedOps     int
@@ -123,7 +156,7 @@ type publishTaskMetrics struct {
 	DestructiveOK    int
 }
 
-// publishModelMetrics holds data for main operations.
+// publishModelMetrics captures publish model metrics data for published evaluation reports.
 type publishModelMetrics struct {
 	Attempts          int
 	ToolSelection     float64
@@ -142,7 +175,7 @@ type publishTraceAccumulator struct {
 	OutputTokens int
 }
 
-// publishModelSummary holds data for main operations.
+// publishModelSummary captures publish model summary data for published evaluation reports.
 type publishModelSummary struct {
 	Model           string
 	Attempts        int
@@ -165,7 +198,7 @@ type publishDocSection struct {
 	SummaryEndMarker   string
 }
 
-// publishEvaluationDocs is an internal helper for the main package.
+// publishEvaluationDocs publishes evaluation docs for the main package.
 func publishEvaluationDocs(opts options) error {
 	if len(opts.PublishFrom) == 0 {
 		return errors.New("--publish-docs and --check-docs require at least one --publish-from report")
@@ -340,7 +373,7 @@ func readPublishReport(path string) (publishReport, error) {
 	return report, nil
 }
 
-// publishRowsForReport is an internal helper for the main package.
+// publishRowsForReport publishes rows for report and returns [[]publishRow].
 func publishRowsForReport(report publishReport, input comparisonInput, content string) ([]publishRow, error) {
 	if shouldSplitPublishReportByPreset(report) {
 		rows, splitErr := publishRowsByPresetFromTraces(report, content)
@@ -375,6 +408,7 @@ func publishRowsForReport(report publishReport, input comparisonInput, content s
 	return rows, nil
 }
 
+// shouldSplitPublishReportByPreset reports whether should split publish report by preset.
 func shouldSplitPublishReportByPreset(report publishReport) bool {
 	if strings.TrimSpace(report.Preset) != "" {
 		return false
@@ -382,6 +416,7 @@ func shouldSplitPublishReportByPreset(report publishReport) bool {
 	return report.Backend == backendGitLab && report.ToolExecution == "mcp"
 }
 
+// publishRowsByPresetFromTraces publishes rows by preset from traces and returns [[]publishRow].
 func publishRowsByPresetFromTraces(report publishReport, content string) ([]publishRow, error) {
 	tracePath := publishTraceJSONLPath(report.Path, content)
 	if tracePath == "" {
@@ -441,6 +476,7 @@ func publishRowsByPresetFromTraces(report publishReport, content string) ([]publ
 	return rows, nil
 }
 
+// publishTasksPath publishes tasks path for the main package.
 func publishTasksPath() string {
 	if _, err := os.Stat(defaultTasksPath); err == nil {
 		return defaultTasksPath
@@ -452,6 +488,7 @@ func publishTasksPath() string {
 	return defaultTasksPath
 }
 
+// addTrace handles add trace for publishTraceAccumulator.
 func (a *publishTraceAccumulator) addTrace(trace taskTrace, task evalTask, toolSurface string) {
 	a.Stats.Attempts++
 	expectedSteps := trace.Summary.ExpectedSteps
@@ -495,6 +532,7 @@ func (a *publishTraceAccumulator) addTrace(trace taskTrace, task evalTask, toolS
 	}
 }
 
+// publishEffectiveTraceOutcome publishes effective trace outcome for the main package.
 func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, actionOK, firstPassOK bool) {
 	if len(trace.Expected) == 0 {
 		return false, false, false
@@ -521,6 +559,7 @@ func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, 
 	return toolOK, actionOK, firstPassOK
 }
 
+// metrics handles metrics for publishTraceAccumulator.
 func (a *publishTraceAccumulator) metrics() publishModelMetrics {
 	return publishModelMetrics{
 		Attempts:          a.Stats.Attempts,
@@ -533,6 +572,7 @@ func (a *publishTraceAccumulator) metrics() publishModelMetrics {
 	}
 }
 
+// usage handles usage for publishTraceAccumulator.
 func (a *publishTraceAccumulator) usage() map[string]string {
 	return map[string]string{
 		usageModelRequests:    strconv.Itoa(a.Stats.ModelRequests),
@@ -542,6 +582,7 @@ func (a *publishTraceAccumulator) usage() map[string]string {
 	}
 }
 
+// publishPresetForTask publishes preset for task for the main package.
 func publishPresetForTask(task evalTask) string {
 	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetSchemaEnterprise} {
 		if taskMatchesPreset(task, preset) {
@@ -556,6 +597,7 @@ func publishPresetForTask(task evalTask) string {
 	return "other"
 }
 
+// publishTraceJSONLPath publishes trace jsonl path for the main package.
 func publishTraceJSONLPath(reportPath, content string) string {
 	traceDir := firstMetadataValue(content, "Trace artifacts")
 	if traceDir == "" {
@@ -575,7 +617,7 @@ func publishTraceJSONLPath(reportPath, content string) string {
 	return reportRelative
 }
 
-// publishSingleTaskStats is an internal helper for the main package.
+// publishSingleTaskStats publishes single task stats for the main package.
 func publishSingleTaskStats(statsByModel map[string]publishTaskStats, model string, fallbackAttempts int) publishTaskStats {
 	stats := statsByModel[model]
 	if stats.Attempts == 0 && len(statsByModel) == 1 {
@@ -589,7 +631,7 @@ func publishSingleTaskStats(statsByModel map[string]publishTaskStats, model stri
 	return stats
 }
 
-// metricsFromComparison is an internal helper for the main package.
+// metricsFromComparison computes from comparison from comparison data.
 func metricsFromComparison(input comparisonInput) publishModelMetrics {
 	return publishModelMetrics{
 		Attempts:          input.TaskAttempts,
@@ -602,7 +644,7 @@ func metricsFromComparison(input comparisonInput) publishModelMetrics {
 	}
 }
 
-// publishSingleUsage is an internal helper for the main package.
+// publishSingleUsage publishes single usage for the main package.
 func publishSingleUsage(usage map[string]string, stats publishTaskStats) map[string]string {
 	out := map[string]string{}
 	maps.Copy(out, usage)
@@ -615,7 +657,7 @@ func publishSingleUsage(usage map[string]string, stats publishTaskStats) map[str
 	return out
 }
 
-// newPublishRow is an internal helper for the main package.
+// newPublishRow constructs publish row.
 func newPublishRow(report publishReport, model, preset string, stats publishTaskStats, metrics publishModelMetrics, usage map[string]string) publishRow {
 	return publishRow{
 		SourcePath:        report.Path,
@@ -642,7 +684,7 @@ func newPublishRow(report publishReport, model, preset string, stats publishTask
 	}
 }
 
-// publishTaskStatsByModel is an internal helper for the main package.
+// publishTaskStatsByModel publishes task stats by model for the main package.
 func publishTaskStatsByModel(content, defaultModel string) map[string]publishTaskStats {
 	out := map[string]publishTaskStats{}
 	for _, row := range reportNamedTableRows(content, "## Task Results") {
@@ -667,7 +709,7 @@ func publishTaskStatsByModel(content, defaultModel string) map[string]publishTas
 	return out
 }
 
-// publishMetricsByModel is an internal helper for the main package.
+// publishMetricsByModel publishes metrics by model for the main package.
 func publishMetricsByModel(content string) map[string]publishModelMetrics {
 	out := map[string]publishModelMetrics{}
 	for _, row := range reportNamedTableRows(content, "## Per-Model Metrics") {
@@ -688,7 +730,7 @@ func publishMetricsByModel(content string) map[string]publishModelMetrics {
 	return out
 }
 
-// publishUsageByModel is an internal helper for the main package.
+// publishUsageByModel publishes usage by model for the main package.
 func publishUsageByModel(content string) map[string]map[string]string {
 	out := map[string]map[string]string{}
 	for _, row := range reportNamedTableRows(content, "### API Usage By Model") {
@@ -707,7 +749,7 @@ func publishUsageByModel(content string) map[string]map[string]string {
 	return out
 }
 
-// reportNamedTableRows is an internal helper for the main package.
+// reportNamedTableRows extracts named table rows from generated reports.
 func reportNamedTableRows(content, heading string) []map[string]string {
 	rows := reportTableRowsForHeading(content, heading)
 	if len(rows) < 2 {
@@ -727,7 +769,7 @@ func reportNamedTableRows(content, heading string) []map[string]string {
 	return out
 }
 
-// reportTableRowsForHeading is an internal helper for the main package.
+// reportTableRowsForHeading extracts table rows for heading from generated reports.
 func reportTableRowsForHeading(content, heading string) [][]string {
 	var rows [][]string
 	for _, line := range sectionLinesForHeading(strings.Split(content, "\n"), heading) {
@@ -736,7 +778,7 @@ func reportTableRowsForHeading(content, heading string) [][]string {
 	return rows
 }
 
-// sectionLinesForHeading is an internal helper for the main package.
+// sectionLinesForHeading extracts lines for heading from a managed Markdown section.
 func sectionLinesForHeading(lines []string, heading string) []string {
 	level := markdownHeadingLevel(heading)
 	if level == 0 {
@@ -762,7 +804,7 @@ func sectionLinesForHeading(lines []string, heading string) []string {
 	return lines[start:end]
 }
 
-// markdownHeadingLevel is an internal helper for the main package.
+// markdownHeadingLevel marks down heading level for the main package.
 func markdownHeadingLevel(line string) int {
 	trimmed := strings.TrimSpace(line)
 	if !strings.HasPrefix(trimmed, "#") {
@@ -781,7 +823,7 @@ func markdownHeadingLevel(line string) int {
 	return count
 }
 
-// parseExpectedOps is an internal helper for the main package.
+// parseExpectedOps parses expected ops from evaluator input.
 func parseExpectedOps(value string) int {
 	value = cleanReportValue(value)
 	if _, after, ok := strings.Cut(value, "/"); ok {
@@ -790,7 +832,7 @@ func parseExpectedOps(value string) int {
 	return parseReportInt(value)
 }
 
-// publishCostTokens is an internal helper for the main package.
+// publishCostTokens publishes cost tokens for the main package.
 func publishCostTokens(usage map[string]string) string {
 	inputTokens := parseReportInt(usage[usageInputTokens])
 	outputTokens := parseReportInt(usage[usageOutputTokens])
@@ -808,7 +850,7 @@ func publishCostTokens(usage map[string]string) string {
 	return strings.Join(parts, "; ")
 }
 
-// validatePublishReports is an internal helper for the main package.
+// validatePublishReports validates publish reports for the main package.
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
@@ -830,13 +872,13 @@ func validatePublishReports(reports []publishReport, label string, allowHarnessN
 	return nil
 }
 
-// reportMentionsHarnessNoise is an internal helper for the main package.
+// reportMentionsHarnessNoise reports whether report mentions harness noise.
 func reportMentionsHarnessNoise(content string) bool {
 	lower := strings.ToLower(content)
 	return strings.Contains(lower, "harness noise") || strings.Contains(lower, "harness_noise")
 }
 
-// publishSnapshotLabel is an internal helper for the main package.
+// publishSnapshotLabel publishes snapshot label for the main package.
 func publishSnapshotLabel(label string, reports []publishReport) string {
 	label = strings.TrimSpace(label)
 	if label != "" {
@@ -891,7 +933,7 @@ func buildReadmeSummaryBlock(label string, reports []publishReport) string {
 	return strings.TrimSpace(b.String()) + "\n"
 }
 
-// sortedPublishRows is an internal helper for the main package.
+// sortedPublishRows sorts publish rows deterministically.
 func sortedPublishRows(reports []publishReport) []publishRow {
 	var rows []publishRow
 	rowIndexes := map[string]int{}
@@ -918,12 +960,12 @@ func sortedPublishRows(reports []publishReport) []publishRow {
 	return rows
 }
 
-// publishRowKey is an internal helper for the main package.
+// publishRowKey publishes row key for the main package.
 func publishRowKey(row publishRow) string {
 	return strings.Join([]string{row.Model, row.Preset, row.Backend, row.ToolExecution}, "\x00")
 }
 
-// presetRank is an internal helper for the main package.
+// presetRank formats preset rank for report output.
 func presetRank(preset string) int {
 	switch preset {
 	case presetDockerRead:
@@ -943,7 +985,7 @@ func presetRank(preset string) int {
 	}
 }
 
-// aggregatePublishRows is an internal helper for the main package.
+// aggregatePublishRows aggregates publish rows across reports.
 func aggregatePublishRows(rows []publishRow) publishRow {
 	var out publishRow
 	for _, row := range rows {
@@ -972,7 +1014,7 @@ func aggregatePublishRows(rows []publishRow) publishRow {
 	return out
 }
 
-// publishSummariesByModel is an internal helper for the main package.
+// publishSummariesByModel publishes summaries by model for the main package.
 func publishSummariesByModel(rows []publishRow) []publishModelSummary {
 	byModel := map[string][]publishRow{}
 	for _, row := range rows {
@@ -1004,7 +1046,7 @@ func publishSummariesByModel(rows []publishRow) []publishModelSummary {
 	return summaries
 }
 
-// providerModel is an internal helper for the main package.
+// providerModel prepares provider model for model-provider evaluation.
 func providerModel(model string) (providerName, modelName string) {
 	provider, modelName, ok := strings.Cut(model, ":")
 	if !ok {
@@ -1027,7 +1069,7 @@ func providerModel(model string) (providerName, modelName string) {
 	}
 }
 
-// compatibilityLabel is an internal helper for the main package.
+// compatibilityLabel formats compatibility label for report output.
 func compatibilityLabel(summary publishModelSummary) string {
 	if summary.ToolSelection == 100 && summary.ActionSelection == 100 && summary.FinalSuccess == 100 {
 		return "OK"
@@ -1035,7 +1077,7 @@ func compatibilityLabel(summary publishModelSummary) string {
 	return "Review"
 }
 
-// dockerLiveStatus is an internal helper for the main package.
+// dockerLiveStatus formats docker live status for report output.
 func dockerLiveStatus(summary publishModelSummary) string {
 	if !summary.DockerBacked {
 		return "Not Docker-backed"
@@ -1059,7 +1101,7 @@ func formatRecoverySummary(summary publishModelSummary) string {
 	return fmt.Sprintf("%s (%d/%d)", formatMetric(summary.RepairSuccess), summary.RepairSuccesses, summary.RepairAttempts)
 }
 
-// dockerBackendLabel is an internal helper for the main package.
+// dockerBackendLabel formats docker backend label for report output.
 func dockerBackendLabel(row publishRow) string {
 	if row.Backend == backendGitLab && row.ToolExecution == "mcp" {
 		return "Docker GitLab via MCP"
@@ -1070,7 +1112,7 @@ func dockerBackendLabel(row publishRow) string {
 	return escapeTable(row.Backend)
 }
 
-// rowCommitBranchDate is an internal helper for the main package.
+// rowCommitBranchDate formats row commit branch date for report output.
 func rowCommitBranchDate(row publishRow) string {
 	branch := row.GitBranch
 	if branch == "" {
@@ -1087,7 +1129,7 @@ func rowCommitBranchDate(row publishRow) string {
 	return commit + " / " + branch + " / " + date
 }
 
-// updateManagedDoc is an internal helper for the main package.
+// updateManagedDoc updates managed doc for the main package.
 func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) error {
 	content, err := readTextFile(path)
 	if err != nil {
@@ -1111,7 +1153,7 @@ func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) e
 	return nil
 }
 
-// checkManagedDoc is an internal helper for the main package.
+// checkManagedDoc checks managed doc for the main package.
 func checkManagedDoc(path, startMarker, endMarker, block, mode, label string) error {
 	content, err := readTextFile(path)
 	if err != nil {
@@ -1157,7 +1199,7 @@ func applyManagedBlock(content, startMarker, endMarker, block, mode, label strin
 	return content[:start] + replacement + content[end+len(endMarker):], nil
 }
 
-// appendSnapshotBlock is an internal helper for the main package.
+// appendSnapshotBlock appends snapshot block to the output builder.
 func appendSnapshotBlock(inner, block, label string) string {
 	trimmedInner := strings.TrimSpace(inner)
 	trimmedBlock := strings.TrimSpace(block)
@@ -1198,7 +1240,7 @@ func replaceSnapshotByHeading(content, heading, replacement string) (string, boo
 	return strings.TrimSpace(strings.Join(out, "\n")), true
 }
 
-// firstPositive is an internal helper for the main package.
+// firstPositive returns the first positive value that is set.
 func firstPositive(values ...int) int {
 	for _, value := range values {
 		if value > 0 {
@@ -1208,7 +1250,7 @@ func firstPositive(values ...int) int {
 	return 0
 }
 
-// currentGitReportMetadata is an internal helper for the main package.
+// currentGitReportMetadata collects current git report metadata metadata.
 func currentGitReportMetadata() (branch, commit string) {
 	gitDir, err := resolveGitDir(".")
 	if err != nil {

@@ -24,32 +24,55 @@ import (
 )
 
 const (
-	liveFixtureGroupPath         = "my-org"
-	liveFixtureToolsPath         = "my-org/tools"
-	liveFixtureProjectPath       = "my-org/tools/gitlab-mcp-server"
-	liveFixtureDefaultRef        = "main"
-	liveFixtureFeatureRef        = "feature/eval"
-	liveFixtureObsoleteRef       = "obsolete/eval"
-	liveFixtureFailureTag        = "v0.0.0-eval"
-	liveFixtureCleanupTag        = "v0.0.0-eval-ms"
+	// liveFixtureGroupPath identifies the live fixture group path constant used by this package.
+	liveFixtureGroupPath = "my-org"
+	// liveFixtureToolsPath identifies the live fixture tools path constant used by this package.
+	liveFixtureToolsPath = "my-org/tools"
+	// liveFixtureProjectPath identifies the live fixture project path constant used by this package.
+	liveFixtureProjectPath = "my-org/tools/gitlab-mcp-server"
+	// liveFixtureDefaultRef identifies the live fixture default ref constant used by this package.
+	liveFixtureDefaultRef = "main"
+	// liveFixtureFeatureRef identifies the live fixture feature ref constant used by this package.
+	liveFixtureFeatureRef = "feature/eval"
+	// liveFixtureObsoleteRef identifies the live fixture obsolete ref constant used by this package.
+	liveFixtureObsoleteRef = "obsolete/eval"
+	// liveFixtureFailureTag identifies the live fixture failure tag constant used by this package.
+	liveFixtureFailureTag = "v0.0.0-eval"
+	// liveFixtureCleanupTag identifies the live fixture cleanup tag constant used by this package.
+	liveFixtureCleanupTag = "v0.0.0-eval-ms"
+	// liveFixtureReleaseSummaryTag identifies the live fixture release summary tag constant used by this package.
 	liveFixtureReleaseSummaryTag = "v0.0.0-eval-summary-ms"
-	liveFixtureElicitationTag    = "v0.0.0-eval-elicit"
+	// liveFixtureElicitationTag identifies the live fixture elicitation tag constant used by this package.
+	liveFixtureElicitationTag = "v0.0.0-eval-elicit"
+	// liveFixtureInteractiveMRFile identifies the live fixture interactive MR file constant used by this package.
 	liveFixtureInteractiveMRFile = "interactive/eval-mr.txt"
-	liveFixtureFeatureFlag       = "eval_flag"
-	liveFixturePackageName       = "eval-package"
-	liveFixturePackageVer        = "0.0.1"
-	liveFixturePackageFile       = "artifact.txt"
-	liveFixtureWikiSlug          = "obsolete-eval"
-	liveFixtureReviewBranch      = "feature/eval-review-fixture"
-	liveFixtureMergeBranch       = "feature/eval-merge-fixture"
+	// liveFixtureFeatureFlag identifies the live fixture feature flag constant used by this package.
+	liveFixtureFeatureFlag = "eval_flag"
+	// liveFixturePackageName identifies the live fixture package name constant used by this package.
+	liveFixturePackageName = "eval-package"
+	// liveFixturePackageVer identifies the live fixture package ver constant used by this package.
+	liveFixturePackageVer = "0.0.1"
+	// liveFixturePackageFile identifies the live fixture package file constant used by this package.
+	liveFixturePackageFile = "artifact.txt"
+	// liveFixtureWikiSlug identifies the live fixture wiki slug constant used by this package.
+	liveFixtureWikiSlug = "obsolete-eval"
+	// liveFixtureReviewBranch identifies the live fixture review branch constant used by this package.
+	liveFixtureReviewBranch = "feature/eval-review-fixture"
+	// liveFixtureMergeBranch identifies the live fixture merge branch constant used by this package.
+	liveFixtureMergeBranch = "feature/eval-merge-fixture"
+	// liveFixtureAwardBranchPrefix identifies the live fixture award branch prefix constant used by this package.
 	liveFixtureAwardBranchPrefix = "feature/eval-award-fixture-"
-	liveDeleteFixtureFormat      = "delete-fixture-%d"
-	taskFileCreateID             = "MT-030"
-	taskPipelineScheduleID       = "MT-103"
-	taskMergeRequestAwardID      = "MS-033"
+	// liveDeleteFixtureFormat identifies the live delete fixture format constant used by this package.
+	liveDeleteFixtureFormat = "delete-fixture-%d"
+	// taskFileCreateID identifies the task file create ID constant used by this package.
+	taskFileCreateID = "MT-030"
+	// taskPipelineScheduleID identifies the task pipeline schedule ID constant used by this package.
+	taskPipelineScheduleID = "MT-103"
+	// taskMergeRequestAwardID identifies the task merge request award ID constant used by this package.
+	taskMergeRequestAwardID = "MS-033"
 )
 
-// liveFixtureState holds data for main operations.
+// liveFixtureState captures live fixture state data for live evaluation fixtures.
 type liveFixtureState struct {
 	GeneratedAt            string   `json:"generated_at"`
 	GitLabURL              string   `json:"gitlab_url"`
@@ -100,13 +123,13 @@ type liveFixtureState struct {
 	Notes                  []string `json:"notes,omitempty"`
 }
 
-// liveFixturePreparer holds data for main operations.
+// liveFixturePreparer captures live fixture preparer data for live evaluation fixtures.
 type liveFixturePreparer struct {
 	client *gitlabclient.Client
 	state  *liveFixtureState
 }
 
-// prepareLiveFixtures performs the prepare live fixtures operation using the GitLab API and returns [*liveFixtureState].
+// prepareLiveFixtures handles prepare live fixtures and returns [*liveFixtureState].
 func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 	if err := validateFixtureOptions(opts); err != nil {
 		return nil, err
@@ -149,7 +172,7 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 	return state, nil
 }
 
-// validateFixtureOptions is an internal helper for the main package.
+// validateFixtureOptions validates fixture options for the main package.
 func validateFixtureOptions(opts options) error {
 	if opts.ToolsFile != "" {
 		return errors.New("--prepare-fixtures requires a live catalog, not --tools-file")
@@ -163,7 +186,7 @@ func validateFixtureOptions(opts options) error {
 	return nil
 }
 
-// writeLiveFixtures is an internal helper for the main package.
+// writeLiveFixtures writes live fixtures to disk.
 func writeLiveFixtures(path string, state *liveFixtureState) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create fixture state directory: %w", err)
@@ -179,7 +202,7 @@ func writeLiveFixtures(path string, state *liveFixtureState) error {
 	return nil
 }
 
-// readLiveFixtures performs the read live fixtures operation using the GitLab API and returns [*liveFixtureState].
+// readLiveFixtures handles read live fixtures and returns [*liveFixtureState].
 func readLiveFixtures(path string) (*liveFixtureState, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- fixture state path is an explicit evaluator input.
 	if err != nil {
@@ -207,7 +230,7 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	return &state, nil
 }
 
-// prepare performs the prepare operation on *liveFixturePreparer.
+// prepare creates or updates the live fixture resources tracked by liveFixturePreparer.
 func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	topGroup, err := p.ensureGroup(ctx, "my-org", liveFixtureGroupPath, 0)
 	if err != nil {
@@ -272,14 +295,14 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	return nil
 }
 
-// bestEffort performs the best effort operation on *liveFixturePreparer.
+// bestEffort runs cleanup work for liveFixturePreparer without aborting fixture preparation.
 func (p *liveFixturePreparer) bestEffort(ctx context.Context, name string, fn func(context.Context) error) {
 	if err := fn(ctx); err != nil {
 		p.notef("%s fixture unavailable: %v", name, err)
 	}
 }
 
-// notef performs the notef operation on *liveFixturePreparer.
+// notef records a fixture preparation note for liveFixturePreparer.
 func (p *liveFixturePreparer) notef(format string, args ...any) {
 	p.state.Notes = append(p.state.Notes, fmt.Sprintf(format, args...))
 }
@@ -292,7 +315,7 @@ func (p *liveFixturePreparer) defaultRef() string {
 	return liveFixtureDefaultRef
 }
 
-// ensureGroup performs the ensure group operation on *liveFixturePreparer.
+// ensureGroup ensures group exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureGroup(ctx context.Context, name, fullPath string, parentID int64) (*gl.Group, error) {
 	group, _, err := p.client.GL().Groups.GetGroup(fullPath, nil, gl.WithContext(ctx))
 	if err == nil {
@@ -317,7 +340,7 @@ func (p *liveFixturePreparer) ensureGroup(ctx context.Context, name, fullPath st
 	return group, nil
 }
 
-// ensureProject performs the ensure project operation on *liveFixturePreparer.
+// ensureProject ensures project exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureProject(ctx context.Context, namespaceID int64) (*gl.Project, error) {
 	project, _, err := p.client.GL().Projects.GetProject(liveFixtureProjectPath, nil, gl.WithContext(ctx))
 	if err == nil {
@@ -348,7 +371,7 @@ func (p *liveFixturePreparer) ensureProject(ctx context.Context, namespaceID int
 	return project, nil
 }
 
-// ensureRepository performs the ensure repository operation on *liveFixturePreparer.
+// ensureRepository ensures repository exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureRepository(ctx context.Context) error {
 	defaultRef := p.defaultRef()
 	if err := p.waitForBranch(ctx, defaultRef); err != nil {
@@ -360,7 +383,7 @@ func (p *liveFixturePreparer) ensureRepository(ctx context.Context) error {
 	return p.ensureFile(ctx, ".gitlab-ci.yml", defaultRef, fixtureCI(), "Seed evaluation CI")
 }
 
-// ensureLabels performs the ensure labels operation on *liveFixturePreparer.
+// ensureLabels ensures labels exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureLabels(ctx context.Context) error {
 	labels := []struct {
 		name  string
@@ -388,7 +411,7 @@ func (p *liveFixturePreparer) ensureLabels(ctx context.Context) error {
 	return nil
 }
 
-// ensureBranches performs the ensure branches operation on *liveFixturePreparer.
+// ensureBranches ensures branches exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureBranches(ctx context.Context) error {
 	defaultRef := p.defaultRef()
 	if err := p.ensureBranch(ctx, liveFixtureFeatureRef, defaultRef); err != nil {
@@ -421,7 +444,7 @@ func (p *liveFixturePreparer) ensureInteractiveResources(ctx context.Context) er
 	return nil
 }
 
-// ensureCoreIssues performs the ensure core issues operation on *liveFixturePreparer.
+// ensureCoreIssues ensures core issues exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCoreIssues(ctx context.Context) error {
 	issue, err := p.createIssue(ctx, "Fixture issue for evaluation reads", "Used by read, update, close, note, emoji, and analyzer cases.", []string{"evaluation"})
 	if err != nil {
@@ -436,7 +459,7 @@ func (p *liveFixturePreparer) ensureCoreIssues(ctx context.Context) error {
 	return nil
 }
 
-// ensureMergeRequests performs the ensure merge requests operation on *liveFixturePreparer.
+// ensureMergeRequests ensures merge requests exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureMergeRequests(ctx context.Context) error {
 	mr, err := p.ensureFixtureMergeRequest(ctx, liveFixtureReviewBranch, "Evaluation review fixture MR", false)
 	if err != nil {
@@ -459,7 +482,7 @@ func (p *liveFixturePreparer) ensureMergeRequests(ctx context.Context) error {
 	return nil
 }
 
-// ensurePipeline performs the ensure pipeline operation on *liveFixturePreparer.
+// ensurePipeline ensures pipeline exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePipeline(ctx context.Context) error {
 	pipeline, _, err := p.client.GL().Pipelines.CreatePipeline(p.state.ProjectID, &gl.CreatePipelineOptions{
 		Ref: new(p.defaultRef()),
@@ -472,7 +495,7 @@ func (p *liveFixturePreparer) ensurePipeline(ctx context.Context) error {
 	return p.waitForPipelineJobs(ctx, pipeline.ID)
 }
 
-// ensureMilestone performs the ensure milestone operation on *liveFixturePreparer.
+// ensureMilestone ensures milestone exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureMilestone(ctx context.Context) error {
 	m, _, err := p.client.GL().Milestones.CreateMilestone(p.state.ProjectID, &gl.CreateMilestoneOptions{
 		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %d", time.Now().Unix())),
@@ -485,7 +508,7 @@ func (p *liveFixturePreparer) ensureMilestone(ctx context.Context) error {
 	return nil
 }
 
-// ensureCleanupRelease performs the ensure cleanup release operation on *liveFixturePreparer.
+// ensureCleanupRelease ensures cleanup release exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCleanupRelease(ctx context.Context) error {
 	if err := p.ensureTag(ctx, liveFixtureCleanupTag, p.defaultRef()); err != nil {
 		return err
@@ -535,7 +558,7 @@ func (p *liveFixturePreparer) ensureCleanupRelease(ctx context.Context) error {
 	return nil
 }
 
-// ensureHooks performs the ensure hooks operation on *liveFixturePreparer.
+// ensureHooks ensures hooks exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureHooks(ctx context.Context) error {
 	if err := p.cleanupProjectHooks(ctx); err != nil {
 		return err
@@ -553,7 +576,7 @@ func (p *liveFixturePreparer) ensureHooks(ctx context.Context) error {
 	return nil
 }
 
-// cleanupProjectHooks performs the cleanup project hooks operation on *liveFixturePreparer.
+// cleanupProjectHooks removes cleanup project hooks fixture resources for liveFixturePreparer when present.
 func (p *liveFixturePreparer) cleanupProjectHooks(ctx context.Context) error {
 	for range 3 {
 		deleted, err := p.deleteEvaluationProjectHooks(ctx)
@@ -567,7 +590,7 @@ func (p *liveFixturePreparer) cleanupProjectHooks(ctx context.Context) error {
 	return nil
 }
 
-// deleteEvaluationProjectHooks performs the delete evaluation project hooks operation on *liveFixturePreparer.
+// deleteEvaluationProjectHooks removes delete evaluation project hooks fixture resources for liveFixturePreparer when present.
 func (p *liveFixturePreparer) deleteEvaluationProjectHooks(ctx context.Context) (int, error) {
 	deleted := 0
 	for page := int64(1); ; {
@@ -594,7 +617,7 @@ func (p *liveFixturePreparer) deleteEvaluationProjectHooks(ctx context.Context) 
 	}
 }
 
-// isEvaluationProjectHook is an internal helper for the main package.
+// isEvaluationProjectHook reports whether is evaluation project hook.
 func isEvaluationProjectHook(hook *gl.ProjectHook) bool {
 	if hook == nil {
 		return false
@@ -608,7 +631,7 @@ func isEvaluationProjectHook(hook *gl.ProjectHook) bool {
 		strings.Contains(url, "example.com/eval-crud-hook")
 }
 
-// ensureBadge performs the ensure badge operation on *liveFixturePreparer.
+// ensureBadge ensures badge exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureBadge(ctx context.Context) error {
 	badge, _, err := p.client.GL().ProjectBadges.AddProjectBadge(p.state.ProjectID, &gl.AddProjectBadgeOptions{
 		LinkURL:  new("https://example.com/coverage"),
@@ -622,7 +645,7 @@ func (p *liveFixturePreparer) ensureBadge(ctx context.Context) error {
 	return nil
 }
 
-// ensureSnippet performs the ensure snippet operation on *liveFixturePreparer.
+// ensureSnippet ensures snippet exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureSnippet(ctx context.Context) error {
 	visibility := gl.PrivateVisibility
 	snippet, _, err := p.client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
@@ -638,7 +661,7 @@ func (p *liveFixturePreparer) ensureSnippet(ctx context.Context) error {
 	return nil
 }
 
-// ensureEnvironment performs the ensure environment operation on *liveFixturePreparer.
+// ensureEnvironment ensures environment exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureEnvironment(ctx context.Context) error {
 	environments, _, err := p.client.GL().Environments.ListEnvironments(p.state.ProjectID, &gl.ListEnvironmentsOptions{
 		Name: new("production"),
@@ -662,7 +685,7 @@ func (p *liveFixturePreparer) ensureEnvironment(ctx context.Context) error {
 	return nil
 }
 
-// ensureProjectAccessToken performs the ensure project access token operation on *liveFixturePreparer.
+// ensureProjectAccessToken ensures project access token exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureProjectAccessToken(ctx context.Context) error {
 	expires := gl.ISOTime(time.Now().UTC().AddDate(0, 1, 0))
 	accessLevel := gl.DeveloperPermissions
@@ -679,7 +702,7 @@ func (p *liveFixturePreparer) ensureProjectAccessToken(ctx context.Context) erro
 	return nil
 }
 
-// ensureCIVariables performs the ensure c i variables operation on *liveFixturePreparer.
+// ensureCIVariables ensures CI variables exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCIVariables(ctx context.Context) error {
 	const (
 		projectKey  = "EVAL_TOKEN"
@@ -720,14 +743,14 @@ func (p *liveFixturePreparer) ensureCIVariables(ctx context.Context) error {
 	return err
 }
 
-// ignoreNotFound performs the ignore not found operation on *liveFixturePreparer.
+// ignoreNotFound handles ignore not found for liveFixturePreparer.
 func (p *liveFixturePreparer) ignoreNotFound(_ *gl.Response, err error) {
 	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 		p.notef("cleanup warning: %v", err)
 	}
 }
 
-// ensurePackage performs the ensure package operation on *liveFixturePreparer.
+// ensurePackage ensures package exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePackage(ctx context.Context) error {
 	_, _, err := p.client.GL().GenericPackages.PublishPackageFile(
 		p.state.ProjectID,
@@ -758,7 +781,7 @@ func (p *liveFixturePreparer) ensurePackage(ctx context.Context) error {
 	return nil
 }
 
-// ensureDeployKey performs the ensure deploy key operation on *liveFixturePreparer.
+// ensureDeployKey ensures deploy key exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureDeployKey(ctx context.Context) error {
 	key, err := newAuthorizedSSHKey()
 	if err != nil {
@@ -776,7 +799,7 @@ func (p *liveFixturePreparer) ensureDeployKey(ctx context.Context) error {
 	return nil
 }
 
-// ensureDeployToken performs the ensure deploy token operation on *liveFixturePreparer.
+// ensureDeployToken ensures deploy token exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureDeployToken(ctx context.Context) error {
 	expiresAt := time.Now().UTC().AddDate(0, 1, 0)
 	token, _, err := p.client.GL().DeployTokens.CreateProjectDeployToken(p.state.ProjectID, &gl.CreateProjectDeployTokenOptions{
@@ -791,7 +814,7 @@ func (p *liveFixturePreparer) ensureDeployToken(ctx context.Context) error {
 	return nil
 }
 
-// ensurePipelineTriggers performs the ensure pipeline triggers operation on *liveFixturePreparer.
+// ensurePipelineTriggers ensures pipeline triggers exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePipelineTriggers(ctx context.Context) error {
 	deleteTrigger, _, err := p.client.GL().PipelineTriggers.AddPipelineTrigger(p.state.ProjectID, &gl.AddPipelineTriggerOptions{
 		Description: new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
@@ -810,7 +833,7 @@ func (p *liveFixturePreparer) ensurePipelineTriggers(ctx context.Context) error 
 	return nil
 }
 
-// ensurePipelineSchedules performs the ensure pipeline schedules operation on *liveFixturePreparer.
+// ensurePipelineSchedules ensures pipeline schedules exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error {
 	if err := p.cleanupPipelineSchedules(ctx); err != nil {
 		return err
@@ -840,7 +863,7 @@ func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error
 	return nil
 }
 
-// cleanupPipelineSchedules performs the cleanup pipeline schedules operation on *liveFixturePreparer.
+// cleanupPipelineSchedules removes cleanup pipeline schedules fixture resources for liveFixturePreparer when present.
 func (p *liveFixturePreparer) cleanupPipelineSchedules(ctx context.Context) error {
 	schedules, _, err := p.client.GL().PipelineSchedules.ListPipelineSchedules(p.state.ProjectID, &gl.ListPipelineSchedulesOptions{
 		ListOptions: gl.ListOptions{PerPage: 100},
@@ -860,7 +883,7 @@ func (p *liveFixturePreparer) cleanupPipelineSchedules(ctx context.Context) erro
 	return nil
 }
 
-// ensureDisposableRunner performs the ensure disposable runner operation on *liveFixturePreparer.
+// ensureDisposableRunner ensures disposable runner exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureDisposableRunner(ctx context.Context) error {
 	runner, _, err := p.client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
 		RunnerType:  new("project_type"),
@@ -877,7 +900,7 @@ func (p *liveFixturePreparer) ensureDisposableRunner(ctx context.Context) error 
 	return nil
 }
 
-// ensureDisposableUser performs the ensure disposable user operation on *liveFixturePreparer.
+// ensureDisposableUser ensures disposable user exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureDisposableUser(ctx context.Context) error {
 	username := fmt.Sprintf("eval-user-%d", time.Now().UnixNano())
 	user, _, err := p.client.GL().Users.CreateUser(&gl.CreateUserOptions{
@@ -895,7 +918,7 @@ func (p *liveFixturePreparer) ensureDisposableUser(ctx context.Context) error {
 	return nil
 }
 
-// ensureFeatureFlag performs the ensure feature flag operation on *liveFixturePreparer.
+// ensureFeatureFlag ensures feature flag exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureFeatureFlag(ctx context.Context) error {
 	_, _, err := p.client.GL().ProjectFeatureFlags.GetProjectFeatureFlag(p.state.ProjectID, liveFixtureFeatureFlag, gl.WithContext(ctx))
 	if err == nil {
@@ -912,7 +935,7 @@ func (p *liveFixturePreparer) ensureFeatureFlag(ctx context.Context) error {
 	return err
 }
 
-// ensureWiki performs the ensure wiki operation on *liveFixturePreparer.
+// ensureWiki ensures wiki exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureWiki(ctx context.Context) error {
 	_, _, err := p.client.GL().Wikis.GetWikiPage(p.state.ProjectID, liveFixtureWikiSlug, nil, gl.WithContext(ctx))
 	if err == nil {
@@ -928,7 +951,7 @@ func (p *liveFixturePreparer) ensureWiki(ctx context.Context) error {
 	return err
 }
 
-// ensureAwardEmoji performs the ensure award emoji operation on *liveFixturePreparer.
+// ensureAwardEmoji ensures award emoji exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureAwardEmoji(ctx context.Context) error {
 	if p.state.IssueIID > 0 {
 		award, _, err := p.client.GL().AwardEmoji.CreateIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.CreateAwardEmojiOptions{Name: "thumbsup"}, gl.WithContext(ctx))
@@ -969,7 +992,7 @@ func (p *liveFixturePreparer) ensureAwardEmoji(ctx context.Context) error {
 	return nil
 }
 
-// ensureDiscussions performs the ensure discussions operation on *liveFixturePreparer.
+// ensureDiscussions ensures discussions exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureDiscussions(ctx context.Context) error {
 	if p.state.MergeRequestIID == 0 {
 		return nil
@@ -984,7 +1007,7 @@ func (p *liveFixturePreparer) ensureDiscussions(ctx context.Context) error {
 	return nil
 }
 
-// ensureCommitDiscussion performs the ensure commit discussion operation on *liveFixturePreparer.
+// ensureCommitDiscussion ensures commit discussion exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureCommitDiscussion(ctx context.Context) error {
 	branch, _, err := p.client.GL().Branches.GetBranch(p.state.ProjectID, p.defaultRef(), gl.WithContext(ctx))
 	if err != nil {
@@ -1007,7 +1030,7 @@ func (p *liveFixturePreparer) ensureCommitDiscussion(ctx context.Context) error 
 	return nil
 }
 
-// createIssue performs the create issue operation on *liveFixturePreparer.
+// createIssue handles create issue for liveFixturePreparer.
 func (p *liveFixturePreparer) createIssue(ctx context.Context, title, description string, labels []string) (*gl.Issue, error) {
 	labelOptions := gl.LabelOptions(labels)
 	issue, _, err := p.client.GL().Issues.CreateIssue(p.state.ProjectID, &gl.CreateIssueOptions{
@@ -1021,7 +1044,7 @@ func (p *liveFixturePreparer) createIssue(ctx context.Context, title, descriptio
 	return issue, nil
 }
 
-// ensureFixtureMergeRequest performs the ensure fixture merge request operation on *liveFixturePreparer.
+// ensureFixtureMergeRequest ensures fixture merge request exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sourceBranch, title string, mergeFixture bool) (*gl.BasicMergeRequest, error) {
 	defaultRef := p.defaultRef()
 	if err := p.ensureBranch(ctx, sourceBranch, defaultRef); err != nil {
@@ -1061,7 +1084,7 @@ func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sou
 	return &gl.BasicMergeRequest{ID: mr.ID, IID: mr.IID, ProjectID: mr.ProjectID, Title: mr.Title, State: mr.State, SourceBranch: mr.SourceBranch, TargetBranch: mr.TargetBranch, WebURL: mr.WebURL}, nil
 }
 
-// waitForMergeRequestMergeable performs the wait for merge request mergeable operation on *liveFixturePreparer.
+// waitForMergeRequestMergeable handles wait for merge request mergeable for liveFixturePreparer.
 func (p *liveFixturePreparer) waitForMergeRequestMergeable(ctx context.Context, iid int64) error {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
@@ -1086,7 +1109,7 @@ func (p *liveFixturePreparer) waitForMergeRequestMergeable(ctx context.Context, 
 	}
 }
 
-// closeOpenMergeRequestsForBranch performs the close open merge requests for branch operation on *liveFixturePreparer.
+// closeOpenMergeRequestsForBranch handles close open merge requests for branch for liveFixturePreparer.
 func (p *liveFixturePreparer) closeOpenMergeRequestsForBranch(ctx context.Context, sourceBranch string) error {
 	open := "opened"
 	mrs, _, err := p.client.GL().MergeRequests.ListProjectMergeRequests(p.state.ProjectID, &gl.ListProjectMergeRequestsOptions{
@@ -1107,7 +1130,7 @@ func (p *liveFixturePreparer) closeOpenMergeRequestsForBranch(ctx context.Contex
 	return nil
 }
 
-// ensureBranch performs the ensure branch operation on *liveFixturePreparer.
+// ensureBranch ensures branch exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureBranch(ctx context.Context, branch, ref string) error {
 	_, _, err := p.client.GL().Branches.GetBranch(p.state.ProjectID, branch, gl.WithContext(ctx))
 	if err == nil {
@@ -1126,7 +1149,7 @@ func (p *liveFixturePreparer) ensureBranch(ctx context.Context, branch, ref stri
 	return nil
 }
 
-// waitForBranch performs the wait for branch operation on *liveFixturePreparer.
+// waitForBranch handles wait for branch for liveFixturePreparer.
 func (p *liveFixturePreparer) waitForBranch(ctx context.Context, branch string) error {
 	deadline := time.Now().Add(45 * time.Second)
 	var lastErr error
@@ -1145,7 +1168,7 @@ func (p *liveFixturePreparer) waitForBranch(ctx context.Context, branch string) 
 	return fmt.Errorf("wait for branch %s: %w", branch, lastErr)
 }
 
-// ensureFile performs the ensure file operation on *liveFixturePreparer.
+// ensureFile ensures file exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureFile(ctx context.Context, path, branch, content, message string) error {
 	_, _, err := p.client.GL().RepositoryFiles.GetFile(p.state.ProjectID, path, &gl.GetFileOptions{Ref: new(branch)}, gl.WithContext(ctx))
 	if err == nil {
@@ -1181,7 +1204,7 @@ func (p *liveFixturePreparer) createFile(ctx context.Context, path, branch, cont
 	return nil
 }
 
-// ensureTag performs the ensure tag operation on *liveFixturePreparer.
+// ensureTag ensures tag exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureTag(ctx context.Context, tag, ref string) error {
 	_, _, err := p.client.GL().Tags.GetTag(p.state.ProjectID, tag, gl.WithContext(ctx))
 	if err == nil {
@@ -1197,7 +1220,7 @@ func (p *liveFixturePreparer) ensureTag(ctx context.Context, tag, ref string) er
 	return err
 }
 
-// waitForPipelineJobs performs the wait for pipeline jobs operation on *liveFixturePreparer.
+// waitForPipelineJobs handles wait for pipeline jobs for liveFixturePreparer.
 func (p *liveFixturePreparer) waitForPipelineJobs(ctx context.Context, pipelineID int64) error {
 	deadline := time.Now().Add(8 * time.Minute)
 	var lastStatuses []string
@@ -1231,7 +1254,7 @@ func (p *liveFixturePreparer) waitForPipelineJobs(ctx context.Context, pipelineI
 	return fmt.Errorf("pipeline jobs did not reach failed/manual states; last statuses: %s", strings.Join(lastStatuses, ", "))
 }
 
-// applyLiveFixtureState is an internal helper for the main package.
+// applyLiveFixtureState applies live fixture state transformations.
 func applyLiveFixtureState(tasks []evalTask, state *liveFixtureState) []evalTask {
 	out := make([]evalTask, len(tasks))
 	for i, task := range tasks {
@@ -1273,7 +1296,7 @@ func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool 
 	}
 }
 
-// addLiveAttemptResourceSuffix is an internal helper for the main package.
+// addLiveAttemptResourceSuffix adds live attempt resource suffix for the main package.
 func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int, runSuffix string) evalTask {
 	if !taskNeedsAttemptResourceSuffix(task.ID) {
 		return task
@@ -1290,14 +1313,14 @@ func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int
 	return task
 }
 
-// suffixEvaluationFileCreatePath is an internal helper for the main package.
+// suffixEvaluationFileCreatePath appends evaluation file create path to isolate live evaluation resources.
 func suffixEvaluationFileCreatePath(prompt, suffix string) string {
 	return suffixEvaluationBacktickValuesMatching(prompt, suffix, func(value string) bool {
 		return strings.HasPrefix(value, "tmp/eval")
 	})
 }
 
-// suffixEvaluationBacktickValuesMatching is an internal helper for the main package.
+// suffixEvaluationBacktickValuesMatching appends evaluation backtick values matching to isolate live evaluation resources.
 func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix func(string) bool) string {
 	var out strings.Builder
 	for {
@@ -1322,7 +1345,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 	}
 }
 
-// taskNeedsAttemptResourceSuffix is an internal helper for the main package.
+// taskNeedsAttemptResourceSuffix reports whether task needs attempt resource suffix.
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
@@ -1333,7 +1356,7 @@ func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	}
 }
 
-// liveAttemptResourceSuffix is an internal helper for the main package.
+// liveAttemptResourceSuffix returns attempt resource suffix for live evaluation runs.
 func liveAttemptResourceSuffix(modelLabel string, runIndex int, runSuffix string) string {
 	modelPart := modelLabel
 	if idx := strings.LastIndex(modelPart, ":"); idx >= 0 {
@@ -1355,7 +1378,7 @@ func liveAttemptResourceSuffix(modelLabel string, runIndex int, runSuffix string
 	return fmt.Sprintf("%s-r%d-%s", text, runIndex, runSuffix)
 }
 
-// suffixEvaluationBacktickValues is an internal helper for the main package.
+// suffixEvaluationBacktickValues appends evaluation backtick values to isolate live evaluation resources.
 func suffixEvaluationBacktickValues(prompt, suffix string) string {
 	var out strings.Builder
 	for {
@@ -1377,7 +1400,7 @@ func suffixEvaluationBacktickValues(prompt, suffix string) string {
 	}
 }
 
-// suffixEvaluationValue is an internal helper for the main package.
+// suffixEvaluationValue appends evaluation value to isolate live evaluation resources.
 func suffixEvaluationValue(value, suffix string) string {
 	if strings.Contains(value, suffix) || !shouldSuffixEvaluationValue(value) {
 		return value
@@ -1392,7 +1415,7 @@ func suffixEvaluationValue(value, suffix string) string {
 	return value + separator + suffix
 }
 
-// shouldSuffixEvaluationValue is an internal helper for the main package.
+// shouldSuffixEvaluationValue reports whether should suffix evaluation value.
 func shouldSuffixEvaluationValue(value string) bool {
 	switch {
 	case strings.HasPrefix(value, "Evaluation "):
@@ -1418,7 +1441,7 @@ func shouldSuffixEvaluationValue(value string) bool {
 	}
 }
 
-// replaceFixturePrompt is an internal helper for the main package.
+// replaceFixturePrompt replaces fixture prompt placeholders in evaluation prompts.
 func replaceFixturePrompt(taskID, prompt string, state *liveFixtureState) string {
 	replacements := map[string]string{
 		"https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git": state.RemoteURL,
@@ -1438,7 +1461,7 @@ func replaceFixturePrompt(taskID, prompt string, state *liveFixtureState) string
 	return prompt
 }
 
-// replaceLifecyclePlaceholders is an internal helper for the main package.
+// replaceLifecyclePlaceholders replaces lifecycle placeholders placeholders in evaluation prompts.
 func replaceLifecyclePlaceholders(prompt string, state *liveFixtureState) string {
 	suffix := fixtureUniqueSuffix(state)
 	if suffix == "" {
@@ -1491,7 +1514,7 @@ func replaceLifecyclePlaceholders(prompt string, state *liveFixtureState) string
 	return prompt
 }
 
-// replaceIssuePlaceholders is an internal helper for the main package.
+// replaceIssuePlaceholders replaces issue placeholders placeholders in evaluation prompts.
 func replaceIssuePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	issueIID := state.IssueIID
 	if taskID == "MT-013" && state.IssueDeleteIID > 0 {
@@ -1506,7 +1529,7 @@ func replaceIssuePlaceholders(taskID, prompt string, state *liveFixtureState) st
 	return prompt
 }
 
-// replaceMergeRequestPlaceholders is an internal helper for the main package.
+// replaceMergeRequestPlaceholders replaces merge request placeholders placeholders in evaluation prompts.
 func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	mrIID := state.MergeRequestIID
 	if taskID == "MT-017" && state.MergeRequestMergeIID > 0 {
@@ -1534,7 +1557,7 @@ func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureSt
 	return prompt
 }
 
-// replacePipelinePlaceholders is an internal helper for the main package.
+// replacePipelinePlaceholders replaces pipeline placeholders placeholders in evaluation prompts.
 func replacePipelinePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	if state.PipelineID > 0 {
 		pipelineID := state.PipelineID
@@ -1554,7 +1577,7 @@ func replacePipelinePlaceholders(taskID, prompt string, state *liveFixtureState)
 	return prompt
 }
 
-// replaceResourcePlaceholders is an internal helper for the main package.
+// replaceResourcePlaceholders replaces resource placeholders placeholders in evaluation prompts.
 func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	switch taskID {
 	case "MT-007":
@@ -1635,7 +1658,7 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 	return prompt
 }
 
-// fixtureUniqueSuffix is an internal helper for the main package.
+// fixtureUniqueSuffix returns unique suffix fixture content.
 func fixtureUniqueSuffix(state *liveFixtureState) string {
 	if state.PipelineID > 0 {
 		return strconv.FormatInt(state.PipelineID, 10)
@@ -1646,7 +1669,7 @@ func fixtureUniqueSuffix(state *liveFixtureState) string {
 	return ""
 }
 
-// replaceID is an internal helper for the main package.
+// replaceID replaces ID placeholders in evaluation prompts.
 func replaceID(prompt, label string, oldID, newID int64) string {
 	if newID <= 0 {
 		return prompt
@@ -1654,17 +1677,17 @@ func replaceID(prompt, label string, oldID, newID int64) string {
 	return strings.ReplaceAll(prompt, fmt.Sprintf("%s `%d`", label, oldID), fmt.Sprintf("%s `%d`", label, newID))
 }
 
-// fixtureRemoteURL is an internal helper for the main package.
+// fixtureRemoteURL returns remote URL fixture content.
 func fixtureRemoteURL(baseURL, projectPath string) string {
 	return strings.TrimRight(baseURL, "/") + "/" + projectPath + ".git"
 }
 
-// fixtureReadme is an internal helper for the main package.
+// fixtureReadme returns readme fixture content.
 func fixtureReadme() string {
 	return "# GitLab MCP Server Evaluation Fixture\n\nThis repository is seeded by cmd/eval_meta_tools for live MCP evaluation.\n\nfunc RegisterMCPMeta() {}\n\nTODO: keep evaluation coverage representative.\n"
 }
 
-// fixtureCI is an internal helper for the main package.
+// fixtureCI returns CI fixture content.
 func fixtureCI() string {
 	return `stages:
   - test
@@ -1692,7 +1715,7 @@ manual_deploy:
 `
 }
 
-// pathBase is an internal helper for the main package.
+// pathBase implements the path base helper used by main.
 func pathBase(path string) string {
 	idx := strings.LastIndex(path, "/")
 	if idx < 0 {
@@ -1701,7 +1724,7 @@ func pathBase(path string) string {
 	return path[idx+1:]
 }
 
-// isEmptyCommitError is an internal helper for the main package.
+// isEmptyCommitError reports whether is empty commit error.
 func isEmptyCommitError(err error) bool {
 	return toolutil.ContainsAny(err, "commit was empty", "You are trying to update the file with the same content")
 }
@@ -1711,7 +1734,7 @@ func isMissingFileUpdateError(err error) bool {
 	return toolutil.ContainsAny(err, "A file with this name doesn't exist", "file does not exist")
 }
 
-// newAuthorizedSSHKey performs the new authorized s s h key operation using the GitLab API and returns [string].
+// newAuthorizedSSHKey handles new authorized SSH key and returns [string].
 func newAuthorizedSSHKey() (string, error) {
 	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

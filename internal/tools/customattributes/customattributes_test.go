@@ -15,23 +15,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// testResourceID identifies the test resource ID constant used by this package.
 const testResourceID = "resource_id"
 
+// testKeyDept identifies the test key dept constant used by this package.
 const testKeyDept = "dept"
 
+// fmtErrWantResourceID identifies the fmt err want resource ID constant used by this package.
 const fmtErrWantResourceID = "error = %q, want it to contain resource_id"
 
+// testTypeUser identifies the test type user constant used by this package.
 const testTypeUser = "user"
 
+// testTypeGroup identifies the test type group constant used by this package.
 const testTypeGroup = "group"
 
+// testTypeProject identifies the test type project constant used by this package.
 const testTypeProject = "project"
 
-// TestList_User verifies the behavior of list user.
+// TestList_User verifies List when user.
 func TestList_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/users/1/custom_attributes" {
@@ -52,7 +60,7 @@ func TestList_User(t *testing.T) {
 	}
 }
 
-// TestList_Group verifies the behavior of list group.
+// TestList_Group verifies List when group.
 func TestList_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/2/custom_attributes" {
@@ -70,7 +78,7 @@ func TestList_Group(t *testing.T) {
 	}
 }
 
-// TestList_Project verifies the behavior of list project.
+// TestList_Project verifies List when project.
 func TestList_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/3/custom_attributes" {
@@ -88,7 +96,7 @@ func TestList_Project(t *testing.T) {
 	}
 }
 
-// TestList_InvalidType verifies the behavior of list invalid type.
+// TestList_InvalidType verifies List when invalid type.
 func TestList_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -99,7 +107,7 @@ func TestList_InvalidType(t *testing.T) {
 	}
 }
 
-// TestGet_User verifies the behavior of get user.
+// TestGet_User verifies Get when user.
 func TestGet_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/users/1/custom_attributes/dept" {
@@ -117,7 +125,7 @@ func TestGet_User(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies the behavior of get error.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -129,7 +137,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestSet_Group verifies the behavior of set group.
+// TestSet_Group verifies Set when group.
 func TestSet_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/2/custom_attributes/tier" {
@@ -150,7 +158,7 @@ func TestSet_Group(t *testing.T) {
 	}
 }
 
-// TestSet_Error verifies the behavior of set error.
+// TestSet_Error verifies Set when error.
 func TestSet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -162,7 +170,7 @@ func TestSet_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_Project verifies the behavior of delete project.
+// TestDelete_Project verifies Delete when project.
 func TestDelete_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/3/custom_attributes/old_key" {
@@ -180,7 +188,7 @@ func TestDelete_Project(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -192,7 +200,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Output verifies the behavior of format list markdown output.
+// TestFormatListMarkdown_Output verifies FormatListMarkdown when output.
 func TestFormatListMarkdown_Output(t *testing.T) {
 	out := ListOutput{Attributes: []AttributeItem{{Key: testKeyDept, Value: "eng"}}}
 	md := FormatListMarkdown(out)
@@ -204,7 +212,7 @@ func TestFormatListMarkdown_Output(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No custom attributes") {
@@ -212,7 +220,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Output verifies the behavior of format get markdown output.
+// TestFormatGetMarkdown_Output verifies FormatGetMarkdown when output.
 func TestFormatGetMarkdown_Output(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{AttributeItem: AttributeItem{Key: "k", Value: "v"}})
 	if !strings.Contains(md, "k") || !strings.Contains(md, "v") {
@@ -220,7 +228,7 @@ func TestFormatGetMarkdown_Output(t *testing.T) {
 	}
 }
 
-// TestList_InvalidResourceID verifies the behavior of list invalid resource i d.
+// TestList_InvalidResourceID verifies List when invalid resource ID.
 func TestList_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -234,7 +242,7 @@ func TestList_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidResourceID verifies the behavior of get invalid resource i d.
+// TestGet_InvalidResourceID verifies Get when invalid resource ID.
 func TestGet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -248,7 +256,7 @@ func TestGet_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestSet_InvalidResourceID verifies the behavior of set invalid resource i d.
+// TestSet_InvalidResourceID verifies Set when invalid resource ID.
 func TestSet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -262,7 +270,7 @@ func TestSet_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidResourceID verifies the behavior of delete invalid resource i d.
+// TestDelete_InvalidResourceID verifies Delete when invalid resource ID.
 func TestDelete_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -278,13 +286,14 @@ func TestDelete_InvalidResourceID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // Get — group and project resource types
 // ---------------------------------------------------------------------------.
 
-// TestGet_Group verifies the behavior of get group.
+// TestGet_Group verifies Get when group.
 func TestGet_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/2/custom_attributes/tier" {
@@ -303,7 +312,7 @@ func TestGet_Group(t *testing.T) {
 	}
 }
 
-// TestGet_Project verifies the behavior of get project.
+// TestGet_Project verifies Get when project.
 func TestGet_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/3/custom_attributes/env" {
@@ -322,7 +331,7 @@ func TestGet_Project(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidType verifies the behavior of get invalid type.
+// TestGet_InvalidType verifies Get when invalid type.
 func TestGet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(t.Context(), client, GetInput{ResourceType: "invalid", ResourceID: 1, Key: "k"})
@@ -335,7 +344,7 @@ func TestGet_InvalidType(t *testing.T) {
 // Set — user and project resource types
 // ---------------------------------------------------------------------------.
 
-// TestSet_User verifies the behavior of set user.
+// TestSet_User verifies Set when user.
 func TestSet_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/1/custom_attributes/role" && r.Method == http.MethodPut {
@@ -354,7 +363,7 @@ func TestSet_User(t *testing.T) {
 	}
 }
 
-// TestSet_Project verifies the behavior of set project.
+// TestSet_Project verifies Set when project.
 func TestSet_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/5/custom_attributes/env" && r.Method == http.MethodPut {
@@ -373,7 +382,7 @@ func TestSet_Project(t *testing.T) {
 	}
 }
 
-// TestSet_InvalidType verifies the behavior of set invalid type.
+// TestSet_InvalidType verifies Set when invalid type.
 func TestSet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Set(t.Context(), client, SetInput{ResourceType: "bad", ResourceID: 1, Key: "k", Value: "v"})
@@ -386,7 +395,7 @@ func TestSet_InvalidType(t *testing.T) {
 // Delete — user and group resource types + invalid type
 // ---------------------------------------------------------------------------.
 
-// TestDelete_User verifies the behavior of delete user.
+// TestDelete_User verifies Delete when user.
 func TestDelete_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/1/custom_attributes/old" && r.Method == http.MethodDelete {
@@ -402,7 +411,7 @@ func TestDelete_User(t *testing.T) {
 	}
 }
 
-// TestDelete_Group verifies the behavior of delete group.
+// TestDelete_Group verifies Delete when group.
 func TestDelete_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/2/custom_attributes/stale" && r.Method == http.MethodDelete {
@@ -418,7 +427,7 @@ func TestDelete_Group(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidType verifies the behavior of delete invalid type.
+// TestDelete_InvalidType verifies Delete when invalid type.
 func TestDelete_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(t.Context(), client, DeleteInput{ResourceType: "bad", ResourceID: 1, Key: "k"})
@@ -431,7 +440,7 @@ func TestDelete_InvalidType(t *testing.T) {
 // List — API error for user type
 // ---------------------------------------------------------------------------.
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -446,7 +455,7 @@ func TestList_Error(t *testing.T) {
 // FormatSetMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatSetMarkdown_Coverage verifies the behavior of format set markdown coverage.
+// TestFormatSetMarkdown_Coverage verifies FormatSetMarkdown when coverage.
 func TestFormatSetMarkdown_Coverage(t *testing.T) {
 	md := FormatSetMarkdown(SetOutput{AttributeItem: AttributeItem{Key: "env", Value: "prod"}})
 	if !strings.Contains(md, "env") || !strings.Contains(md, "prod") {
@@ -598,6 +607,7 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// newCustomAttributeRouteSpecs constructs custom attribute route specs test fixtures.
 func newCustomAttributeRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -618,6 +628,7 @@ func newCustomAttributeRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return customAttributeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 }
 
+// customAttributeSpecsByTool supports custom attribute specs by tool assertions in customattributes tests.
 func customAttributeSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

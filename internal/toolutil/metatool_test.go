@@ -50,27 +50,33 @@ type testAliasInput struct {
 	Variables    []string    `json:"variables,omitempty"`
 }
 
+// testProjectPathInput defines parameters for the test project path operation.
 type testProjectPathInput struct {
 	ProjectPath string `json:"project_path"`
 }
 
+// testGroupPathInput defines parameters for the test group path operation.
 type testGroupPathInput struct {
 	GroupPath string `json:"group_path"`
 }
 
+// testFullPathInput defines parameters for the test full path operation.
 type testFullPathInput struct {
 	FullPath string `json:"full_path"`
 }
 
+// testPausedInput defines parameters for the test paused operation.
 type testPausedInput struct {
 	Paused bool `json:"paused"`
 }
 
+// testPackageFilePathInput defines parameters for the test package file path operation.
 type testPackageFilePathInput struct {
 	Path     string `json:"path"`
 	Filename string `json:"filename"`
 }
 
+// testRequiredInput defines parameters for the test required operation.
 type testRequiredInput struct {
 	Name string `json:"name" jsonschema:"Resource name,required"`
 }
@@ -369,6 +375,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias verifies NormalizeParamAliasesForSchemaWithExplanation when ID alias.
 func TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
@@ -385,6 +392,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation_IDAlias(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous verifies NormalizeParamAliasesForSchemaWithExplanation when ID alias ambiguous.
 func TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous(t *testing.T) {
 	schema := map[string]any{
 		"properties": map[string]any{
@@ -398,6 +406,7 @@ func TestNormalizeParamAliasesForSchemaWithExplanation_IDAliasAmbiguous(t *testi
 	}
 }
 
+// TestNormalizeParamAliasesForSchemaWithExplanation_EmptyAndRejectedIDAlias verifies NormalizeParamAliasesForSchemaWithExplanation when empty and rejected ID alias.
 func TestNormalizeParamAliasesForSchemaWithExplanation_EmptyAndRejectedIDAlias(t *testing.T) {
 	if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(nil, map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "string"}}}); explanations != nil {
 		t.Fatalf("explanations = %+v, want nil for empty params", explanations)
@@ -1030,6 +1039,7 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 	}
 }
 
+// TestParamValidationError_Unwrap verifies ParamValidationError when unwrap.
 func TestParamValidationError_Unwrap(t *testing.T) {
 	if got := (*ParamValidationError)(nil).Unwrap(); got != nil {
 		t.Fatalf("nil ParamValidationError unwrap = %v, want nil", got)
@@ -1099,6 +1109,7 @@ func TestMakeMetaHandler_MissingRequiredParamsIsToolError(t *testing.T) {
 	}
 }
 
+// metaErrorText supports meta error text assertions in toolutil tests.
 func metaErrorText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
 	if result == nil || !result.IsError {
@@ -2694,6 +2705,7 @@ func TestUnmarshalParams_DoubleFailureReturnsOriginalError(t *testing.T) {
 	}
 }
 
+// routeSchemaTestInput defines parameters for the route schema test operation.
 type routeSchemaTestInput struct {
 	ID int `json:"id"`
 }

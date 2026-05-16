@@ -16,7 +16,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -34,7 +34,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidIID verifies the behavior of get invalid i i d.
+// TestGet_InvalidIID verifies Get when invalid IID.
 func TestGet_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -50,7 +50,7 @@ func TestGet_InvalidIID(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies the behavior of get error.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -62,7 +62,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -80,7 +80,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`)
@@ -95,7 +95,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -107,7 +107,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -129,7 +129,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -197,7 +197,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
 		IID: 42, Title: "Test", Type: "Issue", State: "OPEN", Author: "dev",
@@ -207,7 +207,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -215,7 +215,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
 		{IID: 1, Type: "Issue", State: "OPEN", Title: "A", Author: "dev"},
@@ -232,35 +232,58 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
+// testFullPath identifies the test full path constant used by this package.
 const testFullPath = "my-group/my-project"
 
 const (
-	testProjectPath  = "ns/proj"
-	testStateOpen    = "OPEN"
-	testStateClosed  = "CLOSED"
-	testTypeIssue    = "Issue"
-	testTypeTask     = "Task"
-	testTypeGID      = "gid://gitlab/WorkItems::Type/1"
-	testAuthorAlice  = "alice"
-	testAuthorBob    = "bob"
-	testAuthorCarol  = "carol"
-	testAuthorDev    = "dev"
-	testLabelBug     = "bug"
-	testLabelUrgent  = "urgent"
-	testWorkItemURL  = "https://gitlab.example.com/-/work_items/42"
-	testVersion      = "0.0.1"
-	testSectionDesc  = "### Description"
-	fmtDescWant      = "Description = %q"
+	// testProjectPath identifies the test project path constant used by this package.
+	testProjectPath = "ns/proj"
+	// testStateOpen identifies the test state open constant used by this package.
+	testStateOpen = "OPEN"
+	// testStateClosed identifies the test state closed constant used by this package.
+	testStateClosed = "CLOSED"
+	// testTypeIssue identifies the test type issue constant used by this package.
+	testTypeIssue = "Issue"
+	// testTypeTask identifies the test type task constant used by this package.
+	testTypeTask = "Task"
+	// testTypeGID identifies the test type gid constant used by this package.
+	testTypeGID = "gid://gitlab/WorkItems::Type/1"
+	// testAuthorAlice identifies the test author alice constant used by this package.
+	testAuthorAlice = "alice"
+	// testAuthorBob identifies the test author bob constant used by this package.
+	testAuthorBob = "bob"
+	// testAuthorCarol identifies the test author carol constant used by this package.
+	testAuthorCarol = "carol"
+	// testAuthorDev identifies the test author dev constant used by this package.
+	testAuthorDev = "dev"
+	// testLabelBug identifies the test label bug constant used by this package.
+	testLabelBug = "bug"
+	// testLabelUrgent identifies the test label urgent constant used by this package.
+	testLabelUrgent = "urgent"
+	// testWorkItemURL identifies the test work item URL constant used by this package.
+	testWorkItemURL = "https://gitlab.example.com/-/work_items/42"
+	// testVersion identifies the test version constant used by this package.
+	testVersion = "0.0.1"
+	// testSectionDesc identifies the test section desc constant used by this package.
+	testSectionDesc = "### Description"
+	// fmtDescWant identifies the fmt desc want constant used by this package.
+	fmtDescWant = "Description = %q"
+	// testTitleNewItem identifies the test title new item constant used by this package.
 	testTitleNewItem = "New item"
 )
 
@@ -268,7 +291,7 @@ const (
 // workItemToItem -- converter tests
 // ---------------------------------------------------------------------------.
 
-// TestWorkItemToItem_FullData verifies the behavior of work item to item full data.
+// TestWorkItemToItem_FullData verifies WorkItemToItem when full data.
 func TestWorkItemToItem_FullData(t *testing.T) {
 	now := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	later := now.Add(24 * time.Hour)
@@ -303,7 +326,7 @@ func TestWorkItemToItem_FullData(t *testing.T) {
 	assertFullItemTimestamps(t, item)
 }
 
-// assertFullItemCore is an internal helper for the workitems package.
+// assertFullItemCore checks full item core invariants for tests.
 func assertFullItemCore(t *testing.T, item WorkItemItem) {
 	t.Helper()
 	if item.ID != 100 {
@@ -347,7 +370,7 @@ func assertFullItemCore(t *testing.T, item WorkItemItem) {
 	}
 }
 
-// assertFullItemPeople is an internal helper for the workitems package.
+// assertFullItemPeople checks full item people invariants for tests.
 func assertFullItemPeople(t *testing.T, item WorkItemItem) {
 	t.Helper()
 	if item.Author != testAuthorAlice {
@@ -361,7 +384,7 @@ func assertFullItemPeople(t *testing.T, item WorkItemItem) {
 	}
 }
 
-// assertFullItemTimestamps is an internal helper for the workitems package.
+// assertFullItemTimestamps checks full item timestamps invariants for tests.
 func assertFullItemTimestamps(t *testing.T, item WorkItemItem) {
 	t.Helper()
 	if item.CreatedAt == "" {
@@ -375,7 +398,7 @@ func assertFullItemTimestamps(t *testing.T, item WorkItemItem) {
 	}
 }
 
-// TestWorkItemToItem_Minimal verifies the behavior of work item to item minimal.
+// TestWorkItemToItem_Minimal verifies WorkItemToItem when minimal.
 func TestWorkItemToItem_Minimal(t *testing.T) {
 	wi := &gl.WorkItem{
 		ID:    1,
@@ -410,7 +433,7 @@ func TestWorkItemToItem_Minimal(t *testing.T) {
 	}
 }
 
-// TestWorkItemToItemNilStatusNon_NilAuthor verifies the behavior of work item to item nil status non nil author.
+// TestWorkItemToItemNilStatusNon_NilAuthor verifies WorkItemToItemNilStatusNon when nil author.
 func TestWorkItemToItemNilStatusNon_NilAuthor(t *testing.T) {
 	wi := &gl.WorkItem{
 		ID:     5,
@@ -429,7 +452,7 @@ func TestWorkItemToItemNilStatusNon_NilAuthor(t *testing.T) {
 	}
 }
 
-// TestWorkItemToItem_EmptyAssigneesAndLabelsSlices verifies the behavior of work item to item empty assignees and labels slices.
+// TestWorkItemToItem_EmptyAssigneesAndLabelsSlices verifies WorkItemToItem when empty assignees and labels slices.
 func TestWorkItemToItem_EmptyAssigneesAndLabelsSlices(t *testing.T) {
 	wi := &gl.WorkItem{
 		ID:        2,
@@ -453,7 +476,7 @@ func TestWorkItemToItem_EmptyAssigneesAndLabelsSlices(t *testing.T) {
 // FormatGetMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_FullPopulated verifies the behavior of format get markdown full populated.
+// TestFormatGetMarkdown_FullPopulated verifies FormatGetMarkdown when full populated.
 func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:         42,
@@ -489,7 +512,7 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Empty verifies the behavior of format get markdown empty.
+// TestFormatGetMarkdown_Empty verifies FormatGetMarkdown when empty.
 func TestFormatGetMarkdown_Empty(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{}}
 	result := FormatGetMarkdown(out)
@@ -515,7 +538,7 @@ func TestFormatGetMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_OnlyAuthor verifies the behavior of format get markdown only author.
+// TestFormatGetMarkdown_OnlyAuthor verifies FormatGetMarkdown when only author.
 func TestFormatGetMarkdown_OnlyAuthor(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:    1,
@@ -534,7 +557,7 @@ func TestFormatGetMarkdown_OnlyAuthor(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_OnlyAssignees verifies the behavior of format get markdown only assignees.
+// TestFormatGetMarkdown_OnlyAssignees verifies FormatGetMarkdown when only assignees.
 func TestFormatGetMarkdown_OnlyAssignees(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:       1,
@@ -550,7 +573,7 @@ func TestFormatGetMarkdown_OnlyAssignees(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_OnlyLabels verifies the behavior of format get markdown only labels.
+// TestFormatGetMarkdown_OnlyLabels verifies FormatGetMarkdown when only labels.
 func TestFormatGetMarkdown_OnlyLabels(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:    1,
@@ -566,7 +589,7 @@ func TestFormatGetMarkdown_OnlyLabels(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_OnlyWebURL verifies the behavior of format get markdown only web u r l.
+// TestFormatGetMarkdown_OnlyWebURL verifies FormatGetMarkdown when only web URL.
 func TestFormatGetMarkdown_OnlyWebURL(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:    1,
@@ -582,7 +605,7 @@ func TestFormatGetMarkdown_OnlyWebURL(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_OnlyDescription verifies the behavior of format get markdown only description.
+// TestFormatGetMarkdown_OnlyDescription verifies FormatGetMarkdown when only description.
 func TestFormatGetMarkdown_OnlyDescription(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:         1,
@@ -605,7 +628,7 @@ func TestFormatGetMarkdown_OnlyDescription(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_MultipleItems verifies the behavior of format list markdown multiple items.
+// TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
 		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "First", Author: "dev1"},
@@ -628,7 +651,7 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyReturnsMessage verifies the behavior of format list markdown empty returns message.
+// TestFormatListMarkdown_EmptyReturnsMessage verifies FormatListMarkdown returns message for empty.
 func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	text := extractText(t, result)
@@ -637,7 +660,7 @@ func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharsInTitle verifies the behavior of format list markdown special chars in title.
+// TestFormatListMarkdown_SpecialCharsInTitle verifies FormatListMarkdown when special chars in title.
 func TestFormatListMarkdown_SpecialCharsInTitle(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
 		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "Has | pipe", Author: testAuthorDev},
@@ -654,7 +677,7 @@ func TestFormatListMarkdown_SpecialCharsInTitle(t *testing.T) {
 // List -- all filter branches
 // ---------------------------------------------------------------------------.
 
-// TestList_AllFilters verifies the behavior of list all filters.
+// TestList_AllFilters verifies List when all filters.
 func TestList_AllFilters(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -686,7 +709,7 @@ func TestList_AllFilters(t *testing.T) {
 	}
 }
 
-// TestList_MinimalFilters verifies the behavior of list minimal filters.
+// TestList_MinimalFilters verifies List when minimal filters.
 func TestList_MinimalFilters(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item","author":{"username":"dev"},"widgets":[]}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`)
@@ -706,7 +729,7 @@ func TestList_MinimalFilters(t *testing.T) {
 // Create -- all option branches
 // ---------------------------------------------------------------------------.
 
-// TestCreate_AllOptions verifies the behavior of create all options.
+// TestCreate_AllOptions verifies Create when all options.
 func TestCreate_AllOptions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -743,7 +766,7 @@ func TestCreate_AllOptions(t *testing.T) {
 	}
 }
 
-// TestCreate_MinimalOptions verifies the behavior of create minimal options.
+// TestCreate_MinimalOptions verifies Create when minimal options.
 func TestCreate_MinimalOptions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Min","author":{"username":"dev"},"widgets":[]}}}}`)
@@ -763,7 +786,7 @@ func TestCreate_MinimalOptions(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidDueDate verifies the behavior of create invalid due date.
+// TestCreate_InvalidDueDate verifies Create when invalid due date.
 func TestCreate_InvalidDueDate(t *testing.T) {
 	// DueDate parsing uses time.Parse -- invalid format is silently ignored
 	// (err == nil check), so invalid dates just skip setting the field.
@@ -784,7 +807,7 @@ func TestCreate_InvalidDueDate(t *testing.T) {
 	}
 }
 
-// TestCreate_WithOnlyDescription verifies the behavior of create with only description.
+// TestCreate_WithOnlyDescription verifies Create when with only description.
 func TestCreate_WithOnlyDescription(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/2","iid":"2","workItemType":{"name":"Issue"},"state":"OPEN","title":"Desc only","description":"my desc","author":{"username":"dev"},"widgets":[]}}}}`)
@@ -809,7 +832,7 @@ func TestCreate_WithOnlyDescription(t *testing.T) {
 // Context cancellation
 // ---------------------------------------------------------------------------.
 
-// TestGet_ContextCancelled verifies the behavior of get context cancelled.
+// TestGet_ContextCancelled verifies Get when context cancelled.
 func TestGet_ContextCancelled(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"x","author":{"username":"dev"},"widgets":[]}}}}`)
@@ -824,7 +847,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestList_ContextCancelled verifies the behavior of list context cancelled.
+// TestList_ContextCancelled verifies List when context cancelled.
 func TestList_ContextCancelled(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`)
@@ -839,7 +862,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestCreate_ContextCancelled verifies the behavior of create context cancelled.
+// TestCreate_ContextCancelled verifies Create when context cancelled.
 func TestCreate_ContextCancelled(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"x","author":{"username":"dev"},"widgets":[]}}}}`)
@@ -862,7 +885,7 @@ func TestCreate_ContextCancelled(t *testing.T) {
 // API error paths
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError404 verifies the behavior of get a p i error404.
+// TestGet_APIError404 verifies Get when API error 404.
 func TestGet_APIError404(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -875,7 +898,7 @@ func TestGet_APIError404(t *testing.T) {
 	}
 }
 
-// TestGet_APIError401 verifies the behavior of get a p i error401.
+// TestGet_APIError401 verifies Get when API error 401.
 func TestGet_APIError401(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -888,7 +911,7 @@ func TestGet_APIError401(t *testing.T) {
 	}
 }
 
-// TestList_APIError403 verifies the behavior of list a p i error403.
+// TestList_APIError403 verifies List when API error 403.
 func TestList_APIError403(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -901,7 +924,7 @@ func TestList_APIError403(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError422 verifies the behavior of create a p i error422.
+// TestCreate_APIError422 verifies Create when API error 422.
 func TestCreate_APIError422(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -918,7 +941,7 @@ func TestCreate_APIError422(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError500 verifies the behavior of create a p i error500.
+// TestCreate_APIError500 verifies Create when API error 500.
 func TestCreate_APIError500(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1461,7 +1484,7 @@ func TestGet_RichResponse(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// extractText is an internal helper for the workitems package.
+// extractText supports extract text assertions in workitems tests.
 func extractText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
 	if result == nil {

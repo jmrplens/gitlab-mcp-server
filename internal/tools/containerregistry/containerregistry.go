@@ -56,7 +56,7 @@ type TagListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertRepository is an internal helper for the containerregistry package.
+// convertRepository implements the convert repository helper used by containerregistry.
 func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
 	o := RepositoryOutput{
 		ID:        r.ID,
@@ -78,7 +78,7 @@ func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
 	return o
 }
 
-// convertTag is an internal helper for the containerregistry package.
+// convertTag implements the convert tag helper used by containerregistry.
 func convertTag(t *gl.RegistryRepositoryTag) TagOutput {
 	o := TagOutput{
 		Name:          t.Name,

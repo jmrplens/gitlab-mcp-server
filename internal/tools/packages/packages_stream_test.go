@@ -16,10 +16,15 @@ import (
 )
 
 const (
-	testOctetStream   = "application/octet-stream"
-	testOutputBin     = "out.bin"
-	testAppBin        = "app.bin"
-	testPkgVersion    = "1.0.0"
+	// testOctetStream identifies the test octet stream constant used by this package.
+	testOctetStream = "application/octet-stream"
+	// testOutputBin identifies the test output bin constant used by this package.
+	testOutputBin = "out.bin"
+	// testAppBin identifies the test app bin constant used by this package.
+	testAppBin = "app.bin"
+	// testPkgVersion identifies the test pkg version constant used by this package.
+	testPkgVersion = "1.0.0"
+	// headerContentType identifies the header content type constant used by this package.
 	headerContentType = "Content-Type"
 )
 
@@ -39,7 +44,7 @@ func testStreamServer(t *testing.T, fileBody string, statusCode int) http.Handle
 	})
 }
 
-// TestStreamDownloadPackageFile_Success verifies the behavior of stream download package file success.
+// TestStreamDownloadPackageFile_Success verifies StreamDownloadPackageFile when success.
 func TestStreamDownloadPackageFile_Success(t *testing.T) {
 	fileBody := strings.Repeat("streaming-data-block-", 1000)
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
@@ -71,7 +76,7 @@ func TestStreamDownloadPackageFile_Success(t *testing.T) {
 	}
 }
 
-// TestStreamDownloadPackageFile_CreatesDirectory verifies the behavior of stream download package file creates directory.
+// TestStreamDownloadPackageFile_CreatesDirectory verifies StreamDownloadPackageFile creates directory.
 func TestStreamDownloadPackageFile_CreatesDirectory(t *testing.T) {
 	fileBody := "hello-stream"
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
@@ -92,7 +97,7 @@ func TestStreamDownloadPackageFile_CreatesDirectory(t *testing.T) {
 	}
 }
 
-// TestStreamDownloadPackageFile_ContextCancelled verifies the behavior of stream download package file context cancelled.
+// TestStreamDownloadPackageFile_ContextCancelled verifies StreamDownloadPackageFile when context cancelled.
 func TestStreamDownloadPackageFile_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
 
@@ -110,7 +115,7 @@ func TestStreamDownloadPackageFile_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestStreamDownloadPackageFile_APIError verifies the behavior of stream download package file a p i error.
+// TestStreamDownloadPackageFile_APIError verifies StreamDownloadPackageFile when API error.
 func TestStreamDownloadPackageFile_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"Package Not Found"}`)
@@ -128,7 +133,7 @@ func TestStreamDownloadPackageFile_APIError(t *testing.T) {
 	}
 }
 
-// TestComputeSHA256_ViaToolutil verifies the behavior of compute s h a256 via toolutil.
+// TestComputeSHA256_ViaToolutil verifies ComputeSHA256 when via toolutil.
 func TestComputeSHA256_ViaToolutil(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "test.bin")
 	os.WriteFile(f, []byte("hello"), 0644)

@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestNewActionSpec_DeepClonesMetadata verifies NewActionSpec when deep clones metadata.
 func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	inputSchema := map[string]any{
 		"type": "object",
@@ -22,6 +23,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases := []string{" Project.Delete ", "project.delete"}
 	tags := []string{" Admin ", "ADMIN"}
 	relatedActions := []string{"Project.Get"}
+	docs := []DocumentationReference{{Title: "Projects API", URL: "https://docs.gitlab.com/api/projects/"}}
 	compatibility := CompatibilityPolicy{
 		ActionAliases:    []ActionAliasSpec{{Alias: " Project.Remove ", Target: " Delete ", Source: "dynamic", Searchable: true, Reason: "Historical dynamic alias."}},
 		ParameterAliases: []ParameterAliasSpec{{Alias: " Project ", Target: "project_id", Source: "dynamic", Reason: "Historical dynamic parameter alias."}},
@@ -33,6 +35,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 		Aliases:                aliases,
 		Tags:                   tags,
 		RelatedActions:         relatedActions,
+		Docs:                   docs,
 		Compatibility:          compatibility,
 		ParameterGuidance:      map[string]ParameterGuidance{"project_id": specGuidance},
 		ReadOnly:               false,
@@ -52,6 +55,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases[0] = "changed"
 	tags[0] = "changed"
 	relatedActions[0] = "changed"
+	docs[0].Title = "changed"
 	compatibility.ActionAliases[0].Alias = "changed"
 	compatibility.ParameterAliases[0].Alias = "changed"
 	schemaNotes[0] = "changed"
@@ -79,6 +83,9 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	if spec.RelatedActions[0] != "project.get" || spec.SchemaValidationNotes[0] != "Schema cannot express file source exclusivity." || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
 		t.Fatalf("related/actions notes = %+v / %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.SchemaValidationNotes, spec.RuntimeValidationNotes)
 	}
+	if len(spec.Docs) != 1 || spec.Docs[0].Title != "Projects API" || spec.Docs[0].URL != "https://docs.gitlab.com/api/projects/" {
+		t.Fatalf("Docs = %+v, want cloned documentation reference", spec.Docs)
+	}
 	if spec.Compatibility.ActionAliases[0].Alias != "project.remove" || spec.Compatibility.ActionAliases[0].Target != "delete" {
 		t.Fatalf("action compatibility aliases = %+v, want cloned normalized action alias", spec.Compatibility.ActionAliases)
 	}
@@ -90,6 +97,7 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_CompatibilityPolicy verifies ActionSpecValidate when compatibility policy.
 func TestActionSpecValidate_CompatibilityPolicy(t *testing.T) {
 	spec := NewActionSpec("delete", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{
 		Compatibility: CompatibilityPolicy{
@@ -103,6 +111,7 @@ func TestActionSpecValidate_CompatibilityPolicy(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsInvalidCompatibilityPolicy covers ActionSpecValidate with table-driven subtests for rejects invalid compatibility policy.
 func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -150,6 +159,7 @@ func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsUnsupportedIndividualPolicies covers ActionSpecValidate with table-driven subtests for rejects unsupported individual policies.
 func TestActionSpecValidate_RejectsUnsupportedIndividualPolicies(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -189,6 +199,7 @@ func TestActionSpecValidate_RejectsUnsupportedIndividualPolicies(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_AcceptsKnownIndividualPolicies verifies ActionSpecValidate accepts known individual policies.
 func TestActionSpecValidate_AcceptsKnownIndividualPolicies(t *testing.T) {
 	spec := NewActionSpec("get", ActionRoute{}, ActionSpecOptions{
 		ContentKind:            ActionSpecContentDetail,
@@ -202,6 +213,7 @@ func TestActionSpecValidate_AcceptsKnownIndividualPolicies(t *testing.T) {
 	}
 }
 
+// TestNewActionSpec_SyncsOptionDestructiveToRoute verifies NewActionSpec syncs option destructive to route.
 func TestNewActionSpec_SyncsOptionDestructiveToRoute(t *testing.T) {
 	spec := NewActionSpec("delete", ActionRoute{}, ActionSpecOptions{Destructive: true})
 
@@ -213,6 +225,7 @@ func TestNewActionSpec_SyncsOptionDestructiveToRoute(t *testing.T) {
 	}
 }
 
+// TestActionSpecsToMapWithError_RejectsDuplicateNames verifies ActionSpecsToMapWithError rejects duplicate names.
 func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	route := ActionRoute{}
 	specs := []ActionSpec{
@@ -226,6 +239,7 @@ func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	}
 }
 
+// TestActionSpecsToMap_ProjectsValidSpecsAndPanicsOnInvalid verifies ActionSpecsToMap projects valid specs and panics on invalid.
 func TestActionSpecsToMap_ProjectsValidSpecsAndPanicsOnInvalid(t *testing.T) {
 	valid := NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{ReadOnly: true})
 	routes := ActionSpecsToMap([]ActionSpec{valid})
@@ -241,6 +255,7 @@ func TestActionSpecsToMap_ProjectsValidSpecsAndPanicsOnInvalid(t *testing.T) {
 	_ = ActionSpecsToMap([]ActionSpec{{Name: ""}})
 }
 
+// TestActionSpecsToMapWithError_RejectsAliasMatchingCanonicalActionName verifies ActionSpecsToMapWithError rejects alias matching canonical action name.
 func TestActionSpecsToMapWithError_RejectsAliasMatchingCanonicalActionName(t *testing.T) {
 	specs := []ActionSpec{
 		NewActionSpec("list", ActionRoute{}, ActionSpecOptions{Aliases: []string{"show"}}),
@@ -253,6 +268,7 @@ func TestActionSpecsToMapWithError_RejectsAliasMatchingCanonicalActionName(t *te
 	}
 }
 
+// TestActionRouteFluentMetadata_FlowsToActionSpec verifies ActionRouteFluentMetadata flows to action spec.
 func TestActionRouteFluentMetadata_FlowsToActionSpec(t *testing.T) {
 	guidance := map[string]ParameterGuidance{
 		"project_id": {SemanticRole: "scope_project", CommonConfusions: []string{"route confusion"}},
@@ -291,6 +307,7 @@ func TestActionRouteFluentMetadata_FlowsToActionSpec(t *testing.T) {
 	}
 }
 
+// TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields verifies ActionSpecsToMapWithError when merges guidance without overwriting route fields.
 func TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields(t *testing.T) {
 	route := ActionRoute{
 		InputSchema: map[string]any{
@@ -322,6 +339,7 @@ func TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields(t
 	}
 }
 
+// TestActionSpecsToMapWithError_DeduplicatesCommonConfusions verifies ActionSpecsToMapWithError deduplicates common confusions.
 func TestActionSpecsToMapWithError_DeduplicatesCommonConfusions(t *testing.T) {
 	route := ActionRoute{
 		InputSchema: map[string]any{
@@ -348,6 +366,7 @@ func TestActionSpecsToMapWithError_DeduplicatesCommonConfusions(t *testing.T) {
 	}
 }
 
+// TestActionSpecsToMapWithError_AllowsNilRouteSchemasWithoutGuidance verifies ActionSpecsToMapWithError allows nil route schemas without guidance.
 func TestActionSpecsToMapWithError_AllowsNilRouteSchemasWithoutGuidance(t *testing.T) {
 	spec := NewActionSpec("current", ActionRoute{}, ActionSpecOptions{Tags: []string{"Read"}})
 
@@ -360,6 +379,7 @@ func TestActionSpecsToMapWithError_AllowsNilRouteSchemasWithoutGuidance(t *testi
 	}
 }
 
+// TestActionSpecValidate_RejectsUnknownGuidanceParameter verifies ActionSpecValidate rejects unknown guidance parameter.
 func TestActionSpecValidate_RejectsUnknownGuidanceParameter(t *testing.T) {
 	route := ActionRoute{InputSchema: map[string]any{
 		"type":       "object",
@@ -374,6 +394,7 @@ func TestActionSpecValidate_RejectsUnknownGuidanceParameter(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsGuidanceWithoutInputSchema verifies ActionSpecValidate rejects guidance without input schema.
 func TestActionSpecValidate_RejectsGuidanceWithoutInputSchema(t *testing.T) {
 	spec := NewActionSpec("get", ActionRoute{}, ActionSpecOptions{
 		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
@@ -384,12 +405,14 @@ func TestActionSpecValidate_RejectsGuidanceWithoutInputSchema(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsEmptyName verifies ActionSpecValidate rejects empty name.
 func TestActionSpecValidate_RejectsEmptyName(t *testing.T) {
 	if err := (ActionSpec{}).Validate(); err == nil || !strings.Contains(err.Error(), "name is required") {
 		t.Fatalf("Validate() error = %v, want missing name rejection", err)
 	}
 }
 
+// TestActionSpecValidate_RejectsReadOnlyDestructive verifies ActionSpecValidate rejects read only destructive.
 func TestActionSpecValidate_RejectsReadOnlyDestructive(t *testing.T) {
 	spec := NewActionSpec("delete", ActionRoute{Destructive: true}, ActionSpecOptions{ReadOnly: true, Destructive: true})
 
@@ -398,6 +421,7 @@ func TestActionSpecValidate_RejectsReadOnlyDestructive(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsConflictingAliases covers ActionSpecValidate with table-driven subtests for rejects conflicting aliases.
 func TestActionSpecValidate_RejectsConflictingAliases(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -425,6 +449,7 @@ func TestActionSpecValidate_RejectsConflictingAliases(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsDestructiveMismatch verifies ActionSpecValidate rejects destructive mismatch.
 func TestActionSpecValidate_RejectsDestructiveMismatch(t *testing.T) {
 	spec := ActionSpec{Name: "delete", Route: ActionRoute{Destructive: true}}
 
@@ -433,6 +458,7 @@ func TestActionSpecValidate_RejectsDestructiveMismatch(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsNonNormalizedTags verifies ActionSpecValidate rejects non normalized tags.
 func TestActionSpecValidate_RejectsNonNormalizedTags(t *testing.T) {
 	spec := ActionSpec{Name: "list", Tags: []string{"Needs Cleanup"}}
 

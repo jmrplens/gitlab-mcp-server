@@ -41,7 +41,7 @@ func registerMergeVelocityPrompt(server *mcp.Server, client *gitlabclient.Client
 	})
 }
 
-// handleMergeVelocity performs the handle merge velocity operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleMergeVelocity handles handle merge velocity and returns [*mcp.GetPromptResult].
 func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -148,7 +148,7 @@ func registerReleaseReadinessPrompt(server *mcp.Server, client *gitlabclient.Cli
 	})
 }
 
-// handleReleaseReadiness performs the handle release readiness operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleReleaseReadiness handles handle release readiness and returns [*mcp.GetPromptResult].
 func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -253,7 +253,7 @@ func registerReleaseCadencePrompt(server *mcp.Server, client *gitlabclient.Clien
 	})
 }
 
-// handleReleaseCadence performs the handle release cadence operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleReleaseCadence handles handle release cadence and returns [*mcp.GetPromptResult].
 func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -369,7 +369,7 @@ func registerWeeklyTeamRecapPrompt(server *mcp.Server, client *gitlabclient.Clie
 	})
 }
 
-// handleWeeklyTeamRecap performs the handle weekly team recap operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleWeeklyTeamRecap handles handle weekly team recap and returns [*mcp.GetPromptResult].
 func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {

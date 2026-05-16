@@ -71,7 +71,7 @@ type ListBoardListsOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// convertBoard is an internal helper for the boards package.
+// convertBoard implements the convert board helper used by boards.
 func convertBoard(b *gl.IssueBoard) BoardOutput {
 	out := BoardOutput{
 		ID:              b.ID,
@@ -104,7 +104,7 @@ func convertBoard(b *gl.IssueBoard) BoardOutput {
 	return out
 }
 
-// convertBoardList is an internal helper for the boards package.
+// convertBoardList implements the convert board list helper used by boards.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
 	out := BoardListOutput{
 		ID:             l.ID,

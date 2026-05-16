@@ -13,6 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions verifies BuildActionCatalog includes base enterprise and MCP actions.
 func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
 	t.Run("base", func(t *testing.T) {
 		base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
@@ -55,6 +56,7 @@ func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
 	})
 }
 
+// TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture verifies BuildActionCatalog does not use meta registration capture.
 func TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture(t *testing.T) {
 	source, err := os.ReadFile("action_catalog.go")
 	if err != nil {
@@ -67,6 +69,7 @@ func TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_CapturesInlineAndDelegatedGroups verifies BuildActionCatalog captures inline and delegated groups.
 func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
 	if err != nil {
@@ -185,6 +188,7 @@ func TestBuildActionCatalog_EnterpriseAndGitLabDotComGates(t *testing.T) {
 	assertCatalogHasAction(t, gitLabDotComEnterprise, "orbit.status")
 }
 
+// TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions verifies BuildMCPActionGroup when nil updater omits update actions.
 func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	group := BuildMCPActionGroup(nil, nil)
 	if _, ok := group.Actions["status"]; !ok {
@@ -198,6 +202,7 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_UsesCanonicalActionSpecs verifies BuildActionCatalog uses canonical action specs.
 func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	spec := toolutil.NewActionSpec("list", testCatalogActionRoute("search"), toolutil.ActionSpecOptions{
 		Aliases:           []string{"group.search"},
@@ -226,11 +231,15 @@ func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	if !slices.Contains(action.Aliases, "group.search") || !slices.Contains(action.Tags, "group") || !slices.Contains(action.RelatedActions, "group.get") {
 		t.Fatalf("action search metadata = aliases %+v tags %+v related %+v", action.Aliases, action.Tags, action.RelatedActions)
 	}
+	if len(action.Docs) == 0 || action.Docs[0].URL != "https://docs.gitlab.com/api/groups/" {
+		t.Fatalf("action Docs = %+v, want default group API documentation", action.Docs)
+	}
 	if action.Route.ParameterGuidance["search"].SemanticRole != "group_search_query" {
 		t.Fatalf("route guidance = %+v, want spec guidance", action.Route.ParameterGuidance)
 	}
 }
 
+// TestBuildActionCatalog_UsesCollectedActionSpecGuidance verifies BuildActionCatalog uses collected action spec guidance.
 func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
 	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{})
 	if err != nil {
@@ -252,6 +261,7 @@ func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_ExplicitSpecOverridesCatalogRoute verifies BuildActionCatalog when explicit spec overrides catalog route.
 func TestBuildActionCatalog_ExplicitSpecOverridesCatalogRoute(t *testing.T) {
 	spec := toolutil.NewActionSpec("token_scope_add_project", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "spec_scope_project"}},
@@ -271,6 +281,7 @@ func TestBuildActionCatalog_ExplicitSpecOverridesCatalogRoute(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_AcceptsExplicitSpecGroupActions verifies BuildActionCatalog accepts explicit spec group actions.
 func TestBuildActionCatalog_AcceptsExplicitSpecGroupActions(t *testing.T) {
 	spec := toolutil.NewActionSpec("not_captured", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{})
 
@@ -283,6 +294,7 @@ func TestBuildActionCatalog_AcceptsExplicitSpecGroupActions(t *testing.T) {
 	}
 }
 
+// TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata verifies MergeActionSpecGroupOverrides handles blank override metadata.
 func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T) {
 	base := []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{
 		toolutil.NewActionSpec("get", testCatalogActionRoute("project_id"), toolutil.ActionSpecOptions{}),
@@ -302,6 +314,7 @@ func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T
 	}
 }
 
+// testCatalogActionRoute supports test catalog action route assertions in tools tests.
 func testCatalogActionRoute(params ...string) toolutil.ActionRoute {
 	properties := make(map[string]any, len(params))
 	for _, param := range params {
@@ -318,6 +331,7 @@ func testCatalogActionRoute(params ...string) toolutil.ActionRoute {
 	}
 }
 
+// mustBuildActionCatalog builds action catalog test fixtures and fails the test on error.
 func mustBuildActionCatalog(t *testing.T, client *gitlabclient.Client, opts ActionCatalogOptions) *actioncatalog.Catalog {
 	t.Helper()
 	catalog, err := BuildActionCatalog(client, opts)
@@ -327,6 +341,7 @@ func mustBuildActionCatalog(t *testing.T, client *gitlabclient.Client, opts Acti
 	return catalog
 }
 
+// newGitLabDotComClient constructs GitLab dot com client test fixtures.
 func newGitLabDotComClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	client, err := gitlabclient.NewClient(&config.Config{
@@ -339,6 +354,7 @@ func newGitLabDotComClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+// assertCatalogHasAction checks catalog has action invariants for tests.
 func assertCatalogHasAction(t *testing.T, catalog *actioncatalog.Catalog, actionID actioncatalog.ActionID) {
 	t.Helper()
 	if _, ok := catalog.Action(actionID); !ok {
@@ -346,6 +362,7 @@ func assertCatalogHasAction(t *testing.T, catalog *actioncatalog.Catalog, action
 	}
 }
 
+// assertCatalogMissingAction checks catalog missing action invariants for tests.
 func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, actionID actioncatalog.ActionID) {
 	t.Helper()
 	if _, ok := catalog.Action(actionID); ok {

@@ -16,7 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestGetAccessSettings_Success verifies the behavior of get access settings success.
+// TestGetAccessSettings_Success verifies GetAccessSettings when success.
 func TestGetAccessSettings_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/job_token_scope" {
@@ -34,7 +34,7 @@ func TestGetAccessSettings_Success(t *testing.T) {
 	}
 }
 
-// TestGetAccessSettings_Error verifies the behavior of get access settings error.
+// TestGetAccessSettings_Error verifies GetAccessSettings when error.
 func TestGetAccessSettings_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -47,7 +47,7 @@ func TestGetAccessSettings_Error(t *testing.T) {
 	}
 }
 
-// TestPatchAccessSettings_Success verifies the behavior of patch access settings success.
+// TestPatchAccessSettings_Success verifies PatchAccessSettings when success.
 func TestPatchAccessSettings_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
@@ -65,7 +65,7 @@ func TestPatchAccessSettings_Success(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_Success verifies the behavior of list inbound allowlist success.
+// TestListInboundAllowlist_Success verifies ListInboundAllowlist when success.
 func TestListInboundAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -88,7 +88,7 @@ func TestListInboundAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestAddProjectAllowlist_Success verifies the behavior of add project allowlist success.
+// TestAddProjectAllowlist_Success verifies AddProjectAllowlist when success.
 func TestAddProjectAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"source_project_id": 42, "target_project_id": 99}`)
@@ -106,7 +106,7 @@ func TestAddProjectAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestRemoveProjectAllowlist_Success verifies the behavior of remove project allowlist success.
+// TestRemoveProjectAllowlist_Success verifies RemoveProjectAllowlist when success.
 func TestRemoveProjectAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -118,7 +118,7 @@ func TestRemoveProjectAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestRemoveProjectAllowlist_Error verifies the behavior of remove project allowlist error.
+// TestRemoveProjectAllowlist_Error verifies RemoveProjectAllowlist when error.
 func TestRemoveProjectAllowlist_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -131,7 +131,7 @@ func TestRemoveProjectAllowlist_Error(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_Success verifies the behavior of list group allowlist success.
+// TestListGroupAllowlist_Success verifies ListGroupAllowlist when success.
 func TestListGroupAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -151,7 +151,7 @@ func TestListGroupAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestAddGroupAllowlist_Success verifies the behavior of add group allowlist success.
+// TestAddGroupAllowlist_Success verifies AddGroupAllowlist when success.
 func TestAddGroupAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"source_project_id": 42, "target_group_id": 5}`)
@@ -166,7 +166,7 @@ func TestAddGroupAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestRemoveGroupAllowlist_Success verifies the behavior of remove group allowlist success.
+// TestRemoveGroupAllowlist_Success verifies RemoveGroupAllowlist when success.
 func TestRemoveGroupAllowlist_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -178,7 +178,7 @@ func TestRemoveGroupAllowlist_Success(t *testing.T) {
 	}
 }
 
-// TestAddProjectAllowlist_ZeroTargetProjectID verifies the behavior of add project allowlist zero target project i d.
+// TestAddProjectAllowlist_ZeroTargetProjectID verifies AddProjectAllowlist when zero target project ID.
 func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TargetProjectID is 0")
@@ -189,7 +189,7 @@ func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	}
 }
 
-// TestRemoveProjectAllowlist_ZeroTargetProjectID verifies the behavior of remove project allowlist zero target project i d.
+// TestRemoveProjectAllowlist_ZeroTargetProjectID verifies RemoveProjectAllowlist when zero target project ID.
 func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TargetProjectID is 0")
@@ -200,7 +200,7 @@ func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	}
 }
 
-// TestAddGroupAllowlist_ZeroTargetGroupID verifies the behavior of add group allowlist zero target group i d.
+// TestAddGroupAllowlist_ZeroTargetGroupID verifies AddGroupAllowlist when zero target group ID.
 func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TargetGroupID is 0")
@@ -211,7 +211,7 @@ func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	}
 }
 
-// TestRemoveGroupAllowlist_ZeroTargetGroupID verifies the behavior of remove group allowlist zero target group i d.
+// TestRemoveGroupAllowlist_ZeroTargetGroupID verifies RemoveGroupAllowlist when zero target group ID.
 func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TargetGroupID is 0")
@@ -222,7 +222,7 @@ func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatAccessSettingsMarkdown verifies the behavior of format access settings markdown.
+// TestFormatAccessSettingsMarkdown verifies FormatAccessSettingsMarkdown.
 func TestFormatAccessSettingsMarkdown(t *testing.T) {
 	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})
 	if r == nil {
@@ -230,7 +230,7 @@ func TestFormatAccessSettingsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListInboundAllowlistMarkdown_Empty verifies the behavior of format list inbound allowlist markdown empty.
+// TestFormatListInboundAllowlistMarkdown_Empty verifies FormatListInboundAllowlistMarkdown when empty.
 func TestFormatListInboundAllowlistMarkdown_Empty(t *testing.T) {
 	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{})
 	if r == nil {
@@ -238,7 +238,7 @@ func TestFormatListInboundAllowlistMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListGroupAllowlistMarkdown_Empty verifies the behavior of format list group allowlist markdown empty.
+// TestFormatListGroupAllowlistMarkdown_Empty verifies FormatListGroupAllowlistMarkdown when empty.
 func TestFormatListGroupAllowlistMarkdown_Empty(t *testing.T) {
 	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{})
 	if r == nil {
@@ -248,19 +248,23 @@ func TestFormatListGroupAllowlistMarkdown_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // GetAccessSettings — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetAccessSettings_CancelledContext verifies the behavior of get access settings cancelled context.
+// TestGetAccessSettings_CancelledContext verifies GetAccessSettings when cancelled context.
 func TestGetAccessSettings_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -274,7 +278,7 @@ func TestGetAccessSettings_CancelledContext(t *testing.T) {
 // PatchAccessSettings — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestPatchAccessSettings_APIError verifies the behavior of patch access settings a p i error.
+// TestPatchAccessSettings_APIError verifies PatchAccessSettings when API error.
 func TestPatchAccessSettings_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -285,7 +289,7 @@ func TestPatchAccessSettings_APIError(t *testing.T) {
 	}
 }
 
-// TestPatchAccessSettings_CancelledContext verifies the behavior of patch access settings cancelled context.
+// TestPatchAccessSettings_CancelledContext verifies PatchAccessSettings when cancelled context.
 func TestPatchAccessSettings_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -299,7 +303,7 @@ func TestPatchAccessSettings_CancelledContext(t *testing.T) {
 // ListInboundAllowlist — API error, canceled context, pagination
 // ---------------------------------------------------------------------------.
 
-// TestListInboundAllowlist_APIError verifies the behavior of list inbound allowlist a p i error.
+// TestListInboundAllowlist_APIError verifies ListInboundAllowlist when API error.
 func TestListInboundAllowlist_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -310,7 +314,7 @@ func TestListInboundAllowlist_APIError(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_CancelledContext verifies the behavior of list inbound allowlist cancelled context.
+// TestListInboundAllowlist_CancelledContext verifies ListInboundAllowlist when cancelled context.
 func TestListInboundAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -320,7 +324,7 @@ func TestListInboundAllowlist_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_WithPagination verifies the behavior of list inbound allowlist with pagination.
+// TestListInboundAllowlist_WithPagination verifies ListInboundAllowlist when with pagination.
 func TestListInboundAllowlist_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -343,7 +347,7 @@ func TestListInboundAllowlist_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_Empty verifies the behavior of list inbound allowlist empty.
+// TestListInboundAllowlist_Empty verifies ListInboundAllowlist when empty.
 func TestListInboundAllowlist_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -361,7 +365,7 @@ func TestListInboundAllowlist_Empty(t *testing.T) {
 // AddProjectAllowlist — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestAddProjectAllowlist_APIError verifies the behavior of add project allowlist a p i error.
+// TestAddProjectAllowlist_APIError verifies AddProjectAllowlist when API error.
 func TestAddProjectAllowlist_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -372,7 +376,7 @@ func TestAddProjectAllowlist_APIError(t *testing.T) {
 	}
 }
 
-// TestAddProjectAllowlist_CancelledContext verifies the behavior of add project allowlist cancelled context.
+// TestAddProjectAllowlist_CancelledContext verifies AddProjectAllowlist when cancelled context.
 func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -386,7 +390,7 @@ func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 // RemoveProjectAllowlist — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestRemoveProjectAllowlist_CancelledContext verifies the behavior of remove project allowlist cancelled context.
+// TestRemoveProjectAllowlist_CancelledContext verifies RemoveProjectAllowlist when cancelled context.
 func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -400,7 +404,7 @@ func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 // ListGroupAllowlist — API error, canceled context, pagination, empty
 // ---------------------------------------------------------------------------.
 
-// TestListGroupAllowlist_APIError verifies the behavior of list group allowlist a p i error.
+// TestListGroupAllowlist_APIError verifies ListGroupAllowlist when API error.
 func TestListGroupAllowlist_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -411,7 +415,7 @@ func TestListGroupAllowlist_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_CancelledContext verifies the behavior of list group allowlist cancelled context.
+// TestListGroupAllowlist_CancelledContext verifies ListGroupAllowlist when cancelled context.
 func TestListGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -421,7 +425,7 @@ func TestListGroupAllowlist_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_WithPagination verifies the behavior of list group allowlist with pagination.
+// TestListGroupAllowlist_WithPagination verifies ListGroupAllowlist when with pagination.
 func TestListGroupAllowlist_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -444,7 +448,7 @@ func TestListGroupAllowlist_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_Empty verifies the behavior of list group allowlist empty.
+// TestListGroupAllowlist_Empty verifies ListGroupAllowlist when empty.
 func TestListGroupAllowlist_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -462,7 +466,7 @@ func TestListGroupAllowlist_Empty(t *testing.T) {
 // AddGroupAllowlist — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestAddGroupAllowlist_APIError verifies the behavior of add group allowlist a p i error.
+// TestAddGroupAllowlist_APIError verifies AddGroupAllowlist when API error.
 func TestAddGroupAllowlist_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -473,7 +477,7 @@ func TestAddGroupAllowlist_APIError(t *testing.T) {
 	}
 }
 
-// TestAddGroupAllowlist_CancelledContext verifies the behavior of add group allowlist cancelled context.
+// TestAddGroupAllowlist_CancelledContext verifies AddGroupAllowlist when cancelled context.
 func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -487,7 +491,7 @@ func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 // RemoveGroupAllowlist — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestRemoveGroupAllowlist_APIError verifies the behavior of remove group allowlist a p i error.
+// TestRemoveGroupAllowlist_APIError verifies RemoveGroupAllowlist when API error.
 func TestRemoveGroupAllowlist_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -498,7 +502,7 @@ func TestRemoveGroupAllowlist_APIError(t *testing.T) {
 	}
 }
 
-// TestRemoveGroupAllowlist_CancelledContext verifies the behavior of remove group allowlist cancelled context.
+// TestRemoveGroupAllowlist_CancelledContext verifies RemoveGroupAllowlist when cancelled context.
 func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -512,7 +516,7 @@ func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 // FormatAccessSettingsMarkdown — disabled state
 // ---------------------------------------------------------------------------.
 
-// TestFormatAccessSettingsMarkdown_Disabled verifies the behavior of format access settings markdown disabled.
+// TestFormatAccessSettingsMarkdown_Disabled verifies FormatAccessSettingsMarkdown when disabled.
 func TestFormatAccessSettingsMarkdown_Disabled(t *testing.T) {
 	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: false})
 	if r == nil {
@@ -524,7 +528,7 @@ func TestFormatAccessSettingsMarkdown_Disabled(t *testing.T) {
 	}
 }
 
-// TestFormatAccessSettingsMarkdown_Enabled verifies the behavior of format access settings markdown enabled.
+// TestFormatAccessSettingsMarkdown_Enabled verifies FormatAccessSettingsMarkdown when enabled.
 func TestFormatAccessSettingsMarkdown_Enabled(t *testing.T) {
 	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})
 	if r == nil {
@@ -543,7 +547,7 @@ func TestFormatAccessSettingsMarkdown_Enabled(t *testing.T) {
 // FormatPatchResultMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatPatchResultMarkdown verifies the behavior of format patch result markdown.
+// TestFormatPatchResultMarkdown verifies FormatPatchResultMarkdown.
 func TestFormatPatchResultMarkdown(t *testing.T) {
 	r := FormatPatchResultMarkdown(toolutil.DeleteOutput{Status: "updated"})
 	if r == nil {
@@ -559,7 +563,7 @@ func TestFormatPatchResultMarkdown(t *testing.T) {
 // FormatListInboundAllowlistMarkdown — with data
 // ---------------------------------------------------------------------------.
 
-// TestFormatListInboundAllowlistMarkdown_WithData verifies the behavior of format list inbound allowlist markdown with data.
+// TestFormatListInboundAllowlistMarkdown_WithData verifies FormatListInboundAllowlistMarkdown when with data.
 func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{
 		Projects: []AllowlistProjectItem{
@@ -590,7 +594,7 @@ func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 // FormatAddProjectAllowlistMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatAddProjectAllowlistMarkdown verifies the behavior of format add project allowlist markdown.
+// TestFormatAddProjectAllowlistMarkdown verifies FormatAddProjectAllowlistMarkdown.
 func TestFormatAddProjectAllowlistMarkdown(t *testing.T) {
 	r := FormatAddProjectAllowlistMarkdown(InboundAllowItemOutput{SourceProjectID: 42, TargetProjectID: 99})
 	if r == nil {
@@ -609,7 +613,7 @@ func TestFormatAddProjectAllowlistMarkdown(t *testing.T) {
 // FormatListGroupAllowlistMarkdown — with data
 // ---------------------------------------------------------------------------.
 
-// TestFormatListGroupAllowlistMarkdown_WithData verifies the behavior of format list group allowlist markdown with data.
+// TestFormatListGroupAllowlistMarkdown_WithData verifies FormatListGroupAllowlistMarkdown when with data.
 func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{
 		Groups: []AllowlistGroupItem{
@@ -640,7 +644,7 @@ func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 // FormatAddGroupAllowlistMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatAddGroupAllowlistMarkdown verifies the behavior of format add group allowlist markdown.
+// TestFormatAddGroupAllowlistMarkdown verifies FormatAddGroupAllowlistMarkdown.
 func TestFormatAddGroupAllowlistMarkdown(t *testing.T) {
 	r := FormatAddGroupAllowlistMarkdown(GroupAllowlistItemOutput{SourceProjectID: 42, TargetGroupID: 5})
 	if r == nil {
@@ -659,7 +663,7 @@ func TestFormatAddGroupAllowlistMarkdown(t *testing.T) {
 // FormatListInboundAllowlistMarkdown — with pipe character in name
 // ---------------------------------------------------------------------------.
 
-// TestFormatListInboundAllowlistMarkdown_EscapesPipes verifies the behavior of format list inbound allowlist markdown escapes pipes.
+// TestFormatListInboundAllowlistMarkdown_EscapesPipes verifies FormatListInboundAllowlistMarkdown when escapes pipes.
 func TestFormatListInboundAllowlistMarkdown_EscapesPipes(t *testing.T) {
 	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{
 		Projects: []AllowlistProjectItem{
@@ -679,7 +683,7 @@ func TestFormatListInboundAllowlistMarkdown_EscapesPipes(t *testing.T) {
 // FormatListGroupAllowlistMarkdown — with pipe character in name
 // ---------------------------------------------------------------------------.
 
-// TestFormatListGroupAllowlistMarkdown_EscapesPipes verifies the behavior of format list group allowlist markdown escapes pipes.
+// TestFormatListGroupAllowlistMarkdown_EscapesPipes verifies FormatListGroupAllowlistMarkdown when escapes pipes.
 func TestFormatListGroupAllowlistMarkdown_EscapesPipes(t *testing.T) {
 	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{
 		Groups: []AllowlistGroupItem{

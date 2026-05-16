@@ -22,7 +22,7 @@ type StatisticsOutput struct {
 	Opened int64 `json:"opened"`
 }
 
-// fromGL is an internal helper for the issuestatistics package.
+// fromGL implements the from gl helper used by issuestatistics.
 func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 	return StatisticsOutput{
 		All:    s.Statistics.Counts.All,

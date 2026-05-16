@@ -13,13 +13,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestGetServicePing verifies the behavior of get service ping.
+// TestGetServicePing verifies GetServicePing.
 func TestGetServicePing(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/usage_data/service_ping" {
@@ -53,7 +56,7 @@ func TestGetServicePing(t *testing.T) {
 	}
 }
 
-// TestGetServicePing_NilRecordedAt verifies that GetServicePing handles the nil recorded at scenario correctly.
+// TestGetServicePing_NilRecordedAt verifies GetServicePing when nil recorded at.
 func TestGetServicePing_NilRecordedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"license": {}, "counts": {}}`)
@@ -68,7 +71,7 @@ func TestGetServicePing_NilRecordedAt(t *testing.T) {
 	}
 }
 
-// TestGetServicePing_Error verifies that GetServicePing handles the error scenario correctly.
+// TestGetServicePing_Error verifies GetServicePing when error.
 func TestGetServicePing_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -80,7 +83,7 @@ func TestGetServicePing_Error(t *testing.T) {
 	}
 }
 
-// TestGetNonSQLMetrics verifies the behavior of get non s q l metrics.
+// TestGetNonSQLMetrics verifies GetNonSQLMetrics.
 func TestGetNonSQLMetrics(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/usage_data/non_sql_metrics" {
@@ -135,7 +138,7 @@ func TestGetNonSQLMetrics(t *testing.T) {
 	}
 }
 
-// TestGetNonSQLMetrics_Error verifies that GetNonSQLMetrics handles the error scenario correctly.
+// TestGetNonSQLMetrics_Error verifies GetNonSQLMetrics when error.
 func TestGetNonSQLMetrics_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -147,7 +150,7 @@ func TestGetNonSQLMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestGetQueries verifies the behavior of get queries.
+// TestGetQueries verifies GetQueries.
 func TestGetQueries(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/usage_data/queries" {
@@ -191,7 +194,7 @@ func TestGetQueries(t *testing.T) {
 	}
 }
 
-// TestGetMetricDefinitions verifies the behavior of get metric definitions.
+// TestGetMetricDefinitions verifies GetMetricDefinitions.
 func TestGetMetricDefinitions(t *testing.T) {
 	yamlContent := "---\nmetrics:\n  - name: users_count\n    description: Total users\n"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +215,7 @@ func TestGetMetricDefinitions(t *testing.T) {
 	}
 }
 
-// TestGetMetricDefinitions_Error verifies that GetMetricDefinitions handles the error scenario correctly.
+// TestGetMetricDefinitions_Error verifies GetMetricDefinitions when error.
 func TestGetMetricDefinitions_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -224,7 +227,7 @@ func TestGetMetricDefinitions_Error(t *testing.T) {
 	}
 }
 
-// TestTrackEvent verifies the behavior of track event.
+// TestTrackEvent verifies TrackEvent.
 func TestTrackEvent(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/usage_data/track_event" {
@@ -253,7 +256,7 @@ func TestTrackEvent(t *testing.T) {
 	}
 }
 
-// TestTrackEvent_Error verifies that TrackEvent handles the error scenario correctly.
+// TestTrackEvent_Error verifies TrackEvent when error.
 func TestTrackEvent_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -265,7 +268,7 @@ func TestTrackEvent_Error(t *testing.T) {
 	}
 }
 
-// TestTrackEvents verifies the behavior of track events.
+// TestTrackEvents verifies TrackEvents.
 func TestTrackEvents(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/usage_data/track_events" {
@@ -296,7 +299,7 @@ func TestTrackEvents(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatServicePingMarkdown verifies the behavior of format service ping markdown.
+// TestFormatServicePingMarkdown verifies FormatServicePingMarkdown.
 func TestFormatServicePingMarkdown(t *testing.T) {
 	out := GetServicePingOutput{
 		RecordedAt: "2026-01-15T10:00:00Z",
@@ -318,7 +321,7 @@ func TestFormatServicePingMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatNonSQLMetricsMarkdown verifies the behavior of format non s q l metrics markdown.
+// TestFormatNonSQLMetricsMarkdown verifies FormatNonSQLMetricsMarkdown.
 func TestFormatNonSQLMetricsMarkdown(t *testing.T) {
 	out := NonSQLMetricsOutput{
 		UUID:     "abc-123",
@@ -335,7 +338,7 @@ func TestFormatNonSQLMetricsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMetricDefinitionsMarkdown verifies the behavior of format metric definitions markdown.
+// TestFormatMetricDefinitionsMarkdown verifies FormatMetricDefinitionsMarkdown.
 func TestFormatMetricDefinitionsMarkdown(t *testing.T) {
 	out := MetricDefinitionsOutput{YAML: "key: value"}
 	md := FormatMetricDefinitionsMarkdown(out)
@@ -347,7 +350,7 @@ func TestFormatMetricDefinitionsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMetricDefinitionsMarkdown_Truncation verifies that FormatMetricDefinitionsMarkdown handles the truncation scenario correctly.
+// TestFormatMetricDefinitionsMarkdown_Truncation verifies FormatMetricDefinitionsMarkdown when truncation.
 func TestFormatMetricDefinitionsMarkdown_Truncation(t *testing.T) {
 	longYAML := strings.Repeat("a", 15000)
 	out := MetricDefinitionsOutput{YAML: longYAML}
@@ -357,7 +360,7 @@ func TestFormatMetricDefinitionsMarkdown_Truncation(t *testing.T) {
 	}
 }
 
-// TestFormatTrackEventMarkdown verifies the behavior of format track event markdown.
+// TestFormatTrackEventMarkdown verifies FormatTrackEventMarkdown.
 func TestFormatTrackEventMarkdown(t *testing.T) {
 	md := FormatTrackEventMarkdown(TrackEventOutput{Status: "accepted"})
 	if !strings.Contains(md, "accepted") {
@@ -365,7 +368,7 @@ func TestFormatTrackEventMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatTrackEventsMarkdown verifies the behavior of format track events markdown.
+// TestFormatTrackEventsMarkdown verifies FormatTrackEventsMarkdown.
 func TestFormatTrackEventsMarkdown(t *testing.T) {
 	md := FormatTrackEventsMarkdown(TrackEventsOutput{Status: "accepted", Count: 3})
 	if !strings.Contains(md, "accepted") {
@@ -382,7 +385,7 @@ func TestFormatTrackEventsMarkdown(t *testing.T) {
 // GetQueries — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetQueries_APIError verifies the behavior of get queries a p i error.
+// TestGetQueries_APIError verifies GetQueries when API error.
 func TestGetQueries_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -397,7 +400,7 @@ func TestGetQueries_APIError(t *testing.T) {
 // GetQueries — nil recorded_at
 // ---------------------------------------------------------------------------.
 
-// TestGetQueries_NilRecordedAt verifies the behavior of get queries nil recorded at.
+// TestGetQueries_NilRecordedAt verifies GetQueries when nil recorded at.
 func TestGetQueries_NilRecordedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"uuid":"abc","hostname":"h","version":"1","installation_type":"omnibus","active_user_count":"","edition":"CE","license_md5":"","license_sha256":"","license_id":"","historical_max_users":0,"licensee":{},"license_user_count":0,"license_starts_at":"","license_expires_at":"","license_plan":"","license_add_ons":{},"license_trial":"","license_subscription_id":"","license":{},"settings":{},"counts":{}}`)
@@ -415,7 +418,7 @@ func TestGetQueries_NilRecordedAt(t *testing.T) {
 // TrackEvents — API error
 // ---------------------------------------------------------------------------.
 
-// TestTrackEvents_APIError verifies the behavior of track events a p i error.
+// TestTrackEvents_APIError verifies TrackEvents when API error.
 func TestTrackEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -432,7 +435,7 @@ func TestTrackEvents_APIError(t *testing.T) {
 // Formatters — empty service ping
 // ---------------------------------------------------------------------------.
 
-// TestFormatServicePingMarkdown_Empty verifies the behavior of format service ping markdown empty.
+// TestFormatServicePingMarkdown_Empty verifies FormatServicePingMarkdown when empty.
 func TestFormatServicePingMarkdown_Empty(t *testing.T) {
 	md := FormatServicePingMarkdown(GetServicePingOutput{})
 	if !strings.Contains(md, "Service Ping Data") {
@@ -444,7 +447,7 @@ func TestFormatServicePingMarkdown_Empty(t *testing.T) {
 // Formatters — queries with many counts
 // ---------------------------------------------------------------------------.
 
-// TestFormatQueriesMarkdown verifies the behavior of format queries markdown.
+// TestFormatQueriesMarkdown verifies FormatQueriesMarkdown.
 func TestFormatQueriesMarkdown(t *testing.T) {
 	counts := make(map[string]string)
 	for i := range 25 {
@@ -464,7 +467,7 @@ func TestFormatQueriesMarkdown(t *testing.T) {
 // Formatters — service ping with many counts
 // ---------------------------------------------------------------------------.
 
-// TestFormatServicePingMarkdown_ManyCounts verifies the behavior of format service ping markdown many counts.
+// TestFormatServicePingMarkdown_ManyCounts verifies FormatServicePingMarkdown when many counts.
 func TestFormatServicePingMarkdown_ManyCounts(t *testing.T) {
 	counts := make(map[string]int64)
 	for i := range 25 {
@@ -590,6 +593,7 @@ func TestGetMetricDefinitions_ReadError(t *testing.T) {
 	}
 }
 
+// newUsageDataRouteSpecs constructs usage data route specs test fixtures.
 func newUsageDataRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -625,6 +629,7 @@ func newUsageDataRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return usageDataSpecsByTool(ActionSpecs(client))
 }
 
+// usageDataSpecsByTool supports usage data specs by tool assertions in usagedata tests.
 func usageDataSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

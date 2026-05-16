@@ -16,25 +16,33 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// errSnippetIDRequired identifies the err snippet ID required constant used by this package.
 const errSnippetIDRequired = "snippet_id is required"
 
+// errProjectIDRequired identifies the err project ID required constant used by this package.
 const errProjectIDRequired = "project_id is required"
 
 const (
-	fmtExpProjIDReqErr    = "expected project_id required error, got %v"
+	// fmtExpProjIDReqErr identifies the fmt exp proj ID req err constant used by this package.
+	fmtExpProjIDReqErr = "expected project_id required error, got %v"
+	// fmtExpSnippetIDReqErr identifies the fmt exp snippet ID req err constant used by this package.
 	fmtExpSnippetIDReqErr = "expected snippet_id required error, got %v"
-	pathSnippet42         = "/api/v4/projects/10/snippets/42"
-	msgMethodNotAllowed   = "method not allowed"
-	fmtExpID42            = "expected ID 42, got %d"
+	// pathSnippet42 identifies the path snippet 42 constant used by this package.
+	pathSnippet42 = "/api/v4/projects/10/snippets/42"
+	// msgMethodNotAllowed identifies the msg method not allowed constant used by this package.
+	msgMethodNotAllowed = "method not allowed"
+	// fmtExpID42 identifies the fmt exp ID 42 constant used by this package.
+	fmtExpID42 = "expected ID 42, got %d"
 )
 
 // ---------------------------------------------------------------------------
 // ProjectList
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_Success verifies the behavior of project list success.
+// TestProjectList_Success verifies ProjectList when success.
 func TestProjectList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/snippets", func(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +60,7 @@ func TestProjectList_Success(t *testing.T) {
 	}
 }
 
-// TestProjectList_MissingProjectID verifies the behavior of project list missing project i d.
+// TestProjectList_MissingProjectID verifies ProjectList when missing project ID.
 func TestProjectList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ProjectList(context.Background(), client, ProjectListInput{})
@@ -65,7 +73,7 @@ func TestProjectList_MissingProjectID(t *testing.T) {
 // ProjectGet
 // ---------------------------------------------------------------------------.
 
-// TestProjectGet_Success verifies the behavior of project get success.
+// TestProjectGet_Success verifies ProjectGet when success.
 func TestProjectGet_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathSnippet42, func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +92,7 @@ func TestProjectGet_Success(t *testing.T) {
 	}
 }
 
-// TestProjectGet_MissingParams verifies the behavior of project get missing params.
+// TestProjectGet_MissingParams verifies ProjectGet when missing params.
 func TestProjectGet_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ProjectGet(context.Background(), client, ProjectGetInput{})
@@ -102,7 +110,7 @@ func TestProjectGet_MissingParams(t *testing.T) {
 // ProjectContent
 // ---------------------------------------------------------------------------.
 
-// TestProjectContent_Success verifies the behavior of project content success.
+// TestProjectContent_Success verifies ProjectContent when success.
 func TestProjectContent_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/snippets/42/raw", func(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +130,7 @@ func TestProjectContent_Success(t *testing.T) {
 	}
 }
 
-// TestProjectContent_MissingParams verifies the behavior of project content missing params.
+// TestProjectContent_MissingParams verifies ProjectContent when missing params.
 func TestProjectContent_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ProjectContent(context.Background(), client, ProjectContentInput{})
@@ -140,7 +148,7 @@ func TestProjectContent_MissingParams(t *testing.T) {
 // ProjectCreate
 // ---------------------------------------------------------------------------.
 
-// TestProjectCreate_Success verifies the behavior of project create success.
+// TestProjectCreate_Success verifies ProjectCreate when success.
 func TestProjectCreate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/snippets", func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +174,7 @@ func TestProjectCreate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_MissingParams verifies the behavior of project create missing params.
+// TestProjectCreate_MissingParams verifies ProjectCreate when missing params.
 func TestProjectCreate_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{})
@@ -212,7 +220,7 @@ func TestProjectCreate_MissingFileName(t *testing.T) {
 // ProjectUpdate
 // ---------------------------------------------------------------------------.
 
-// TestProjectUpdate_Success verifies the behavior of project update success.
+// TestProjectUpdate_Success verifies ProjectUpdate when success.
 func TestProjectUpdate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathSnippet42, func(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +245,7 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectUpdate_MissingParams verifies the behavior of project update missing params.
+// TestProjectUpdate_MissingParams verifies ProjectUpdate when missing params.
 func TestProjectUpdate_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{})
@@ -255,7 +263,7 @@ func TestProjectUpdate_MissingParams(t *testing.T) {
 // ProjectDelete
 // ---------------------------------------------------------------------------.
 
-// TestProjectDelete_Success verifies the behavior of project delete success.
+// TestProjectDelete_Success verifies ProjectDelete when success.
 func TestProjectDelete_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathSnippet42, func(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +283,7 @@ func TestProjectDelete_Success(t *testing.T) {
 	}
 }
 
-// TestProjectDelete_MissingParams verifies the behavior of project delete missing params.
+// TestProjectDelete_MissingParams verifies ProjectDelete when missing params.
 func TestProjectDelete_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := ProjectDelete(context.Background(), client, ProjectDeleteInput{})
@@ -291,17 +299,26 @@ func TestProjectDelete_MissingParams(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// covSnippetJSON identifies the cov snippet JSON constant used by this package.
 const covSnippetJSON = `{"id":1,"title":"Hello","file_name":"hello.rb","description":"test","visibility":"private","author":{"id":10,"username":"user","name":"User","email":"u@e.com","state":"active"},"web_url":"https://x","raw_url":"https://r","files":[{"path":"hello.rb","raw_url":"https://f"}],"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+
+// covListSnippetJSON identifies the cov list snippet JSON constant used by this package.
 const covListSnippetJSON = `[` + covSnippetJSON + `]`
 
 const (
-	errExpected      = "expected error"
+	// errExpected identifies the err expected constant used by this package.
+	errExpected = "expected error"
+	// fmtUnexpectedErr identifies the fmt unexpected err constant used by this package.
 	fmtUnexpectedErr = "unexpected error: %v"
-	fmtIDEquals      = "ID = %d"
-	testWebURL       = "https://x"
-	labelProjectID   = "Project ID"
+	// fmtIDEquals identifies the fmt ID equals constant used by this package.
+	fmtIDEquals = "ID = %d"
+	// testWebURL identifies the test web URL constant used by this package.
+	testWebURL = "https://x"
+	// labelProjectID identifies the label project ID constant used by this package.
+	labelProjectID = "Project ID"
 )
 
+// snippetFixtureNoFiles stores the package-level snippet fixture no files state.
 var snippetFixtureNoFiles = gl.Snippet{
 	ID:         1,
 	Title:      "Test",
@@ -313,7 +330,7 @@ var snippetFixtureNoFiles = gl.Snippet{
 // API error paths
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -324,7 +341,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestListAll_APIError verifies the behavior of list all a p i error.
+// TestListAll_APIError verifies ListAll when API error.
 func TestListAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -335,7 +352,7 @@ func TestListAll_APIError(t *testing.T) {
 	}
 }
 
-// TestListAll_WithDateFilters verifies the behavior of list all with date filters.
+// TestListAll_WithDateFilters verifies ListAll when with date filters.
 func TestListAll_WithDateFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covListSnippetJSON)
@@ -352,7 +369,7 @@ func TestListAll_WithDateFilters(t *testing.T) {
 	}
 }
 
-// TestListAll_InvalidDateFilters verifies the behavior of list all invalid date filters.
+// TestListAll_InvalidDateFilters verifies ListAll when invalid date filters.
 func TestListAll_InvalidDateFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -366,7 +383,7 @@ func TestListAll_InvalidDateFilters(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -377,7 +394,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestContent_APIError verifies the behavior of content a p i error.
+// TestContent_APIError verifies Content when API error.
 func TestContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -388,7 +405,7 @@ func TestContent_APIError(t *testing.T) {
 	}
 }
 
-// TestFileContent_APIError verifies the behavior of file content a p i error.
+// TestFileContent_APIError verifies FileContent when API error.
 func TestFileContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -399,7 +416,7 @@ func TestFileContent_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -410,7 +427,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -421,7 +438,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -432,7 +449,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestExplore_APIError verifies the behavior of explore a p i error.
+// TestExplore_APIError verifies Explore when API error.
 func TestExplore_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -447,7 +464,7 @@ func TestExplore_APIError(t *testing.T) {
 // Create/Update with full options
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithAllOptions verifies the behavior of create with all options.
+// TestCreate_WithAllOptions verifies Create when with all options.
 func TestCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +496,7 @@ func TestCreate_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestUpdate_WithAllOptions verifies the behavior of update with all options.
+// TestUpdate_WithAllOptions verifies Update when with all options.
 func TestUpdate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -516,7 +533,7 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 // Project snippet errors
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_APIError verifies the behavior of project list a p i error.
+// TestProjectList_APIError verifies ProjectList when API error.
 func TestProjectList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -527,7 +544,7 @@ func TestProjectList_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectGet_APIError verifies the behavior of project get a p i error.
+// TestProjectGet_APIError verifies ProjectGet when API error.
 func TestProjectGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -538,7 +555,7 @@ func TestProjectGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectContent_APIError verifies the behavior of project content a p i error.
+// TestProjectContent_APIError verifies ProjectContent when API error.
 func TestProjectContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -549,7 +566,7 @@ func TestProjectContent_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_AllOptions verifies the behavior of project create all options.
+// TestProjectCreate_AllOptions verifies ProjectCreate when all options.
 func TestProjectCreate_AllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, covSnippetJSON)
@@ -571,7 +588,7 @@ func TestProjectCreate_AllOptions(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_APIError verifies the behavior of project create a p i error.
+// TestProjectCreate_APIError verifies ProjectCreate when API error.
 func TestProjectCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -582,7 +599,7 @@ func TestProjectCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectUpdate_AllOptions verifies the behavior of project update all options.
+// TestProjectUpdate_AllOptions verifies ProjectUpdate when all options.
 func TestProjectUpdate_AllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSnippetJSON)
@@ -605,7 +622,7 @@ func TestProjectUpdate_AllOptions(t *testing.T) {
 	}
 }
 
-// TestProjectUpdate_APIError verifies the behavior of project update a p i error.
+// TestProjectUpdate_APIError verifies ProjectUpdate when API error.
 func TestProjectUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -616,7 +633,7 @@ func TestProjectUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectDelete_APIError verifies the behavior of project delete a p i error.
+// TestProjectDelete_APIError verifies ProjectDelete when API error.
 func TestProjectDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -631,7 +648,7 @@ func TestProjectDelete_APIError(t *testing.T) {
 // Formatter coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies the behavior of format markdown all fields.
+// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	s := FormatMarkdown(Output{
 		ID: 1, Title: "T", FileName: "f.rb", Description: "desc",
@@ -653,7 +670,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies the behavior of format markdown minimal.
+// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	s := FormatMarkdown(Output{ID: 1, Title: "T", Visibility: "private", Author: AuthorOutput{Name: "U", Username: "u"}})
 	if strings.Contains(s, "File Name") {
@@ -667,7 +684,7 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	s := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(s, "No snippets found") {
@@ -679,7 +696,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // extractProjectPath
 // ---------------------------------------------------------------------------.
 
-// TestExtractProjectPath validates extract project path across multiple scenarios using table-driven subtests.
+// TestExtractProjectPath covers ExtractProjectPath with table-driven subtests.
 func TestExtractProjectPath(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -708,7 +725,7 @@ func TestExtractProjectPath(t *testing.T) {
 // FormatMarkdown with project path
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_WithProjectPath verifies the behavior of format markdown with project path.
+// TestFormatMarkdown_WithProjectPath verifies FormatMarkdown when with project path.
 func TestFormatMarkdown_WithProjectPath(t *testing.T) {
 	s := FormatMarkdown(Output{
 		ID: 5, Title: "Project Snippet", Visibility: "internal",
@@ -724,7 +741,7 @@ func TestFormatMarkdown_WithProjectPath(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_FallbackProjectID verifies the behavior of format markdown fallback project i d.
+// TestFormatMarkdown_FallbackProjectID verifies FormatMarkdown when fallback project ID.
 func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
 	s := FormatMarkdown(Output{
 		ID: 5, Title: "Snippet", Visibility: "private",
@@ -740,7 +757,7 @@ func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
 // FormatListMarkdown with project column
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithProjectColumn verifies the behavior of format list markdown with project column.
+// TestFormatListMarkdown_WithProjectColumn verifies FormatListMarkdown when with project column.
 func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 	out := ListOutput{
 		Snippets: []Output{
@@ -770,7 +787,7 @@ func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NoProjectColumn verifies the behavior of format list markdown no project column.
+// TestFormatListMarkdown_NoProjectColumn verifies FormatListMarkdown when no project column.
 func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 	out := ListOutput{
 		Snippets: []Output{
@@ -787,7 +804,7 @@ func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 // convertSnippet with nil files
 // ---------------------------------------------------------------------------.
 
-// TestConvertSnippet_NilFiles verifies the behavior of convert snippet nil files.
+// TestConvertSnippet_NilFiles verifies ConvertSnippet when nil files.
 func TestConvertSnippet_NilFiles(t *testing.T) {
 	s := convertSnippet(&snippetFixtureNoFiles)
 	if len(s.Files) != 0 {

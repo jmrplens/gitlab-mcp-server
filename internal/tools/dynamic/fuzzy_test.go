@@ -234,12 +234,14 @@ func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
 	}
 }
 
+// TestFuzzyScoreEntryWithExplanation_EmptyTerms verifies FuzzyScoreEntryWithExplanation when empty terms.
 func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
 	if score, explanation := fuzzyScoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
 		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
 	}
 }
 
+// TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore verifies FuzzyScoreEntryWithExplanation matches non explanation score.
 func TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore(t *testing.T) {
 	entry := actionEntry{
 		ID:           "merge_request.list",

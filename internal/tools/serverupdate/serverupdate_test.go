@@ -195,7 +195,7 @@ func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && stringContains(s, substr)
 }
 
-// stringContains is an internal helper for the serverupdate package.
+// stringContains supports string contains assertions in serverupdate tests.
 func stringContains(s, substr string) bool {
 	for i := 0; i+len(substr) <= len(s); i++ {
 		if s[i:i+len(substr)] == substr {
@@ -478,6 +478,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// serverUpdateSpecsByTool supports server update specs by tool assertions in serverupdate tests.
 func serverUpdateSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

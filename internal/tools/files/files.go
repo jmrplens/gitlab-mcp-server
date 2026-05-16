@@ -262,6 +262,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return enrichFileInfoOutput(ctx, client, string(input.ProjectID), info.FilePath, info.Branch), nil
 }
 
+// enrichFileInfoOutput implements the enrich file info output helper used by files.
 func enrichFileInfoOutput(ctx context.Context, client *gitlabclient.Client, projectID, filePath, branch string) FileInfoOutput {
 	output := FileInfoOutput{FilePath: filePath, Branch: branch}
 	if client == nil || projectID == "" || filePath == "" || branch == "" {
@@ -410,7 +411,7 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	return BlameOutput{FilePath: input.FilePath, Ranges: out}, nil
 }
 
-// minLen is an internal helper for the files package.
+// minLen implements the min len helper used by files.
 func minLen(a, b int) int {
 	if a < b {
 		return a

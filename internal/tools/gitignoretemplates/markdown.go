@@ -16,7 +16,7 @@ func FormatListMarkdown(out ListOutput) string {
 		sb.WriteString("No templates found.\n")
 		return sb.String()
 	}
-	sb.WriteString("| Key | Name |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Key", "Name"))
 	for _, t := range out.Templates {
 		fmt.Fprintf(&sb, "| %s | %s |\n",
 			toolutil.EscapeMdTableCell(t.Key), toolutil.EscapeMdTableCell(t.Name))

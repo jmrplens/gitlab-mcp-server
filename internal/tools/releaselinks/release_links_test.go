@@ -477,17 +477,20 @@ func TestReleaseLinkCreateBatch_CancelledContext(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // Create — API error, missing project_id, canceled context, no link type
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -500,7 +503,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingProjectID verifies the behavior of create missing project i d.
+// TestCreate_MissingProjectID verifies Create when missing project ID.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Create(context.Background(), client, CreateInput{
@@ -511,7 +514,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -523,7 +526,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_WithoutLinkType verifies the behavior of create without link type.
+// TestCreate_WithoutLinkType verifies Create when without link type.
 func TestCreate_WithoutLinkType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/releases/v1.0.0/assets/links" {
@@ -547,7 +550,7 @@ func TestCreate_WithoutLinkType(t *testing.T) {
 // Delete — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -560,7 +563,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies the behavior of delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Delete(context.Background(), client, DeleteInput{
@@ -571,7 +574,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -587,7 +590,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // Get — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -600,7 +603,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{
@@ -611,7 +614,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -627,7 +630,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Update — API error, missing project_id, canceled context, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -640,7 +643,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{
@@ -651,7 +654,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -663,7 +666,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/releases/v1.0.0/assets/links/10" {
@@ -700,7 +703,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // List — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -711,7 +714,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := List(context.Background(), client, ListInput{TagName: "v1.0.0"})
@@ -720,7 +723,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -730,7 +733,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/releases/v1.0.0/assets/links" {
@@ -752,7 +755,7 @@ func TestList_EmptyResult(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithData verifies the behavior of format output markdown with data.
+// TestFormatOutputMarkdown_WithData verifies FormatOutputMarkdown when with data.
 func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:             10,
@@ -776,7 +779,7 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if !strings.Contains(md, "## Release Link:") {
@@ -787,7 +790,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ExternalFalse verifies the behavior of format output markdown external false.
+// TestFormatOutputMarkdown_ExternalFalse verifies FormatOutputMarkdown when external false.
 func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       5,
@@ -805,7 +808,7 @@ func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithLinks verifies the behavior of format list markdown with links.
+// TestFormatListMarkdown_WithLinks verifies FormatListMarkdown when with links.
 func TestFormatListMarkdown_WithLinks(t *testing.T) {
 	out := ListOutput{
 		Links: []Output{
@@ -832,7 +835,7 @@ func TestFormatListMarkdown_WithLinks(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No release links found") {
@@ -843,7 +846,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SingleLink verifies the behavior of format list markdown single link.
+// TestFormatListMarkdown_SingleLink verifies FormatListMarkdown when single link.
 func TestFormatListMarkdown_SingleLink(t *testing.T) {
 	out := ListOutput{
 		Links: []Output{
@@ -941,7 +944,7 @@ func TestFormatBatchMarkdown_Empty(t *testing.T) {
 // ToOutput
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllFields verifies the behavior of to output all fields.
+// TestToOutput_AllFields verifies ToOutput when all fields.
 func TestToOutput_AllFields(t *testing.T) {
 	rl := mockReleaseLink(20, "Pkg", "https://example.com/pkg", "package", true, "https://direct.example.com")
 	out := ToOutput(&rl)
@@ -965,7 +968,7 @@ func TestToOutput_AllFields(t *testing.T) {
 	}
 }
 
-// TestToOutput_ZeroValue verifies the behavior of to output zero value.
+// TestToOutput_ZeroValue verifies ToOutput when zero value.
 func TestToOutput_ZeroValue(t *testing.T) {
 	rl := mockReleaseLink(0, "", "", "", false, "")
 	out := ToOutput(&rl)

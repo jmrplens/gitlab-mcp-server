@@ -104,7 +104,7 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// convertPlanLimit is an internal helper for the planlimits package.
+// convertPlanLimit implements the convert plan limit helper used by planlimits.
 func convertPlanLimit(l *gl.PlanLimit) PlanLimitItem {
 	return PlanLimitItem{
 		ConanMaxFileSize:           l.ConanMaxFileSize,

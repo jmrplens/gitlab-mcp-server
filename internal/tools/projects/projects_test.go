@@ -721,14 +721,14 @@ func TestProjectCreate_EnrichedFeatureOpts(t *testing.T) {
 	}
 }
 
-// assertCreateFeatureBody is an internal helper for the projects package.
+// assertCreateFeatureBody checks create feature body invariants for tests.
 func assertCreateFeatureBody(t *testing.T, body map[string]any) {
 	t.Helper()
 	assertCreateFeatureBodyCI(t, body)
 	assertCreateFeatureBodyAccess(t, body)
 }
 
-// assertCreateFeatureBodyCI is an internal helper for the projects package.
+// assertCreateFeatureBodyCI checks create feature body CI invariants for tests.
 func assertCreateFeatureBodyCI(t *testing.T, body map[string]any) {
 	t.Helper()
 	if v, ok := body["import_url"].(string); !ok || v != testImportURL {
@@ -745,7 +745,7 @@ func assertCreateFeatureBodyCI(t *testing.T, body map[string]any) {
 	}
 }
 
-// assertCreateFeatureBodyAccess is an internal helper for the projects package.
+// assertCreateFeatureBodyAccess checks create feature body access invariants for tests.
 func assertCreateFeatureBodyAccess(t *testing.T, body map[string]any) {
 	t.Helper()
 	if v, ok := body["packages_enabled"].(bool); !ok || !v {
@@ -901,7 +901,7 @@ func TestProjectGet_MergeRequestTitleRegex(t *testing.T) {
 // Fork
 // ---------------------------------------------------------------------------.
 
-// TestProjectFork_Success verifies the behavior of project fork success.
+// TestProjectFork_Success verifies ProjectFork when success.
 func TestProjectFork_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Fork {
@@ -923,7 +923,7 @@ func TestProjectFork_Success(t *testing.T) {
 	}
 }
 
-// TestProjectFork_EmptyProjectID verifies the behavior of project fork empty project i d.
+// TestProjectFork_EmptyProjectID verifies ProjectFork when empty project ID.
 func TestProjectFork_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -938,7 +938,7 @@ func TestProjectFork_EmptyProjectID(t *testing.T) {
 // Star / Unstar
 // ---------------------------------------------------------------------------.
 
-// TestProjectStar_Success verifies the behavior of project star success.
+// TestProjectStar_Success verifies ProjectStar when success.
 func TestProjectStar_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/star" {
@@ -1006,7 +1006,7 @@ func TestProjectStar_EOFFallsBackToGet(t *testing.T) {
 	}
 }
 
-// TestProjectStar_EmptyProjectID verifies the behavior of project star empty project i d.
+// TestProjectStar_EmptyProjectID verifies ProjectStar when empty project ID.
 func TestProjectStar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1017,7 +1017,7 @@ func TestProjectStar_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectUnstar_Success verifies the behavior of project unstar success.
+// TestProjectUnstar_Success verifies ProjectUnstar when success.
 func TestProjectUnstar_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/unstar" {
@@ -1036,7 +1036,7 @@ func TestProjectUnstar_Success(t *testing.T) {
 	}
 }
 
-// TestProjectUnstar_EmptyProjectID verifies the behavior of project unstar empty project i d.
+// TestProjectUnstar_EmptyProjectID verifies ProjectUnstar when empty project ID.
 func TestProjectUnstar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1051,7 +1051,7 @@ func TestProjectUnstar_EmptyProjectID(t *testing.T) {
 // Archive / Unarchive
 // ---------------------------------------------------------------------------.
 
-// TestProjectArchive_Success verifies the behavior of project archive success.
+// TestProjectArchive_Success verifies ProjectArchive when success.
 func TestProjectArchive_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/archive" {
@@ -1070,7 +1070,7 @@ func TestProjectArchive_Success(t *testing.T) {
 	}
 }
 
-// TestProjectArchive_EmptyProjectID verifies the behavior of project archive empty project i d.
+// TestProjectArchive_EmptyProjectID verifies ProjectArchive when empty project ID.
 func TestProjectArchive_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1081,7 +1081,7 @@ func TestProjectArchive_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectUnarchive_Success verifies the behavior of project unarchive success.
+// TestProjectUnarchive_Success verifies ProjectUnarchive when success.
 func TestProjectUnarchive_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/unarchive" {
@@ -1100,7 +1100,7 @@ func TestProjectUnarchive_Success(t *testing.T) {
 	}
 }
 
-// TestProjectUnarchive_EmptyProjectID verifies the behavior of project unarchive empty project i d.
+// TestProjectUnarchive_EmptyProjectID verifies ProjectUnarchive when empty project ID.
 func TestProjectUnarchive_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1115,7 +1115,7 @@ func TestProjectUnarchive_EmptyProjectID(t *testing.T) {
 // Transfer
 // ---------------------------------------------------------------------------.
 
-// TestProjectTransfer_Success verifies the behavior of project transfer success.
+// TestProjectTransfer_Success verifies ProjectTransfer when success.
 func TestProjectTransfer_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/transfer" {
@@ -1134,7 +1134,7 @@ func TestProjectTransfer_Success(t *testing.T) {
 	}
 }
 
-// TestProjectTransfer_EmptyProjectID verifies the behavior of project transfer empty project i d.
+// TestProjectTransfer_EmptyProjectID verifies ProjectTransfer when empty project ID.
 func TestProjectTransfer_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1145,7 +1145,7 @@ func TestProjectTransfer_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectTransfer_EmptyNamespace verifies the behavior of project transfer empty namespace.
+// TestProjectTransfer_EmptyNamespace verifies ProjectTransfer when empty namespace.
 func TestProjectTransfer_EmptyNamespace(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1160,7 +1160,7 @@ func TestProjectTransfer_EmptyNamespace(t *testing.T) {
 // ListForks
 // ---------------------------------------------------------------------------.
 
-// TestProjectListForks_Success verifies the behavior of project list forks success.
+// TestProjectListForks_Success verifies ProjectListForks when success.
 func TestProjectListForks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42Forks {
@@ -1186,7 +1186,7 @@ func TestProjectListForks_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListForks_EmptyProjectID verifies the behavior of project list forks empty project i d.
+// TestProjectListForks_EmptyProjectID verifies ProjectListForks when empty project ID.
 func TestProjectListForks_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1201,7 +1201,7 @@ func TestProjectListForks_EmptyProjectID(t *testing.T) {
 // GetLanguages
 // ---------------------------------------------------------------------------.
 
-// TestProjectGetLanguages_Success verifies the behavior of project get languages success.
+// TestProjectGetLanguages_Success verifies ProjectGetLanguages when success.
 func TestProjectGetLanguages_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/languages" {
@@ -1232,7 +1232,7 @@ func TestProjectGetLanguages_Success(t *testing.T) {
 	}
 }
 
-// TestProjectGetLanguages_EmptyProjectID verifies the behavior of project get languages empty project i d.
+// TestProjectGetLanguages_EmptyProjectID verifies ProjectGetLanguages when empty project ID.
 func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1247,9 +1247,10 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ListHooks
 // ---------------------------------------------------------------------------.
 
+// hookJSON stores the package-level hook JSON state.
 var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"enable_ssl_verification":true,"created_at":"2026-01-01T00:00:00Z"}`
 
-// TestProjectListHooks_Success verifies the behavior of project list hooks success.
+// TestProjectListHooks_Success verifies ProjectListHooks when success.
 func TestProjectListHooks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42Hooks {
@@ -1281,7 +1282,7 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListHooks_EmptyProjectID verifies the behavior of project list hooks empty project i d.
+// TestProjectListHooks_EmptyProjectID verifies ProjectListHooks when empty project ID.
 func TestProjectListHooks_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1296,7 +1297,7 @@ func TestProjectListHooks_EmptyProjectID(t *testing.T) {
 // GetHook
 // ---------------------------------------------------------------------------.
 
-// TestProjectGetHook_Success verifies the behavior of project get hook success.
+// TestProjectGetHook_Success verifies ProjectGetHook when success.
 func TestProjectGetHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42Hook1 {
@@ -1318,7 +1319,7 @@ func TestProjectGetHook_Success(t *testing.T) {
 	}
 }
 
-// TestProjectGetHook_EmptyProjectID verifies the behavior of project get hook empty project i d.
+// TestProjectGetHook_EmptyProjectID verifies ProjectGetHook when empty project ID.
 func TestProjectGetHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1329,7 +1330,7 @@ func TestProjectGetHook_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectGetHook_EmptyHookID verifies the behavior of project get hook empty hook i d.
+// TestProjectGetHook_EmptyHookID verifies ProjectGetHook when empty hook ID.
 func TestProjectGetHook_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1344,7 +1345,7 @@ func TestProjectGetHook_EmptyHookID(t *testing.T) {
 // AddHook
 // ---------------------------------------------------------------------------.
 
-// TestProjectAddHook_Success verifies the behavior of project add hook success.
+// TestProjectAddHook_Success verifies ProjectAddHook when success.
 func TestProjectAddHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Hooks {
@@ -1367,7 +1368,7 @@ func TestProjectAddHook_Success(t *testing.T) {
 	}
 }
 
-// TestProjectAddHook_EmptyProjectID verifies the behavior of project add hook empty project i d.
+// TestProjectAddHook_EmptyProjectID verifies ProjectAddHook when empty project ID.
 func TestProjectAddHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1378,7 +1379,7 @@ func TestProjectAddHook_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectAddHook_EmptyURL verifies the behavior of project add hook empty u r l.
+// TestProjectAddHook_EmptyURL verifies ProjectAddHook when empty URL.
 func TestProjectAddHook_EmptyURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1393,7 +1394,7 @@ func TestProjectAddHook_EmptyURL(t *testing.T) {
 // EditHook
 // ---------------------------------------------------------------------------.
 
-// TestProjectEditHook_Success verifies the behavior of project edit hook success.
+// TestProjectEditHook_Success verifies ProjectEditHook when success.
 func TestProjectEditHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42Hook1 {
@@ -1412,7 +1413,7 @@ func TestProjectEditHook_Success(t *testing.T) {
 	}
 }
 
-// TestProjectEditHook_EmptyProjectID verifies the behavior of project edit hook empty project i d.
+// TestProjectEditHook_EmptyProjectID verifies ProjectEditHook when empty project ID.
 func TestProjectEditHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1423,7 +1424,7 @@ func TestProjectEditHook_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectEditHook_EmptyHookID verifies the behavior of project edit hook empty hook i d.
+// TestProjectEditHook_EmptyHookID verifies ProjectEditHook when empty hook ID.
 func TestProjectEditHook_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1438,7 +1439,7 @@ func TestProjectEditHook_EmptyHookID(t *testing.T) {
 // DeleteHook
 // ---------------------------------------------------------------------------.
 
-// TestProjectDeleteHook_Success verifies the behavior of project delete hook success.
+// TestProjectDeleteHook_Success verifies ProjectDeleteHook when success.
 func TestProjectDeleteHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProject42Hook1 {
@@ -1454,7 +1455,7 @@ func TestProjectDeleteHook_Success(t *testing.T) {
 	}
 }
 
-// TestProjectDeleteHook_EmptyProjectID verifies the behavior of project delete hook empty project i d.
+// TestProjectDeleteHook_EmptyProjectID verifies ProjectDeleteHook when empty project ID.
 func TestProjectDeleteHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1465,7 +1466,7 @@ func TestProjectDeleteHook_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectDeleteHook_EmptyHookID verifies the behavior of project delete hook empty hook i d.
+// TestProjectDeleteHook_EmptyHookID verifies ProjectDeleteHook when empty hook ID.
 func TestProjectDeleteHook_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1480,7 +1481,7 @@ func TestProjectDeleteHook_EmptyHookID(t *testing.T) {
 // TriggerTestHook
 // ---------------------------------------------------------------------------.
 
-// TestProjectTriggerTestHook_Success verifies the behavior of project trigger test hook success.
+// TestProjectTriggerTestHook_Success verifies ProjectTriggerTestHook when success.
 func TestProjectTriggerTestHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/hooks/1/test/push_events" {
@@ -1499,7 +1500,7 @@ func TestProjectTriggerTestHook_Success(t *testing.T) {
 	}
 }
 
-// TestProjectTriggerTestHook_EmptyProjectID verifies the behavior of project trigger test hook empty project i d.
+// TestProjectTriggerTestHook_EmptyProjectID verifies ProjectTriggerTestHook when empty project ID.
 func TestProjectTriggerTestHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1510,7 +1511,7 @@ func TestProjectTriggerTestHook_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectTriggerTestHook_EmptyEvent verifies the behavior of project trigger test hook empty event.
+// TestProjectTriggerTestHook_EmptyEvent verifies ProjectTriggerTestHook when empty event.
 func TestProjectTriggerTestHook_EmptyEvent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1525,7 +1526,7 @@ func TestProjectTriggerTestHook_EmptyEvent(t *testing.T) {
 // ListUserProjects
 // ---------------------------------------------------------------------------.
 
-// TestProjectListUserProjects_Success verifies the behavior of project list user projects success.
+// TestProjectListUserProjects_Success verifies ProjectListUserProjects when success.
 func TestProjectListUserProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/jdoe/projects" {
@@ -1550,7 +1551,7 @@ func TestProjectListUserProjects_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListUserProjects_EmptyUserID verifies the behavior of project list user projects empty user i d.
+// TestProjectListUserProjects_EmptyUserID verifies ProjectListUserProjects when empty user ID.
 func TestProjectListUserProjects_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1565,7 +1566,7 @@ func TestProjectListUserProjects_EmptyUserID(t *testing.T) {
 // ListProjectUsers
 // ---------------------------------------------------------------------------.
 
-// TestProjectListProjectUsers_Success verifies the behavior of project list project users success.
+// TestProjectListProjectUsers_Success verifies ProjectListProjectUsers when success.
 func TestProjectListProjectUsers_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/users" {
@@ -1590,7 +1591,7 @@ func TestProjectListProjectUsers_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListProjectUsers_EmptyProjectID verifies the behavior of project list project users empty project i d.
+// TestProjectListProjectUsers_EmptyProjectID verifies ProjectListProjectUsers when empty project ID.
 func TestProjectListProjectUsers_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1605,7 +1606,7 @@ func TestProjectListProjectUsers_EmptyProjectID(t *testing.T) {
 // ListProjectGroups
 // ---------------------------------------------------------------------------.
 
-// TestProjectListProjectGroups_Success verifies the behavior of project list project groups success.
+// TestProjectListProjectGroups_Success verifies ProjectListProjectGroups when success.
 func TestProjectListProjectGroups_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/groups" {
@@ -1630,7 +1631,7 @@ func TestProjectListProjectGroups_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListProjectGroups_EmptyProjectID verifies the behavior of project list project groups empty project i d.
+// TestProjectListProjectGroups_EmptyProjectID verifies ProjectListProjectGroups when empty project ID.
 func TestProjectListProjectGroups_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1645,7 +1646,7 @@ func TestProjectListProjectGroups_EmptyProjectID(t *testing.T) {
 // ListProjectStarrers
 // ---------------------------------------------------------------------------.
 
-// TestProjectListStarrers_Success verifies the behavior of project list starrers success.
+// TestProjectListStarrers_Success verifies ProjectListStarrers when success.
 func TestProjectListStarrers_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/starrers" {
@@ -1673,7 +1674,7 @@ func TestProjectListStarrers_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListStarrers_EmptyProjectID verifies the behavior of project list starrers empty project i d.
+// TestProjectListStarrers_EmptyProjectID verifies ProjectListStarrers when empty project ID.
 func TestProjectListStarrers_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1688,7 +1689,7 @@ func TestProjectListStarrers_EmptyProjectID(t *testing.T) {
 // ShareProjectWithGroup
 // ---------------------------------------------------------------------------.
 
-// TestProjectShare_WithGroupSuccess verifies the behavior of project share with group success.
+// TestProjectShare_WithGroupSuccess verifies ProjectShare when with group success.
 func TestProjectShare_WithGroupSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/share" {
@@ -1710,7 +1711,7 @@ func TestProjectShare_WithGroupSuccess(t *testing.T) {
 	}
 }
 
-// TestProjectShare_WithGroupEmptyProjectID verifies the behavior of project share with group empty project i d.
+// TestProjectShare_WithGroupEmptyProjectID verifies ProjectShare when with group empty project ID.
 func TestProjectShare_WithGroupEmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -1721,7 +1722,7 @@ func TestProjectShare_WithGroupEmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectShare_WithGroupEmptyGroupID verifies the behavior of project share with group empty group i d.
+// TestProjectShare_WithGroupEmptyGroupID verifies ProjectShare when with group empty group ID.
 func TestProjectShare_WithGroupEmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -1732,7 +1733,7 @@ func TestProjectShare_WithGroupEmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestProjectShare_WithGroupEmptyGroupAccess verifies the behavior of project share with group empty group access.
+// TestProjectShare_WithGroupEmptyGroupAccess verifies ProjectShare when with group empty group access.
 func TestProjectShare_WithGroupEmptyGroupAccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -1747,7 +1748,7 @@ func TestProjectShare_WithGroupEmptyGroupAccess(t *testing.T) {
 // DeleteSharedProjectFromGroup
 // ---------------------------------------------------------------------------.
 
-// TestProjectDeleteSharedGroup_Success verifies the behavior of project delete shared group success.
+// TestProjectDeleteSharedGroup_Success verifies ProjectDeleteSharedGroup when success.
 func TestProjectDeleteSharedGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/share/5" {
@@ -1762,7 +1763,7 @@ func TestProjectDeleteSharedGroup_Success(t *testing.T) {
 	}
 }
 
-// TestProjectDeleteSharedGroup_EmptyProjectID verifies the behavior of project delete shared group empty project i d.
+// TestProjectDeleteSharedGroup_EmptyProjectID verifies ProjectDeleteSharedGroup when empty project ID.
 func TestProjectDeleteSharedGroup_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1773,7 +1774,7 @@ func TestProjectDeleteSharedGroup_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectDeleteSharedGroup_EmptyGroupID verifies the behavior of project delete shared group empty group i d.
+// TestProjectDeleteSharedGroup_EmptyGroupID verifies ProjectDeleteSharedGroup when empty group ID.
 func TestProjectDeleteSharedGroup_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -1788,7 +1789,7 @@ func TestProjectDeleteSharedGroup_EmptyGroupID(t *testing.T) {
 // ListInvitedGroups
 // ---------------------------------------------------------------------------.
 
-// TestProjectListInvitedGroups_Success verifies the behavior of project list invited groups success.
+// TestProjectListInvitedGroups_Success verifies ProjectListInvitedGroups when success.
 func TestProjectListInvitedGroups_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/invited_groups" {
@@ -1813,7 +1814,7 @@ func TestProjectListInvitedGroups_Success(t *testing.T) {
 	}
 }
 
-// TestProjectListInvitedGroups_EmptyProjectID verifies the behavior of project list invited groups empty project i d.
+// TestProjectListInvitedGroups_EmptyProjectID verifies ProjectListInvitedGroups when empty project ID.
 func TestProjectListInvitedGroups_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1828,7 +1829,7 @@ func TestProjectListInvitedGroups_EmptyProjectID(t *testing.T) {
 // ListUserContributedProjects tests
 // ---------------------------------------------------------------------------.
 
-// TestListUserContributedProjects_Success verifies the behavior of list user contributed projects success.
+// TestListUserContributedProjects_Success verifies ListUserContributedProjects when success.
 func TestListUserContributedProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/john/contributed_projects" {
@@ -1852,7 +1853,7 @@ func TestListUserContributedProjects_Success(t *testing.T) {
 	}
 }
 
-// TestListUserContributedProjects_EmptyUserID verifies the behavior of list user contributed projects empty user i d.
+// TestListUserContributedProjects_EmptyUserID verifies ListUserContributedProjects when empty user ID.
 func TestListUserContributedProjects_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1867,7 +1868,7 @@ func TestListUserContributedProjects_EmptyUserID(t *testing.T) {
 // ListUserStarredProjects tests
 // ---------------------------------------------------------------------------.
 
-// TestListUserStarredProjects_Success verifies the behavior of list user starred projects success.
+// TestListUserStarredProjects_Success verifies ListUserStarredProjects when success.
 func TestListUserStarredProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/jane/starred_projects" {
@@ -1891,7 +1892,7 @@ func TestListUserStarredProjects_Success(t *testing.T) {
 	}
 }
 
-// TestListUserStarredProjects_EmptyUserID verifies the behavior of list user starred projects empty user i d.
+// TestListUserStarredProjects_EmptyUserID verifies ListUserStarredProjects when empty user ID.
 func TestListUserStarredProjects_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1907,8 +1908,10 @@ func TestListUserStarredProjects_EmptyUserID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
+	// pathPushRules42 identifies the path push rules 42 constant used by this package.
 	pathPushRules42 = "/api/v4/projects/42/push_rule"
-	pushRuleJSON    = `{
+	// pushRuleJSON identifies the push rule JSON constant used by this package.
+	pushRuleJSON = `{
 		"id": 1,
 		"project_id": 42,
 		"commit_message_regex": "^(feat|fix|docs):",
@@ -1928,7 +1931,7 @@ const (
 	}`
 )
 
-// TestGetPushRules_Success verifies the behavior of get push rules success.
+// TestGetPushRules_Success verifies GetPushRules when success.
 func TestGetPushRules_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPushRules42 {
@@ -1962,7 +1965,7 @@ func TestGetPushRules_Success(t *testing.T) {
 	}
 }
 
-// TestGetPushRules_EmptyProjectID verifies the behavior of get push rules empty project i d.
+// TestGetPushRules_EmptyProjectID verifies GetPushRules when empty project ID.
 func TestGetPushRules_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, pushRuleJSON)
@@ -1973,7 +1976,7 @@ func TestGetPushRules_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestAddPushRule_Success verifies the behavior of add push rule success.
+// TestAddPushRule_Success verifies AddPushRule when success.
 func TestAddPushRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathPushRules42 {
@@ -2001,7 +2004,7 @@ func TestAddPushRule_Success(t *testing.T) {
 	}
 }
 
-// TestAddPushRule_EmptyProjectID verifies the behavior of add push rule empty project i d.
+// TestAddPushRule_EmptyProjectID verifies AddPushRule when empty project ID.
 func TestAddPushRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, pushRuleJSON)
@@ -2012,7 +2015,7 @@ func TestAddPushRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestEditPushRule_Success verifies the behavior of edit push rule success.
+// TestEditPushRule_Success verifies EditPushRule when success.
 func TestEditPushRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathPushRules42 {
@@ -2035,7 +2038,7 @@ func TestEditPushRule_Success(t *testing.T) {
 	}
 }
 
-// TestEditPushRule_EmptyProjectID verifies the behavior of edit push rule empty project i d.
+// TestEditPushRule_EmptyProjectID verifies EditPushRule when empty project ID.
 func TestEditPushRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, pushRuleJSON)
@@ -2046,7 +2049,7 @@ func TestEditPushRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestDeletePushRule_Success verifies the behavior of delete push rule success.
+// TestDeletePushRule_Success verifies DeletePushRule when success.
 func TestDeletePushRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathPushRules42 {
@@ -2062,7 +2065,7 @@ func TestDeletePushRule_Success(t *testing.T) {
 	}
 }
 
-// TestDeletePushRule_EmptyProjectID verifies the behavior of delete push rule empty project i d.
+// TestDeletePushRule_EmptyProjectID verifies DeletePushRule when empty project ID.
 func TestDeletePushRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -2073,7 +2076,7 @@ func TestDeletePushRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetPushRules_NotFound verifies the behavior of get push rules not found.
+// TestGetPushRules_NotFound verifies GetPushRules when not found.
 func TestGetPushRules_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPushRules42 {
@@ -2093,7 +2096,7 @@ func TestGetPushRules_NotFound(t *testing.T) {
 // FormatPushRuleMarkdown test
 // ---------------------------------------------------------------------------.
 
-// TestFormatPushRuleMarkdown verifies the behavior of format push rule markdown.
+// TestFormatPushRuleMarkdown verifies FormatPushRuleMarkdown.
 func TestFormatPushRuleMarkdown(t *testing.T) {
 	out := PushRuleOutput{
 		ID:                 1,
@@ -2115,7 +2118,7 @@ func TestFormatPushRuleMarkdown(t *testing.T) {
 	}
 }
 
-// TestAccessLevelName validates access level name across multiple scenarios using table-driven subtests.
+// TestAccessLevelName covers AccessLevelName with table-driven subtests.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
 		level int
@@ -2138,7 +2141,7 @@ func TestAccessLevelName(t *testing.T) {
 	}
 }
 
-// TestFormatShareProjectMarkdown verifies the behavior of format share project markdown.
+// TestFormatShareProjectMarkdown verifies FormatShareProjectMarkdown.
 func TestFormatShareProjectMarkdown(t *testing.T) {
 	out := ShareProjectOutput{
 		Message:     "Project 42 shared with group 5 as Developer",
@@ -2161,7 +2164,7 @@ func TestFormatShareProjectMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatShareProjectMarkdown_Minimal verifies the behavior of format share project markdown minimal.
+// TestFormatShareProjectMarkdown_Minimal verifies FormatShareProjectMarkdown when minimal.
 func TestFormatShareProjectMarkdown_Minimal(t *testing.T) {
 	out := ShareProjectOutput{
 		Message: "Project shared",
@@ -2175,7 +2178,7 @@ func TestFormatShareProjectMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestShareProjectOutput_ContainsRoleName verifies the behavior of share project output contains role name.
+// TestShareProjectOutput_ContainsRoleName verifies ShareProjectOutput when contains role name.
 func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/share" {
@@ -2213,7 +2216,7 @@ func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 // Format function coverage tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID:                1,
@@ -2241,7 +2244,7 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies the behavior of format markdown minimal.
+// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	out := Output{ID: 1, Name: "minimal", Visibility: testPublic}
 	md := FormatMarkdown(out)
@@ -2250,7 +2253,7 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatDeleteMarkdown validates format delete markdown across multiple scenarios using table-driven subtests.
+// TestFormatDeleteMarkdown covers FormatDeleteMarkdown with table-driven subtests.
 func TestFormatDeleteMarkdown(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2280,7 +2283,7 @@ func TestFormatDeleteMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	t.Run("with_projects", func(t *testing.T) {
 		out := ListOutput{
@@ -2305,7 +2308,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListForksMarkdown verifies the behavior of format list forks markdown.
+// TestFormatListForksMarkdown verifies FormatListForksMarkdown.
 func TestFormatListForksMarkdown(t *testing.T) {
 	t.Run("with_forks", func(t *testing.T) {
 		out := ListForksOutput{
@@ -2325,7 +2328,7 @@ func TestFormatListForksMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatLanguagesMarkdown verifies the behavior of format languages markdown.
+// TestFormatLanguagesMarkdown verifies FormatLanguagesMarkdown.
 func TestFormatLanguagesMarkdown(t *testing.T) {
 	t.Run("with_languages", func(t *testing.T) {
 		out := LanguagesOutput{
@@ -2347,7 +2350,7 @@ func TestFormatLanguagesMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListHooksMarkdown verifies the behavior of format list hooks markdown.
+// TestFormatListHooksMarkdown verifies FormatListHooksMarkdown.
 func TestFormatListHooksMarkdown(t *testing.T) {
 	t.Run("with_hooks", func(t *testing.T) {
 		out := ListHooksOutput{
@@ -2369,7 +2372,7 @@ func TestFormatListHooksMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatHookMarkdown verifies the behavior of format hook markdown.
+// TestFormatHookMarkdown verifies FormatHookMarkdown.
 func TestFormatHookMarkdown(t *testing.T) {
 	out := HookOutput{
 		ID:                    1,
@@ -2389,7 +2392,7 @@ func TestFormatHookMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListProjectUsersMarkdown verifies the behavior of format list project users markdown.
+// TestFormatListProjectUsersMarkdown verifies FormatListProjectUsersMarkdown.
 func TestFormatListProjectUsersMarkdown(t *testing.T) {
 	t.Run("with_users", func(t *testing.T) {
 		out := ListProjectUsersOutput{
@@ -2411,7 +2414,7 @@ func TestFormatListProjectUsersMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListProjectGroupsMarkdown verifies the behavior of format list project groups markdown.
+// TestFormatListProjectGroupsMarkdown verifies FormatListProjectGroupsMarkdown.
 func TestFormatListProjectGroupsMarkdown(t *testing.T) {
 	t.Run("with_groups", func(t *testing.T) {
 		out := ListProjectGroupsOutput{
@@ -2433,7 +2436,7 @@ func TestFormatListProjectGroupsMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListStarrersMarkdown verifies the behavior of format list starrers markdown.
+// TestFormatListStarrersMarkdown verifies FormatListStarrersMarkdown.
 func TestFormatListStarrersMarkdown(t *testing.T) {
 	t.Run("with_starrers", func(t *testing.T) {
 		out := ListProjectStarrersOutput{
@@ -2459,7 +2462,7 @@ func TestFormatListStarrersMarkdown(t *testing.T) {
 // Option builder coverage — exercising branches
 // ---------------------------------------------------------------------------.
 
-// TestFork_WithAllOptions verifies the behavior of fork with all options.
+// TestFork_WithAllOptions verifies Fork when with all options.
 func TestFork_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2499,7 +2502,7 @@ func TestFork_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestListForks_WithFilters verifies the behavior of list forks with filters.
+// TestListForks_WithFilters verifies ListForks when with filters.
 func TestListForks_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProject42Forks {
@@ -2525,7 +2528,7 @@ func TestListForks_WithFilters(t *testing.T) {
 	}
 }
 
-// TestAddHook_WithAllEvents verifies the behavior of add hook with all events.
+// TestAddHook_WithAllEvents verifies AddHook when with all events.
 func TestAddHook_WithAllEvents(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2579,7 +2582,7 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	}
 }
 
-// TestEditHook_WithAllEvents verifies the behavior of edit hook with all events.
+// TestEditHook_WithAllEvents verifies EditHook when with all events.
 func TestEditHook_WithAllEvents(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2638,7 +2641,7 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 // FormatMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_FullFields verifies the behavior of format markdown full fields.
+// TestFormatMarkdown_FullFields verifies FormatMarkdown when full fields.
 func TestFormatMarkdown_FullFields(t *testing.T) {
 	p := Output{
 		ID:                42,
@@ -2682,7 +2685,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_MinimalFields verifies the behavior of format markdown minimal fields.
+// TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	p := Output{
 		ID:                1,
@@ -2708,7 +2711,7 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 // FormatDeleteMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatDeleteMarkdown_PermanentlyRemoved verifies the behavior of format delete markdown permanently removed.
+// TestFormatDeleteMarkdown_PermanentlyRemoved verifies FormatDeleteMarkdown when permanently removed.
 func TestFormatDeleteMarkdown_PermanentlyRemoved(t *testing.T) {
 	out := DeleteOutput{
 		Status:             testSuccess,
@@ -2723,7 +2726,7 @@ func TestFormatDeleteMarkdown_PermanentlyRemoved(t *testing.T) {
 	}
 }
 
-// TestFormatDeleteMarkdown_MarkedForDeletion verifies the behavior of format delete markdown marked for deletion.
+// TestFormatDeleteMarkdown_MarkedForDeletion verifies FormatDeleteMarkdown when marked for deletion.
 func TestFormatDeleteMarkdown_MarkedForDeletion(t *testing.T) {
 	out := DeleteOutput{
 		Status:              "scheduled",
@@ -2743,7 +2746,7 @@ func TestFormatDeleteMarkdown_MarkedForDeletion(t *testing.T) {
 // FormatListMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithProjects verifies the behavior of format list markdown with projects.
+// TestFormatListMarkdown_WithProjects verifies FormatListMarkdown projects for with.
 func TestFormatListMarkdown_WithProjects(t *testing.T) {
 	out := ListOutput{
 		Projects: []Output{
@@ -2760,7 +2763,7 @@ func TestFormatListMarkdown_WithProjects(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		Projects:   []Output{},
@@ -2792,7 +2795,7 @@ func TestFormatListMarkdown_ClickableProjectLinks(t *testing.T) {
 // FormatListForksMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListForksMarkdown_WithForks verifies the behavior of format list forks markdown with forks.
+// TestFormatListForksMarkdown_WithForks verifies FormatListForksMarkdown when with forks.
 func TestFormatListForksMarkdown_WithForks(t *testing.T) {
 	out := ListForksOutput{
 		Forks: []Output{
@@ -2808,7 +2811,7 @@ func TestFormatListForksMarkdown_WithForks(t *testing.T) {
 	}
 }
 
-// TestFormatListForksMarkdown_Empty verifies the behavior of format list forks markdown empty.
+// TestFormatListForksMarkdown_Empty verifies FormatListForksMarkdown when empty.
 func TestFormatListForksMarkdown_Empty(t *testing.T) {
 	out := ListForksOutput{
 		Forks:      []Output{},
@@ -2824,7 +2827,7 @@ func TestFormatListForksMarkdown_Empty(t *testing.T) {
 // FormatLanguagesMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatLanguagesMarkdown_WithLanguages verifies the behavior of format languages markdown with languages.
+// TestFormatLanguagesMarkdown_WithLanguages verifies FormatLanguagesMarkdown when with languages.
 func TestFormatLanguagesMarkdown_WithLanguages(t *testing.T) {
 	out := LanguagesOutput{
 		Languages: []LanguageEntry{
@@ -2840,7 +2843,7 @@ func TestFormatLanguagesMarkdown_WithLanguages(t *testing.T) {
 	}
 }
 
-// TestFormatLanguagesMarkdown_Empty verifies the behavior of format languages markdown empty.
+// TestFormatLanguagesMarkdown_Empty verifies FormatLanguagesMarkdown when empty.
 func TestFormatLanguagesMarkdown_Empty(t *testing.T) {
 	out := LanguagesOutput{Languages: []LanguageEntry{}}
 	md := FormatLanguagesMarkdown(out)
@@ -2853,7 +2856,7 @@ func TestFormatLanguagesMarkdown_Empty(t *testing.T) {
 // FormatListHooksMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListHooksMarkdown_WithHooks verifies the behavior of format list hooks markdown with hooks.
+// TestFormatListHooksMarkdown_WithHooks verifies FormatListHooksMarkdown when with hooks.
 func TestFormatListHooksMarkdown_WithHooks(t *testing.T) {
 	out := ListHooksOutput{
 		Hooks: []HookOutput{
@@ -2870,7 +2873,7 @@ func TestFormatListHooksMarkdown_WithHooks(t *testing.T) {
 	}
 }
 
-// TestFormatListHooksMarkdown_Empty verifies the behavior of format list hooks markdown empty.
+// TestFormatListHooksMarkdown_Empty verifies FormatListHooksMarkdown when empty.
 func TestFormatListHooksMarkdown_Empty(t *testing.T) {
 	out := ListHooksOutput{
 		Hooks:      []HookOutput{},
@@ -2882,7 +2885,7 @@ func TestFormatListHooksMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListHooksMarkdown_HookWithoutName verifies the behavior of format list hooks markdown hook without name.
+// TestFormatListHooksMarkdown_HookWithoutName verifies FormatListHooksMarkdown when hook without name.
 func TestFormatListHooksMarkdown_HookWithoutName(t *testing.T) {
 	out := ListHooksOutput{
 		Hooks: []HookOutput{
@@ -2901,7 +2904,7 @@ func TestFormatListHooksMarkdown_HookWithoutName(t *testing.T) {
 // FormatHookMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookMarkdown_WithName verifies the behavior of format hook markdown with name.
+// TestFormatHookMarkdown_WithName verifies FormatHookMarkdown when with name.
 func TestFormatHookMarkdown_WithName(t *testing.T) {
 	out := HookOutput{
 		ID:                    1,
@@ -2920,7 +2923,7 @@ func TestFormatHookMarkdown_WithName(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_WithoutName verifies the behavior of format hook markdown without name.
+// TestFormatHookMarkdown_WithoutName verifies FormatHookMarkdown when without name.
 func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	out := HookOutput{
 		ID:  2,
@@ -2939,7 +2942,7 @@ func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 // FormatListProjectUsersMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListProjectUsersMarkdown_WithUsers verifies the behavior of format list project users markdown with users.
+// TestFormatListProjectUsersMarkdown_WithUsers verifies FormatListProjectUsersMarkdown when with users.
 func TestFormatListProjectUsersMarkdown_WithUsers(t *testing.T) {
 	out := ListProjectUsersOutput{
 		Users: []ProjectUserOutput{
@@ -2955,7 +2958,7 @@ func TestFormatListProjectUsersMarkdown_WithUsers(t *testing.T) {
 	}
 }
 
-// TestFormatListProjectUsersMarkdown_Empty verifies the behavior of format list project users markdown empty.
+// TestFormatListProjectUsersMarkdown_Empty verifies FormatListProjectUsersMarkdown when empty.
 func TestFormatListProjectUsersMarkdown_Empty(t *testing.T) {
 	out := ListProjectUsersOutput{Users: []ProjectUserOutput{}}
 	md := FormatListProjectUsersMarkdown(out)
@@ -2968,7 +2971,7 @@ func TestFormatListProjectUsersMarkdown_Empty(t *testing.T) {
 // FormatListProjectGroupsMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListProjectGroupsMarkdown_WithGroups verifies the behavior of format list project groups markdown with groups.
+// TestFormatListProjectGroupsMarkdown_WithGroups verifies FormatListProjectGroupsMarkdown when with groups.
 func TestFormatListProjectGroupsMarkdown_WithGroups(t *testing.T) {
 	out := ListProjectGroupsOutput{
 		Groups: []ProjectGroupOutput{
@@ -2984,7 +2987,7 @@ func TestFormatListProjectGroupsMarkdown_WithGroups(t *testing.T) {
 	}
 }
 
-// TestFormatListProjectGroupsMarkdown_Empty verifies the behavior of format list project groups markdown empty.
+// TestFormatListProjectGroupsMarkdown_Empty verifies FormatListProjectGroupsMarkdown when empty.
 func TestFormatListProjectGroupsMarkdown_Empty(t *testing.T) {
 	out := ListProjectGroupsOutput{Groups: []ProjectGroupOutput{}}
 	md := FormatListProjectGroupsMarkdown(out)
@@ -2997,7 +3000,7 @@ func TestFormatListProjectGroupsMarkdown_Empty(t *testing.T) {
 // FormatListStarrersMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListStarrersMarkdown_WithStarrers verifies the behavior of format list starrers markdown with starrers.
+// TestFormatListStarrersMarkdown_WithStarrers verifies FormatListStarrersMarkdown when with starrers.
 func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 	out := ListProjectStarrersOutput{
 		Starrers: []StarrerOutput{
@@ -3013,7 +3016,7 @@ func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 	}
 }
 
-// TestFormatListStarrersMarkdown_Empty verifies the behavior of format list starrers markdown empty.
+// TestFormatListStarrersMarkdown_Empty verifies FormatListStarrersMarkdown when empty.
 func TestFormatListStarrersMarkdown_Empty(t *testing.T) {
 	out := ListProjectStarrersOutput{Starrers: []StarrerOutput{}}
 	md := FormatListStarrersMarkdown(out)
@@ -3026,7 +3029,7 @@ func TestFormatListStarrersMarkdown_Empty(t *testing.T) {
 // buildCreateOpts — additional branch coverage for optional fields
 // ---------------------------------------------------------------------------.
 
-// TestBuildCreateOpts_AllOptionalFields verifies the behavior of build create opts all optional fields.
+// TestBuildCreateOpts_AllOptionalFields verifies BuildCreateOpts when all optional fields.
 func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 	issuesEnabled := true
 	mrEnabled := false
@@ -3067,14 +3070,14 @@ func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 	assertCreateProjectOpts(t, opts)
 }
 
-// assertCreateProjectOpts is an internal helper for the projects package.
+// assertCreateProjectOpts checks create project opts invariants for tests.
 func assertCreateProjectOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	t.Helper()
 	assertCreateProjectCoreOpts(t, opts)
 	assertCreateProjectFeatureOpts(t, opts)
 }
 
-// assertCreateProjectCoreOpts is an internal helper for the projects package.
+// assertCreateProjectCoreOpts checks create project core opts invariants for tests.
 func assertCreateProjectCoreOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	t.Helper()
 	if opts.Name == nil || *opts.Name != "full-project" {
@@ -3106,14 +3109,14 @@ func assertCreateProjectCoreOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	}
 }
 
-// assertCreateProjectFeatureOpts is an internal helper for the projects package.
+// assertCreateProjectFeatureOpts checks create project feature opts invariants for tests.
 func assertCreateProjectFeatureOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	t.Helper()
 	assertCreateProjectMergeOpts(t, opts)
 	assertCreateProjectToggleOpts(t, opts)
 }
 
-// assertCreateProjectMergeOpts is an internal helper for the projects package.
+// assertCreateProjectMergeOpts checks create project merge opts invariants for tests.
 func assertCreateProjectMergeOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	t.Helper()
 	if opts.OnlyAllowMergeIfPipelineSucceeds == nil || !*opts.OnlyAllowMergeIfPipelineSucceeds {
@@ -3136,7 +3139,7 @@ func assertCreateProjectMergeOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	}
 }
 
-// assertCreateProjectToggleOpts is an internal helper for the projects package.
+// assertCreateProjectToggleOpts checks create project toggle opts invariants for tests.
 func assertCreateProjectToggleOpts(t *testing.T, opts *gl.CreateProjectOptions) {
 	t.Helper()
 	if opts.LFSEnabled == nil || !*opts.LFSEnabled {
@@ -3163,7 +3166,7 @@ func assertCreateProjectToggleOpts(t *testing.T, opts *gl.CreateProjectOptions) 
 // buildUpdateOpts + applyUpdateFeatureOpts — branch coverage
 // ---------------------------------------------------------------------------.
 
-// TestBuildUpdateOpts_AllFields verifies the behavior of build update opts all fields.
+// TestBuildUpdateOpts_AllFields verifies BuildUpdateOpts when all fields.
 func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	pipelineSucceeds := true
 	allDiscussions := true
@@ -3218,14 +3221,14 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	assertEditProjectOpts(t, opts)
 }
 
-// assertEditProjectOpts is an internal helper for the projects package.
+// assertEditProjectOpts checks edit project opts invariants for tests.
 func assertEditProjectOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	t.Helper()
 	assertEditProjectCoreOpts(t, opts)
 	assertEditProjectAdvancedOpts(t, opts)
 }
 
-// assertEditProjectCoreOpts is an internal helper for the projects package.
+// assertEditProjectCoreOpts checks edit project core opts invariants for tests.
 func assertEditProjectCoreOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	t.Helper()
 	if opts.Name == nil || *opts.Name != "updated" {
@@ -3266,7 +3269,7 @@ func assertEditProjectCoreOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	}
 }
 
-// assertEditProjectAdvancedOpts is an internal helper for the projects package.
+// assertEditProjectAdvancedOpts checks edit project advanced opts invariants for tests.
 func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	t.Helper()
 	if opts.BuildsAccessLevel == nil {
@@ -3337,7 +3340,7 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 // Fork — additional branch coverage for optional fields
 // ---------------------------------------------------------------------------.
 
-// TestProjectFork_AllOptionalFields verifies the behavior of project fork all optional fields.
+// TestProjectFork_AllOptionalFields verifies ProjectFork when all optional fields.
 func TestProjectFork_AllOptionalFields(t *testing.T) {
 	const projectJSON = `{"id":99,"name":"forked","path_with_namespace":"user/forked","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/user/forked","description":"forked desc"}`
 	mrTarget := true
@@ -3373,7 +3376,7 @@ func TestProjectFork_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// assertForkBody is an internal helper for the projects package.
+// assertForkBody checks fork body invariants for tests.
 func assertForkBody(t *testing.T, body map[string]any) {
 	t.Helper()
 	if body["name"] != "forked" {
@@ -3397,7 +3400,7 @@ func assertForkBody(t *testing.T, body map[string]any) {
 // ListForks — additional branch coverage for optional fields
 // ---------------------------------------------------------------------------.
 
-// TestProjectListForks_AllOptionalFields verifies the behavior of project list forks all optional fields.
+// TestProjectListForks_AllOptionalFields verifies ProjectListForks when all optional fields.
 func TestProjectListForks_AllOptionalFields(t *testing.T) {
 	const forksJSON = `[{"id":10,"name":"fork-a","path_with_namespace":"u/fork-a","visibility":"public","default_branch":"main","web_url":"https://gitlab.example.com/u/fork-a","description":""}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3425,7 +3428,7 @@ func TestProjectListForks_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// assertListForksQuery is an internal helper for the projects package.
+// assertListForksQuery checks list forks query invariants for tests.
 func assertListForksQuery(t *testing.T, r *http.Request) {
 	t.Helper()
 	q := r.URL.Query()
@@ -3450,7 +3453,7 @@ func assertListForksQuery(t *testing.T, r *http.Request) {
 // AddHook — additional branch coverage for all optional event booleans
 // ---------------------------------------------------------------------------.
 
-// TestProjectAddHook_AllOptionalEvents verifies the behavior of project add hook all optional events.
+// TestProjectAddHook_AllOptionalEvents verifies ProjectAddHook when all optional events.
 func TestProjectAddHook_AllOptionalEvents(t *testing.T) {
 	const hookJSON = `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"confidential_issues_events":true,"emoji_events":true,"resource_access_token_events":true,"enable_ssl_verification":false}`
 	pushEvents := true
@@ -3514,7 +3517,7 @@ func TestProjectAddHook_AllOptionalEvents(t *testing.T) {
 // EditHook — additional branch coverage for all optional event booleans
 // ---------------------------------------------------------------------------.
 
-// TestProjectEditHook_AllOptionalEvents verifies the behavior of project edit hook all optional events.
+// TestProjectEditHook_AllOptionalEvents verifies ProjectEditHook when all optional events.
 func TestProjectEditHook_AllOptionalEvents(t *testing.T) {
 	const hookJSON = `{"id":5,"url":"https://example.com/updated","project_id":42,"push_events":false,"issues_events":false,"merge_requests_events":false,"tag_push_events":false,"note_events":false,"confidential_note_events":false,"job_events":false,"pipeline_events":false,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"confidential_issues_events":false,"emoji_events":false,"resource_access_token_events":false,"enable_ssl_verification":true}`
 	pushEvents := false
@@ -3579,7 +3582,7 @@ func TestProjectEditHook_AllOptionalEvents(t *testing.T) {
 // buildUserProjectOpts — branch coverage for all option fields
 // ---------------------------------------------------------------------------.
 
-// TestBuildUserProjectOpts_AllFields verifies the behavior of build user project opts all fields.
+// TestBuildUserProjectOpts_AllFields verifies BuildUserProjectOpts when all fields.
 func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	archived := true
 	opts := buildUserProjectOpts(userProjectFilter{
@@ -3614,7 +3617,7 @@ func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	}
 }
 
-// TestBuildUserProjectOpts_NoFields verifies the behavior of build user project opts no fields.
+// TestBuildUserProjectOpts_NoFields verifies BuildUserProjectOpts when no fields.
 func TestBuildUserProjectOpts_NoFields(t *testing.T) {
 	opts := buildUserProjectOpts(userProjectFilter{})
 	if opts.Search != nil {
@@ -3665,14 +3668,14 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // Context cancellation tests (covers ctx.Err() branches)
 // ---------------------------------------------------------------------------.
 
-// canceledCtx is an internal helper for the projects package.
+// canceledCtx supports canceled ctx assertions in projects tests.
 func canceledCtx() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
 }
 
-// TestGet_CtxCanceled verifies the behavior of get ctx canceled.
+// TestGet_CtxCanceled verifies Get when ctx canceled.
 func TestGet_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3683,7 +3686,7 @@ func TestGet_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestUpdate_CtxCanceled verifies the behavior of update ctx canceled.
+// TestUpdate_CtxCanceled verifies Update when ctx canceled.
 func TestUpdate_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3694,7 +3697,7 @@ func TestUpdate_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestList_CtxCanceled verifies the behavior of list ctx canceled.
+// TestList_CtxCanceled verifies List when ctx canceled.
 func TestList_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3705,7 +3708,7 @@ func TestList_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestStar_CtxCanceled verifies the behavior of star ctx canceled.
+// TestStar_CtxCanceled verifies Star when ctx canceled.
 func TestStar_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3716,7 +3719,7 @@ func TestStar_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestUnstar_CtxCanceled verifies the behavior of unstar ctx canceled.
+// TestUnstar_CtxCanceled verifies Unstar when ctx canceled.
 func TestUnstar_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3727,7 +3730,7 @@ func TestUnstar_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestArchive_CtxCanceled verifies the behavior of archive ctx canceled.
+// TestArchive_CtxCanceled verifies Archive when ctx canceled.
 func TestArchive_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3738,7 +3741,7 @@ func TestArchive_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestUnarchive_CtxCanceled verifies the behavior of unarchive ctx canceled.
+// TestUnarchive_CtxCanceled verifies Unarchive when ctx canceled.
 func TestUnarchive_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3753,7 +3756,7 @@ func TestUnarchive_CtxCanceled(t *testing.T) {
 // AddPushRule with ALL optional fields set (covers all branches)
 // ---------------------------------------------------------------------------.
 
-// TestAddPushRule_AllFields verifies the behavior of add push rule all fields.
+// TestAddPushRule_AllFields verifies AddPushRule when all fields.
 func TestAddPushRule_AllFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathPushRules42 {
@@ -3790,7 +3793,7 @@ func TestAddPushRule_AllFields(t *testing.T) {
 // EditPushRule with ALL optional fields set (covers all branches)
 // ---------------------------------------------------------------------------.
 
-// TestEditPushRule_AllFields verifies the behavior of edit push rule all fields.
+// TestEditPushRule_AllFields verifies EditPushRule when all fields.
 func TestEditPushRule_AllFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathPushRules42 {
@@ -3829,7 +3832,7 @@ func TestEditPushRule_AllFields(t *testing.T) {
 // Get with optional params (Statistics, License, WithCustomAttributes)
 // ---------------------------------------------------------------------------.
 
-// TestGet_WithOptions verifies the behavior of get with options.
+// TestGet_WithOptions verifies Get when with options.
 func TestGet_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProject42 {
@@ -3856,7 +3859,7 @@ func TestGet_WithOptions(t *testing.T) {
 // ListProjectGroups with all filter options
 // ---------------------------------------------------------------------------.
 
-// TestListProjectGroups_AllFilters verifies the behavior of list project groups all filters.
+// TestListProjectGroups_AllFilters verifies ListProjectGroups when all filters.
 func TestListProjectGroups_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/groups" {
@@ -3886,7 +3889,7 @@ func TestListProjectGroups_AllFilters(t *testing.T) {
 // ListInvitedGroups with all filter options
 // ---------------------------------------------------------------------------.
 
-// TestListInvitedGroups_AllFilters verifies the behavior of list invited groups all filters.
+// TestListInvitedGroups_AllFilters verifies ListInvitedGroups when all filters.
 func TestListInvitedGroups_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/invited_groups" {
@@ -3913,7 +3916,7 @@ func TestListInvitedGroups_AllFilters(t *testing.T) {
 // ListUserProjects with all filter options
 // ---------------------------------------------------------------------------.
 
-// TestListUserProjects_AllFilters verifies the behavior of list user projects all filters.
+// TestListUserProjects_AllFilters verifies ListUserProjects when all filters.
 func TestListUserProjects_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/john/projects" {
@@ -3944,7 +3947,7 @@ func TestListUserProjects_AllFilters(t *testing.T) {
 // buildListOpts + applyListFilterOpts with all branches
 // ---------------------------------------------------------------------------.
 
-// TestBuildListOpts_AllBranches verifies the behavior of build list opts all branches.
+// TestBuildListOpts_AllBranches verifies BuildListOpts when all branches.
 func TestBuildListOpts_AllBranches(t *testing.T) {
 	input := ListInput{
 		Owned:                    true,
@@ -3977,21 +3980,21 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 	assertListProjectOpts(t, opts)
 }
 
-// assertListProjectOpts is an internal helper for the projects package.
+// assertListProjectOpts checks list project opts invariants for tests.
 func assertListProjectOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	assertListProjectCoreOpts(t, opts)
 	assertListProjectFilterOpts(t, opts)
 }
 
-// assertListProjectCoreOpts is an internal helper for the projects package.
+// assertListProjectCoreOpts checks list project core opts invariants for tests.
 func assertListProjectCoreOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	assertListProjectSearchOpts(t, opts)
 	assertListProjectDisplayOpts(t, opts)
 }
 
-// assertListProjectSearchOpts is an internal helper for the projects package.
+// assertListProjectSearchOpts checks list project search opts invariants for tests.
 func assertListProjectSearchOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	if opts.Owned == nil || !*opts.Owned {
@@ -4014,7 +4017,7 @@ func assertListProjectSearchOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	}
 }
 
-// assertListProjectDisplayOpts is an internal helper for the projects package.
+// assertListProjectDisplayOpts checks list project display opts invariants for tests.
 func assertListProjectDisplayOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	if opts.Topic == nil || *opts.Topic != "go" {
@@ -4034,14 +4037,14 @@ func assertListProjectDisplayOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	}
 }
 
-// assertListProjectFilterOpts is an internal helper for the projects package.
+// assertListProjectFilterOpts checks list project filter opts invariants for tests.
 func assertListProjectFilterOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	assertListProjectFeatureFilterOpts(t, opts)
 	assertListProjectPaginationFilterOpts(t, opts)
 }
 
-// assertListProjectFeatureFilterOpts is an internal helper for the projects package.
+// assertListProjectFeatureFilterOpts checks list project feature filter opts invariants for tests.
 func assertListProjectFeatureFilterOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	if opts.WithIssuesEnabled == nil || !*opts.WithIssuesEnabled {
@@ -4061,7 +4064,7 @@ func assertListProjectFeatureFilterOpts(t *testing.T, opts *gl.ListProjectsOptio
 	}
 }
 
-// assertListProjectPaginationFilterOpts is an internal helper for the projects package.
+// assertListProjectPaginationFilterOpts checks list project pagination filter opts invariants for tests.
 func assertListProjectPaginationFilterOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	t.Helper()
 	if opts.IncludePendingDelete == nil || !*opts.IncludePendingDelete {
@@ -4088,7 +4091,7 @@ func assertListProjectPaginationFilterOpts(t *testing.T, opts *gl.ListProjectsOp
 // ToOutput with Namespace (covers the namespace branch)
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithNamespace verifies the behavior of to output with namespace.
+// TestToOutput_WithNamespace verifies ToOutput when with namespace.
 func TestToOutput_WithNamespace(t *testing.T) {
 	p := &gl.Project{
 		ID:         1,
@@ -4102,7 +4105,7 @@ func TestToOutput_WithNamespace(t *testing.T) {
 	}
 }
 
-// TestToOutput_WithCreatedAt verifies the behavior of to output with created at.
+// TestToOutput_WithCreatedAt verifies ToOutput when with created at.
 func TestToOutput_WithCreatedAt(t *testing.T) {
 	now := time.Now()
 	p := &gl.Project{
@@ -4120,7 +4123,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 // API error path tests (covers err != nil after API calls)
 // ---------------------------------------------------------------------------.
 
-// errMockHandler is an internal helper for the projects package.
+// errMockHandler supports err mock handler assertions in projects tests.
 func errMockHandler() http.Handler {
 	// Return 404 (not 500) to avoid triggering GitLab client retry logic
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -4128,7 +4131,7 @@ func errMockHandler() http.Handler {
 	})
 }
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", Name: "x"})
@@ -4137,7 +4140,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestTransfer_APIError verifies the behavior of transfer a p i error.
+// TestTransfer_APIError verifies Transfer when API error.
 func TestTransfer_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "1", Namespace: "ns"})
@@ -4146,7 +4149,7 @@ func TestTransfer_APIError(t *testing.T) {
 	}
 }
 
-// TestTransfer_EmptyNamespace verifies the behavior of transfer empty namespace.
+// TestTransfer_EmptyNamespace verifies Transfer when empty namespace.
 func TestTransfer_EmptyNamespace(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "1"})
@@ -4155,7 +4158,7 @@ func TestTransfer_EmptyNamespace(t *testing.T) {
 	}
 }
 
-// TestGetLanguages_APIError verifies the behavior of get languages a p i error.
+// TestGetLanguages_APIError verifies GetLanguages when API error.
 func TestGetLanguages_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := GetLanguages(context.Background(), client, GetLanguagesInput{ProjectID: "1"})
@@ -4164,7 +4167,7 @@ func TestGetLanguages_APIError(t *testing.T) {
 	}
 }
 
-// TestGetLanguages_EmptyProjectID verifies the behavior of get languages empty project i d.
+// TestGetLanguages_EmptyProjectID verifies GetLanguages when empty project ID.
 func TestGetLanguages_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := GetLanguages(context.Background(), client, GetLanguagesInput{})
@@ -4173,7 +4176,7 @@ func TestGetLanguages_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestListHooks_APIError verifies the behavior of list hooks a p i error.
+// TestListHooks_APIError verifies ListHooks when API error.
 func TestListHooks_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ListHooks(context.Background(), client, ListHooksInput{ProjectID: "1"})
@@ -4182,7 +4185,7 @@ func TestListHooks_APIError(t *testing.T) {
 	}
 }
 
-// TestGetHook_APIError verifies the behavior of get hook a p i error.
+// TestGetHook_APIError verifies GetHook when API error.
 func TestGetHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := GetHook(context.Background(), client, GetHookInput{ProjectID: "1", HookID: 1})
@@ -4191,7 +4194,7 @@ func TestGetHook_APIError(t *testing.T) {
 	}
 }
 
-// TestGetHook_EmptyProject verifies the behavior of get hook empty project.
+// TestGetHook_EmptyProject verifies GetHook when empty project.
 func TestGetHook_EmptyProject(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := GetHook(context.Background(), client, GetHookInput{HookID: 1})
@@ -4200,7 +4203,7 @@ func TestGetHook_EmptyProject(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_APIError verifies the behavior of delete hook a p i error.
+// TestDeleteHook_APIError verifies DeleteHook when API error.
 func TestDeleteHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	err := DeleteHook(context.Background(), client, DeleteHookInput{ProjectID: "1", HookID: 1})
@@ -4209,7 +4212,7 @@ func TestDeleteHook_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_CtxCanceled verifies the behavior of delete hook ctx canceled.
+// TestDeleteHook_CtxCanceled verifies DeleteHook when ctx canceled.
 func TestDeleteHook_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	err := DeleteHook(canceledCtx(), client, DeleteHookInput{ProjectID: "1", HookID: 1})
@@ -4218,7 +4221,7 @@ func TestDeleteHook_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestTriggerTestHook_Success verifies the behavior of trigger test hook success.
+// TestTriggerTestHook_Success verifies TriggerTestHook when success.
 func TestTriggerTestHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -4240,7 +4243,7 @@ func TestTriggerTestHook_Success(t *testing.T) {
 	}
 }
 
-// TestTriggerTestHook_CtxCanceled verifies the behavior of trigger test hook ctx canceled.
+// TestTriggerTestHook_CtxCanceled verifies TriggerTestHook when ctx canceled.
 func TestTriggerTestHook_CtxCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := TriggerTestHook(canceledCtx(), client, TriggerTestHookInput{ProjectID: "1", HookID: 1, Event: "push_events"})
@@ -4249,7 +4252,7 @@ func TestTriggerTestHook_CtxCanceled(t *testing.T) {
 	}
 }
 
-// TestTriggerTestHook_EmptyEvent verifies the behavior of trigger test hook empty event.
+// TestTriggerTestHook_EmptyEvent verifies TriggerTestHook when empty event.
 func TestTriggerTestHook_EmptyEvent(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := TriggerTestHook(context.Background(), client, TriggerTestHookInput{ProjectID: "1", HookID: 1})
@@ -4258,7 +4261,7 @@ func TestTriggerTestHook_EmptyEvent(t *testing.T) {
 	}
 }
 
-// TestTriggerTestHook_EmptyHookID verifies the behavior of trigger test hook empty hook i d.
+// TestTriggerTestHook_EmptyHookID verifies TriggerTestHook when empty hook ID.
 func TestTriggerTestHook_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := TriggerTestHook(context.Background(), client, TriggerTestHookInput{ProjectID: "1", Event: "push_events"})
@@ -4267,7 +4270,7 @@ func TestTriggerTestHook_EmptyHookID(t *testing.T) {
 	}
 }
 
-// TestListProjectUsers_WithFilters verifies the behavior of list project users with filters.
+// TestListProjectUsers_WithFilters verifies ListProjectUsers when with filters.
 func TestListProjectUsers_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -4289,7 +4292,7 @@ func TestListProjectUsers_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectUsers_APIError verifies the behavior of list project users a p i error.
+// TestListProjectUsers_APIError verifies ListProjectUsers when API error.
 func TestListProjectUsers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ListProjectUsers(context.Background(), client, ListProjectUsersInput{ProjectID: "1"})
@@ -4298,7 +4301,7 @@ func TestListProjectUsers_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectStarrers_WithFilters verifies the behavior of list project starrers with filters.
+// TestListProjectStarrers_WithFilters verifies ListProjectStarrers when with filters.
 func TestListProjectStarrers_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"starred_since":"2026-01-01T00:00:00Z","user":{"id":1,"username":"alice","name":"Alice","state":"active","web_url":"https://g/alice"}}]`)
@@ -4316,7 +4319,7 @@ func TestListProjectStarrers_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectStarrers_APIError verifies the behavior of list project starrers a p i error.
+// TestListProjectStarrers_APIError verifies ListProjectStarrers when API error.
 func TestListProjectStarrers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ListProjectStarrers(context.Background(), client, ListProjectStarrersInput{ProjectID: "1"})
@@ -4325,7 +4328,7 @@ func TestListProjectStarrers_APIError(t *testing.T) {
 	}
 }
 
-// TestShareProject_APIError verifies the behavior of share project a p i error.
+// TestShareProject_APIError verifies ShareProject when API error.
 func TestShareProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ShareProjectWithGroup(context.Background(), client, ShareProjectInput{
@@ -4336,7 +4339,7 @@ func TestShareProject_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_SharedGroupAPIError verifies the behavior of delete shared group a p i error.
+// TestDelete_SharedGroupAPIError verifies Delete when shared group API error.
 func TestDelete_SharedGroupAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	err := DeleteSharedProjectFromGroup(context.Background(), client, DeleteSharedGroupInput{ProjectID: "1", GroupID: 10})
@@ -4345,7 +4348,7 @@ func TestDelete_SharedGroupAPIError(t *testing.T) {
 	}
 }
 
-// TestDeletePushRule_APIError verifies the behavior of delete push rule a p i error.
+// TestDeletePushRule_APIError verifies DeletePushRule when API error.
 func TestDeletePushRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	err := DeletePushRule(context.Background(), client, DeletePushRuleInput{ProjectID: "1"})
@@ -4354,7 +4357,7 @@ func TestDeletePushRule_APIError(t *testing.T) {
 	}
 }
 
-// TestRestore_APIError verifies the behavior of restore a p i error.
+// TestRestore_APIError verifies Restore when API error.
 func TestRestore_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Restore(context.Background(), client, RestoreInput{ProjectID: "1"})
@@ -4363,7 +4366,7 @@ func TestRestore_APIError(t *testing.T) {
 	}
 }
 
-// TestRestore_EmptyProjectID verifies the behavior of restore empty project i d.
+// TestRestore_EmptyProjectID verifies Restore when empty project ID.
 func TestRestore_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Restore(context.Background(), client, RestoreInput{})
@@ -4372,7 +4375,7 @@ func TestRestore_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestStar_APIError verifies the behavior of star a p i error.
+// TestStar_APIError verifies Star when API error.
 func TestStar_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Star(context.Background(), client, StarInput{ProjectID: "1"})
@@ -4381,7 +4384,7 @@ func TestStar_APIError(t *testing.T) {
 	}
 }
 
-// TestUnstar_APIError verifies the behavior of unstar a p i error.
+// TestUnstar_APIError verifies Unstar when API error.
 func TestUnstar_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Unstar(context.Background(), client, UnstarInput{ProjectID: "1"})
@@ -4390,7 +4393,7 @@ func TestUnstar_APIError(t *testing.T) {
 	}
 }
 
-// TestArchive_APIError verifies the behavior of archive a p i error.
+// TestArchive_APIError verifies Archive when API error.
 func TestArchive_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Archive(context.Background(), client, ArchiveInput{ProjectID: "1"})
@@ -4399,7 +4402,7 @@ func TestArchive_APIError(t *testing.T) {
 	}
 }
 
-// TestUnarchive_APIError verifies the behavior of unarchive a p i error.
+// TestUnarchive_APIError verifies Unarchive when API error.
 func TestUnarchive_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := Unarchive(context.Background(), client, UnarchiveInput{ProjectID: "1"})
@@ -4408,7 +4411,7 @@ func TestUnarchive_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectGroups_APIError verifies the behavior of list project groups a p i error.
+// TestListProjectGroups_APIError verifies ListProjectGroups when API error.
 func TestListProjectGroups_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ListProjectGroups(context.Background(), client, ListProjectGroupsInput{ProjectID: "1"})
@@ -4417,7 +4420,7 @@ func TestListProjectGroups_APIError(t *testing.T) {
 	}
 }
 
-// TestListInvitedGroups_APIError verifies the behavior of list invited groups a p i error.
+// TestListInvitedGroups_APIError verifies ListInvitedGroups when API error.
 func TestListInvitedGroups_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
 	_, err := ListInvitedGroups(context.Background(), client, ListInvitedGroupsInput{ProjectID: "1"})
@@ -4430,8 +4433,13 @@ func TestListInvitedGroups_APIError(t *testing.T) {
 // MCP integration tests — exercise RegisterTools handler closures
 // ---------------------------------------------------------------------------.
 
+// projectJSON identifies the project JSON constant used by this package.
 const projectJSON = `{"id":42,"name":"test","path_with_namespace":"g/test","visibility":"private","default_branch":"main","web_url":"https://example.com","description":"desc","merge_request_title_regex":"^(feat|fix):","merge_request_title_regex_description":"MR title must start with feat: or fix:"}`
+
+// hookJSON42 identifies the hook JSON 42 constant used by this package.
 const hookJSON42 = `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"created_at":"2026-01-01T00:00:00Z"}`
+
+// pushRuleJSON42 identifies the push rule JSON 42 constant used by this package.
 const pushRuleJSON42 = `{"id":1,"commit_message_regex":".*","branch_name_regex":".*","max_file_size":100}`
 
 // mockRoute holds a canned HTTP response for a test mock endpoint.
@@ -4854,7 +4862,7 @@ func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	}
 }
 
-// assertProjectRouteOK is an internal helper for the projects package.
+// assertProjectRouteOK checks project route ok invariants for tests.
 func assertProjectRouteOK(t *testing.T, byTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 	result, err := byTool[name].Route.Handler(t.Context(), args)
@@ -4866,6 +4874,7 @@ func assertProjectRouteOK(t *testing.T, byTool map[string]toolutil.ActionSpec, n
 	}
 }
 
+// projectSpecsByTool supports project specs by tool assertions in projects tests.
 func projectSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

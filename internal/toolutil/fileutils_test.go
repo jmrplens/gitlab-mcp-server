@@ -419,7 +419,7 @@ func TestComputeSHA256Reader_ErrorReader(t *testing.T) {
 // errReader is a test helper that always returns the configured error.
 type errReader struct{ err error }
 
-// Read performs the read operation on *errReader.
+// Read streams data from errReader into p.
 func (r *errReader) Read([]byte) (int, error) { return 0, r.err }
 
 // TestProgressWriter_ReportsAtInterval verifies that the progress report

@@ -253,11 +253,13 @@ func TestMembersList_RoleAndSeatFields(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
+	// pathProjectMember10 identifies the path project member 10 constant used by this package.
 	pathProjectMember10 = "/api/v4/projects/42/members/10"
-	memberJSON          = `{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice"}`
+	// memberJSON identifies the member JSON constant used by this package.
+	memberJSON = `{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice"}`
 )
 
-// TestMemberGet_Success verifies the behavior of member get success.
+// TestMemberGet_Success verifies MemberGet when success.
 func TestMemberGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectMember10 {
@@ -279,7 +281,7 @@ func TestMemberGet_Success(t *testing.T) {
 	}
 }
 
-// TestMemberGet_MissingProjectID verifies the behavior of member get missing project i d.
+// TestMemberGet_MissingProjectID verifies MemberGet when missing project ID.
 func TestMemberGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -294,7 +296,7 @@ func TestMemberGet_MissingProjectID(t *testing.T) {
 // GetInherited tests
 // ---------------------------------------------------------------------------.
 
-// TestMemberGetInherited_Success verifies the behavior of member get inherited success.
+// TestMemberGetInherited_Success verifies MemberGetInherited when success.
 func TestMemberGetInherited_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/members/all/10" {
@@ -313,7 +315,7 @@ func TestMemberGetInherited_Success(t *testing.T) {
 	}
 }
 
-// TestMemberGetInherited_MissingProjectID verifies the behavior of member get inherited missing project i d.
+// TestMemberGetInherited_MissingProjectID verifies MemberGetInherited when missing project ID.
 func TestMemberGetInherited_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -328,7 +330,7 @@ func TestMemberGetInherited_MissingProjectID(t *testing.T) {
 // Add tests
 // ---------------------------------------------------------------------------.
 
-// TestMemberAdd_Success verifies the behavior of member add success.
+// TestMemberAdd_Success verifies MemberAdd when success.
 func TestMemberAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/members" {
@@ -347,7 +349,7 @@ func TestMemberAdd_Success(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_MissingProjectID verifies the behavior of member add missing project i d.
+// TestMemberAdd_MissingProjectID verifies MemberAdd when missing project ID.
 func TestMemberAdd_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -358,7 +360,7 @@ func TestMemberAdd_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_MissingUserAndUsername verifies the behavior of member add missing user and username.
+// TestMemberAdd_MissingUserAndUsername verifies MemberAdd when missing user and username.
 func TestMemberAdd_MissingUserAndUsername(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -369,7 +371,7 @@ func TestMemberAdd_MissingUserAndUsername(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_MissingAccessLevel verifies the behavior of member add missing access level.
+// TestMemberAdd_MissingAccessLevel verifies MemberAdd when missing access level.
 func TestMemberAdd_MissingAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -384,7 +386,7 @@ func TestMemberAdd_MissingAccessLevel(t *testing.T) {
 // Edit tests
 // ---------------------------------------------------------------------------.
 
-// TestMemberEdit_Success verifies the behavior of member edit success.
+// TestMemberEdit_Success verifies MemberEdit when success.
 func TestMemberEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProjectMember10 {
@@ -403,7 +405,7 @@ func TestMemberEdit_Success(t *testing.T) {
 	}
 }
 
-// TestMemberEdit_MissingProjectID verifies the behavior of member edit missing project i d.
+// TestMemberEdit_MissingProjectID verifies MemberEdit when missing project ID.
 func TestMemberEdit_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -414,7 +416,7 @@ func TestMemberEdit_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMemberEdit_MissingAccessLevel verifies the behavior of member edit missing access level.
+// TestMemberEdit_MissingAccessLevel verifies MemberEdit when missing access level.
 func TestMemberEdit_MissingAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -429,7 +431,7 @@ func TestMemberEdit_MissingAccessLevel(t *testing.T) {
 // Delete tests
 // ---------------------------------------------------------------------------.
 
-// TestMemberDelete_Success verifies the behavior of member delete success.
+// TestMemberDelete_Success verifies MemberDelete when success.
 func TestMemberDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProjectMember10 {
@@ -445,7 +447,7 @@ func TestMemberDelete_Success(t *testing.T) {
 	}
 }
 
-// TestMemberDelete_MissingProjectID verifies the behavior of member delete missing project i d.
+// TestMemberDelete_MissingProjectID verifies MemberDelete when missing project ID.
 func TestMemberDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -456,7 +458,7 @@ func TestMemberDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMemberDeleteServer_Error verifies the behavior of member delete server error.
+// TestMemberDeleteServer_Error verifies MemberDeleteServer when error.
 func TestMemberDeleteServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -471,7 +473,7 @@ func TestMemberDeleteServer_Error(t *testing.T) {
 // UserID validation tests
 // ---------------------------------------------------------------------------.
 
-// TestMemberGet_MissingUserID verifies the behavior of member get missing user i d.
+// TestMemberGet_MissingUserID verifies MemberGet when missing user ID.
 func TestMemberGet_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -485,7 +487,7 @@ func TestMemberGet_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestMemberGetInherited_MissingUserID verifies the behavior of member get inherited missing user i d.
+// TestMemberGetInherited_MissingUserID verifies MemberGetInherited when missing user ID.
 func TestMemberGetInherited_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -499,7 +501,7 @@ func TestMemberGetInherited_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_MissingUserID verifies the behavior of member add missing user i d.
+// TestMemberAdd_MissingUserID verifies MemberAdd when missing user ID.
 func TestMemberAdd_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -513,7 +515,7 @@ func TestMemberAdd_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestMemberEdit_MissingUserID verifies the behavior of member edit missing user i d.
+// TestMemberEdit_MissingUserID verifies MemberEdit when missing user ID.
 func TestMemberEdit_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -527,7 +529,7 @@ func TestMemberEdit_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestMemberDelete_MissingUserID verifies the behavior of member delete missing user i d.
+// TestMemberDelete_MissingUserID verifies MemberDelete when missing user ID.
 func TestMemberDelete_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -547,7 +549,7 @@ func TestMemberDelete_MissingUserID(t *testing.T) {
 // List — missing project_id validation
 // ---------------------------------------------------------------------------.
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := List(context.Background(), client, ListInput{})
@@ -563,7 +565,7 @@ func TestList_MissingProjectID(t *testing.T) {
 // AccessLevelDescription — edge cases
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelDescription_NoPermissions verifies the behavior of access level description no permissions.
+// TestAccessLevelDescription_NoPermissions verifies AccessLevelDescription when no permissions.
 func TestAccessLevelDescription_NoPermissions(t *testing.T) {
 	got := AccessLevelDescription(gl.NoPermissions)
 	if got != "No access" {
@@ -571,7 +573,7 @@ func TestAccessLevelDescription_NoPermissions(t *testing.T) {
 	}
 }
 
-// TestAccessLevelDescription_MinimalAccess verifies the behavior of access level description minimal access.
+// TestAccessLevelDescription_MinimalAccess verifies AccessLevelDescription when minimal access.
 func TestAccessLevelDescription_MinimalAccess(t *testing.T) {
 	got := AccessLevelDescription(gl.MinimalAccessPermissions)
 	if got != "Minimal access" {
@@ -579,7 +581,7 @@ func TestAccessLevelDescription_MinimalAccess(t *testing.T) {
 	}
 }
 
-// TestAccessLevelDescription_Unknown verifies the behavior of access level description unknown.
+// TestAccessLevelDescription_Unknown verifies AccessLevelDescription when unknown.
 func TestAccessLevelDescription_Unknown(t *testing.T) {
 	got := AccessLevelDescription(gl.AccessLevelValue(999))
 	if got != "Unknown" {
@@ -591,7 +593,7 @@ func TestAccessLevelDescription_Unknown(t *testing.T) {
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestMemberGet_APIError verifies the behavior of member get a p i error.
+// TestMemberGet_APIError verifies MemberGet when API error.
 func TestMemberGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -606,7 +608,7 @@ func TestMemberGet_APIError(t *testing.T) {
 // GetInherited — API error
 // ---------------------------------------------------------------------------.
 
-// TestMemberGetInherited_APIError verifies the behavior of member get inherited a p i error.
+// TestMemberGetInherited_APIError verifies MemberGetInherited when API error.
 func TestMemberGetInherited_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -621,7 +623,7 @@ func TestMemberGetInherited_APIError(t *testing.T) {
 // Add — username path, ExpiresAt, MemberRoleID, API error
 // ---------------------------------------------------------------------------.
 
-// TestMemberAdd_WithUsername verifies the behavior of member add with username.
+// TestMemberAdd_WithUsername verifies MemberAdd when with username.
 func TestMemberAdd_WithUsername(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/members" {
@@ -645,7 +647,7 @@ func TestMemberAdd_WithUsername(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_WithExpiresAt verifies the behavior of member add with expires at.
+// TestMemberAdd_WithExpiresAt verifies MemberAdd when with expires at.
 func TestMemberAdd_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/members" {
@@ -670,7 +672,7 @@ func TestMemberAdd_WithExpiresAt(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_WithMemberRoleID verifies the behavior of member add with member role i d.
+// TestMemberAdd_WithMemberRoleID verifies MemberAdd when with member role ID.
 func TestMemberAdd_WithMemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/members" {
@@ -695,7 +697,7 @@ func TestMemberAdd_WithMemberRoleID(t *testing.T) {
 	}
 }
 
-// TestMemberAdd_APIError verifies the behavior of member add a p i error.
+// TestMemberAdd_APIError verifies MemberAdd when API error.
 func TestMemberAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -710,7 +712,7 @@ func TestMemberAdd_APIError(t *testing.T) {
 // Edit — ExpiresAt, MemberRoleID, API error
 // ---------------------------------------------------------------------------.
 
-// TestMemberEdit_WithExpiresAt verifies the behavior of member edit with expires at.
+// TestMemberEdit_WithExpiresAt verifies MemberEdit when with expires at.
 func TestMemberEdit_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/members/10" {
@@ -735,7 +737,7 @@ func TestMemberEdit_WithExpiresAt(t *testing.T) {
 	}
 }
 
-// TestMemberEdit_WithMemberRoleID verifies the behavior of member edit with member role i d.
+// TestMemberEdit_WithMemberRoleID verifies MemberEdit when with member role ID.
 func TestMemberEdit_WithMemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/members/10" {
@@ -760,7 +762,7 @@ func TestMemberEdit_WithMemberRoleID(t *testing.T) {
 	}
 }
 
-// TestMemberEdit_APIError verifies the behavior of member edit a p i error.
+// TestMemberEdit_APIError verifies MemberEdit when API error.
 func TestMemberEdit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -775,7 +777,7 @@ func TestMemberEdit_APIError(t *testing.T) {
 // ToOutput — CreatedAt, ExpiresAt paths
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithCreatedAt verifies the behavior of to output with created at.
+// TestToOutput_WithCreatedAt verifies ToOutput when with created at.
 func TestToOutput_WithCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/members/10" {
@@ -798,7 +800,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestToOutput_WithExpiresAt verifies the behavior of to output with expires at.
+// TestToOutput_WithExpiresAt verifies ToOutput when with expires at.
 func TestToOutput_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/members/10" {
@@ -825,7 +827,7 @@ func TestToOutput_WithExpiresAt(t *testing.T) {
 // FormatMarkdown — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllOptionalFields validates format markdown all optional fields across multiple scenarios using table-driven subtests.
+// TestFormatMarkdown_AllOptionalFields covers FormatMarkdown with table-driven subtests for all optional fields.
 func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 	out := Output{
 		ID:                     10,
@@ -868,7 +870,7 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_NoOptionalFields verifies the behavior of format markdown no optional fields.
+// TestFormatMarkdown_NoOptionalFields verifies FormatMarkdown when no optional fields.
 func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 	out := Output{
 		ID:                     10,
@@ -900,7 +902,7 @@ func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 // FormatListMarkdownString — direct empty call
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	got := FormatListMarkdownString(ListOutput{Members: []Output{}})
 	if got != "No members found.\n" {
@@ -908,7 +910,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithMembers verifies the behavior of format list markdown string with members.
+// TestFormatListMarkdownString_WithMembers verifies FormatListMarkdownString when with members.
 func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
@@ -989,7 +991,7 @@ func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
 // FormatListMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_ReturnsCallToolResult verifies the behavior of format list markdown returns call tool result.
+// TestFormatListMarkdown_ReturnsCallToolResult verifies FormatListMarkdown returns call tool result.
 func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
@@ -1005,7 +1007,7 @@ func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyReturnsCallToolResult verifies the behavior of format list markdown empty returns call tool result.
+// TestFormatListMarkdown_EmptyReturnsCallToolResult verifies FormatListMarkdown returns call tool result for empty.
 func TestFormatListMarkdown_EmptyReturnsCallToolResult(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{Members: []Output{}})
 	if result == nil {

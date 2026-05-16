@@ -7,8 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const tblSep3Col = "|---|---|---|\n"
-
 // FormatRepositoryMarkdown formats a single registry repository as markdown.
 func FormatRepositoryMarkdown(out RepositoryOutput) string {
 	heading := out.Path
@@ -45,8 +43,7 @@ func FormatRepositoryListMarkdown(out RepositoryListOutput) string {
 		toolutil.WritePagination(&b, out.Pagination)
 		return b.String()
 	}
-	b.WriteString("| Name | Path | Tags Count |\n")
-	b.WriteString(tblSep3Col)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Tags Count"))
 	for _, r := range out.Repositories {
 		fmt.Fprintf(&b, "| %s | %s | %d |\n", r.Name, r.Path, r.TagsCount)
 	}
@@ -91,8 +88,7 @@ func FormatTagListMarkdown(out TagListOutput) string {
 		toolutil.WritePagination(&b, out.Pagination)
 		return b.String()
 	}
-	b.WriteString("| Name | Path | Total Size |\n")
-	b.WriteString(tblSep3Col)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Total Size"))
 	for _, t := range out.Tags {
 		fmt.Fprintf(&b, "| %s | %s | %d |\n", t.Name, t.Path, t.TotalSize)
 	}
@@ -129,8 +125,7 @@ func FormatProtectionRuleListMarkdown(out ProtectionRuleListOutput) string {
 		toolutil.WritePagination(&b, out.Pagination)
 		return b.String()
 	}
-	b.WriteString("| Pattern | Min Push | Min Delete |\n")
-	b.WriteString(tblSep3Col)
+	b.WriteString(toolutil.MarkdownTableHeader("Pattern", "Min Push", "Min Delete"))
 	for _, r := range out.Rules {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n",
 			r.RepositoryPathPattern, r.MinimumAccessLevelForPush, r.MinimumAccessLevelForDelete)

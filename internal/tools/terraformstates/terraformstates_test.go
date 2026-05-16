@@ -12,11 +12,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/graphql" {
@@ -34,7 +36,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -45,7 +47,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/graphql" {
@@ -63,7 +65,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -74,7 +76,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestDelete verifies the behavior of delete.
+// TestDelete verifies Delete.
 func TestDelete(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -89,7 +91,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies that Delete handles the error scenario correctly.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -100,7 +102,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteVersion verifies the behavior of delete version.
+// TestDeleteVersion verifies DeleteVersion.
 func TestDeleteVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -115,7 +117,7 @@ func TestDeleteVersion(t *testing.T) {
 	}
 }
 
-// TestLock verifies the behavior of lock.
+// TestLock verifies Lock.
 func TestLock(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -133,7 +135,7 @@ func TestLock(t *testing.T) {
 	}
 }
 
-// TestLock_Error verifies that Lock handles the error scenario correctly.
+// TestLock_Error verifies Lock when error.
 func TestLock_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"already locked"}`)
@@ -144,7 +146,7 @@ func TestLock_Error(t *testing.T) {
 	}
 }
 
-// TestUnlock verifies the behavior of unlock.
+// TestUnlock verifies Unlock.
 func TestUnlock(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -162,7 +164,7 @@ func TestUnlock(t *testing.T) {
 	}
 }
 
-// TestUnlock_Error verifies that Unlock handles the error scenario correctly.
+// TestUnlock_Error verifies Unlock when error.
 func TestUnlock_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"not locked"}`)
@@ -173,7 +175,7 @@ func TestUnlock_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{States: []StateItem{{Name: "state1", LatestSerial: 3}}})
 	if md == "" {
@@ -187,7 +189,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // DeleteVersion — error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteVersion_Error verifies the behavior of delete version error.
+// TestDeleteVersion_Error verifies DeleteVersion when error.
 func TestDeleteVersion_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -202,7 +204,7 @@ func TestDeleteVersion_Error(t *testing.T) {
 // FormatStateMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatStateMarkdown_Coverage verifies the behavior of format state markdown coverage.
+// TestFormatStateMarkdown_Coverage verifies FormatStateMarkdown when coverage.
 func TestFormatStateMarkdown_Coverage(t *testing.T) {
 	md := FormatStateMarkdown(StateItem{Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path"})
 	for _, want := range []string{"prod-state", "42", "/dl/path"} {
@@ -216,7 +218,7 @@ func TestFormatStateMarkdown_Coverage(t *testing.T) {
 // FormatLockMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatLockMarkdown_Coverage verifies the behavior of format lock markdown coverage.
+// TestFormatLockMarkdown_Coverage verifies FormatLockMarkdown when coverage.
 func TestFormatLockMarkdown_Coverage(t *testing.T) {
 	md := FormatLockMarkdown(LockOutput{Success: true, Message: "State 'x' locked"})
 	if !strings.Contains(md, "true") {
@@ -231,7 +233,7 @@ func TestFormatLockMarkdown_Coverage(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{States: nil})
 	if !strings.Contains(md, "No Terraform states found") {
@@ -243,7 +245,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // ActionSpec route execution — all 6 individual tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates canonical routes across multiple scenarios using table-driven subtests.
+// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, terraformHandler())
 	specs := ActionSpecs(client)
@@ -286,7 +288,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // Shared mock handler
 // ---------------------------------------------------------------------------.
 
-// terraformHandler is an internal helper for the terraformstates package.
+// terraformHandler supports terraform handler assertions in terraformstates tests.
 func terraformHandler() http.Handler {
 	mux := http.NewServeMux()
 

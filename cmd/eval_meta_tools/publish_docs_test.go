@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
-// TestReadPublishReport_ParsesSingleModelReport verifies that ReadPublishReport handles the parses single model report scenario correctly.
+// TestReadPublishReport_ParsesSingleModelReport verifies ReadPublishReport parses single model report.
 func TestReadPublishReport_ParsesSingleModelReport(t *testing.T) {
 	path := writeTempPublishReport(t, singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 2))
 
@@ -40,7 +40,7 @@ func TestReadPublishReport_ParsesSingleModelReport(t *testing.T) {
 	}
 }
 
-// TestReadPublishReport_ParsesPerModelRows verifies that ReadPublishReport handles the parses per model rows scenario correctly.
+// TestReadPublishReport_ParsesPerModelRows verifies ReadPublishReport parses per model rows.
 func TestReadPublishReport_ParsesPerModelRows(t *testing.T) {
 	path := writeTempPublishReport(t, multiModelPublishReport())
 
@@ -63,7 +63,7 @@ func TestReadPublishReport_ParsesPerModelRows(t *testing.T) {
 	}
 }
 
-// TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel verifies that ValidatePublishReports handles the rejects partial docker preset without targeted label scenario correctly.
+// TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel verifies ValidatePublishReports rejects partial docker preset without targeted label.
 func TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel(t *testing.T) {
 	path := writeTempPublishReport(t, singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 1))
 	report, err := readPublishReport(path)
@@ -81,7 +81,7 @@ func TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel(t
 	}
 }
 
-// TestSortedPublishRows_ReplacesDuplicateModelPresetRows verifies that SortedPublishRows handles the replaces duplicate model preset rows scenario correctly.
+// TestSortedPublishRows_ReplacesDuplicateModelPresetRows verifies SortedPublishRows when replaces duplicate model preset rows.
 func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	oldPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, 25))
 	newPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, 25))
@@ -99,7 +99,7 @@ func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	}
 }
 
-// TestAggregatePublishRows_RepairSuccessUsesRepairAttempts verifies that AggregatePublishRows handles the repair success uses repair attempts scenario correctly.
+// TestAggregatePublishRows_RepairSuccessUsesRepairAttempts verifies AggregatePublishRows uses repair attempts for repair success.
 func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	rows := []publishRow{
 		{Attempts: 40, RepairSuccess: 100},
@@ -178,7 +178,7 @@ func TestResolveGitDir_SupportsGitFileAndPackedRefs(t *testing.T) {
 	}
 }
 
-// TestApplyManagedBlock_ReplacesAndAppendsSnapshots verifies that ApplyManagedBlock handles the replaces and appends snapshots scenario correctly.
+// TestApplyManagedBlock_ReplacesAndAppendsSnapshots verifies ApplyManagedBlock when replaces and appends snapshots.
 func TestApplyManagedBlock_ReplacesAndAppendsSnapshots(t *testing.T) {
 	content := "before\n" + modelEvalResultsStart + "\n### Old\n\nold\n" + modelEvalResultsEnd + "\nafter\n"
 	replaced, err := applyManagedBlock(content, modelEvalResultsStart, modelEvalResultsEnd, "### New\n\nnew\n", publishModeReplaceCurrent, "New")
@@ -198,7 +198,7 @@ func TestApplyManagedBlock_ReplacesAndAppendsSnapshots(t *testing.T) {
 	}
 }
 
-// TestPublishEvaluationDocs_WritesAndChecksManagedDocs verifies that PublishEvaluationDocs handles the writes and checks managed docs scenario correctly.
+// TestPublishEvaluationDocs_WritesAndChecksManagedDocs verifies PublishEvaluationDocs writes and checks managed docs.
 func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	tmp := t.TempDir()
 	reportPath := filepath.Join(tmp, "report.md")
@@ -709,7 +709,7 @@ func TestGitMetadataFallbackBranches(t *testing.T) {
 	}
 }
 
-// writeTempPublishReport is an internal helper for the main package.
+// writeTempPublishReport writes temp publish report fixture data for tests.
 func writeTempPublishReport(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "report.md")
@@ -719,11 +719,12 @@ func writeTempPublishReport(t *testing.T, content string) string {
 	return path
 }
 
-// singleModelPublishReport is an internal helper for the main package.
+// singleModelPublishReport supports single model publish report assertions in main tests.
 func singleModelPublishReport(model, preset string, attempts int) string {
 	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceMeta)
 }
 
+// singleModelPublishReportForSurface supports single model publish report for surface assertions in main tests.
 func singleModelPublishReportForSurface(model, preset string, attempts int, toolSurface string) string {
 	var rows strings.Builder
 	for i := 1; i <= attempts; i++ {
@@ -769,12 +770,12 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		rows.String()
 }
 
-// dynamicSingleModelPublishReport is an internal helper for the main package.
+// dynamicSingleModelPublishReport supports dynamic single model publish report assertions in main tests.
 func dynamicSingleModelPublishReport(model, preset string, attempts int) string {
 	return singleModelPublishReportForSurface(model, preset, attempts, config.ToolSurfaceDynamic)
 }
 
-// multiModelPublishReport is an internal helper for the main package.
+// multiModelPublishReport supports multi model publish report assertions in main tests.
 func multiModelPublishReport() string {
 	return "# Meta-Tool Model Evaluation\n\n" +
 		"Date: 2026-05-05T18:00:00Z\n" +

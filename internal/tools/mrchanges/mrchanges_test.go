@@ -109,11 +109,13 @@ func TestMRChangesGet_TruncatedFiles(t *testing.T) {
 // Diff Versions — Tests
 // ---------------------------------------------------------------------------.
 
+// diffVersionsListResponse identifies the diff versions list response constant used by this package.
 const diffVersionsListResponse = `[
   {"id":1,"head_commit_sha":"abc123","base_commit_sha":"def456","start_commit_sha":"ghi789","created_at":"2026-01-15T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"3"},
   {"id":2,"head_commit_sha":"jkl012","base_commit_sha":"mno345","start_commit_sha":"pqr678","created_at":"2026-01-16T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"5"}
 ]`
 
+// diffVersionGetResponse identifies the diff version get response constant used by this package.
 const diffVersionGetResponse = `{
   "id":2,
   "head_commit_sha":"jkl012",
@@ -131,7 +133,7 @@ const diffVersionGetResponse = `{
   ]
 }`
 
-// TestListDiffVersions_Success verifies the behavior of list diff versions success.
+// TestListDiffVersions_Success verifies ListDiffVersions when success.
 func TestListDiffVersions_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/versions" {
@@ -161,7 +163,7 @@ func TestListDiffVersions_Success(t *testing.T) {
 	}
 }
 
-// TestListDiffVersions_MissingProject verifies the behavior of list diff versions missing project.
+// TestListDiffVersions_MissingProject verifies ListDiffVersions when missing project.
 func TestListDiffVersions_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -175,7 +177,7 @@ func TestListDiffVersions_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListDiffVersions_Error verifies the behavior of list diff versions error.
+// TestListDiffVersions_Error verifies ListDiffVersions when error.
 func TestListDiffVersions_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
@@ -189,7 +191,7 @@ func TestListDiffVersions_Error(t *testing.T) {
 	}
 }
 
-// TestGetDiffVersion_Success verifies the behavior of get diff version success.
+// TestGetDiffVersion_Success verifies GetDiffVersion when success.
 func TestGetDiffVersion_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/versions/2" {
@@ -225,7 +227,7 @@ func TestGetDiffVersion_Success(t *testing.T) {
 	}
 }
 
-// TestGetDiffVersion_MissingProject verifies the behavior of get diff version missing project.
+// TestGetDiffVersion_MissingProject verifies GetDiffVersion when missing project.
 func TestGetDiffVersion_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -239,7 +241,7 @@ func TestGetDiffVersion_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetDiffVersion_Error verifies the behavior of get diff version error.
+// TestGetDiffVersion_Error verifies GetDiffVersion when error.
 func TestGetDiffVersion_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
@@ -257,7 +259,7 @@ func TestGetDiffVersion_Error(t *testing.T) {
 // MRIID & VersionID required-field validation
 // ---------------------------------------------------------------------------.
 
-// assertContains is an internal helper for the mrchanges package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -268,7 +270,7 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation validates m r i i d required validation across multiple scenarios using table-driven subtests.
+// TestMRIIDRequired_Validation covers MRIIDRequired with table-driven subtests for validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when merge_request_iid is missing")
@@ -302,7 +304,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 	}
 }
 
-// TestVersionIDRequired_Validation verifies the behavior of version i d required validation.
+// TestVersionIDRequired_Validation verifies VersionIDRequired when validation.
 func TestVersionIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when version_id is missing")
@@ -320,7 +322,7 @@ func TestVersionIDRequired_Validation(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithChanges verifies the behavior of format output markdown with changes.
+// TestFormatOutputMarkdown_WithChanges verifies FormatOutputMarkdown when with changes.
 func TestFormatOutputMarkdown_WithChanges(t *testing.T) {
 	out := Output{
 		MRIID: 42,
@@ -386,7 +388,7 @@ func TestFormatOutputMarkdown_TruncatedFiles(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the behavior of format output markdown empty.
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	out := Output{MRIID: 7, Changes: nil}
 	md := FormatOutputMarkdown(out)
@@ -403,7 +405,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // FormatDiffVersionsListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatDiffVersionsListMarkdown_WithVersions verifies the behavior of format diff versions list markdown with versions.
+// TestFormatDiffVersionsListMarkdown_WithVersions verifies FormatDiffVersionsListMarkdown when with versions.
 func TestFormatDiffVersionsListMarkdown_WithVersions(t *testing.T) {
 	out := DiffVersionsListOutput{
 		DiffVersions: []DiffVersionOutput{
@@ -432,7 +434,7 @@ func TestFormatDiffVersionsListMarkdown_WithVersions(t *testing.T) {
 	}
 }
 
-// TestFormatDiffVersionsListMarkdown_Empty verifies the behavior of format diff versions list markdown empty.
+// TestFormatDiffVersionsListMarkdown_Empty verifies FormatDiffVersionsListMarkdown when empty.
 func TestFormatDiffVersionsListMarkdown_Empty(t *testing.T) {
 	out := DiffVersionsListOutput{DiffVersions: nil}
 	md := FormatDiffVersionsListMarkdown(out)
@@ -446,7 +448,7 @@ func TestFormatDiffVersionsListMarkdown_Empty(t *testing.T) {
 // FormatDiffVersionGetMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatDiffVersionGetMarkdown_Full verifies the behavior of format diff version get markdown full.
+// TestFormatDiffVersionGetMarkdown_Full verifies FormatDiffVersionGetMarkdown when full.
 func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 	out := DiffVersionOutput{
 		ID:             5,
@@ -496,7 +498,7 @@ func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatDiffVersionGetMarkdown_Minimal verifies the behavior of format diff version get markdown minimal.
+// TestFormatDiffVersionGetMarkdown_Minimal verifies FormatDiffVersionGetMarkdown when minimal.
 func TestFormatDiffVersionGetMarkdown_Minimal(t *testing.T) {
 	out := DiffVersionOutput{
 		ID:            1,
@@ -528,7 +530,7 @@ func TestFormatDiffVersionGetMarkdown_Minimal(t *testing.T) {
 // RawDiffs handler
 // ---------------------------------------------------------------------------.
 
-// TestRawDiffs_Success verifies the behavior of raw diffs success.
+// TestRawDiffs_Success verifies RawDiffs when success.
 func TestRawDiffs_Success(t *testing.T) {
 	const rawDiff = "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-old\n+new\n"
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -553,7 +555,7 @@ func TestRawDiffs_Success(t *testing.T) {
 	}
 }
 
-// TestRawDiffs_MissingProjectID verifies the behavior of raw diffs missing project i d.
+// TestRawDiffs_MissingProjectID verifies RawDiffs when missing project ID.
 func TestRawDiffs_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -564,7 +566,7 @@ func TestRawDiffs_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestRawDiffs_APIError verifies the behavior of raw diffs a p i error.
+// TestRawDiffs_APIError verifies RawDiffs when API error.
 func TestRawDiffs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -575,7 +577,7 @@ func TestRawDiffs_APIError(t *testing.T) {
 	}
 }
 
-// TestRawDiffs_CancelledContext verifies the behavior of raw diffs cancelled context.
+// TestRawDiffs_CancelledContext verifies RawDiffs when cancelled context.
 func TestRawDiffs_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -592,7 +594,7 @@ func TestRawDiffs_CancelledContext(t *testing.T) {
 // FormatRawDiffsMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRawDiffsMarkdown_WithDiff verifies the behavior of format raw diffs markdown with diff.
+// TestFormatRawDiffsMarkdown_WithDiff verifies FormatRawDiffsMarkdown when with diff.
 func TestFormatRawDiffsMarkdown_WithDiff(t *testing.T) {
 	out := RawDiffsOutput{MRIID: 3, RawDiff: "diff --git a/f.go b/f.go\n--- a/f.go\n+++ b/f.go\n@@ -1 +1 @@\n-old\n+new\n"}
 	md := FormatRawDiffsMarkdown(out)
@@ -609,7 +611,7 @@ func TestFormatRawDiffsMarkdown_WithDiff(t *testing.T) {
 	}
 }
 
-// TestFormatRawDiffsMarkdown_Empty verifies the behavior of format raw diffs markdown empty.
+// TestFormatRawDiffsMarkdown_Empty verifies FormatRawDiffsMarkdown when empty.
 func TestFormatRawDiffsMarkdown_Empty(t *testing.T) {
 	out := RawDiffsOutput{MRIID: 4, RawDiff: ""}
 	md := FormatRawDiffsMarkdown(out)
@@ -622,7 +624,7 @@ func TestFormatRawDiffsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRawDiffsMarkdown_NoTrailingNewline verifies the behavior of format raw diffs markdown no trailing newline.
+// TestFormatRawDiffsMarkdown_NoTrailingNewline verifies FormatRawDiffsMarkdown when no trailing newline.
 func TestFormatRawDiffsMarkdown_NoTrailingNewline(t *testing.T) {
 	out := RawDiffsOutput{MRIID: 5, RawDiff: "some diff without trailing newline"}
 	md := FormatRawDiffsMarkdown(out)
@@ -637,7 +639,7 @@ func TestFormatRawDiffsMarkdown_NoTrailingNewline(t *testing.T) {
 // Canceled-context paths for existing handlers
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -650,7 +652,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -661,7 +663,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestListDiffVersions_CancelledContext verifies the behavior of list diff versions cancelled context.
+// TestListDiffVersions_CancelledContext verifies ListDiffVersions when cancelled context.
 func TestListDiffVersions_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -674,7 +676,7 @@ func TestListDiffVersions_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetDiffVersion_CancelledContext verifies the behavior of get diff version cancelled context.
+// TestGetDiffVersion_CancelledContext verifies GetDiffVersion when cancelled context.
 func TestGetDiffVersion_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -687,7 +689,7 @@ func TestGetDiffVersion_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetDiffVersion_Unidiff verifies the behavior of get diff version unidiff.
+// TestGetDiffVersion_Unidiff verifies GetDiffVersion when unidiff.
 func TestGetDiffVersion_Unidiff(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/versions/2" {

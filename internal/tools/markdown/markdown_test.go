@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestRender_Success verifies that Render handles the success scenario correctly.
+// TestRender_Success verifies Render when success.
 func TestRender_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/markdown" {
@@ -32,7 +32,7 @@ func TestRender_Success(t *testing.T) {
 	}
 }
 
-// TestRender_WithGFMAndProject verifies that Render handles the with g f m and project scenario correctly.
+// TestRender_WithGFMAndProject verifies Render when with gfm and project.
 func TestRender_WithGFMAndProject(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"html":"<p>Rendered with GFM</p>"}`)
@@ -51,7 +51,7 @@ func TestRender_WithGFMAndProject(t *testing.T) {
 	}
 }
 
-// TestRender_Error verifies that Render handles the error scenario correctly.
+// TestRender_Error verifies Render when error.
 func TestRender_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -63,7 +63,7 @@ func TestRender_Error(t *testing.T) {
 	}
 }
 
-// TestFormatRenderMarkdown_Empty verifies that FormatRenderMarkdown handles the empty scenario correctly.
+// TestFormatRenderMarkdown_Empty verifies FormatRenderMarkdown when empty.
 func TestFormatRenderMarkdown_Empty(t *testing.T) {
 	result := FormatRenderMarkdown(RenderOutput{})
 	if result == nil {
@@ -75,7 +75,7 @@ func TestFormatRenderMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRenderMarkdown_WithData verifies that FormatRenderMarkdown handles the with data scenario correctly.
+// TestFormatRenderMarkdown_WithData verifies FormatRenderMarkdown when with data.
 func TestFormatRenderMarkdown_WithData(t *testing.T) {
 	result := FormatRenderMarkdown(RenderOutput{HTML: "<p>Hello</p>"})
 	if result == nil {
@@ -87,7 +87,7 @@ func TestFormatRenderMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestRender_CancelledContext verifies that Render handles the cancelled context scenario correctly.
+// TestRender_CancelledContext verifies Render when cancelled context.
 func TestRender_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"html":"<p>x</p>"}`)
@@ -141,6 +141,7 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	}
 }
 
+// markdownSpecsByTool supports markdown specs by tool assertions in markdown tests.
 func markdownSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

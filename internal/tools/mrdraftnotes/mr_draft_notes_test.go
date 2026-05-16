@@ -16,19 +16,25 @@ import (
 )
 
 const (
-	msgNotFound        = "not found"
+	// msgNotFound identifies the msg not found constant used by this package.
+	msgNotFound = "not found"
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 	errExpCancelledCtx = "expected error for canceled context"
-	fmtUnexpErr        = "unexpected error: %v"
-	pathDraftNotes     = "/api/v4/projects/42/merge_requests/1/draft_notes"
-	pathDraftNoteByID  = "/api/v4/projects/42/merge_requests/1/draft_notes/10"
-	errExpZeroNoteID   = "expected error for zero note_id"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// pathDraftNotes identifies the path draft notes constant used by this package.
+	pathDraftNotes = "/api/v4/projects/42/merge_requests/1/draft_notes"
+	// pathDraftNoteByID identifies the path draft note by ID constant used by this package.
+	pathDraftNoteByID = "/api/v4/projects/42/merge_requests/1/draft_notes/10"
+	// errExpZeroNoteID identifies the err exp zero note ID constant used by this package.
+	errExpZeroNoteID = "expected error for zero note_id"
 )
 
 // ---------------------------------------------------------------------------
 // draftNoteList tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNoteList_Success verifies the behavior of draft note list success.
+// TestDraftNoteList_Success verifies DraftNoteList when success.
 func TestDraftNoteList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes && r.Method == http.MethodGet {
@@ -59,7 +65,7 @@ func TestDraftNoteList_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNoteList_WithSorting verifies the behavior of draft note list with sorting.
+// TestDraftNoteList_WithSorting verifies DraftNoteList when with sorting.
 func TestDraftNoteList_WithSorting(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes {
@@ -83,7 +89,7 @@ func TestDraftNoteList_WithSorting(t *testing.T) {
 	}
 }
 
-// TestDraftNoteList_MissingProjectID verifies the behavior of draft note list missing project i d.
+// TestDraftNoteList_MissingProjectID verifies DraftNoteList when missing project ID.
 func TestDraftNoteList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -98,7 +104,7 @@ func TestDraftNoteList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDraftNoteList_CancelledContext verifies the behavior of draft note list cancelled context.
+// TestDraftNoteList_CancelledContext verifies DraftNoteList when cancelled context.
 func TestDraftNoteList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -116,7 +122,7 @@ func TestDraftNoteList_CancelledContext(t *testing.T) {
 // draftNoteGet tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNoteGet_Success verifies the behavior of draft note get success.
+// TestDraftNoteGet_Success verifies DraftNoteGet when success.
 func TestDraftNoteGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodGet {
@@ -139,7 +145,7 @@ func TestDraftNoteGet_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNote_GetZeroNoteID verifies the behavior of draft note get zero note i d.
+// TestDraftNote_GetZeroNoteID verifies DraftNote when get zero note ID.
 func TestDraftNote_GetZeroNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -155,7 +161,7 @@ func TestDraftNote_GetZeroNoteID(t *testing.T) {
 	}
 }
 
-// TestDraftNoteGet_CancelledContext verifies the behavior of draft note get cancelled context.
+// TestDraftNoteGet_CancelledContext verifies DraftNoteGet when cancelled context.
 func TestDraftNoteGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -173,7 +179,7 @@ func TestDraftNoteGet_CancelledContext(t *testing.T) {
 // draftNoteCreate tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNoteCreate_Success verifies the behavior of draft note create success.
+// TestDraftNoteCreate_Success verifies DraftNoteCreate when success.
 func TestDraftNoteCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes && r.Method == http.MethodPost {
@@ -196,7 +202,7 @@ func TestDraftNoteCreate_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNoteCreate_WithOptions verifies the behavior of draft note create with options.
+// TestDraftNoteCreate_WithOptions verifies DraftNoteCreate when with options.
 func TestDraftNoteCreate_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes && r.Method == http.MethodPost {
@@ -223,7 +229,7 @@ func TestDraftNoteCreate_WithOptions(t *testing.T) {
 	}
 }
 
-// TestDraftNoteCreate_WithPosition verifies the behavior of draft note create with position.
+// TestDraftNoteCreate_WithPosition verifies DraftNoteCreate when with position.
 func TestDraftNoteCreate_WithPosition(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes && r.Method == http.MethodPost {
@@ -266,7 +272,7 @@ func TestDraftNoteCreate_WithPosition(t *testing.T) {
 	}
 }
 
-// TestDraftNoteCreate_MissingNote verifies the behavior of draft note create missing note.
+// TestDraftNoteCreate_MissingNote verifies DraftNoteCreate when missing note.
 func TestDraftNoteCreate_MissingNote(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -282,7 +288,7 @@ func TestDraftNoteCreate_MissingNote(t *testing.T) {
 	}
 }
 
-// TestDraftNoteCreate_CancelledContext verifies the behavior of draft note create cancelled context.
+// TestDraftNoteCreate_CancelledContext verifies DraftNoteCreate when cancelled context.
 func TestDraftNoteCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -300,7 +306,7 @@ func TestDraftNoteCreate_CancelledContext(t *testing.T) {
 // draftNoteUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNoteUpdate_Success verifies the behavior of draft note update success.
+// TestDraftNoteUpdate_Success verifies DraftNoteUpdate when success.
 func TestDraftNoteUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodPut {
@@ -324,7 +330,7 @@ func TestDraftNoteUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNote_UpdateZeroNoteID verifies the behavior of draft note update zero note i d.
+// TestDraftNote_UpdateZeroNoteID verifies DraftNote when update zero note ID.
 func TestDraftNote_UpdateZeroNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -341,7 +347,7 @@ func TestDraftNote_UpdateZeroNoteID(t *testing.T) {
 	}
 }
 
-// TestDraftNoteUpdate_CancelledContext verifies the behavior of draft note update cancelled context.
+// TestDraftNoteUpdate_CancelledContext verifies DraftNoteUpdate when cancelled context.
 func TestDraftNoteUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -359,7 +365,7 @@ func TestDraftNoteUpdate_CancelledContext(t *testing.T) {
 // draftNoteDelete tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNoteDelete_Success verifies the behavior of draft note delete success.
+// TestDraftNoteDelete_Success verifies DraftNoteDelete when success.
 func TestDraftNoteDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodDelete {
@@ -379,7 +385,7 @@ func TestDraftNoteDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNote_DeleteZeroNoteID verifies the behavior of draft note delete zero note i d.
+// TestDraftNote_DeleteZeroNoteID verifies DraftNote when delete zero note ID.
 func TestDraftNote_DeleteZeroNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -395,7 +401,7 @@ func TestDraftNote_DeleteZeroNoteID(t *testing.T) {
 	}
 }
 
-// TestDraftNoteDelete_CancelledContext verifies the behavior of draft note delete cancelled context.
+// TestDraftNoteDelete_CancelledContext verifies DraftNoteDelete when cancelled context.
 func TestDraftNoteDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -413,7 +419,7 @@ func TestDraftNoteDelete_CancelledContext(t *testing.T) {
 // draftNotePublish tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNotePublish_Success verifies the behavior of draft note publish success.
+// TestDraftNotePublish_Success verifies DraftNotePublish when success.
 func TestDraftNotePublish_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNoteByID+"/publish" && r.Method == http.MethodPut {
@@ -433,7 +439,7 @@ func TestDraftNotePublish_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNote_PublishZeroNoteID verifies the behavior of draft note publish zero note i d.
+// TestDraftNote_PublishZeroNoteID verifies DraftNote when publish zero note ID.
 func TestDraftNote_PublishZeroNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -449,7 +455,7 @@ func TestDraftNote_PublishZeroNoteID(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublishServer_Error verifies the behavior of draft note publish server error.
+// TestDraftNotePublishServer_Error verifies DraftNotePublishServer when error.
 func TestDraftNotePublishServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -465,7 +471,7 @@ func TestDraftNotePublishServer_Error(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublish_CancelledContext verifies the behavior of draft note publish cancelled context.
+// TestDraftNotePublish_CancelledContext verifies DraftNotePublish when cancelled context.
 func TestDraftNotePublish_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -483,7 +489,7 @@ func TestDraftNotePublish_CancelledContext(t *testing.T) {
 // draftNotePublishAll tests
 // ---------------------------------------------------------------------------.
 
-// TestDraftNotePublishAll_Success verifies the behavior of draft note publish all success.
+// TestDraftNotePublishAll_Success verifies DraftNotePublishAll when success.
 func TestDraftNotePublishAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathDraftNotes+"/bulk_publish" && r.Method == http.MethodPost {
@@ -502,7 +508,7 @@ func TestDraftNotePublishAll_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublishAll_MissingProjectID verifies the behavior of draft note publish all missing project i d.
+// TestDraftNotePublishAll_MissingProjectID verifies DraftNotePublishAll when missing project ID.
 func TestDraftNotePublishAll_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -517,7 +523,7 @@ func TestDraftNotePublishAll_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublishAllServer_Error verifies the behavior of draft note publish all server error.
+// TestDraftNotePublishAllServer_Error verifies DraftNotePublishAllServer when error.
 func TestDraftNotePublishAllServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -532,7 +538,7 @@ func TestDraftNotePublishAllServer_Error(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublishAll_CancelledContext verifies the behavior of draft note publish all cancelled context.
+// TestDraftNotePublishAll_CancelledContext verifies DraftNotePublishAll when cancelled context.
 func TestDraftNotePublishAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -550,7 +556,7 @@ func TestDraftNotePublishAll_CancelledContext(t *testing.T) {
 // int64 validation tests
 // ---------------------------------------------------------------------------.
 
-// assertContains is an internal helper for the mrdraftnotes package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -561,7 +567,7 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation verifies the behavior of m r i i d required validation.
+// TestMRIIDRequired_Validation verifies MRIIDRequired when validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("API should not be called when MRIID is 0")
@@ -602,7 +608,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 	})
 }
 
-// TestNoteIDRequired_Validation verifies the behavior of note i d required validation.
+// TestNoteIDRequired_Validation verifies NoteIDRequired when validation.
 func TestNoteIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("API should not be called when NoteID is 0")
@@ -635,7 +641,7 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 // toDiffPositionOptions tests
 // ---------------------------------------------------------------------------.
 
-// TestToDiffPositionOptions verifies the behavior of to diff position options.
+// TestToDiffPositionOptions verifies ToDiffPositionOptions.
 func TestToDiffPositionOptions(t *testing.T) {
 	pos := &DiffPosition{
 		BaseSHA:  "base",
@@ -675,7 +681,7 @@ func TestToDiffPositionOptions(t *testing.T) {
 	}
 }
 
-// TestToDiffPositionOptions_OmitsZeroLines verifies the behavior of to diff position options omits zero lines.
+// TestToDiffPositionOptions_OmitsZeroLines verifies ToDiffPositionOptions omits zero lines.
 func TestToDiffPositionOptions_OmitsZeroLines(t *testing.T) {
 	pos := &DiffPosition{
 		BaseSHA:  "b",
@@ -701,7 +707,7 @@ func TestToDiffPositionOptions_OmitsZeroLines(t *testing.T) {
 // ToOutput with Position tests
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithPosition verifies the behavior of to output with position.
+// TestToOutput_WithPosition verifies ToOutput when with position.
 func TestToOutput_WithPosition(t *testing.T) {
 	dn := &gl.DraftNote{
 		ID:             30,
@@ -731,7 +737,7 @@ func TestToOutput_WithPosition(t *testing.T) {
 	}
 }
 
-// TestToOutput_WithoutPosition verifies the behavior of to output without position.
+// TestToOutput_WithoutPosition verifies ToOutput when without position.
 func TestToOutput_WithoutPosition(t *testing.T) {
 	dn := &gl.DraftNote{
 		ID:             31,
@@ -748,13 +754,14 @@ func TestToOutput_WithoutPosition(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Full verifies the behavior of format output markdown full.
+// TestFormatOutputMarkdown_Full verifies FormatOutputMarkdown when full.
 func TestFormatOutputMarkdown_Full(t *testing.T) {
 	out := Output{
 		ID:                10,
@@ -783,7 +790,7 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Minimal verifies the behavior of format output markdown minimal.
+// TestFormatOutputMarkdown_Minimal verifies FormatOutputMarkdown when minimal.
 func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	out := Output{
 		ID:                5,
@@ -813,7 +820,7 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithDraftNotes verifies the behavior of format list markdown with draft notes.
+// TestFormatListMarkdown_WithDraftNotes verifies FormatListMarkdown when with draft notes.
 func TestFormatListMarkdown_WithDraftNotes(t *testing.T) {
 	out := ListOutput{
 		DraftNotes: []Output{
@@ -847,7 +854,7 @@ func TestFormatListMarkdown_WithDraftNotes(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		DraftNotes: []Output{},
@@ -867,7 +874,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // Handler error branches not covered by existing tests
 // ---------------------------------------------------------------------------.
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -878,7 +885,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -889,7 +896,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingProjectID verifies the behavior of create missing project i d.
+// TestCreate_MissingProjectID verifies Create when missing project ID.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -900,7 +907,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -911,7 +918,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -922,7 +929,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyNote verifies the behavior of update empty note.
+// TestUpdate_EmptyNote verifies Update when empty note.
 func TestUpdate_EmptyNote(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -941,7 +948,7 @@ func TestUpdate_EmptyNote(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -952,7 +959,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies the behavior of delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -963,7 +970,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -974,7 +981,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestPublish_MissingProjectID verifies the behavior of publish missing project i d.
+// TestPublish_MissingProjectID verifies Publish when missing project ID.
 func TestPublish_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -985,7 +992,7 @@ func TestPublish_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPublishAll_CancelledContext verifies the behavior of publish all cancelled context.
+// TestPublishAll_CancelledContext verifies PublishAll when cancelled context.
 func TestPublishAll_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -998,7 +1005,7 @@ func TestPublishAll_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)

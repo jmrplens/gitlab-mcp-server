@@ -297,9 +297,10 @@ func TestTagGet_APIError(t *testing.T) {
 // GetSignature tests
 // ---------------------------------------------------------------------------.
 
+// pathRepoTagSig identifies the path repo tag sig constant used by this package.
 const pathRepoTagSig = "/api/v4/projects/42/repository/tags/v1.0.0/signature"
 
-// TestTagGetSignature_Success verifies the behavior of tag get signature success.
+// TestTagGetSignature_Success verifies TagGetSignature when success.
 func TestTagGetSignature_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTagSig {
@@ -347,7 +348,7 @@ func TestTagGetSignature_Success(t *testing.T) {
 	}
 }
 
-// TestTagGetSignature_EmptyProjectID verifies the behavior of tag get signature empty project i d.
+// TestTagGetSignature_EmptyProjectID verifies TagGetSignature when empty project ID.
 func TestTagGetSignature_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -358,7 +359,7 @@ func TestTagGetSignature_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagGetSignature_EmptyTagName verifies the behavior of tag get signature empty tag name.
+// TestTagGetSignature_EmptyTagName verifies TagGetSignature when empty tag name.
 func TestTagGetSignature_EmptyTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -373,9 +374,10 @@ func TestTagGetSignature_EmptyTagName(t *testing.T) {
 // Protected Tags tests
 // ---------------------------------------------------------------------------.
 
+// pathProtectedTags identifies the path protected tags constant used by this package.
 const pathProtectedTags = "/api/v4/projects/42/protected_tags"
 
-// TestTagListProtected_Success verifies the behavior of tag list protected success.
+// TestTagListProtected_Success verifies TagListProtected when success.
 func TestTagListProtected_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags {
@@ -406,7 +408,7 @@ func TestTagListProtected_Success(t *testing.T) {
 	}
 }
 
-// TestTagListProtected_EmptyProjectID verifies the behavior of tag list protected empty project i d.
+// TestTagListProtected_EmptyProjectID verifies TagListProtected when empty project ID.
 func TestTagListProtected_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -417,7 +419,7 @@ func TestTagListProtected_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_Success verifies the behavior of tag get protected success.
+// TestTagGetProtected_Success verifies TagGetProtected when success.
 func TestTagGetProtected_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags+"/v*" {
@@ -436,7 +438,7 @@ func TestTagGetProtected_Success(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_EmptyProjectID verifies the behavior of tag get protected empty project i d.
+// TestTagGetProtected_EmptyProjectID verifies TagGetProtected when empty project ID.
 func TestTagGetProtected_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -447,7 +449,7 @@ func TestTagGetProtected_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_EmptyTagName verifies the behavior of tag get protected empty tag name.
+// TestTagGetProtected_EmptyTagName verifies TagGetProtected when empty tag name.
 func TestTagGetProtected_EmptyTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -458,7 +460,7 @@ func TestTagGetProtected_EmptyTagName(t *testing.T) {
 	}
 }
 
-// TestTagProtect_Success verifies the behavior of tag protect success.
+// TestTagProtect_Success verifies TagProtect when success.
 func TestTagProtect_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
@@ -484,7 +486,7 @@ func TestTagProtect_Success(t *testing.T) {
 	}
 }
 
-// TestTagProtect_EmptyProjectID verifies the behavior of tag protect empty project i d.
+// TestTagProtect_EmptyProjectID verifies TagProtect when empty project ID.
 func TestTagProtect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -495,7 +497,7 @@ func TestTagProtect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagProtect_EmptyName verifies the behavior of tag protect empty name.
+// TestTagProtect_EmptyName verifies TagProtect when empty name.
 func TestTagProtect_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -506,7 +508,7 @@ func TestTagProtect_EmptyName(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_Success verifies the behavior of tag unprotect success.
+// TestTagUnprotect_Success verifies TagUnprotect when success.
 func TestTagUnprotect_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProtectedTags+"/v*" {
@@ -522,7 +524,7 @@ func TestTagUnprotect_Success(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_EmptyProjectID verifies the behavior of tag unprotect empty project i d.
+// TestTagUnprotect_EmptyProjectID verifies TagUnprotect when empty project ID.
 func TestTagUnprotect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -533,7 +535,7 @@ func TestTagUnprotect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_EmptyTagName verifies the behavior of tag unprotect empty tag name.
+// TestTagUnprotect_EmptyTagName verifies TagUnprotect when empty tag name.
 func TestTagUnprotect_EmptyTagName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -548,7 +550,7 @@ func TestTagUnprotect_EmptyTagName(t *testing.T) {
 // Canceled context tests for ALL functions
 // ---------------------------------------------------------------------------.
 
-// TestTagCreate_CancelledContext verifies the behavior of tag create cancelled context.
+// TestTagCreate_CancelledContext verifies TagCreate when cancelled context.
 func TestTagCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -560,7 +562,7 @@ func TestTagCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagDelete_CancelledContext verifies the behavior of tag delete cancelled context.
+// TestTagDelete_CancelledContext verifies TagDelete when cancelled context.
 func TestTagDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -572,7 +574,7 @@ func TestTagDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagList_CancelledContext verifies the behavior of tag list cancelled context.
+// TestTagList_CancelledContext verifies TagList when cancelled context.
 func TestTagList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -584,7 +586,7 @@ func TestTagList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagGet_CancelledContext verifies the behavior of tag get cancelled context.
+// TestTagGet_CancelledContext verifies TagGet when cancelled context.
 func TestTagGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -596,7 +598,7 @@ func TestTagGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagGetSignature_CancelledContext verifies the behavior of tag get signature cancelled context.
+// TestTagGetSignature_CancelledContext verifies TagGetSignature when cancelled context.
 func TestTagGetSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -608,7 +610,7 @@ func TestTagGetSignature_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagListProtected_CancelledContext verifies the behavior of tag list protected cancelled context.
+// TestTagListProtected_CancelledContext verifies TagListProtected when cancelled context.
 func TestTagListProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -620,7 +622,7 @@ func TestTagListProtected_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_CancelledContext verifies the behavior of tag get protected cancelled context.
+// TestTagGetProtected_CancelledContext verifies TagGetProtected when cancelled context.
 func TestTagGetProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -632,7 +634,7 @@ func TestTagGetProtected_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagProtect_CancelledContext verifies the behavior of tag protect cancelled context.
+// TestTagProtect_CancelledContext verifies TagProtect when cancelled context.
 func TestTagProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -644,7 +646,7 @@ func TestTagProtect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_CancelledContext verifies the behavior of tag unprotect cancelled context.
+// TestTagUnprotect_CancelledContext verifies TagUnprotect when cancelled context.
 func TestTagUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -660,7 +662,7 @@ func TestTagUnprotect_CancelledContext(t *testing.T) {
 // Empty ProjectID for Create and Delete
 // ---------------------------------------------------------------------------.
 
-// TestTagCreate_EmptyProjectID verifies the behavior of tag create empty project i d.
+// TestTagCreate_EmptyProjectID verifies TagCreate when empty project ID.
 func TestTagCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -671,7 +673,7 @@ func TestTagCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestTagDelete_EmptyProjectID verifies the behavior of tag delete empty project i d.
+// TestTagDelete_EmptyProjectID verifies TagDelete when empty project ID.
 func TestTagDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -686,7 +688,7 @@ func TestTagDelete_EmptyProjectID(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestTagList_APIError verifies the behavior of tag list a p i error.
+// TestTagList_APIError verifies TagList when API error.
 func TestTagList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
@@ -697,7 +699,7 @@ func TestTagList_APIError(t *testing.T) {
 	}
 }
 
-// TestTagGetSignature_APIError verifies the behavior of tag get signature a p i error.
+// TestTagGetSignature_APIError verifies TagGetSignature when API error.
 func TestTagGetSignature_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -708,7 +710,7 @@ func TestTagGetSignature_APIError(t *testing.T) {
 	}
 }
 
-// TestTagListProtected_APIError verifies the behavior of tag list protected a p i error.
+// TestTagListProtected_APIError verifies TagListProtected when API error.
 func TestTagListProtected_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -719,7 +721,7 @@ func TestTagListProtected_APIError(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_APIError verifies the behavior of tag get protected a p i error.
+// TestTagGetProtected_APIError verifies TagGetProtected when API error.
 func TestTagGetProtected_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -730,7 +732,7 @@ func TestTagGetProtected_APIError(t *testing.T) {
 	}
 }
 
-// TestTagProtect_APIError verifies the behavior of tag protect a p i error.
+// TestTagProtect_APIError verifies TagProtect when API error.
 func TestTagProtect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -741,7 +743,7 @@ func TestTagProtect_APIError(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_APIError verifies the behavior of tag unprotect a p i error.
+// TestTagUnprotect_APIError verifies TagUnprotect when API error.
 func TestTagUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -756,7 +758,7 @@ func TestTagUnprotect_APIError(t *testing.T) {
 // ProtectTag with AllowedToCreate granular permissions
 // ---------------------------------------------------------------------------.
 
-// TestTagProtect_WithAllowedToCreate verifies the behavior of tag protect with allowed to create.
+// TestTagProtect_WithAllowedToCreate verifies TagProtect when with allowed to create.
 func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -798,7 +800,7 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 // ListProtectedTags with pagination
 // ---------------------------------------------------------------------------.
 
-// TestTagListProtected_Pagination verifies the behavior of tag list protected pagination.
+// TestTagListProtected_Pagination verifies TagListProtected when pagination.
 func TestTagListProtected_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags {
@@ -832,7 +834,7 @@ func TestTagListProtected_Pagination(t *testing.T) {
 // Converter edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilCommitAndZeroTime verifies the behavior of to output nil commit and zero time.
+// TestToOutput_NilCommitAndZeroTime verifies ToOutput when nil commit and zero time.
 func TestToOutput_NilCommitAndZeroTime(t *testing.T) {
 	out := toOutput(&gl.Tag{Name: "v0.0.1", Target: "abc"})
 	if out.CommitSHA != "" {
@@ -843,7 +845,7 @@ func TestToOutput_NilCommitAndZeroTime(t *testing.T) {
 	}
 }
 
-// TestProtectedTagOutput_FromGLEmptyLevels verifies the behavior of protected tag output from g l empty levels.
+// TestProtectedTagOutput_FromGLEmptyLevels verifies ProtectedTagOutput when from gl empty levels.
 func TestProtectedTagOutput_FromGLEmptyLevels(t *testing.T) {
 	out := protectedTagOutputFromGL(&gl.ProtectedTag{Name: "v*"})
 	if len(out.CreateAccessLevels) != 0 {
@@ -855,7 +857,7 @@ func TestProtectedTagOutput_FromGLEmptyLevels(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString verifies the behavior of format output markdown string.
+// TestFormatOutputMarkdownString verifies FormatOutputMarkdownString.
 func TestFormatOutputMarkdownString(t *testing.T) {
 	md := FormatOutputMarkdownString(Output{
 		Name:          testTagV100,
@@ -880,7 +882,7 @@ func TestFormatOutputMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdownString_Minimal verifies the behavior of format output markdown string minimal.
+// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
 func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	md := FormatOutputMarkdownString(Output{Name: "v0", Target: "x"})
 	if !strings.Contains(md, "## Tag: v0") {
@@ -891,7 +893,7 @@ func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString verifies the behavior of format list markdown string.
+// TestFormatListMarkdownString verifies FormatListMarkdownString.
 func TestFormatListMarkdownString(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{
 		Tags: []Output{
@@ -908,7 +910,7 @@ func TestFormatListMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No tags found") {
@@ -916,7 +918,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatSignatureMarkdownString verifies the behavior of format signature markdown string.
+// TestFormatSignatureMarkdownString verifies FormatSignatureMarkdownString.
 func TestFormatSignatureMarkdownString(t *testing.T) {
 	md := FormatSignatureMarkdownString(SignatureOutput{
 		SignatureType:      "X509",
@@ -949,7 +951,7 @@ func TestFormatSignatureMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatSignatureMarkdownString_Minimal verifies the behavior of format signature markdown string minimal.
+// TestFormatSignatureMarkdownString_Minimal verifies FormatSignatureMarkdownString when minimal.
 func TestFormatSignatureMarkdownString_Minimal(t *testing.T) {
 	md := FormatSignatureMarkdownString(SignatureOutput{
 		SignatureType:      "X509",
@@ -963,7 +965,7 @@ func TestFormatSignatureMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedTagMarkdownString verifies the behavior of format protected tag markdown string.
+// TestFormatProtectedTagMarkdownString verifies FormatProtectedTagMarkdownString.
 func TestFormatProtectedTagMarkdownString(t *testing.T) {
 	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
 		Name: "v*",
@@ -985,7 +987,7 @@ func TestFormatProtectedTagMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedTagMarkdownString_Empty verifies the behavior of format protected tag markdown string empty.
+// TestFormatProtectedTagMarkdownString_Empty verifies FormatProtectedTagMarkdownString when empty.
 func TestFormatProtectedTagMarkdownString_Empty(t *testing.T) {
 	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{Name: "release-*"})
 	if !strings.Contains(md, "No create access levels") {
@@ -993,7 +995,7 @@ func TestFormatProtectedTagMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTagsMarkdownString verifies the behavior of format list protected tags markdown string.
+// TestFormatListProtectedTagsMarkdownString verifies FormatListProtectedTagsMarkdownString.
 func TestFormatListProtectedTagsMarkdownString(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
 		Tags: []ProtectedTagOutput{
@@ -1009,7 +1011,7 @@ func TestFormatListProtectedTagsMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedTagMarkdownString_WithUserID verifies the behavior of format protected tag markdown string with user i d.
+// TestFormatProtectedTagMarkdownString_WithUserID verifies FormatProtectedTagMarkdownString when with user ID.
 func TestFormatProtectedTagMarkdownString_WithUserID(t *testing.T) {
 	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
 		Name: "v*",
@@ -1025,7 +1027,7 @@ func TestFormatProtectedTagMarkdownString_WithUserID(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedTagMarkdownString_WithGroupID verifies the behavior of format protected tag markdown string with group i d.
+// TestFormatProtectedTagMarkdownString_WithGroupID verifies FormatProtectedTagMarkdownString when with group ID.
 func TestFormatProtectedTagMarkdownString_WithGroupID(t *testing.T) {
 	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
 		Name: "release-*",
@@ -1038,7 +1040,7 @@ func TestFormatProtectedTagMarkdownString_WithGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedTagMarkdownString_WithDeployKeyID verifies the behavior of format protected tag markdown string with deploy key i d.
+// TestFormatProtectedTagMarkdownString_WithDeployKeyID verifies FormatProtectedTagMarkdownString when with deploy key ID.
 func TestFormatProtectedTagMarkdownString_WithDeployKeyID(t *testing.T) {
 	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
 		Name: "deploy-*",
@@ -1051,7 +1053,7 @@ func TestFormatProtectedTagMarkdownString_WithDeployKeyID(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTags_WithUserContext verifies the behavior of format list protected tags with user context.
+// TestFormatListProtectedTags_WithUserContext verifies FormatListProtectedTags when with user context.
 func TestFormatListProtectedTags_WithUserContext(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
 		Tags: []ProtectedTagOutput{
@@ -1066,7 +1068,7 @@ func TestFormatListProtectedTags_WithUserContext(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTags_WithGroupContext verifies the behavior of format list protected tags with group context.
+// TestFormatListProtectedTags_WithGroupContext verifies FormatListProtectedTags when with group context.
 func TestFormatListProtectedTags_WithGroupContext(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
 		Tags: []ProtectedTagOutput{
@@ -1081,7 +1083,7 @@ func TestFormatListProtectedTags_WithGroupContext(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTags_WithDeployKeyContext verifies the behavior of format list protected tags with deploy key context.
+// TestFormatListProtectedTags_WithDeployKeyContext verifies FormatListProtectedTags when with deploy key context.
 func TestFormatListProtectedTags_WithDeployKeyContext(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
 		Tags: []ProtectedTagOutput{
@@ -1096,7 +1098,7 @@ func TestFormatListProtectedTags_WithDeployKeyContext(t *testing.T) {
 	}
 }
 
-// TestFormatIDCell verifies the behavior of format i d cell.
+// TestFormatIDCell verifies FormatIDCell.
 func TestFormatIDCell(t *testing.T) {
 	if got := formatIDCell(0); got != "-" {
 		t.Errorf("formatIDCell(0) = %q, want %q", got, "-")
@@ -1106,7 +1108,7 @@ func TestFormatIDCell(t *testing.T) {
 	}
 }
 
-// TestFormatAccessLevelSummary validates format access level summary across multiple scenarios using table-driven subtests.
+// TestFormatAccessLevelSummary covers FormatAccessLevelSummary with table-driven subtests.
 func TestFormatAccessLevelSummary(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -1127,7 +1129,7 @@ func TestFormatAccessLevelSummary(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTagsMarkdownString_Empty verifies the behavior of format list protected tags markdown string empty.
+// TestFormatListProtectedTagsMarkdownString_Empty verifies FormatListProtectedTagsMarkdownString when empty.
 func TestFormatListProtectedTagsMarkdownString_Empty(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{})
 	if !strings.Contains(md, "No protected tags found") {
@@ -1139,7 +1141,7 @@ func TestFormatListProtectedTagsMarkdownString_Empty(t *testing.T) {
 // List with search/order/sort params
 // ---------------------------------------------------------------------------.
 
-// TestTagList_WithSearchOrderSort verifies the behavior of tag list with search order sort.
+// TestTagList_WithSearchOrderSort verifies TagList when with search order sort.
 func TestTagList_WithSearchOrderSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRepoTags {
@@ -1224,6 +1226,7 @@ func tagRouteHandler() http.HandlerFunc {
 	}
 }
 
+// newTagSpecsByTool constructs tag specs by tool test fixtures.
 func newTagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1231,6 +1234,7 @@ func newTagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return tagSpecsByTool(t, ActionSpecs(client))
 }
 
+// assertTagRouteSuccess checks tag route success invariants for tests.
 func assertTagRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 	result, err := specs[name].Route.Handler(t.Context(), args)
@@ -1310,6 +1314,7 @@ func TestActionSpecs_TagGetRoute(t *testing.T) {
 	}
 }
 
+// tagSpecsByTool supports tag specs by tool assertions in tags tests.
 func tagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

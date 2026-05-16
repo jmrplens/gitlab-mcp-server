@@ -13,14 +13,19 @@ import (
 )
 
 const (
-	routeGetUser          = "GET /api/v4/user"
+	// routeGetUser identifies the route get user constant used by this package.
+	routeGetUser = "GET /api/v4/user"
+	// routeGetMergeRequests identifies the route get merge requests constant used by this package.
 	routeGetMergeRequests = "GET /api/v4/merge_requests"
-	routeGetIssues        = "GET /api/v4/issues"
-	fmtGetPromptFailed    = "GetPrompt failed: %v"
-	actionPushedTo        = "pushed to"
+	// routeGetIssues identifies the route get issues constant used by this package.
+	routeGetIssues = "GET /api/v4/issues"
+	// fmtGetPromptFailed identifies the fmt get prompt failed constant used by this package.
+	fmtGetPromptFailed = "GetPrompt failed: %v"
+	// actionPushedTo identifies the action pushed to constant used by this package.
+	actionPushedTo = "pushed to"
 )
 
-// TestMyOpenMRsGroups_ByProject verifies the behavior of my open m rs groups by project.
+// TestMyOpenMRsGroups_ByProject verifies MyOpenMRsGroups when by project.
 func TestMyOpenMRsGroups_ByProject(t *testing.T) {
 	created := time.Now().Add(-3 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -69,7 +74,7 @@ func TestMyOpenMRsGroups_ByProject(t *testing.T) {
 	}
 }
 
-// TestMyOpenMRs_EmptyResult verifies the behavior of my open m rs empty result.
+// TestMyOpenMRs_EmptyResult verifies MyOpenMRs when empty result.
 func TestMyOpenMRs_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +98,7 @@ func TestMyOpenMRs_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestMy_PendingReviewsGroupsByProject verifies the behavior of my pending reviews groups by project.
+// TestMy_PendingReviewsGroupsByProject verifies My when pending reviews groups by project.
 func TestMy_PendingReviewsGroupsByProject(t *testing.T) {
 	created := time.Now().Add(-5 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -134,7 +139,7 @@ func TestMy_PendingReviewsGroupsByProject(t *testing.T) {
 	}
 }
 
-// TestMyPendingReviews_EmptyResult verifies the behavior of my pending reviews empty result.
+// TestMyPendingReviews_EmptyResult verifies MyPendingReviews when empty result.
 func TestMyPendingReviews_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +163,7 @@ func TestMyPendingReviews_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestMyIssuesGroups_ByProject verifies the behavior of my issues groups by project.
+// TestMyIssuesGroups_ByProject verifies MyIssuesGroups when by project.
 func TestMyIssuesGroups_ByProject(t *testing.T) {
 	created := time.Now().Add(-5 * 24 * time.Hour)
 	mux := http.NewServeMux()
@@ -199,7 +204,7 @@ func TestMyIssuesGroups_ByProject(t *testing.T) {
 	}
 }
 
-// TestMyIssues_OverdueDetection verifies the behavior of my issues overdue detection.
+// TestMyIssues_OverdueDetection verifies MyIssues when overdue detection.
 func TestMyIssues_OverdueDetection(t *testing.T) {
 	created := time.Now().Add(-10 * 24 * time.Hour)
 	pastDue := gl.ISOTime(time.Now().Add(-2 * 24 * time.Hour))
@@ -232,7 +237,7 @@ func TestMyIssues_OverdueDetection(t *testing.T) {
 	}
 }
 
-// TestMyIssues_StateFilter verifies the behavior of my issues state filter.
+// TestMyIssues_StateFilter verifies MyIssues when state filter.
 func TestMyIssues_StateFilter(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -256,7 +261,7 @@ func TestMyIssues_StateFilter(t *testing.T) {
 	}
 }
 
-// TestMyActivity_SummaryEventBreakdown verifies the behavior of my activity summary event breakdown.
+// TestMyActivity_SummaryEventBreakdown verifies MyActivity when summary event breakdown.
 func TestMyActivity_SummaryEventBreakdown(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -294,7 +299,7 @@ func TestMyActivity_SummaryEventBreakdown(t *testing.T) {
 	}
 }
 
-// TestMyActivitySummary_CustomDays verifies the behavior of my activity summary custom days.
+// TestMyActivitySummary_CustomDays verifies MyActivitySummary when custom days.
 func TestMyActivitySummary_CustomDays(t *testing.T) {
 	mux := http.NewServeMux()
 

@@ -15,29 +15,40 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpAPIFailure identifies the err exp API failure constant used by this package.
 const errExpAPIFailure = "expected error for API failure, got nil"
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testDiscussionID identifies the test discussion ID constant used by this package.
 const testDiscussionID = "d1"
 
+// testCommitSHA identifies the test commit SHA constant used by this package.
 const testCommitSHA = "abc123"
 
+// testProjectID identifies the test project ID constant used by this package.
 const testProjectID = "1"
 
+// testAuthorAlice identifies the test author alice constant used by this package.
 const testAuthorAlice = "alice"
 
+// testVersion identifies the test version constant used by this package.
 const testVersion = "0.0.1"
 
 const (
-	testPathDiscussions     = "/discussions"
+	// testPathDiscussions identifies the test path discussions constant used by this package.
+	testPathDiscussions = "/discussions"
+	// testPathDiscussionSlash identifies the test path discussion slash constant used by this package.
 	testPathDiscussionSlash = "/discussions/"
-	testDate20260101        = "2026-01-01"
+	// testDate20260101 identifies the test date 20260101 constant used by this package.
+	testDate20260101 = "2026-01-01"
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/repository/commits/"+testCommitSHA+testPathDiscussions {
@@ -64,7 +75,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -77,7 +88,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/repository/commits/"+testCommitSHA+testPathDiscussionSlash+testDiscussionID {
@@ -100,7 +111,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -117,7 +128,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_WithPosition verifies the behavior of create with position.
+// TestCreate_WithPosition verifies Create when with position.
 func TestCreate_WithPosition(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -146,7 +157,7 @@ func TestCreate_WithPosition(t *testing.T) {
 	}
 }
 
-// TestAddNote_Success verifies the behavior of add note success.
+// TestAddNote_Success verifies AddNote when success.
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -166,7 +177,7 @@ func TestAddNote_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_Success verifies the behavior of update note success.
+// TestUpdateNote_Success verifies UpdateNote when success.
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
@@ -183,7 +194,7 @@ func TestUpdateNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_Success verifies the behavior of delete note success.
+// TestDeleteNote_Success verifies DeleteNote when success.
 func TestDeleteNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -196,7 +207,7 @@ func TestDeleteNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_APIError verifies the behavior of delete note a p i error.
+// TestDeleteNote_APIError verifies DeleteNote when API error.
 func TestDeleteNote_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -213,7 +224,7 @@ func TestDeleteNote_APIError(t *testing.T) {
 // Int64 Validation Tests
 // ---------------------------------------------------------------------------.
 
-// TestUpdateNote_NoteIDValidation verifies the behavior of update note note i d validation.
+// TestUpdateNote_NoteIDValidation verifies UpdateNote when note ID validation.
 func TestUpdateNote_NoteIDValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach API")
@@ -233,7 +244,7 @@ func TestUpdateNote_NoteIDValidation(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_NoteIDValidation verifies the behavior of delete note note i d validation.
+// TestDeleteNote_NoteIDValidation verifies DeleteNote when note ID validation.
 func TestDeleteNote_NoteIDValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach API")
@@ -256,7 +267,7 @@ func TestDeleteNote_NoteIDValidation(t *testing.T) {
 // Canceled Context Tests
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -268,7 +279,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -280,7 +291,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -292,7 +303,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddNote_CancelledContext verifies the behavior of add note cancelled context.
+// TestAddNote_CancelledContext verifies AddNote when cancelled context.
 func TestAddNote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -304,7 +315,7 @@ func TestAddNote_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_CancelledContext verifies the behavior of update note cancelled context.
+// TestUpdateNote_CancelledContext verifies UpdateNote when cancelled context.
 func TestUpdateNote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -316,7 +327,7 @@ func TestUpdateNote_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_CancelledContext verifies the behavior of delete note cancelled context.
+// TestDeleteNote_CancelledContext verifies DeleteNote when cancelled context.
 func TestDeleteNote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -332,7 +343,7 @@ func TestDeleteNote_CancelledContext(t *testing.T) {
 // API Error Tests
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -343,7 +354,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -354,7 +365,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestAddNote_APIError verifies the behavior of add note a p i error.
+// TestAddNote_APIError verifies AddNote when API error.
 func TestAddNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -365,7 +376,7 @@ func TestAddNote_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_APIError verifies the behavior of update note a p i error.
+// TestUpdateNote_APIError verifies UpdateNote when API error.
 func TestUpdateNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -380,7 +391,7 @@ func TestUpdateNote_APIError(t *testing.T) {
 // Formatter Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithData verifies the behavior of format list markdown string with data.
+// TestFormatListMarkdownString_WithData verifies FormatListMarkdownString when with data.
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
@@ -400,7 +411,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	out := ListOutput{Discussions: nil}
 	md := FormatListMarkdownString(out)
@@ -409,7 +420,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_WithNotes verifies the behavior of format markdown string with notes.
+// TestFormatMarkdownString_WithNotes verifies FormatMarkdownString when with notes.
 func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	out := Output{
 		ID:    testDiscussionID,
@@ -424,7 +435,7 @@ func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_Empty verifies the behavior of format markdown string empty.
+// TestFormatMarkdownString_Empty verifies FormatMarkdownString when empty.
 func TestFormatMarkdownString_Empty(t *testing.T) {
 	out := Output{ID: testDiscussionID, Notes: nil}
 	md := FormatMarkdownString(out)
@@ -433,7 +444,7 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString verifies the behavior of format note markdown string.
+// TestFormatNoteMarkdownString verifies FormatNoteMarkdownString.
 func TestFormatNoteMarkdownString(t *testing.T) {
 	n := NoteOutput{ID: 10, Author: "dev", Body: "Nice!", CreatedAt: testDate20260101}
 	md := FormatNoteMarkdownString(n)
@@ -451,7 +462,7 @@ func TestFormatNoteMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString_NoDate verifies the behavior of format note markdown string no date.
+// TestFormatNoteMarkdownString_NoDate verifies FormatNoteMarkdownString when no date.
 func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
 	n := NoteOutput{ID: 11, Author: "bot", Body: "OK"}
 	md := FormatNoteMarkdownString(n)
@@ -464,7 +475,7 @@ func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
 // Test helpers
 // ---------------------------------------------------------------------------.
 
-// newCommitDiscussionMockHandler is an internal helper for the commitdiscussions package.
+// newCommitDiscussionMockHandler constructs commit discussion mock handler test fixtures.
 func newCommitDiscussionMockHandler(t *testing.T) http.Handler {
 	t.Helper()
 	noteJSON := `{"id":1,"body":"t","author":{"username":"dev"},"created_at":"2026-01-01T00:00:00Z"}`
@@ -597,6 +608,7 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// commitDiscussionSpecsByTool supports commit discussion specs by tool assertions in commitdiscussions tests.
 func commitDiscussionSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

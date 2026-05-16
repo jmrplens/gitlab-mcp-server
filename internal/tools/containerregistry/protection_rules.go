@@ -31,7 +31,7 @@ type ProtectionRuleListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertProtectionRule is an internal helper for the containerregistry package.
+// convertProtectionRule implements the convert protection rule helper used by containerregistry.
 func convertProtectionRule(r *gl.ContainerRegistryProtectionRule) ProtectionRuleOutput {
 	return ProtectionRuleOutput{
 		ID:                          r.ID,

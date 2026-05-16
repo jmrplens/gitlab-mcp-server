@@ -20,7 +20,7 @@ type ListAgentsInput struct {
 	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
 }
 
-// AgentItem holds data for clusteragents operations.
+// AgentItem holds agent item data for the clusteragents package.
 type AgentItem struct {
 	toolutil.HintableOutput
 	ID              int64  `json:"id"`
@@ -82,7 +82,7 @@ type RegisterAgentInput struct {
 	Name      string               `json:"name" jsonschema:"Agent name,required"`
 }
 
-// RegisterAgent performs the register agent operation for the clusteragents package.
+// RegisterAgent coordinates register agent for the clusteragents package.
 func RegisterAgent(ctx context.Context, client *gitlabclient.Client, input RegisterAgentInput) (AgentItem, error) {
 	opts := &gl.RegisterAgentOptions{Name: new(input.Name)}
 	a, _, err := client.GL().ClusterAgents.RegisterAgent(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -124,7 +124,7 @@ type ListAgentTokensInput struct {
 	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
 }
 
-// AgentTokenItem holds data for clusteragents operations.
+// AgentTokenItem holds agent token item data for the clusteragents package.
 type AgentTokenItem struct {
 	toolutil.HintableOutput
 	ID          int64  `json:"id"`

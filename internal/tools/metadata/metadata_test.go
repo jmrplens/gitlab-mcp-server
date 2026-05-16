@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/metadata" {
@@ -51,7 +51,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -63,7 +63,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Version:    "16.8.0",
@@ -85,6 +85,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// covCovMetaJSON identifies the cov cov meta JSON constant used by this package.
 const covCovMetaJSON = `{"version":"17.0.0","revision":"abc123","kas":{"enabled":true,"external_url":"https://kas.example.com","external_k8s_proxy_url":"https://k8s.example.com","version":"17.0.0"},"enterprise":true}`
 
 // TestGet_APIError_Coverage verifies the API error path for metadata lookup.
@@ -131,7 +132,7 @@ func TestFormatGetMarkdown_Full_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_NoKAS_Coverage verifies the behavior of cov format get markdown no k a s.
+// TestFormatGetMarkdown_NoKAS_Coverage verifies FormatGetMarkdown when no kas coverage.
 func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Version: "17.0.0"})
 	if strings.Contains(md, "KAS Version") || strings.Contains(md, "KAS URL") {

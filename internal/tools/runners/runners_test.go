@@ -19,19 +19,25 @@ import (
 )
 
 const (
+	// errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
 	errExpMissingProjectID = "expected error for missing project_id"
-	errExpectedNil         = "expected error, got nil"
-	errExpMissingRunnerID  = "expected error for missing runner_id"
-	errExpMissingToken     = "expected error for missing token"
-	pathRunners            = "/api/v4/runners"
-	pathRunner10           = "/api/v4/runners/10"
+	// errExpectedNil identifies the err expected nil constant used by this package.
+	errExpectedNil = "expected error, got nil"
+	// errExpMissingRunnerID identifies the err exp missing runner ID constant used by this package.
+	errExpMissingRunnerID = "expected error for missing runner_id"
+	// errExpMissingToken identifies the err exp missing token constant used by this package.
+	errExpMissingToken = "expected error for missing token"
+	// pathRunners identifies the path runners constant used by this package.
+	pathRunners = "/api/v4/runners"
+	// pathRunner10 identifies the path runner 10 constant used by this package.
+	pathRunner10 = "/api/v4/runners/10"
 )
 
 // ---------------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunners && r.Method == http.MethodGet {
@@ -74,7 +80,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies the behavior of list with filters.
+// TestList_WithFilters verifies List when with filters.
 func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunners {
@@ -99,7 +105,7 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -115,7 +121,7 @@ func TestList_APIError(t *testing.T) {
 // Get
 // ---------------------------------------------------------------------------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10 && r.Method == http.MethodGet {
@@ -172,7 +178,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingID verifies the behavior of get missing i d.
+// TestGet_MissingID verifies Get when missing ID.
 func TestGet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -184,7 +190,7 @@ func TestGet_MissingID(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -200,7 +206,7 @@ func TestGet_APIError(t *testing.T) {
 // Update
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10 && r.Method == http.MethodPut {
@@ -238,7 +244,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingID verifies the behavior of update missing i d.
+// TestUpdate_MissingID verifies Update when missing ID.
 func TestUpdate_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -254,7 +260,7 @@ func TestUpdate_MissingID(t *testing.T) {
 // Remove
 // ---------------------------------------------------------------------------.
 
-// TestRemove_Success verifies the behavior of remove success.
+// TestRemove_Success verifies Remove when success.
 func TestRemove_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10 && r.Method == http.MethodDelete {
@@ -270,7 +276,7 @@ func TestRemove_Success(t *testing.T) {
 	}
 }
 
-// TestRemove_MissingID verifies the behavior of remove missing i d.
+// TestRemove_MissingID verifies Remove when missing ID.
 func TestRemove_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -286,7 +292,7 @@ func TestRemove_MissingID(t *testing.T) {
 // ListJobs
 // ---------------------------------------------------------------------------.
 
-// TestListJobs_Success verifies the behavior of list jobs success.
+// TestListJobs_Success verifies ListJobs when success.
 func TestListJobs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10+"/jobs" && r.Method == http.MethodGet {
@@ -326,7 +332,7 @@ func TestListJobs_Success(t *testing.T) {
 	}
 }
 
-// TestListJobs_MissingID verifies the behavior of list jobs missing i d.
+// TestListJobs_MissingID verifies ListJobs when missing ID.
 func TestListJobs_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -342,7 +348,7 @@ func TestListJobs_MissingID(t *testing.T) {
 // ListProject
 // ---------------------------------------------------------------------------.
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
@@ -375,7 +381,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingID verifies the behavior of list project missing i d.
+// TestListProject_MissingID verifies ListProject when missing ID.
 func TestListProject_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -391,7 +397,7 @@ func TestListProject_MissingID(t *testing.T) {
 // EnableProject
 // ---------------------------------------------------------------------------.
 
-// TestEnableProject_Success verifies the behavior of enable project success.
+// TestEnableProject_Success verifies EnableProject when success.
 func TestEnableProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodPost {
@@ -419,7 +425,7 @@ func TestEnableProject_Success(t *testing.T) {
 	}
 }
 
-// TestEnableProject_MissingFields verifies the behavior of enable project missing fields.
+// TestEnableProject_MissingFields verifies EnableProject when missing fields.
 func TestEnableProject_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -440,7 +446,7 @@ func TestEnableProject_MissingFields(t *testing.T) {
 // DisableProject
 // ---------------------------------------------------------------------------.
 
-// TestDisableProject_Success verifies the behavior of disable project success.
+// TestDisableProject_Success verifies DisableProject when success.
 func TestDisableProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners/5" && r.Method == http.MethodDelete {
@@ -456,7 +462,7 @@ func TestDisableProject_Success(t *testing.T) {
 	}
 }
 
-// TestDisableProject_MissingFields verifies the behavior of disable project missing fields.
+// TestDisableProject_MissingFields verifies DisableProject when missing fields.
 func TestDisableProject_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -477,7 +483,7 @@ func TestDisableProject_MissingFields(t *testing.T) {
 // ListGroup
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_Success verifies the behavior of list group success.
+// TestListGroup_Success verifies ListGroup when success.
 func TestListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/7/runners" && r.Method == http.MethodGet {
@@ -510,7 +516,7 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingID verifies the behavior of list group missing i d.
+// TestListGroup_MissingID verifies ListGroup when missing ID.
 func TestListGroup_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -526,7 +532,7 @@ func TestListGroup_MissingID(t *testing.T) {
 // Register
 // ---------------------------------------------------------------------------.
 
-// TestRegister_Success verifies the behavior of register success.
+// TestRegister_Success verifies Register when success.
 func TestRegister_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunners && r.Method == http.MethodPost {
@@ -554,7 +560,7 @@ func TestRegister_Success(t *testing.T) {
 	}
 }
 
-// TestRegister_MissingToken verifies the behavior of register missing token.
+// TestRegister_MissingToken verifies Register when missing token.
 func TestRegister_MissingToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -570,7 +576,7 @@ func TestRegister_MissingToken(t *testing.T) {
 // DeleteByID
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByID_Success verifies the behavior of delete by i d success.
+// TestDeleteByID_Success verifies DeleteByID when success.
 func TestDeleteByID_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/99" && r.Method == http.MethodDelete {
@@ -586,7 +592,7 @@ func TestDeleteByID_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_MissingID verifies the behavior of delete by i d missing i d.
+// TestDeleteByID_MissingID verifies DeleteByID when missing ID.
 func TestDeleteByID_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -602,7 +608,7 @@ func TestDeleteByID_MissingID(t *testing.T) {
 // Verify
 // ---------------------------------------------------------------------------.
 
-// TestVerify_Success verifies the behavior of verify success.
+// TestVerify_Success verifies Verify when success.
 func TestVerify_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/verify" && r.Method == http.MethodPost {
@@ -618,7 +624,7 @@ func TestVerify_Success(t *testing.T) {
 	}
 }
 
-// TestVerify_MissingToken verifies the behavior of verify missing token.
+// TestVerify_MissingToken verifies Verify when missing token.
 func TestVerify_MissingToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -630,7 +636,7 @@ func TestVerify_MissingToken(t *testing.T) {
 	}
 }
 
-// TestVerify_InvalidToken verifies the behavior of verify invalid token.
+// TestVerify_InvalidToken verifies Verify when invalid token.
 func TestVerify_InvalidToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -646,7 +652,7 @@ func TestVerify_InvalidToken(t *testing.T) {
 // ResetAuthToken
 // ---------------------------------------------------------------------------.
 
-// TestResetAuthToken_Success verifies the behavior of reset auth token success.
+// TestResetAuthToken_Success verifies ResetAuthToken when success.
 func TestResetAuthToken_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10+"/reset_authentication_token" && r.Method == http.MethodPost {
@@ -668,7 +674,7 @@ func TestResetAuthToken_Success(t *testing.T) {
 	}
 }
 
-// TestResetAuthToken_MissingID verifies the behavior of reset auth token missing i d.
+// TestResetAuthToken_MissingID verifies ResetAuthToken when missing ID.
 func TestResetAuthToken_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -684,7 +690,7 @@ func TestResetAuthToken_MissingID(t *testing.T) {
 // ListAll
 // ---------------------------------------------------------------------------.
 
-// TestListAll_Success verifies the behavior of list all success.
+// TestListAll_Success verifies ListAll when success.
 func TestListAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/all" && r.Method == http.MethodGet {
@@ -709,7 +715,7 @@ func TestListAll_Success(t *testing.T) {
 	}
 }
 
-// TestListAll_APIError verifies the behavior of list all a p i error.
+// TestListAll_APIError verifies ListAll when API error.
 func TestListAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -725,7 +731,7 @@ func TestListAll_APIError(t *testing.T) {
 // DeleteByToken
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByToken_Success verifies the behavior of delete by token success.
+// TestDeleteByToken_Success verifies DeleteByToken when success.
 func TestDeleteByToken_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunners && r.Method == http.MethodDelete {
@@ -741,7 +747,7 @@ func TestDeleteByToken_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteByToken_MissingToken verifies the behavior of delete by token missing token.
+// TestDeleteByToken_MissingToken verifies DeleteByToken when missing token.
 func TestDeleteByToken_MissingToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -753,7 +759,7 @@ func TestDeleteByToken_MissingToken(t *testing.T) {
 	}
 }
 
-// TestDeleteByToken_APIError verifies the behavior of delete by token a p i error.
+// TestDeleteByToken_APIError verifies DeleteByToken when API error.
 func TestDeleteByToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -769,7 +775,7 @@ func TestDeleteByToken_APIError(t *testing.T) {
 // ResetInstanceRegToken
 // ---------------------------------------------------------------------------.
 
-// TestResetInstanceRegToken_Success verifies the behavior of reset instance reg token success.
+// TestResetInstanceRegToken_Success verifies ResetInstanceRegToken when success.
 func TestResetInstanceRegToken_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/reset_registration_token" && r.Method == http.MethodPost {
@@ -791,7 +797,7 @@ func TestResetInstanceRegToken_Success(t *testing.T) {
 	}
 }
 
-// TestResetInstanceRegToken_APIError verifies the behavior of reset instance reg token a p i error.
+// TestResetInstanceRegToken_APIError verifies ResetInstanceRegToken when API error.
 func TestResetInstanceRegToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -807,7 +813,7 @@ func TestResetInstanceRegToken_APIError(t *testing.T) {
 // ResetGroupRegToken
 // ---------------------------------------------------------------------------.
 
-// TestResetGroupRegToken_Success verifies the behavior of reset group reg token success.
+// TestResetGroupRegToken_Success verifies ResetGroupRegToken when success.
 func TestResetGroupRegToken_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/runners/reset_registration_token" && r.Method == http.MethodPost {
@@ -826,7 +832,7 @@ func TestResetGroupRegToken_Success(t *testing.T) {
 	}
 }
 
-// TestResetGroupRegToken_MissingGroupID verifies the behavior of reset group reg token missing group i d.
+// TestResetGroupRegToken_MissingGroupID verifies ResetGroupRegToken when missing group ID.
 func TestResetGroupRegToken_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -838,7 +844,7 @@ func TestResetGroupRegToken_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestResetGroupRegToken_APIError verifies the behavior of reset group reg token a p i error.
+// TestResetGroupRegToken_APIError verifies ResetGroupRegToken when API error.
 func TestResetGroupRegToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -854,7 +860,7 @@ func TestResetGroupRegToken_APIError(t *testing.T) {
 // ResetProjectRegToken
 // ---------------------------------------------------------------------------.
 
-// TestResetProjectRegToken_Success verifies the behavior of reset project reg token success.
+// TestResetProjectRegToken_Success verifies ResetProjectRegToken when success.
 func TestResetProjectRegToken_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/99/runners/reset_registration_token" && r.Method == http.MethodPost {
@@ -873,7 +879,7 @@ func TestResetProjectRegToken_Success(t *testing.T) {
 	}
 }
 
-// TestResetProjectRegToken_MissingProjectID verifies the behavior of reset project reg token missing project i d.
+// TestResetProjectRegToken_MissingProjectID verifies ResetProjectRegToken when missing project ID.
 func TestResetProjectRegToken_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -885,7 +891,7 @@ func TestResetProjectRegToken_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestResetProjectRegToken_APIError verifies the behavior of reset project reg token a p i error.
+// TestResetProjectRegToken_APIError verifies ResetProjectRegToken when API error.
 func TestResetProjectRegToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -899,17 +905,20 @@ func TestResetProjectRegToken_APIError(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — canceled context, with optional filter branches (paused, tag_list, pagination)
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of cov list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -919,7 +928,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithAllFilters verifies the behavior of cov list with all filters.
+// TestList_WithAllFilters verifies List when with all filters.
 func TestList_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners" && r.Method == http.MethodGet {
@@ -958,7 +967,7 @@ func TestList_WithAllFilters(t *testing.T) {
 // Get — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of cov get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -972,7 +981,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Update — canceled context, API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_CancelledContext verifies the behavior of cov update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -982,7 +991,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies the behavior of cov update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -993,7 +1002,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of cov update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/10" && r.Method == http.MethodPut {
@@ -1039,7 +1048,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Remove — canceled context, API error
 // ---------------------------------------------------------------------------.
 
-// TestRemove_CancelledContext verifies the behavior of cov remove cancelled context.
+// TestRemove_CancelledContext verifies Remove when cancelled context.
 func TestRemove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1049,7 +1058,7 @@ func TestRemove_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRemove_APIError verifies the behavior of cov remove a p i error.
+// TestRemove_APIError verifies Remove when API error.
 func TestRemove_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1064,7 +1073,7 @@ func TestRemove_APIError(t *testing.T) {
 // ListJobs — canceled context, API error, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestListJobs_CancelledContext verifies the behavior of cov list jobs cancelled context.
+// TestListJobs_CancelledContext verifies ListJobs when cancelled context.
 func TestListJobs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1074,7 +1083,7 @@ func TestListJobs_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListJobs_APIError verifies the behavior of cov list jobs a p i error.
+// TestListJobs_APIError verifies ListJobs when API error.
 func TestListJobs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1085,7 +1094,7 @@ func TestListJobs_APIError(t *testing.T) {
 	}
 }
 
-// TestListJobs_WithAllFilters verifies the behavior of cov list jobs with all filters.
+// TestListJobs_WithAllFilters verifies ListJobs when with all filters.
 func TestListJobs_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/10/jobs" && r.Method == http.MethodGet {
@@ -1122,7 +1131,7 @@ func TestListJobs_WithAllFilters(t *testing.T) {
 // ListProject — canceled context, API error, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestListProject_CancelledContext verifies the behavior of cov list project cancelled context.
+// TestListProject_CancelledContext verifies ListProject when cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1132,7 +1141,7 @@ func TestListProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProject_APIError verifies the behavior of cov list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1143,7 +1152,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_AllFilters verifies the behavior of cov list project all filters.
+// TestListProject_AllFilters verifies ListProject when all filters.
 func TestListProject_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
@@ -1170,7 +1179,7 @@ func TestListProject_AllFilters(t *testing.T) {
 // EnableProject — canceled context, API error
 // ---------------------------------------------------------------------------.
 
-// TestEnableProject_CancelledContext verifies the behavior of cov enable project cancelled context.
+// TestEnableProject_CancelledContext verifies EnableProject when cancelled context.
 func TestEnableProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1180,7 +1189,7 @@ func TestEnableProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEnableProject_APIError verifies the behavior of cov enable project a p i error.
+// TestEnableProject_APIError verifies EnableProject when API error.
 func TestEnableProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1195,7 +1204,7 @@ func TestEnableProject_APIError(t *testing.T) {
 // DisableProject — canceled context, API error
 // ---------------------------------------------------------------------------.
 
-// TestDisableProject_CancelledContext verifies the behavior of cov disable project cancelled context.
+// TestDisableProject_CancelledContext verifies DisableProject when cancelled context.
 func TestDisableProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1205,7 +1214,7 @@ func TestDisableProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDisableProject_APIError verifies the behavior of cov disable project a p i error.
+// TestDisableProject_APIError verifies DisableProject when API error.
 func TestDisableProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1220,7 +1229,7 @@ func TestDisableProject_APIError(t *testing.T) {
 // ListGroup — canceled context, API error, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_CancelledContext verifies the behavior of cov list group cancelled context.
+// TestListGroup_CancelledContext verifies ListGroup when cancelled context.
 func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1230,7 +1239,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListGroup_APIError verifies the behavior of cov list group a p i error.
+// TestListGroup_APIError verifies ListGroup when API error.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1241,7 +1250,7 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroup_AllFilters verifies the behavior of cov list group all filters.
+// TestListGroup_AllFilters verifies ListGroup when all filters.
 func TestListGroup_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/7/runners" && r.Method == http.MethodGet {
@@ -1268,7 +1277,7 @@ func TestListGroup_AllFilters(t *testing.T) {
 // Register — canceled context, API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestRegister_CancelledContext verifies the behavior of cov register cancelled context.
+// TestRegister_CancelledContext verifies Register when cancelled context.
 func TestRegister_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1278,7 +1287,7 @@ func TestRegister_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRegister_APIError verifies the behavior of cov register a p i error.
+// TestRegister_APIError verifies Register when API error.
 func TestRegister_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1289,7 +1298,7 @@ func TestRegister_APIError(t *testing.T) {
 	}
 }
 
-// TestRegister_AllOptionalFields verifies the behavior of cov register all optional fields.
+// TestRegister_AllOptionalFields verifies Register when all optional fields.
 func TestRegister_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners" && r.Method == http.MethodPost {
@@ -1329,7 +1338,7 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 // DeleteByID — canceled context, API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByID_CancelledContext verifies the behavior of cov delete by i d cancelled context.
+// TestDeleteByID_CancelledContext verifies DeleteByID when cancelled context.
 func TestDeleteByID_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1339,7 +1348,7 @@ func TestDeleteByID_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_APIError verifies the behavior of cov delete by i d a p i error.
+// TestDeleteByID_APIError verifies DeleteByID when API error.
 func TestDeleteByID_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1354,7 +1363,7 @@ func TestDeleteByID_APIError(t *testing.T) {
 // Verify — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestVerify_CancelledContext verifies the behavior of cov verify cancelled context.
+// TestVerify_CancelledContext verifies Verify when cancelled context.
 func TestVerify_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1368,7 +1377,7 @@ func TestVerify_CancelledContext(t *testing.T) {
 // ResetAuthToken — canceled context, API error, nil token/expires
 // ---------------------------------------------------------------------------.
 
-// TestResetAuthToken_CancelledContext verifies the behavior of cov reset auth token cancelled context.
+// TestResetAuthToken_CancelledContext verifies ResetAuthToken when cancelled context.
 func TestResetAuthToken_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1378,7 +1387,7 @@ func TestResetAuthToken_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestResetAuthToken_APIError verifies the behavior of cov reset auth token a p i error.
+// TestResetAuthToken_APIError verifies ResetAuthToken when API error.
 func TestResetAuthToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -1389,7 +1398,7 @@ func TestResetAuthToken_APIError(t *testing.T) {
 	}
 }
 
-// TestResetAuthToken_NilFields verifies the behavior of cov reset auth token nil fields.
+// TestResetAuthToken_NilFields verifies ResetAuthToken when nil fields.
 func TestResetAuthToken_NilFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/10/reset_authentication_token" && r.Method == http.MethodPost {
@@ -1415,7 +1424,7 @@ func TestResetAuthToken_NilFields(t *testing.T) {
 // ListAll — canceled context, all optional filters
 // ---------------------------------------------------------------------------.
 
-// TestListAll_CancelledContext verifies the behavior of cov list all cancelled context.
+// TestListAll_CancelledContext verifies ListAll when cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1425,7 +1434,7 @@ func TestListAll_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListAll_AllFilters verifies the behavior of cov list all all filters.
+// TestListAll_AllFilters verifies ListAll when all filters.
 func TestListAll_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/all" && r.Method == http.MethodGet {
@@ -1453,7 +1462,7 @@ func TestListAll_AllFilters(t *testing.T) {
 // DeleteByToken — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByToken_CancelledContext verifies the behavior of cov delete by token cancelled context.
+// TestDeleteByToken_CancelledContext verifies DeleteByToken when cancelled context.
 func TestDeleteByToken_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1467,7 +1476,7 @@ func TestDeleteByToken_CancelledContext(t *testing.T) {
 // ResetInstanceRegToken — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestResetInstanceRegToken_CancelledContext verifies the behavior of cov reset instance reg token cancelled context.
+// TestResetInstanceRegToken_CancelledContext verifies ResetInstanceRegToken when cancelled context.
 func TestResetInstanceRegToken_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1481,7 +1490,7 @@ func TestResetInstanceRegToken_CancelledContext(t *testing.T) {
 // ResetGroupRegToken — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestResetGroupRegToken_CancelledContext verifies the behavior of cov reset group reg token cancelled context.
+// TestResetGroupRegToken_CancelledContext verifies ResetGroupRegToken when cancelled context.
 func TestResetGroupRegToken_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1495,7 +1504,7 @@ func TestResetGroupRegToken_CancelledContext(t *testing.T) {
 // ResetProjectRegToken — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestResetProjectRegToken_CancelledContext verifies the behavior of cov reset project reg token cancelled context.
+// TestResetProjectRegToken_CancelledContext verifies ResetProjectRegToken when cancelled context.
 func TestResetProjectRegToken_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1509,7 +1518,7 @@ func TestResetProjectRegToken_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the behavior of cov format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:          5,
@@ -1542,7 +1551,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // FormatDetailsMarkdown — all optional fields present and absent
 // ---------------------------------------------------------------------------.
 
-// TestFormatDetailsMarkdown_Full verifies the behavior of cov format details markdown full.
+// TestFormatDetailsMarkdown_Full verifies FormatDetailsMarkdown when full.
 func TestFormatDetailsMarkdown_Full(t *testing.T) {
 	md := FormatDetailsMarkdown(DetailsOutput{
 		ID:              10,
@@ -1585,7 +1594,7 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatDetailsMarkdown_Minimal verifies the behavior of cov format details markdown minimal.
+// TestFormatDetailsMarkdown_Minimal verifies FormatDetailsMarkdown when minimal.
 func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 	md := FormatDetailsMarkdown(DetailsOutput{
 		ID:   1,
@@ -1611,7 +1620,7 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies the behavior of cov format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Runners: []Output{
@@ -1638,7 +1647,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No runners found") {
@@ -1653,7 +1662,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatJobListMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatJobListMarkdown_WithData verifies the behavior of cov format job list markdown with data.
+// TestFormatJobListMarkdown_WithData verifies FormatJobListMarkdown when with data.
 func TestFormatJobListMarkdown_WithData(t *testing.T) {
 	md := FormatJobListMarkdown(JobListOutput{
 		Jobs: []jobs.Output{
@@ -1681,7 +1690,7 @@ func TestFormatJobListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatJobListMarkdown_Empty verifies the behavior of cov format job list markdown empty.
+// TestFormatJobListMarkdown_Empty verifies FormatJobListMarkdown when empty.
 func TestFormatJobListMarkdown_Empty(t *testing.T) {
 	md := FormatJobListMarkdown(JobListOutput{})
 	if !strings.Contains(md, "No jobs found") {
@@ -1696,7 +1705,7 @@ func TestFormatJobListMarkdown_Empty(t *testing.T) {
 // FormatAuthTokenMarkdown — with and without ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatAuthTokenMarkdown_Full verifies the behavior of cov format auth token markdown full.
+// TestFormatAuthTokenMarkdown_Full verifies FormatAuthTokenMarkdown when full.
 func TestFormatAuthTokenMarkdown_Full(t *testing.T) {
 	md := FormatAuthTokenMarkdown(AuthTokenOutput{
 		Token:     "glrt-abc123",
@@ -1714,7 +1723,7 @@ func TestFormatAuthTokenMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatAuthTokenMarkdown_NoExpiry verifies the behavior of cov format auth token markdown no expiry.
+// TestFormatAuthTokenMarkdown_NoExpiry verifies FormatAuthTokenMarkdown when no expiry.
 func TestFormatAuthTokenMarkdown_NoExpiry(t *testing.T) {
 	md := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "tok"})
 	if strings.Contains(md, "Expires At") {
@@ -1726,7 +1735,7 @@ func TestFormatAuthTokenMarkdown_NoExpiry(t *testing.T) {
 // FormatRegTokenMarkdown — with and without ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatRegTokenMarkdown_Full verifies the behavior of cov format reg token markdown full.
+// TestFormatRegTokenMarkdown_Full verifies FormatRegTokenMarkdown when full.
 func TestFormatRegTokenMarkdown_Full(t *testing.T) {
 	md := FormatRegTokenMarkdown(AuthTokenOutput{
 		Token:     "reg-tok-123",
@@ -1744,7 +1753,7 @@ func TestFormatRegTokenMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatRegTokenMarkdown_NoExpiry verifies the behavior of cov format reg token markdown no expiry.
+// TestFormatRegTokenMarkdown_NoExpiry verifies FormatRegTokenMarkdown when no expiry.
 func TestFormatRegTokenMarkdown_NoExpiry(t *testing.T) {
 	md := FormatRegTokenMarkdown(AuthTokenOutput{Token: "tok"})
 	if strings.Contains(md, "Expires At") {
@@ -1756,7 +1765,7 @@ func TestFormatRegTokenMarkdown_NoExpiry(t *testing.T) {
 // RegisterMeta — no panic
 // ---------------------------------------------------------------------------.
 
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
+// TestRegisterMeta_NoPanic verifies RegisterMeta when no panic.
 func TestRegisterMeta_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1825,6 +1834,7 @@ func TestActionSpecs_RunnerProjectGuidance(t *testing.T) {
 	}
 }
 
+// runnerActionSpecRoutes supports runner action spec routes assertions in runners tests.
 func runnerActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
 	t.Helper()
 	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
@@ -1834,6 +1844,7 @@ func runnerActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.
 	return routes
 }
 
+// registerRunnerMetaForTest supports register runner meta for test assertions in runners tests.
 func registerRunnerMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
 	t.Helper()
 	toolutil.AddMetaTool(server, "gitlab_runner", "Manage GitLab CI/CD runners.", runnerActionSpecRoutes(t, client), toolutil.IconRunner, nil)

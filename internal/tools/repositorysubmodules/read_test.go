@@ -15,7 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestRead_Success verifies that Read handles the success scenario correctly.
+// TestRead_Success verifies Read when success.
 func TestRead_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -93,7 +93,7 @@ func TestRead_Success(t *testing.T) {
 	}
 }
 
-// TestRead_SubmoduleNotFound verifies that Read handles the submodule not found scenario correctly.
+// TestRead_SubmoduleNotFound verifies Read when submodule not found.
 func TestRead_SubmoduleNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/repository/files/") {
@@ -130,7 +130,7 @@ func TestRead_SubmoduleNotFound(t *testing.T) {
 	}
 }
 
-// TestRead_EmptyProjectID verifies that Read handles the empty project i d scenario correctly.
+// TestRead_EmptyProjectID verifies Read when empty project ID.
 func TestRead_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -141,7 +141,7 @@ func TestRead_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRead_EmptySubmodulePath verifies that Read handles the empty submodule path scenario correctly.
+// TestRead_EmptySubmodulePath verifies Read when empty submodule path.
 func TestRead_EmptySubmodulePath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -152,7 +152,7 @@ func TestRead_EmptySubmodulePath(t *testing.T) {
 	}
 }
 
-// TestRead_EmptyFilePath verifies that Read handles the empty file path scenario correctly.
+// TestRead_EmptyFilePath verifies Read when empty file path.
 func TestRead_EmptyFilePath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -163,7 +163,7 @@ func TestRead_EmptyFilePath(t *testing.T) {
 	}
 }
 
-// TestRead_CancelledContext verifies that Read handles the cancelled context scenario correctly.
+// TestRead_CancelledContext verifies Read when cancelled context.
 func TestRead_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -175,7 +175,7 @@ func TestRead_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRead_Base64Content verifies that Read handles the base64 content scenario correctly.
+// TestRead_Base64Content verifies Read when base 64 content.
 func TestRead_Base64Content(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/repository/files/%2Egitmodules") || strings.Contains(r.URL.Path, "/repository/files/.gitmodules") {
@@ -229,7 +229,7 @@ func TestRead_Base64Content(t *testing.T) {
 
 // FormatReadMarkdown tests.
 
-// TestFormatReadMarkdown verifies the behavior of format read markdown.
+// TestFormatReadMarkdown verifies FormatReadMarkdown.
 func TestFormatReadMarkdown(t *testing.T) {
 	out := ReadOutput{
 		FileName:        "main.c",
@@ -267,7 +267,7 @@ func TestFormatReadMarkdown(t *testing.T) {
 
 // listSubmodulePaths.
 
-// TestList_SubmodulePaths verifies the behavior of list submodule paths.
+// TestList_SubmodulePaths verifies List when submodule paths.
 func TestList_SubmodulePaths(t *testing.T) {
 	entries := []SubmoduleEntry{
 		{Path: "lib"},
@@ -281,7 +281,7 @@ func TestList_SubmodulePaths(t *testing.T) {
 
 // minLen.
 
-// TestMinLen verifies the behavior of min len.
+// TestMinLen verifies MinLen.
 func TestMinLen(t *testing.T) {
 	if minLen(3, 5) != 3 {
 		t.Error("expected 3")

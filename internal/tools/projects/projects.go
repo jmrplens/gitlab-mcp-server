@@ -377,7 +377,7 @@ func applyCreateFeatureOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	applyCreateAccessLevels(opts, input)
 }
 
-// applyCreateFeatureToggles is an internal helper for the projects package.
+// applyCreateFeatureToggles applies create feature toggles transformations.
 func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.IssuesEnabled != nil {
 		opts.IssuesAccessLevel = boolToAccessLevel(input.IssuesEnabled)
@@ -411,7 +411,7 @@ func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput)
 	}
 }
 
-// applyCreateBuildOpts is an internal helper for the projects package.
+// applyCreateBuildOpts applies create build opts transformations.
 func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.ImportURL != "" {
 		opts.ImportURL = new(input.ImportURL)
@@ -438,7 +438,7 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	}
 }
 
-// applyCreateAccessLevels is an internal helper for the projects package.
+// applyCreateAccessLevels applies create access levels transformations.
 func applyCreateAccessLevels(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.PagesAccessLevel != "" {
 		opts.PagesAccessLevel = new(gl.AccessControlValue(input.PagesAccessLevel))
@@ -1207,7 +1207,7 @@ type HookOutput struct {
 	CreatedAt                 time.Time `json:"created_at"`
 }
 
-// hookOutputFromGL is an internal helper for the projects package.
+// hookOutputFromGL maps hook output from gl between API and evaluator models.
 func hookOutputFromGL(h *gl.ProjectHook) HookOutput {
 	out := HookOutput{
 		ID:                        h.ID,
@@ -1364,7 +1364,7 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 	return hookOutputFromGL(h), nil
 }
 
-// applyAddHookIdentity is an internal helper for the projects package.
+// applyAddHookIdentity applies add hook identity transformations.
 func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -1389,7 +1389,7 @@ func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	}
 }
 
-// applyAddHookEvents is an internal helper for the projects package.
+// applyAddHookEvents applies add hook events transformations.
 func applyAddHookEvents(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
@@ -1489,7 +1489,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	return hookOutputFromGL(h), nil
 }
 
-// applyEditHookIdentity is an internal helper for the projects package.
+// applyEditHookIdentity applies edit hook identity transformations.
 func applyEditHookIdentity(input EditHookInput, opts *gl.EditProjectHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
@@ -1517,7 +1517,7 @@ func applyEditHookIdentity(input EditHookInput, opts *gl.EditProjectHookOptions)
 	}
 }
 
-// applyEditHookEvents is an internal helper for the projects package.
+// applyEditHookEvents applies edit hook events transformations.
 func applyEditHookEvents(input EditHookInput, opts *gl.EditProjectHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
@@ -1627,9 +1627,7 @@ func TriggerTestHook(ctx context.Context, client *gitlabclient.Client, input Tri
 	return TriggerTestHookOutput{Message: fmt.Sprintf("Test event '%s' triggered for hook %d", input.Event, input.HookID)}, nil
 }
 
-// boolIcon is an internal helper for the projects package.
-//
-// Deprecated: Use toolutil.BoolEmoji instead. Retained as alias.
+// boolIcon implements the bool icon helper used by projects.
 func boolIcon(v bool) string {
 	return toolutil.BoolEmoji(v)
 }
@@ -1689,7 +1687,7 @@ type ProjectUserOutput struct {
 	WebURL    string `json:"web_url,omitempty"`
 }
 
-// projectUserOutputFromGL is an internal helper for the projects package.
+// projectUserOutputFromGL maps project user output from gl between API and evaluator models.
 func projectUserOutputFromGL(u *gl.ProjectUser) ProjectUserOutput {
 	return ProjectUserOutput{
 		ID:        u.ID,
@@ -1759,7 +1757,7 @@ type ProjectGroupOutput struct {
 	FullPath  string `json:"full_path"`
 }
 
-// projectGroupOutputFromGL is an internal helper for the projects package.
+// projectGroupOutputFromGL maps project group output from gl between API and evaluator models.
 func projectGroupOutputFromGL(g *gl.ProjectGroup) ProjectGroupOutput {
 	return ProjectGroupOutput{
 		ID:        g.ID,
@@ -2180,7 +2178,7 @@ type PushRuleOutput struct {
 	CreatedAt                  string `json:"created_at,omitempty"`
 }
 
-// pushRuleOutputFromGL is an internal helper for the projects package.
+// pushRuleOutputFromGL maps push rule output from gl between API and evaluator models.
 func pushRuleOutputFromGL(r *gl.ProjectPushRules) PushRuleOutput {
 	out := PushRuleOutput{
 		ID:                         r.ID,
@@ -2535,6 +2533,7 @@ type ForkRelationOutput struct {
 	UpdatedAt           string `json:"updated_at,omitempty"`
 }
 
+// forkRelationToOutput converts the GitLab API response to the tool output format.
 func forkRelationToOutput(r *gl.ProjectForkRelation) ForkRelationOutput {
 	out := ForkRelationOutput{
 		ID:                  r.ID,

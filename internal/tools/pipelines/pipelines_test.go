@@ -16,14 +16,19 @@ import (
 )
 
 const (
+	// pathProjectPipelines identifies the path project pipelines constant used by this package.
 	pathProjectPipelines = "/api/v4/projects/42/pipelines"
-	statusSuccess        = "success"
-	fmtOutStatusWant     = "out.Status = %q, want %q"
+	// statusSuccess identifies the status success constant used by this package.
+	statusSuccess = "success"
+	// fmtOutStatusWant identifies the fmt out status want constant used by this package.
+	fmtOutStatusWant = "out.Status = %q, want %q"
+	// msgErrEmptyProjectID identifies the msg err empty project ID constant used by this package.
 	msgErrEmptyProjectID = "expected error for empty project_id, got nil"
-	fmtIDWant10          = "ID = %d, want 10"
+	// fmtIDWant10 identifies the fmt ID want 10 constant used by this package.
+	fmtIDWant10 = "ID = %d, want 10"
 )
 
-// TestPipelineList_Success verifies the behavior of pipeline list success.
+// TestPipelineList_Success verifies PipelineList when success.
 func TestPipelineList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectPipelines {
@@ -80,7 +85,7 @@ func TestPipelineList_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineList_WithFilters verifies the behavior of pipeline list with filters.
+// TestPipelineList_WithFilters verifies PipelineList when with filters.
 func TestPipelineList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectPipelines {
@@ -110,7 +115,7 @@ func TestPipelineList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestPipelineList_EmptyProjectID verifies the behavior of pipeline list empty project i d.
+// TestPipelineList_EmptyProjectID verifies PipelineList when empty project ID.
 func TestPipelineList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -122,7 +127,7 @@ func TestPipelineList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineListServer_Error verifies the behavior of pipeline list server error.
+// TestPipelineListServer_Error verifies PipelineListServer when error.
 func TestPipelineListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Internal Server Error"}`)
@@ -136,7 +141,7 @@ func TestPipelineListServer_Error(t *testing.T) {
 	}
 }
 
-// TestPipelineList_CancelledContext verifies the behavior of pipeline list cancelled context.
+// TestPipelineList_CancelledContext verifies PipelineList when cancelled context.
 func TestPipelineList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -151,11 +156,15 @@ func TestPipelineList_CancelledContext(t *testing.T) {
 }
 
 const (
-	pathPipelineGet    = "/api/v4/projects/42/pipelines/10"
+	// pathPipelineGet identifies the path pipeline get constant used by this package.
+	pathPipelineGet = "/api/v4/projects/42/pipelines/10"
+	// pathPipelineCancel identifies the path pipeline cancel constant used by this package.
 	pathPipelineCancel = "/api/v4/projects/42/pipelines/10/cancel"
-	pathPipelineRetry  = "/api/v4/projects/42/pipelines/10/retry"
+	// pathPipelineRetry identifies the path pipeline retry constant used by this package.
+	pathPipelineRetry = "/api/v4/projects/42/pipelines/10/retry"
 )
 
+// pipelineDetailJSON identifies the pipeline detail JSON constant used by this package.
 const pipelineDetailJSON = `{
 	"id":10,"iid":10,"project_id":42,"status":"success","source":"push",
 	"ref":"main","sha":"abc123","before_sha":"def456prev","name":"Build","tag":false,
@@ -166,7 +175,7 @@ const pipelineDetailJSON = `{
 	"user":{"username":"testuser"}
 }`
 
-// TestPipelineGet_Success verifies the behavior of pipeline get success.
+// TestPipelineGet_Success verifies PipelineGet when success.
 func TestPipelineGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineGet {
@@ -203,7 +212,7 @@ func TestPipelineGet_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineGet_EmptyProjectID verifies the behavior of pipeline get empty project i d.
+// TestPipelineGet_EmptyProjectID verifies PipelineGet when empty project ID.
 func TestPipelineGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, pipelineDetailJSON)
@@ -215,7 +224,7 @@ func TestPipelineGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineCancel_Success verifies the behavior of pipeline cancel success.
+// TestPipelineCancel_Success verifies PipelineCancel when success.
 func TestPipelineCancel_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathPipelineCancel {
@@ -243,7 +252,7 @@ func TestPipelineCancel_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineCancel_EmptyProjectID verifies the behavior of pipeline cancel empty project i d.
+// TestPipelineCancel_EmptyProjectID verifies PipelineCancel when empty project ID.
 func TestPipelineCancel_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, pipelineDetailJSON)
@@ -255,7 +264,7 @@ func TestPipelineCancel_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineRetry_Success verifies the behavior of pipeline retry success.
+// TestPipelineRetry_Success verifies PipelineRetry when success.
 func TestPipelineRetry_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathPipelineRetry {
@@ -283,7 +292,7 @@ func TestPipelineRetry_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineRetry_EmptyProjectID verifies the behavior of pipeline retry empty project i d.
+// TestPipelineRetry_EmptyProjectID verifies PipelineRetry when empty project ID.
 func TestPipelineRetry_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, pipelineDetailJSON)
@@ -295,7 +304,7 @@ func TestPipelineRetry_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineDelete_Success verifies the behavior of pipeline delete success.
+// TestPipelineDelete_Success verifies PipelineDelete when success.
 func TestPipelineDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathPipelineGet {
@@ -314,7 +323,7 @@ func TestPipelineDelete_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineDelete_EmptyProjectID verifies the behavior of pipeline delete empty project i d.
+// TestPipelineDelete_EmptyProjectID verifies PipelineDelete when empty project ID.
 func TestPipelineDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -329,10 +338,13 @@ func TestPipelineDelete_EmptyProjectID(t *testing.T) {
 // TASK-023: GetVariables, GetTestReport, GetTestReportSummary, GetLatest, Create, UpdateMetadata tests.
 
 const (
+	// pathPipeline10 identifies the path pipeline 10 constant used by this package.
 	pathPipeline10 = "/api/v4/projects/42/pipelines/10"
 
+	// variablesResponse identifies the variables response constant used by this package.
 	variablesResponse = `[{"key":"CI_VAR","value":"hello","variable_type":"env_var"},{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file"}]`
 
+	// testReportResponse identifies the test report response constant used by this package.
 	testReportResponse = `{
 		"total_time":120.5,
 		"total_count":10,
@@ -348,6 +360,7 @@ const (
 		}]
 	}`
 
+	// testReportSummaryResponse identifies the test report summary response constant used by this package.
 	testReportSummaryResponse = `{
 		"total":{"time":120.5,"count":10,"success":8,"failed":1,"skipped":1,"error":0},
 		"test_suites":[{
@@ -359,7 +372,7 @@ const (
 	}`
 )
 
-// TestGetVariables_Success verifies the behavior of get variables success.
+// TestGetVariables_Success verifies GetVariables when success.
 func TestGetVariables_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipeline10+"/variables" {
@@ -384,7 +397,7 @@ func TestGetVariables_Success(t *testing.T) {
 	}
 }
 
-// TestGetVariables_MissingProject verifies the behavior of get variables missing project.
+// TestGetVariables_MissingProject verifies GetVariables when missing project.
 func TestGetVariables_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -395,7 +408,7 @@ func TestGetVariables_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetTestReport_Success verifies the behavior of get test report success.
+// TestGetTestReport_Success verifies GetTestReport when success.
 func TestGetTestReport_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipeline10+"/test_report" {
@@ -423,7 +436,7 @@ func TestGetTestReport_Success(t *testing.T) {
 	}
 }
 
-// TestGetTestReport_MissingProject verifies the behavior of get test report missing project.
+// TestGetTestReport_MissingProject verifies GetTestReport when missing project.
 func TestGetTestReport_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -434,7 +447,7 @@ func TestGetTestReport_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetTestReportSummary_Success verifies the behavior of get test report summary success.
+// TestGetTestReportSummary_Success verifies GetTestReportSummary when success.
 func TestGetTestReportSummary_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipeline10+"/test_report_summary" {
@@ -459,7 +472,7 @@ func TestGetTestReportSummary_Success(t *testing.T) {
 	}
 }
 
-// TestGetTestReportSummary_MissingProject verifies the behavior of get test report summary missing project.
+// TestGetTestReportSummary_MissingProject verifies GetTestReportSummary when missing project.
 func TestGetTestReportSummary_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -470,7 +483,7 @@ func TestGetTestReportSummary_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetLatest_Success verifies the behavior of get latest success.
+// TestGetLatest_Success verifies GetLatest when success.
 func TestGetLatest_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
@@ -492,7 +505,7 @@ func TestGetLatest_Success(t *testing.T) {
 	}
 }
 
-// TestGetLatest_MissingProject verifies the behavior of get latest missing project.
+// TestGetLatest_MissingProject verifies GetLatest when missing project.
 func TestGetLatest_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -537,7 +550,7 @@ func TestGet_Latest403FallbackToList(t *testing.T) {
 	}
 }
 
-// TestCreate_PipelineSuccess verifies the behavior of create pipeline success.
+// TestCreate_PipelineSuccess verifies Create when pipeline success.
 func TestCreate_PipelineSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
@@ -556,7 +569,7 @@ func TestCreate_PipelineSuccess(t *testing.T) {
 	}
 }
 
-// TestCreate_PipelineMissingRef verifies the behavior of create pipeline missing ref.
+// TestCreate_PipelineMissingRef verifies Create when pipeline missing ref.
 func TestCreate_PipelineMissingRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -567,7 +580,7 @@ func TestCreate_PipelineMissingRef(t *testing.T) {
 	}
 }
 
-// TestUpdateMetadata_Success verifies the behavior of update metadata success.
+// TestUpdateMetadata_Success verifies UpdateMetadata when success.
 func TestUpdateMetadata_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathPipeline10+"/metadata" {
@@ -586,7 +599,7 @@ func TestUpdateMetadata_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateMetadata_MissingName verifies the behavior of update metadata missing name.
+// TestUpdateMetadata_MissingName verifies UpdateMetadata when missing name.
 func TestUpdateMetadata_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -661,15 +674,17 @@ func TestPipelineIDRequired_Validation(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // buildListOpts — cover all filter fields
 // ---------------------------------------------------------------------------.
 
-// TestBuildListOpts_AllFilters verifies the behavior of build list opts all filters.
+// TestBuildListOpts_AllFilters verifies BuildListOpts when all filters.
 func TestBuildListOpts_AllFilters(t *testing.T) {
 	input := ListInput{
 		ProjectID:     "1",
@@ -743,7 +758,7 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	}
 }
 
-// TestBuildListOpts_Defaults verifies the behavior of build list opts defaults.
+// TestBuildListOpts_Defaults verifies BuildListOpts when defaults.
 func TestBuildListOpts_Defaults(t *testing.T) {
 	opts := buildListOpts(ListInput{ProjectID: "1"})
 
@@ -768,7 +783,7 @@ func TestBuildListOpts_Defaults(t *testing.T) {
 // ToOutput — with and without timestamps
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilTimestamps verifies the behavior of to output nil timestamps.
+// TestToOutput_NilTimestamps verifies ToOutput when nil timestamps.
 func TestToOutput_NilTimestamps(t *testing.T) {
 	p := &gl.PipelineInfo{
 		ID: 5, IID: 5, ProjectID: 42,
@@ -798,7 +813,7 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 // DetailToOutput — all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestDetailToOutput_AllOptionalFields verifies the behavior of detail to output all optional fields.
+// TestDetailToOutput_AllOptionalFields verifies DetailToOutput when all optional fields.
 func TestDetailToOutput_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -871,7 +886,7 @@ func TestDetailToOutput_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestDetailToOutput_MinimalFields verifies the behavior of detail to output minimal fields.
+// TestDetailToOutput_MinimalFields verifies DetailToOutput when minimal fields.
 func TestDetailToOutput_MinimalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -915,7 +930,7 @@ func TestDetailToOutput_MinimalFields(t *testing.T) {
 // Canceled context tests — handlers not already covered
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -927,7 +942,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCancel_CancelledContext verifies the behavior of cancel cancelled context.
+// TestCancel_CancelledContext verifies Cancel when cancelled context.
 func TestCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -939,7 +954,7 @@ func TestCancel_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRetry_CancelledContext verifies the behavior of retry cancelled context.
+// TestRetry_CancelledContext verifies Retry when cancelled context.
 func TestRetry_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -951,7 +966,7 @@ func TestRetry_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -963,7 +978,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetVariables_CancelledContext verifies the behavior of get variables cancelled context.
+// TestGetVariables_CancelledContext verifies GetVariables when cancelled context.
 func TestGetVariables_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -975,7 +990,7 @@ func TestGetVariables_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetTestReport_CancelledContext verifies the behavior of get test report cancelled context.
+// TestGetTestReport_CancelledContext verifies GetTestReport when cancelled context.
 func TestGetTestReport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -987,7 +1002,7 @@ func TestGetTestReport_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetTestReportSummary_CancelledContext verifies the behavior of get test report summary cancelled context.
+// TestGetTestReportSummary_CancelledContext verifies GetTestReportSummary when cancelled context.
 func TestGetTestReportSummary_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -999,7 +1014,7 @@ func TestGetTestReportSummary_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetLatest_CancelledContext verifies the behavior of get latest cancelled context.
+// TestGetLatest_CancelledContext verifies GetLatest when cancelled context.
 func TestGetLatest_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -1011,7 +1026,7 @@ func TestGetLatest_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -1023,7 +1038,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateMetadata_CancelledContext verifies the behavior of update metadata cancelled context.
+// TestUpdateMetadata_CancelledContext verifies UpdateMetadata when cancelled context.
 func TestUpdateMetadata_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
@@ -1039,7 +1054,7 @@ func TestUpdateMetadata_CancelledContext(t *testing.T) {
 // API error tests — handlers not already covered
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1050,7 +1065,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCancel_APIError verifies the behavior of cancel a p i error.
+// TestCancel_APIError verifies Cancel when API error.
 func TestCancel_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1061,7 +1076,7 @@ func TestCancel_APIError(t *testing.T) {
 	}
 }
 
-// TestRetry_APIError verifies the behavior of retry a p i error.
+// TestRetry_APIError verifies Retry when API error.
 func TestRetry_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1072,7 +1087,7 @@ func TestRetry_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1083,7 +1098,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestGetVariables_APIError verifies the behavior of get variables a p i error.
+// TestGetVariables_APIError verifies GetVariables when API error.
 func TestGetVariables_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1094,7 +1109,7 @@ func TestGetVariables_APIError(t *testing.T) {
 	}
 }
 
-// TestGetTestReport_APIError verifies the behavior of get test report a p i error.
+// TestGetTestReport_APIError verifies GetTestReport when API error.
 func TestGetTestReport_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1105,7 +1120,7 @@ func TestGetTestReport_APIError(t *testing.T) {
 	}
 }
 
-// TestGetTestReportSummary_APIError verifies the behavior of get test report summary a p i error.
+// TestGetTestReportSummary_APIError verifies GetTestReportSummary when API error.
 func TestGetTestReportSummary_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1116,7 +1131,7 @@ func TestGetTestReportSummary_APIError(t *testing.T) {
 	}
 }
 
-// TestGetLatest_APIError verifies the behavior of get latest a p i error.
+// TestGetLatest_APIError verifies GetLatest when API error.
 func TestGetLatest_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1127,7 +1142,7 @@ func TestGetLatest_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1138,7 +1153,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateMetadata_APIError verifies the behavior of update metadata a p i error.
+// TestUpdateMetadata_APIError verifies UpdateMetadata when API error.
 func TestUpdateMetadata_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1153,7 +1168,7 @@ func TestUpdateMetadata_APIError(t *testing.T) {
 // Empty required field tests — handlers not already covered
 // ---------------------------------------------------------------------------.
 
-// TestCreate_MissingProject verifies the behavior of create missing project.
+// TestCreate_MissingProject verifies Create when missing project.
 func TestCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1164,7 +1179,7 @@ func TestCreate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUpdateMetadata_MissingProject verifies the behavior of update metadata missing project.
+// TestUpdateMetadata_MissingProject verifies UpdateMetadata when missing project.
 func TestUpdateMetadata_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1179,7 +1194,7 @@ func TestUpdateMetadata_MissingProject(t *testing.T) {
 // Create with variables
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithVariables verifies the behavior of create with variables.
+// TestCreate_WithVariables verifies Create when with variables.
 func TestCreate_WithVariables(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
@@ -1219,7 +1234,7 @@ func TestCreate_WithVariables(t *testing.T) {
 // GetLatest with ref filter
 // ---------------------------------------------------------------------------.
 
-// TestGetLatest_WithRef verifies the behavior of get latest with ref.
+// TestGetLatest_WithRef verifies GetLatest when with ref.
 func TestGetLatest_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
@@ -1251,7 +1266,7 @@ func TestGetLatest_WithRef(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPipelines verifies the behavior of format list markdown with pipelines.
+// TestFormatListMarkdown_WithPipelines verifies FormatListMarkdown when with pipelines.
 func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 	out := ListOutput{
 		Pipelines: []Output{
@@ -1276,7 +1291,7 @@ func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		Pipelines:  []Output{},
@@ -1311,7 +1326,7 @@ func TestFormatListMarkdown_ClickablePipelineLinks(t *testing.T) {
 // FormatDetailMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatDetailMarkdown_Full verifies the behavior of format detail markdown full.
+// TestFormatDetailMarkdown_Full verifies FormatDetailMarkdown when full.
 func TestFormatDetailMarkdown_Full(t *testing.T) {
 	out := DetailOutput{
 		ID:             99,
@@ -1363,7 +1378,7 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatDetailMarkdown_Minimal verifies the behavior of format detail markdown minimal.
+// TestFormatDetailMarkdown_Minimal verifies FormatDetailMarkdown when minimal.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	out := DetailOutput{
 		ID:     1,
@@ -1397,7 +1412,7 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 // FormatVariablesMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatVariablesMarkdown_WithData verifies the behavior of format variables markdown with data.
+// TestFormatVariablesMarkdown_WithData verifies FormatVariablesMarkdown when with data.
 func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 	out := VariablesOutput{
 		Variables: []VariableOutput{
@@ -1421,7 +1436,7 @@ func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatVariablesMarkdown_Empty verifies the behavior of format variables markdown empty.
+// TestFormatVariablesMarkdown_Empty verifies FormatVariablesMarkdown when empty.
 func TestFormatVariablesMarkdown_Empty(t *testing.T) {
 	out := VariablesOutput{Variables: nil}
 	md := FormatVariablesMarkdown(out)
@@ -1441,7 +1456,7 @@ func TestFormatVariablesMarkdown_Empty(t *testing.T) {
 // FormatTestReportMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTestReportMarkdown_WithSuites verifies the behavior of format test report markdown with suites.
+// TestFormatTestReportMarkdown_WithSuites verifies FormatTestReportMarkdown when with suites.
 func TestFormatTestReportMarkdown_WithSuites(t *testing.T) {
 	out := TestReportOutput{
 		TotalTime:    120.5,
@@ -1478,7 +1493,7 @@ func TestFormatTestReportMarkdown_WithSuites(t *testing.T) {
 	}
 }
 
-// TestFormatTestReportMarkdown_Empty verifies the behavior of format test report markdown empty.
+// TestFormatTestReportMarkdown_Empty verifies FormatTestReportMarkdown when empty.
 func TestFormatTestReportMarkdown_Empty(t *testing.T) {
 	out := TestReportOutput{}
 	md := FormatTestReportMarkdown(out)
@@ -1498,7 +1513,7 @@ func TestFormatTestReportMarkdown_Empty(t *testing.T) {
 // FormatTestReportSummaryMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTestReportSummaryMarkdown_WithSuites verifies the behavior of format test report summary markdown with suites.
+// TestFormatTestReportSummaryMarkdown_WithSuites verifies FormatTestReportSummaryMarkdown when with suites.
 func TestFormatTestReportSummaryMarkdown_WithSuites(t *testing.T) {
 	out := TestReportSummaryOutput{
 		TotalTime:    200.0,
@@ -1528,7 +1543,7 @@ func TestFormatTestReportSummaryMarkdown_WithSuites(t *testing.T) {
 	}
 }
 
-// TestFormatTestReportSummaryMarkdown_Empty verifies the behavior of format test report summary markdown empty.
+// TestFormatTestReportSummaryMarkdown_Empty verifies FormatTestReportSummaryMarkdown when empty.
 func TestFormatTestReportSummaryMarkdown_Empty(t *testing.T) {
 	out := TestReportSummaryOutput{}
 	md := FormatTestReportSummaryMarkdown(out)
@@ -1613,7 +1628,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// newPipelinesRouteSpecs is an internal helper for the pipelines package.
+// newPipelinesRouteSpecs constructs pipelines route specs test fixtures.
 func newPipelinesRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1941,6 +1956,7 @@ func TestActionSpecs_PipelineGetRoute(t *testing.T) {
 	}
 }
 
+// pipelineSpecsByTool supports pipeline specs by tool assertions in pipelines tests.
 func pipelineSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

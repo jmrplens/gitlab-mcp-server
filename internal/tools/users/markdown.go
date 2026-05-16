@@ -9,7 +9,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const tblSep5Col = "|---|---|---|---|---|\n"
 const fmtDeletedRow = "- **Deleted**: %s %v\n"
 
 type userNotFoundOutput struct {
@@ -58,8 +57,7 @@ func FormatListMarkdownString(o ListOutput) string {
 	if len(o.Users) == 0 {
 		b.WriteString("No users found.\n")
 	} else {
-		b.WriteString("| ID | Username | Name | Email | State |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State"))
 		for _, u := range o.Users {
 			fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s | %s |\n",
 				u.ID, toolutil.EscapeMdTableCell(u.Username), u.WebURL,
@@ -139,8 +137,7 @@ func FormatSSHKeyListMarkdownString(o SSHKeyListOutput) string {
 	if len(o.Keys) == 0 {
 		b.WriteString("No SSH keys found.\n")
 	} else {
-		b.WriteString("| ID | Title | Usage Type | Created At | Expires At |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Usage Type", "Created At", "Expires At"))
 		for _, k := range o.Keys {
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
 				k.ID, toolutil.EscapeMdTableCell(k.Title), k.UsageType, k.CreatedAt, k.ExpiresAt)
@@ -165,8 +162,7 @@ func FormatEmailListMarkdownString(o EmailListOutput) string {
 	if len(o.Emails) == 0 {
 		b.WriteString("No email addresses found.\n")
 	} else {
-		b.WriteString("| ID | Email | Confirmed At |\n")
-		b.WriteString("|---|---|---|\n")
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed At"))
 		for _, e := range o.Emails {
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), toolutil.FormatTime(e.ConfirmedAt))
 		}
@@ -189,8 +185,7 @@ func FormatContributionEventsMarkdownString(o ContributionEventsOutput) string {
 	if len(o.Events) == 0 {
 		b.WriteString("No contribution events found.\n")
 	} else {
-		b.WriteString("| ID | Action | Target Type | Target | Created At |\n")
-		b.WriteString(tblSep5Col)
+		b.WriteString(toolutil.MarkdownTableHeader("ID", "Action", "Target Type", "Target", "Created At"))
 		for _, e := range o.Events {
 			target := toolutil.FormatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",

@@ -11,7 +11,7 @@ import (
 func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Deploy Token: %s (ID: %d)\n\n", o.Name, o.ID)
-	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
+	b.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
 	fmt.Fprintf(&b, "| Name | %s |\n", o.Name)
 	fmt.Fprintf(&b, "| Username | %s |\n", o.Username)
@@ -41,8 +41,7 @@ func FormatListMarkdown(o ListOutput) string {
 		toolutil.WritePagination(&b, o.Pagination)
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Username | Scopes | Revoked | Expired |\n")
-	b.WriteString("|---|---|---|---|---|---|\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Scopes", "Revoked", "Expired"))
 	for _, t := range o.DeployTokens {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %t | %t |\n",
 			t.ID, t.Name, t.Username, strings.Join(t.Scopes, ", "), t.Revoked, t.Expired)

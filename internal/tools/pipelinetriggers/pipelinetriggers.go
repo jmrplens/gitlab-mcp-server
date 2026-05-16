@@ -259,7 +259,7 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertTrigger is an internal helper for the pipelinetriggers package.
+// convertTrigger implements the convert trigger helper used by pipelinetriggers.
 func convertTrigger(t *gl.PipelineTrigger) Output {
 	out := Output{
 		ID:          t.ID,
@@ -282,7 +282,7 @@ func convertTrigger(t *gl.PipelineTrigger) Output {
 	return out
 }
 
-// convertPipeline is an internal helper for the pipelinetriggers package.
+// convertPipeline implements the convert pipeline helper used by pipelinetriggers.
 func convertPipeline(p *gl.Pipeline) RunOutput {
 	out := RunOutput{
 		PipelineID: p.ID,

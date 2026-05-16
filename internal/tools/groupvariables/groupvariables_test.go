@@ -14,14 +14,17 @@ import (
 )
 
 const (
+	// pathGroupVars identifies the path group vars constant used by this package.
 	pathGroupVars = "/api/v4/groups/10/variables"
-	pathVar1      = "/api/v4/groups/10/variables/MY_VAR"
-	varJSON       = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"hidden":false,"raw":false,"environment_scope":"*","description":"Test var"}`
+	// pathVar1 identifies the path var 1 constant used by this package.
+	pathVar1 = "/api/v4/groups/10/variables/MY_VAR"
+	// varJSON identifies the var JSON constant used by this package.
+	varJSON = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"hidden":false,"raw":false,"environment_scope":"*","description":"Test var"}`
 )
 
 // ---------- List ----------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupVars {
@@ -47,7 +50,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies the behavior of list missing group i d.
+// TestList_MissingGroupID verifies List when missing group ID.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -61,7 +64,7 @@ func TestList_MissingGroupID(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
@@ -83,7 +86,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_WithEnvironmentScope verifies the behavior of get with environment scope.
+// TestGet_WithEnvironmentScope verifies Get when with environment scope.
 func TestGet_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
@@ -103,7 +106,7 @@ func TestGet_WithEnvironmentScope(t *testing.T) {
 	}
 }
 
-// TestGet_MissingKey verifies the behavior of get missing key.
+// TestGet_MissingKey verifies Get when missing key.
 func TestGet_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -117,7 +120,7 @@ func TestGet_MissingKey(t *testing.T) {
 
 // ---------- Create ----------.
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupVars {
@@ -136,7 +139,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingValue verifies the behavior of create missing value.
+// TestCreate_MissingValue verifies Create when missing value.
 func TestCreate_MissingValue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -148,7 +151,7 @@ func TestCreate_MissingValue(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingGroupID verifies the behavior of create missing group i d.
+// TestCreate_MissingGroupID verifies Create when missing group ID.
 func TestCreate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -162,7 +165,7 @@ func TestCreate_MissingGroupID(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
@@ -181,7 +184,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingKey verifies the behavior of update missing key.
+// TestUpdate_MissingKey verifies Update when missing key.
 func TestUpdate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -195,7 +198,7 @@ func TestUpdate_MissingKey(t *testing.T) {
 
 // ---------- Delete ----------.
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathVar1 {
@@ -211,7 +214,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID verifies the behavior of delete missing group i d.
+// TestDelete_MissingGroupID verifies Delete when missing group ID.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -223,7 +226,7 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingKey verifies the behavior of delete missing key.
+// TestDelete_MissingKey verifies Delete when missing key.
 func TestDelete_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -237,7 +240,7 @@ func TestDelete_MissingKey(t *testing.T) {
 
 // ---------- Formatters ----------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}
 	md := FormatOutputMarkdown(out)
@@ -246,7 +249,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Masked verifies the behavior of format output markdown masked.
+// TestFormatOutputMarkdown_Masked verifies FormatOutputMarkdown when masked.
 func TestFormatOutputMarkdown_Masked(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", Masked: true, VariableType: "env_var"}
 	md := FormatOutputMarkdown(out)
@@ -267,7 +270,7 @@ func TestFormatListMarkdown_Empty_NilVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Variables:  []Output{{Key: "MY_VAR", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}},
@@ -281,17 +284,20 @@ func TestFormatListMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// errExpectedCtxCancelled identifies the err expected ctx cancelled constant used by this package.
 const errExpectedCtxCancelled = "expected canceled context error, got nil"
 
 // ---------------------------------------------------------------------------
 // List — API error, canceled context, pagination parameters, empty result
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -302,7 +308,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -314,7 +320,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/variables" && r.Method == http.MethodGet {
@@ -351,7 +357,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables" && r.Method == http.MethodGet {
@@ -374,7 +380,7 @@ func TestList_EmptyResult(t *testing.T) {
 // Get — API error, canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -385,7 +391,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -397,7 +403,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID verifies the behavior of get missing group i d.
+// TestGet_MissingGroupID verifies Get when missing group ID.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -412,7 +418,7 @@ func TestGet_MissingGroupID(t *testing.T) {
 // Create — API error, canceled context, missing key, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -423,7 +429,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -435,7 +441,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingKey verifies the behavior of create missing key.
+// TestCreate_MissingKey verifies Create when missing key.
 func TestCreate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -446,7 +452,7 @@ func TestCreate_MissingKey(t *testing.T) {
 	}
 }
 
-// TestCreate_AllOptionalFields verifies the behavior of create all optional fields.
+// TestCreate_AllOptionalFields verifies Create when all optional fields.
 func TestCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables" && r.Method == http.MethodPost {
@@ -497,7 +503,7 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, canceled context, missing group_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -508,7 +514,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -520,7 +526,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingGroupID verifies the behavior of update missing group i d.
+// TestUpdate_MissingGroupID verifies Update when missing group ID.
 func TestUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -531,7 +537,7 @@ func TestUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -572,7 +578,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, canceled context, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -583,7 +589,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -595,7 +601,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_WithEnvironmentScope verifies the behavior of delete with environment scope.
+// TestDelete_WithEnvironmentScope verifies Delete when with environment scope.
 func TestDelete_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -619,7 +625,7 @@ func TestDelete_WithEnvironmentScope(t *testing.T) {
 // FormatOutputMarkdown — empty key, full unmasked, masked, hidden, no desc
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyKey verifies the behavior of format output markdown empty key.
+// TestFormatOutputMarkdown_EmptyKey verifies FormatOutputMarkdown when empty key.
 func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -627,7 +633,7 @@ func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_FullUnmasked verifies the behavior of format output markdown full unmasked.
+// TestFormatOutputMarkdown_FullUnmasked verifies FormatOutputMarkdown when full unmasked.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "DB_HOST",
@@ -660,7 +666,7 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MaskedValue verifies the behavior of format output markdown masked value.
+// TestFormatOutputMarkdown_MaskedValue verifies FormatOutputMarkdown when masked value.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SECRET",
@@ -678,7 +684,7 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_HiddenValue verifies the behavior of format output markdown hidden value.
+// TestFormatOutputMarkdown_HiddenValue verifies FormatOutputMarkdown when hidden value.
 func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "TOKEN",
@@ -696,7 +702,7 @@ func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies the behavior of format output markdown no description.
+// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown when no description.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SIMPLE",
@@ -714,7 +720,7 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // FormatListMarkdown — with variables, empty, escape table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies the behavior of format list markdown with variables.
+// TestFormatListMarkdown_WithVariables verifies FormatListMarkdown when with variables.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -740,7 +746,7 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No group CI/CD variables found") {
@@ -751,7 +757,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies the behavior of format list markdown escapes table cells.
+// TestFormatListMarkdown_EscapesTableCells verifies FormatListMarkdown when escapes table cells.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{

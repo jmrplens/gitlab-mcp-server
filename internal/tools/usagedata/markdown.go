@@ -16,7 +16,7 @@ func FormatServicePingMarkdown(out GetServicePingOutput) string {
 
 	if len(out.License) > 0 {
 		sb.WriteString("### License\n\n")
-		sb.WriteString("| Key | Value |\n|---|---|\n")
+		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, k := range sortedKeys(out.License) {
 			fmt.Fprintf(&sb, "| %s | %s |\n",
 				toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(out.License[k]))
@@ -26,7 +26,7 @@ func FormatServicePingMarkdown(out GetServicePingOutput) string {
 
 	if len(out.Counts) > 0 {
 		sb.WriteString("### Counts (first 20)\n\n")
-		sb.WriteString("| Metric | Count |\n|---|---|\n")
+		sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Count"))
 		keys := sortedKeysInt64(out.Counts)
 		limit := min(len(keys), 20)
 		for _, k := range keys[:limit] {
@@ -46,7 +46,7 @@ func FormatServicePingMarkdown(out GetServicePingOutput) string {
 func FormatNonSQLMetricsMarkdown(out NonSQLMetricsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Non-SQL Metrics\n\n")
-	sb.WriteString("| Property | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&sb, "| UUID | %s |\n", toolutil.EscapeMdTableCell(out.UUID))
 	fmt.Fprintf(&sb, "| Hostname | %s |\n", toolutil.EscapeMdTableCell(out.Hostname))
 	fmt.Fprintf(&sb, "| Version | %s |\n", toolutil.EscapeMdTableCell(out.Version))
@@ -69,7 +69,7 @@ func FormatQueriesMarkdown(out QueriesOutput) string {
 
 	if len(out.Counts) > 0 {
 		sb.WriteString("### SQL Queries (first 20)\n\n")
-		sb.WriteString("| Metric | Query |\n|---|---|\n")
+		sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Query"))
 		keys := sortedKeys(out.Counts)
 		limit := min(len(keys), 20)
 		for _, k := range keys[:limit] {

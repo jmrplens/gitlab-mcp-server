@@ -19,8 +19,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
 // TestScheduleExport_Success verifies that ScheduleExport calls the correct
@@ -190,13 +192,14 @@ func TestFormatImportFileMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
 // ---------------------------------------------------------------------------
 // ScheduleExport — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestScheduleExport_CancelledContext verifies the behavior of schedule export cancelled context.
+// TestScheduleExport_CancelledContext verifies ScheduleExport when cancelled context.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -240,7 +243,7 @@ func TestExportDownload_ReadAllError(t *testing.T) {
 	}
 }
 
-// TestExportDownload_CancelledContext verifies the behavior of export download cancelled context.
+// TestExportDownload_CancelledContext verifies ExportDownload when cancelled context.
 func TestExportDownload_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -254,7 +257,7 @@ func TestExportDownload_CancelledContext(t *testing.T) {
 // ImportFile — canceled context, with parent_id
 // ---------------------------------------------------------------------------.
 
-// TestImportFile_CancelledContext verifies the behavior of import file cancelled context.
+// TestImportFile_CancelledContext verifies ImportFile when cancelled context.
 func TestImportFile_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -274,7 +277,7 @@ func TestImportFile_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestImportFile_WithParentID verifies the behavior of import file with parent i d.
+// TestImportFile_WithParentID verifies ImportFile when with parent ID.
 func TestImportFile_WithParentID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/import" && r.Method == http.MethodPost {
@@ -309,7 +312,7 @@ func TestImportFile_WithParentID(t *testing.T) {
 // FormatMarkdown — dispatch for all types and unknown type
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_ScheduleExportOutput verifies the behavior of format markdown schedule export output.
+// TestFormatMarkdown_ScheduleExportOutput verifies FormatMarkdown when schedule export output.
 func TestFormatMarkdown_ScheduleExportOutput(t *testing.T) {
 	result := FormatMarkdown(ScheduleExportOutput{Message: "Group export scheduled successfully"})
 	if result == nil {
@@ -317,7 +320,7 @@ func TestFormatMarkdown_ScheduleExportOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ExportDownloadOutput verifies the behavior of format markdown export download output.
+// TestFormatMarkdown_ExportDownloadOutput verifies FormatMarkdown when export download output.
 func TestFormatMarkdown_ExportDownloadOutput(t *testing.T) {
 	result := FormatMarkdown(ExportDownloadOutput{ContentBase64: "dGVzdA==", SizeBytes: 4})
 	if result == nil {
@@ -325,7 +328,7 @@ func TestFormatMarkdown_ExportDownloadOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ImportFileOutput verifies the behavior of format markdown import file output.
+// TestFormatMarkdown_ImportFileOutput verifies FormatMarkdown when import file output.
 func TestFormatMarkdown_ImportFileOutput(t *testing.T) {
 	result := FormatMarkdown(ImportFileOutput{Message: "Group import started successfully"})
 	if result == nil {
@@ -333,7 +336,7 @@ func TestFormatMarkdown_ImportFileOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_UnknownType verifies the behavior of format markdown unknown type.
+// TestFormatMarkdown_UnknownType verifies FormatMarkdown when unknown type.
 func TestFormatMarkdown_UnknownType(t *testing.T) {
 	result := FormatMarkdown("unknown type")
 	if result != nil {
@@ -341,7 +344,7 @@ func TestFormatMarkdown_UnknownType(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyScheduleExportOutput verifies the behavior of format markdown empty schedule export output.
+// TestFormatMarkdown_EmptyScheduleExportOutput verifies FormatMarkdown when empty schedule export output.
 func TestFormatMarkdown_EmptyScheduleExportOutput(t *testing.T) {
 	result := FormatMarkdown(ScheduleExportOutput{})
 	if result != nil {
@@ -349,7 +352,7 @@ func TestFormatMarkdown_EmptyScheduleExportOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyExportDownloadOutput verifies the behavior of format markdown empty export download output.
+// TestFormatMarkdown_EmptyExportDownloadOutput verifies FormatMarkdown when empty export download output.
 func TestFormatMarkdown_EmptyExportDownloadOutput(t *testing.T) {
 	result := FormatMarkdown(ExportDownloadOutput{})
 	if result != nil {
@@ -357,7 +360,7 @@ func TestFormatMarkdown_EmptyExportDownloadOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyImportFileOutput verifies the behavior of format markdown empty import file output.
+// TestFormatMarkdown_EmptyImportFileOutput verifies FormatMarkdown when empty import file output.
 func TestFormatMarkdown_EmptyImportFileOutput(t *testing.T) {
 	result := FormatMarkdown(ImportFileOutput{})
 	if result != nil {
@@ -369,7 +372,7 @@ func TestFormatMarkdown_EmptyImportFileOutput(t *testing.T) {
 // FormatExportDownloadMarkdown — content check
 // ---------------------------------------------------------------------------.
 
-// TestFormatExportDownloadMarkdown_ContentCheck verifies the behavior of format export download markdown content check.
+// TestFormatExportDownloadMarkdown_ContentCheck verifies FormatExportDownloadMarkdown when content check.
 func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
 	result := FormatExportDownloadMarkdown(ExportDownloadOutput{
 		ContentBase64: "dGVzdA==",
@@ -395,7 +398,7 @@ func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
 // ValidActions
 // ---------------------------------------------------------------------------.
 
-// TestValidActions verifies the behavior of valid actions.
+// TestValidActions verifies ValidActions.
 func TestValidActions(t *testing.T) {
 	actions := ValidActions()
 	for _, expected := range []string{"schedule_export", "export_download", "import_file"} {
@@ -466,6 +469,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// groupImportExportHandler supports group import export handler assertions in groupimportexport tests.
 func groupImportExportHandler() http.Handler {
 	handler := http.NewServeMux()
 

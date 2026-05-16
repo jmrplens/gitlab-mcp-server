@@ -17,15 +17,21 @@ import (
 )
 
 const (
-	actionPushed    = "pushed"
-	targetIssue     = "issue"
-	titleBugReport  = "Bug Report"
-	fmtUnexpErr     = "unexpected error: %v"
-	testDateAfter   = "2026-06-01"
+	// actionPushed identifies the action pushed constant used by this package.
+	actionPushed = "pushed"
+	// targetIssue identifies the target issue constant used by this package.
+	targetIssue = "issue"
+	// titleBugReport identifies the title bug report constant used by this package.
+	titleBugReport = "Bug Report"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// testDateAfter identifies the test date after constant used by this package.
+	testDateAfter = "2026-06-01"
+	// testDateCreated identifies the test date created constant used by this package.
 	testDateCreated = "2026-01-14"
 )
 
-// TestListProjectEvents_Success verifies the behavior of list project events success.
+// TestListProjectEvents_Success verifies ListProjectEvents when success.
 func TestListProjectEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/events" {
@@ -59,7 +65,7 @@ func TestListProjectEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_WithFilters verifies the behavior of list project events with filters.
+// TestListProjectEvents_WithFilters verifies ListProjectEvents when with filters.
 func TestListProjectEvents_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/events") {
@@ -106,7 +112,7 @@ func TestListProjectEvents_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_ValidationError verifies the behavior of list project events validation error.
+// TestListProjectEvents_ValidationError verifies ListProjectEvents when validation error.
 func TestListProjectEvents_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for validation error")
@@ -130,7 +136,7 @@ func TestListProjectEvents_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_EmptyResult verifies the behavior of list project events empty result.
+// TestListProjectEvents_EmptyResult verifies ListProjectEvents when empty result.
 func TestListProjectEvents_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
@@ -145,7 +151,7 @@ func TestListProjectEvents_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_Success verifies the behavior of list current user contribution events success.
+// TestListCurrentUserContributionEvents_Success verifies ListCurrentUserContributionEvents when success.
 func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/events" {
@@ -179,7 +185,7 @@ func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_WithFilters verifies the behavior of list current user contribution events with filters.
+// TestListCurrentUserContributionEvents_WithFilters verifies ListCurrentUserContributionEvents when with filters.
 func TestListCurrentUserContributionEvents_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/events") {
@@ -226,7 +232,7 @@ func TestListCurrentUserContributionEvents_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithEvents verifies the behavior of format contribution list markdown string with events.
+// TestFormatContributionListMarkdownString_WithEvents verifies FormatContributionListMarkdownString when with events.
 func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -243,7 +249,7 @@ func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_Empty verifies the behavior of format contribution list markdown string empty.
+// TestFormatContributionListMarkdownString_Empty verifies FormatContributionListMarkdownString when empty.
 func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
 	out := ListContributionEventsOutput{Events: []ContributionEventOutput{}}
 	md := FormatContributionListMarkdownString(out)
@@ -252,7 +258,7 @@ func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithEvents verifies the behavior of format list markdown string with events.
+// TestFormatListMarkdownString_WithEvents verifies FormatListMarkdownString when with events.
 func TestFormatListMarkdownString_WithEvents(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -272,7 +278,7 @@ func TestFormatListMarkdownString_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	out := ListProjectEventsOutput{Events: []ProjectEventOutput{}}
 	md := FormatListMarkdownString(out)
@@ -281,7 +287,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_TargetTitleShown verifies the behavior of format contribution list markdown string target title shown.
+// TestFormatContributionListMarkdownString_TargetTitleShown verifies FormatContributionListMarkdownString when target title shown.
 func TestFormatContributionListMarkdownString_TargetTitleShown(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -294,7 +300,7 @@ func TestFormatContributionListMarkdownString_TargetTitleShown(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_AuthorPrefixed verifies the behavior of format contribution list markdown string author prefixed.
+// TestFormatContributionListMarkdownString_AuthorPrefixed verifies FormatContributionListMarkdownString when author prefixed.
 func TestFormatContributionListMarkdownString_AuthorPrefixed(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -307,7 +313,7 @@ func TestFormatContributionListMarkdownString_AuthorPrefixed(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_NoEventID verifies the behavior of format contribution list markdown string no event i d.
+// TestFormatContributionListMarkdownString_NoEventID verifies FormatContributionListMarkdownString when no event ID.
 func TestFormatContributionListMarkdownString_NoEventID(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -320,7 +326,7 @@ func TestFormatContributionListMarkdownString_NoEventID(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_TargetTitleShown verifies the behavior of format list markdown string target title shown.
+// TestFormatListMarkdownString_TargetTitleShown verifies FormatListMarkdownString when target title shown.
 func TestFormatListMarkdownString_TargetTitleShown(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -333,7 +339,7 @@ func TestFormatListMarkdownString_TargetTitleShown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_AuthorPrefixed verifies the behavior of format list markdown string author prefixed.
+// TestFormatListMarkdownString_AuthorPrefixed verifies FormatListMarkdownString when author prefixed.
 func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -346,7 +352,7 @@ func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_NoEventID verifies the behavior of format list markdown string no event i d.
+// TestFormatListMarkdownString_NoEventID verifies FormatListMarkdownString when no event ID.
 func TestFormatListMarkdownString_NoEventID(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -359,7 +365,7 @@ func TestFormatListMarkdownString_NoEventID(t *testing.T) {
 	}
 }
 
-// TestFormatAuthor validates format author across multiple scenarios using table-driven subtests.
+// TestFormatAuthor covers FormatAuthor with table-driven subtests.
 func TestFormatAuthor(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -379,12 +385,12 @@ func TestFormatAuthor(t *testing.T) {
 	}
 }
 
-// contains is an internal helper for the events package.
+// contains reports whether contains.
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsSubstring(s, sub))
 }
 
-// containsSubstring is an internal helper for the events package.
+// containsSubstring reports whether contains substring.
 func containsSubstring(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {
@@ -398,7 +404,7 @@ func containsSubstring(s, sub string) bool {
 
 // toContributionEventOutput.
 
-// TestCovtoContributionEventOutput_NilCreatedAt verifies the behavior of covto contribution event output nil created at.
+// TestCovtoContributionEventOutput_NilCreatedAt verifies CovtoContributionEventOutput when nil created at.
 func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 	e := &gl.ContributionEvent{
 		ID:             1,
@@ -422,7 +428,7 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCovtoContributionEventOutput_WithDate verifies the behavior of covto contribution event output with date.
+// TestCovtoContributionEventOutput_WithDate verifies CovtoContributionEventOutput when with date.
 func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 	ts := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 	e := &gl.ContributionEvent{
@@ -446,7 +452,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 
 // FormatContributionListMarkdown.
 
-// TestFormatContributionListMarkdown_Wrapper verifies the behavior of cov format contribution list markdown wrapper.
+// TestFormatContributionListMarkdown_Wrapper verifies FormatContributionListMarkdown when wrapper.
 func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
@@ -457,7 +463,7 @@ func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_EmptyTargetType verifies the behavior of cov format contribution list markdown string empty target type.
+// TestFormatContributionListMarkdownString_EmptyTargetType verifies FormatContributionListMarkdownString when empty target type.
 func TestFormatContributionListMarkdownString_EmptyTargetType(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
@@ -468,7 +474,7 @@ func TestFormatContributionListMarkdownString_EmptyTargetType(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithTargetType verifies the behavior of cov format contribution list markdown string with target type.
+// TestFormatContributionListMarkdownString_WithTargetType verifies FormatContributionListMarkdownString when with target type.
 func TestFormatContributionListMarkdownString_WithTargetType(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: "Issue", TargetIID: 42}},
@@ -481,7 +487,7 @@ func TestFormatContributionListMarkdownString_WithTargetType(t *testing.T) {
 
 // toProjectEventOutput.
 
-// TestCovtoProject_EventOutputFieldMapping verifies the behavior of covto project event output field mapping.
+// TestCovtoProject_EventOutputFieldMapping verifies CovtoProject when event output field mapping.
 func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 	e := &gl.ProjectEvent{
 		ID:             101,
@@ -507,7 +513,7 @@ func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 
 // FormatListMarkdown.
 
-// TestFormatListMarkdown_Wrapper verifies the behavior of cov format list markdown wrapper.
+// TestFormatListMarkdown_Wrapper verifies FormatListMarkdown when wrapper.
 func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
@@ -518,7 +524,7 @@ func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_EmptyTargetType verifies the behavior of cov format list markdown string empty target type.
+// TestFormatListMarkdownString_EmptyTargetType verifies FormatListMarkdownString when empty target type.
 func TestFormatListMarkdownString_EmptyTargetType(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
@@ -529,7 +535,7 @@ func TestFormatListMarkdownString_EmptyTargetType(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithTargetType verifies the behavior of cov format list markdown string with target type.
+// TestFormatListMarkdownString_WithTargetType verifies FormatListMarkdownString when with target type.
 func TestFormatListMarkdownString_WithTargetType(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: "MR", TargetIID: 5}},
@@ -542,7 +548,7 @@ func TestFormatListMarkdownString_WithTargetType(t *testing.T) {
 
 // API error paths.
 
-// TestListCurrentUserContributionEvents_APIError verifies the behavior of cov list current user contribution events a p i error.
+// TestListCurrentUserContributionEvents_APIError verifies ListCurrentUserContributionEvents when API error.
 func TestListCurrentUserContributionEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -553,7 +559,7 @@ func TestListCurrentUserContributionEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_AllFilters verifies the behavior of cov list current user contribution events all filters.
+// TestListCurrentUserContributionEvents_AllFilters verifies ListCurrentUserContributionEvents when all filters.
 func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -574,7 +580,7 @@ func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_InvalidDates verifies the behavior of cov list current user contribution events invalid dates.
+// TestListCurrentUserContributionEvents_InvalidDates verifies ListCurrentUserContributionEvents when invalid dates.
 func TestListCurrentUserContributionEvents_InvalidDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -588,7 +594,7 @@ func TestListCurrentUserContributionEvents_InvalidDates(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_APIError verifies the behavior of cov list project events a p i error.
+// TestListProjectEvents_APIError verifies ListProjectEvents when API error.
 func TestListProjectEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -599,7 +605,7 @@ func TestListProjectEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_EmptyProjectID verifies the behavior of cov list project events empty project i d.
+// TestListProjectEvents_EmptyProjectID verifies ListProjectEvents when empty project ID.
 func TestListProjectEvents_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -610,7 +616,7 @@ func TestListProjectEvents_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_AllFilters verifies the behavior of cov list project events all filters.
+// TestListProjectEvents_AllFilters verifies ListProjectEvents when all filters.
 func TestListProjectEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -631,7 +637,7 @@ func TestListProjectEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_InvalidDates verifies the behavior of cov list project events invalid dates.
+// TestListProjectEvents_InvalidDates verifies ListProjectEvents when invalid dates.
 func TestListProjectEvents_InvalidDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)

@@ -6,6 +6,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
+// TestStandaloneToolSpecs_ClassifyStandaloneUtilities verifies StandaloneToolSpecs when classify standalone utilities.
 func TestStandaloneToolSpecs_ClassifyStandaloneUtilities(t *testing.T) {
 	specs := StandaloneToolSpecs(nil)
 	discover := findSurfaceSpec(t, specs, "gitlab_discover_project")
@@ -28,6 +29,7 @@ func TestStandaloneToolSpecs_ClassifyStandaloneUtilities(t *testing.T) {
 	}
 }
 
+// TestToolGroupSpecs_ProjectsSurfaceMetadata verifies ToolGroupSpecs projects surface metadata.
 func TestToolGroupSpecs_ProjectsSurfaceMetadata(t *testing.T) {
 	groups := ToolGroupSpecs(StandaloneToolSpecs(nil))
 	if len(groups) != 2 {
@@ -48,6 +50,7 @@ func TestToolGroupSpecs_ProjectsSurfaceMetadata(t *testing.T) {
 	}
 }
 
+// TestStandaloneToolSpecs_ProjectPoliciesAndReadOnlyFilter verifies StandaloneToolSpecs when project policies and read only filter.
 func TestStandaloneToolSpecs_ProjectPoliciesAndReadOnlyFilter(t *testing.T) {
 	specs := StandaloneToolSpecs(nil)
 	for _, spec := range specs {
@@ -74,6 +77,7 @@ func TestStandaloneToolSpecs_ProjectPoliciesAndReadOnlyFilter(t *testing.T) {
 	}
 }
 
+// findSurfaceSpec locates surface spec fixture data for assertions.
 func findSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name string) actioncatalog.SurfaceToolSpec {
 	t.Helper()
 	for _, spec := range specs {
@@ -85,6 +89,7 @@ func findSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name s
 	return actioncatalog.SurfaceToolSpec{}
 }
 
+// findGroupSpec locates group spec fixture data for assertions.
 func findGroupSpec(t *testing.T, groups []actioncatalog.CatalogGroupSpec, name string) actioncatalog.CatalogGroupSpec {
 	t.Helper()
 	for _, group := range groups {
@@ -96,6 +101,7 @@ func findGroupSpec(t *testing.T, groups []actioncatalog.CatalogGroupSpec, name s
 	return actioncatalog.CatalogGroupSpec{}
 }
 
+// hasActionAlias reports whether has action alias.
 func hasActionAlias(spec actioncatalog.SurfaceToolSpec, alias string) bool {
 	for _, actionAlias := range spec.Compatibility.ActionAliases {
 		if actionAlias.Alias == alias {

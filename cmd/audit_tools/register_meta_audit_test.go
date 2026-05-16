@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences verifies AuditRegisterMetaDefinitions classifies central references.
 func TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "internal/tools/register_meta.go", `package tools
@@ -65,6 +66,7 @@ func RegisterMeta() {
 	}
 }
 
+// TestUnexpectedRegisterMetaDefinitions_FlagsPackageLevelDefinitions verifies UnexpectedRegisterMetaDefinitions flags package level definitions.
 func TestUnexpectedRegisterMetaDefinitions_FlagsPackageLevelDefinitions(t *testing.T) {
 	definitions := []registerMetaDefinition{
 		{Package: "search", File: "internal/tools/search/register.go", Referenced: true},
@@ -93,6 +95,7 @@ func TestUnexpectedRegisterMetaDefinitions_FlagsPackageLevelDefinitions(t *testi
 	}
 }
 
+// TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions verifies AuditRegisterMetaDefinitionViolations converts unexpected definitions.
 func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *testing.T) {
 	violations := auditRegisterMetaDefinitionViolations([]registerMetaDefinition{
 		{Package: "legacy", File: "internal/tools/legacy/register.go", Referenced: false},
@@ -109,6 +112,7 @@ func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *
 	}
 }
 
+// TestCurrentRegisterMetaDefinitions_NoneRemain verifies CurrentRegisterMetaDefinitions when none remain.
 func TestCurrentRegisterMetaDefinitions_NoneRemain(t *testing.T) {
 	root, err := repositoryRoot(".")
 	if err != nil {
@@ -123,6 +127,7 @@ func TestCurrentRegisterMetaDefinitions_NoneRemain(t *testing.T) {
 	}
 }
 
+// TestPrintRegisterMetaDefinitions_WritesInventorySummary verifies PrintRegisterMetaDefinitions writes inventory summary.
 func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 	output := captureStdout(t, func() {
 		printRegisterMetaDefinitions([]registerMetaDefinition{
@@ -164,6 +169,7 @@ func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 	}
 }
 
+// TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing verifies PrintRegisterMetaDefinitions when empty definitions writes nothing.
 func TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing(t *testing.T) {
 	output := captureStdout(t, func() {
 		printRegisterMetaDefinitions(nil)
@@ -173,6 +179,7 @@ func TestPrintRegisterMetaDefinitions_EmptyDefinitionsWritesNothing(t *testing.T
 	}
 }
 
+// TestRepositoryRoot_FindsNearestGoMod verifies RepositoryRoot when finds nearest go mod.
 func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "go.mod", "module example.com/test\n")
@@ -190,6 +197,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	}
 }
 
+// TestRepositoryRoot_MissingGoModReturnsError verifies RepositoryRoot when missing go mod returns error.
 func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 	_, err := repositoryRoot(t.TempDir())
 	if err == nil {
@@ -200,6 +208,7 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 	}
 }
 
+// writeTestFile writes test file fixture data for tests.
 func writeTestFile(t *testing.T, root string, name string, content string) {
 	t.Helper()
 	path := filepath.Join(root, name)
@@ -211,6 +220,7 @@ func writeTestFile(t *testing.T, root string, name string, content string) {
 	}
 }
 
+// captureStdout supports capture stdout assertions in main tests.
 func captureStdout(t *testing.T, action func()) string {
 	t.Helper()
 	originalStdout := os.Stdout

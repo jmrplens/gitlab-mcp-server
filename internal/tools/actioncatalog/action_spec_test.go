@@ -6,6 +6,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestGroupFromSpecs_ProjectsSpecMetadata verifies GroupFromSpecs projects spec metadata.
 func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{InputSchema: map[string]any{
 		"type": "object",
@@ -71,12 +72,14 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	}
 }
 
+// TestActionsFromSpecs_RejectsInvalidSpecs verifies ActionsFromSpecs rejects invalid specs.
 func TestActionsFromSpecs_RejectsInvalidSpecs(t *testing.T) {
 	if _, err := ActionsFromSpecs([]toolutil.ActionSpec{{Name: ""}}); err == nil {
 		t.Fatal("ActionsFromSpecs() error = nil, want invalid spec rejection")
 	}
 }
 
+// TestGroupFromSpecs_PropagatesSpecProjectionErrors verifies GroupFromSpecs when propagates spec projection errors.
 func TestGroupFromSpecs_PropagatesSpecProjectionErrors(t *testing.T) {
 	if _, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{{Name: ""}}); err == nil {
 		t.Fatal("GroupFromSpecs() error = nil, want invalid spec rejection")

@@ -15,12 +15,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// errAPIShouldNotCallZeroAgentID identifies the err API should not call zero agent ID constant used by this package.
 const errAPIShouldNotCallZeroAgentID = "API should not be called when AgentID is 0"
+
+// errExpectedZeroAgentID identifies the err expected zero agent ID constant used by this package.
 const errExpectedZeroAgentID = "expected error for zero AgentID, got nil"
 
-// TestListAgents verifies the behavior of list agents.
+// TestListAgents verifies ListAgents.
 func TestListAgents(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents" || r.Method != http.MethodGet {
@@ -38,7 +42,7 @@ func TestListAgents(t *testing.T) {
 	}
 }
 
-// TestListAgents_Error verifies the behavior of list agents error.
+// TestListAgents_Error verifies ListAgents when error.
 func TestListAgents_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -49,7 +53,7 @@ func TestListAgents_Error(t *testing.T) {
 	}
 }
 
-// TestGetAgent verifies the behavior of get agent.
+// TestGetAgent verifies GetAgent.
 func TestGetAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5" || r.Method != http.MethodGet {
@@ -67,7 +71,7 @@ func TestGetAgent(t *testing.T) {
 	}
 }
 
-// TestRegisterAgent verifies the behavior of register agent.
+// TestRegisterAgent verifies RegisterAgent.
 func TestRegisterAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -85,7 +89,7 @@ func TestRegisterAgent(t *testing.T) {
 	}
 }
 
-// TestDeleteAgent verifies the behavior of delete agent.
+// TestDeleteAgent verifies DeleteAgent.
 func TestDeleteAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5" || r.Method != http.MethodDelete {
@@ -100,7 +104,7 @@ func TestDeleteAgent(t *testing.T) {
 	}
 }
 
-// TestListAgentTokens verifies the behavior of list agent tokens.
+// TestListAgentTokens verifies ListAgentTokens.
 func TestListAgentTokens(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens" || r.Method != http.MethodGet {
@@ -118,7 +122,7 @@ func TestListAgentTokens(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken verifies the behavior of get agent token.
+// TestGetAgentToken verifies GetAgentToken.
 func TestGetAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens/1" || r.Method != http.MethodGet {
@@ -136,7 +140,7 @@ func TestGetAgentToken(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken verifies the behavior of create agent token.
+// TestCreateAgentToken verifies CreateAgentToken.
 func TestCreateAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -154,7 +158,7 @@ func TestCreateAgentToken(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken verifies the behavior of revoke agent token.
+// TestRevokeAgentToken verifies RevokeAgentToken.
 func TestRevokeAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens/1" || r.Method != http.MethodDelete {
@@ -169,7 +173,7 @@ func TestRevokeAgentToken(t *testing.T) {
 	}
 }
 
-// TestFormatAgentsListMarkdown verifies the behavior of format agents list markdown.
+// TestFormatAgentsListMarkdown verifies FormatAgentsListMarkdown.
 func TestFormatAgentsListMarkdown(t *testing.T) {
 	md := FormatAgentsListMarkdown(ListAgentsOutput{Agents: []AgentItem{{ID: 1, Name: "a"}}})
 	if md == "" {
@@ -177,7 +181,7 @@ func TestFormatAgentsListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatTokensListMarkdown verifies the behavior of format tokens list markdown.
+// TestFormatTokensListMarkdown verifies FormatTokensListMarkdown.
 func TestFormatTokensListMarkdown(t *testing.T) {
 	md := FormatTokensListMarkdown(ListAgentTokensOutput{Tokens: []AgentTokenItem{{ID: 1, Name: "t", Status: "active"}}})
 	if md == "" {
@@ -185,7 +189,7 @@ func TestFormatTokensListMarkdown(t *testing.T) {
 	}
 }
 
-// TestGetAgent_ZeroAgentID verifies the behavior of get agent zero agent i d.
+// TestGetAgent_ZeroAgentID verifies GetAgent when zero agent ID.
 func TestGetAgent_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -196,7 +200,7 @@ func TestGetAgent_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestDeleteAgent_ZeroAgentID verifies the behavior of delete agent zero agent i d.
+// TestDeleteAgent_ZeroAgentID verifies DeleteAgent when zero agent ID.
 func TestDeleteAgent_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -207,7 +211,7 @@ func TestDeleteAgent_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestListAgentTokens_ZeroAgentID verifies the behavior of list agent tokens zero agent i d.
+// TestListAgentTokens_ZeroAgentID verifies ListAgentTokens when zero agent ID.
 func TestListAgentTokens_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -218,7 +222,7 @@ func TestListAgentTokens_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken_ZeroAgentID verifies the behavior of get agent token zero agent i d.
+// TestGetAgentToken_ZeroAgentID verifies GetAgentToken when zero agent ID.
 func TestGetAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -229,7 +233,7 @@ func TestGetAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken_ZeroTokenID verifies the behavior of get agent token zero token i d.
+// TestGetAgentToken_ZeroTokenID verifies GetAgentToken when zero token ID.
 func TestGetAgentToken_ZeroTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TokenID is 0")
@@ -240,7 +244,7 @@ func TestGetAgentToken_ZeroTokenID(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken_ZeroAgentID verifies the behavior of create agent token zero agent i d.
+// TestCreateAgentToken_ZeroAgentID verifies CreateAgentToken when zero agent ID.
 func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -251,7 +255,7 @@ func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken_ZeroAgentID verifies the behavior of revoke agent token zero agent i d.
+// TestRevokeAgentToken_ZeroAgentID verifies RevokeAgentToken when zero agent ID.
 func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -262,7 +266,7 @@ func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken_ZeroTokenID verifies the behavior of revoke agent token zero token i d.
+// TestRevokeAgentToken_ZeroTokenID verifies RevokeAgentToken when zero token ID.
 func TestRevokeAgentToken_ZeroTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TokenID is 0")
@@ -275,13 +279,14 @@ func TestRevokeAgentToken_ZeroTokenID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // GetAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetAgent_APIError verifies the behavior of get agent a p i error.
+// TestGetAgent_APIError verifies GetAgent when API error.
 func TestGetAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -296,7 +301,7 @@ func TestGetAgent_APIError(t *testing.T) {
 // RegisterAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestRegisterAgent_APIError verifies the behavior of register agent a p i error.
+// TestRegisterAgent_APIError verifies RegisterAgent when API error.
 func TestRegisterAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -311,7 +316,7 @@ func TestRegisterAgent_APIError(t *testing.T) {
 // DeleteAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteAgent_APIError verifies the behavior of delete agent a p i error.
+// TestDeleteAgent_APIError verifies DeleteAgent when API error.
 func TestDeleteAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -326,7 +331,7 @@ func TestDeleteAgent_APIError(t *testing.T) {
 // ListAgentTokens — API error
 // ---------------------------------------------------------------------------.
 
-// TestListAgentTokens_APIError verifies the behavior of list agent tokens a p i error.
+// TestListAgentTokens_APIError verifies ListAgentTokens when API error.
 func TestListAgentTokens_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -341,7 +346,7 @@ func TestListAgentTokens_APIError(t *testing.T) {
 // GetAgentToken — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetAgentToken_APIError verifies the behavior of get agent token a p i error.
+// TestGetAgentToken_APIError verifies GetAgentToken when API error.
 func TestGetAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -356,7 +361,7 @@ func TestGetAgentToken_APIError(t *testing.T) {
 // CreateAgentToken — API error, with description
 // ---------------------------------------------------------------------------.
 
-// TestCreateAgentToken_APIError verifies the behavior of create agent token a p i error.
+// TestCreateAgentToken_APIError verifies CreateAgentToken when API error.
 func TestCreateAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -367,7 +372,7 @@ func TestCreateAgentToken_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken_WithDescription verifies the behavior of create agent token with description.
+// TestCreateAgentToken_WithDescription verifies CreateAgentToken when with description.
 func TestCreateAgentToken_WithDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -394,7 +399,7 @@ func TestCreateAgentToken_WithDescription(t *testing.T) {
 // RevokeAgentToken — API error
 // ---------------------------------------------------------------------------.
 
-// TestRevokeAgentToken_APIError verifies the behavior of revoke agent token a p i error.
+// TestRevokeAgentToken_APIError verifies RevokeAgentToken when API error.
 func TestRevokeAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -409,7 +414,7 @@ func TestRevokeAgentToken_APIError(t *testing.T) {
 // ListAgents — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListAgents_WithPagination verifies the behavior of list agents with pagination.
+// TestListAgents_WithPagination verifies ListAgents when with pagination.
 func TestListAgents_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/cluster_agents" && r.Method == http.MethodGet {
@@ -431,7 +436,7 @@ func TestListAgents_WithPagination(t *testing.T) {
 // ListAgentTokens — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListAgentTokens_WithPagination verifies the behavior of list agent tokens with pagination.
+// TestListAgentTokens_WithPagination verifies ListAgentTokens when with pagination.
 func TestListAgentTokens_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/cluster_agents/5/tokens" && r.Method == http.MethodGet {
@@ -453,7 +458,7 @@ func TestListAgentTokens_WithPagination(t *testing.T) {
 // Formatters — empty lists
 // ---------------------------------------------------------------------------.
 
-// TestFormatAgentsListMarkdown_Empty verifies the behavior of format agents list markdown empty.
+// TestFormatAgentsListMarkdown_Empty verifies FormatAgentsListMarkdown when empty.
 func TestFormatAgentsListMarkdown_Empty(t *testing.T) {
 	md := FormatAgentsListMarkdown(ListAgentsOutput{})
 	if !strings.Contains(md, "No cluster agents found.") {
@@ -461,7 +466,7 @@ func TestFormatAgentsListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatTokensListMarkdown_Empty verifies the behavior of format tokens list markdown empty.
+// TestFormatTokensListMarkdown_Empty verifies FormatTokensListMarkdown when empty.
 func TestFormatTokensListMarkdown_Empty(t *testing.T) {
 	md := FormatTokensListMarkdown(ListAgentTokensOutput{})
 	if !strings.Contains(md, "No agent tokens found.") {
@@ -469,7 +474,7 @@ func TestFormatTokensListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatAgentMarkdown_Content verifies the behavior of format agent markdown content.
+// TestFormatAgentMarkdown_Content verifies FormatAgentMarkdown when content.
 func TestFormatAgentMarkdown_Content(t *testing.T) {
 	md := FormatAgentMarkdown(AgentItem{ID: 5, Name: "test-agent"})
 	if !strings.Contains(md, "test-agent") {
@@ -477,7 +482,7 @@ func TestFormatAgentMarkdown_Content(t *testing.T) {
 	}
 }
 
-// TestFormatTokenMarkdown_WithToken verifies the behavior of format token markdown with token.
+// TestFormatTokenMarkdown_WithToken verifies FormatTokenMarkdown when with token.
 func TestFormatTokenMarkdown_WithToken(t *testing.T) {
 	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active", Token: "s3cr3t"})
 	if !strings.Contains(md, "s3cr3t") {
@@ -485,7 +490,7 @@ func TestFormatTokenMarkdown_WithToken(t *testing.T) {
 	}
 }
 
-// TestFormatTokenMarkdown_WithoutToken verifies the behavior of format token markdown without token.
+// TestFormatTokenMarkdown_WithoutToken verifies FormatTokenMarkdown when without token.
 func TestFormatTokenMarkdown_WithoutToken(t *testing.T) {
 	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active"})
 	if strings.Contains(md, "Token") && strings.Contains(md, "s3cr3t") {
@@ -652,6 +657,7 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// newClusterAgentRouteSpecs constructs cluster agent route specs test fixtures.
 func newClusterAgentRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -695,6 +701,7 @@ func newClusterAgentRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return clusterAgentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 }
 
+// clusterAgentSpecsByTool supports cluster agent specs by tool assertions in clusteragents tests.
 func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

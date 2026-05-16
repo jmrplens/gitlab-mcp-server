@@ -16,8 +16,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// settingsJSON identifies the settings JSON constant used by this package.
 const settingsJSON = `{
 	"id": 1,
 	"signup_enabled": true,
@@ -34,7 +36,7 @@ const settingsJSON = `{
 	"throttle_authenticated_api_enabled": false
 }`
 
-// TestGet_Success verifies that Get handles the success scenario correctly.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/settings" && r.Method == http.MethodGet {
@@ -59,7 +61,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -71,7 +73,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies that Update handles the success scenario correctly.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/settings" && r.Method == http.MethodPut {
@@ -95,7 +97,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Error verifies that Update handles the error scenario correctly.
+// TestUpdate_Error verifies Update when error.
 func TestUpdate_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -109,7 +111,7 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptySettings verifies that Update handles the empty settings scenario correctly.
+// TestUpdate_EmptySettings verifies Update when empty settings.
 func TestUpdate_EmptySettings(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/settings" && r.Method == http.MethodPut {
@@ -130,7 +132,7 @@ func TestUpdate_EmptySettings(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Settings: map[string]any{
@@ -150,7 +152,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatUpdateMarkdown verifies the behavior of format update markdown.
+// TestFormatUpdateMarkdown verifies FormatUpdateMarkdown.
 func TestFormatUpdateMarkdown(t *testing.T) {
 	out := UpdateOutput{
 		Settings: map[string]any{

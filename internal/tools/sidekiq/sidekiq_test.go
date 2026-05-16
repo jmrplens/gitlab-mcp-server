@@ -12,10 +12,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// queueMetricsJSON identifies the queue metrics JSON constant used by this package.
 const queueMetricsJSON = `{
 	"queues": {
 		"default": {"backlog": 10, "latency": 5},
@@ -23,6 +26,7 @@ const queueMetricsJSON = `{
 	}
 }`
 
+// processMetricsJSON identifies the process metrics JSON constant used by this package.
 const processMetricsJSON = `{
 	"processes": [
 		{
@@ -38,6 +42,7 @@ const processMetricsJSON = `{
 	]
 }`
 
+// jobStatsJSON identifies the job stats JSON constant used by this package.
 const jobStatsJSON = `{
 	"jobs": {
 		"processed": 100000,
@@ -46,6 +51,7 @@ const jobStatsJSON = `{
 	}
 }`
 
+// compoundMetricsJSON identifies the compound metrics JSON constant used by this package.
 const compoundMetricsJSON = `{
 	"queues": {
 		"default": {"backlog": 10, "latency": 5}
@@ -69,7 +75,7 @@ const compoundMetricsJSON = `{
 	}
 }`
 
-// TestGetQueueMetrics_Success verifies that GetQueueMetrics handles the success scenario correctly.
+// TestGetQueueMetrics_Success verifies GetQueueMetrics when success.
 func TestGetQueueMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/queue_metrics" && r.Method == http.MethodGet {
@@ -88,7 +94,7 @@ func TestGetQueueMetrics_Success(t *testing.T) {
 	}
 }
 
-// TestGetQueueMetrics_Error verifies that GetQueueMetrics handles the error scenario correctly.
+// TestGetQueueMetrics_Error verifies GetQueueMetrics when error.
 func TestGetQueueMetrics_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -100,7 +106,7 @@ func TestGetQueueMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestGetProcessMetrics_Success verifies that GetProcessMetrics handles the success scenario correctly.
+// TestGetProcessMetrics_Success verifies GetProcessMetrics when success.
 func TestGetProcessMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/process_metrics" && r.Method == http.MethodGet {
@@ -125,7 +131,7 @@ func TestGetProcessMetrics_Success(t *testing.T) {
 	}
 }
 
-// TestGetProcessMetrics_Error verifies that GetProcessMetrics handles the error scenario correctly.
+// TestGetProcessMetrics_Error verifies GetProcessMetrics when error.
 func TestGetProcessMetrics_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -137,7 +143,7 @@ func TestGetProcessMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestGetJobStats_Success verifies that GetJobStats handles the success scenario correctly.
+// TestGetJobStats_Success verifies GetJobStats when success.
 func TestGetJobStats_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/job_stats" && r.Method == http.MethodGet {
@@ -162,7 +168,7 @@ func TestGetJobStats_Success(t *testing.T) {
 	}
 }
 
-// TestGetJobStats_Error verifies that GetJobStats handles the error scenario correctly.
+// TestGetJobStats_Error verifies GetJobStats when error.
 func TestGetJobStats_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -174,7 +180,7 @@ func TestGetJobStats_Error(t *testing.T) {
 	}
 }
 
-// TestGetCompoundMetrics_Success verifies that GetCompoundMetrics handles the success scenario correctly.
+// TestGetCompoundMetrics_Success verifies GetCompoundMetrics when success.
 func TestGetCompoundMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/compound_metrics" && r.Method == http.MethodGet {
@@ -199,7 +205,7 @@ func TestGetCompoundMetrics_Success(t *testing.T) {
 	}
 }
 
-// TestGetCompoundMetrics_Error verifies that GetCompoundMetrics handles the error scenario correctly.
+// TestGetCompoundMetrics_Error verifies GetCompoundMetrics when error.
 func TestGetCompoundMetrics_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -211,7 +217,7 @@ func TestGetCompoundMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestFormatQueueMetricsMarkdown verifies the behavior of format queue metrics markdown.
+// TestFormatQueueMetricsMarkdown verifies FormatQueueMetricsMarkdown.
 func TestFormatQueueMetricsMarkdown(t *testing.T) {
 	out := GetQueueMetricsOutput{
 		Queues: []QueueItem{
@@ -228,7 +234,7 @@ func TestFormatQueueMetricsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProcessMetricsMarkdown verifies the behavior of format process metrics markdown.
+// TestFormatProcessMetricsMarkdown verifies FormatProcessMetricsMarkdown.
 func TestFormatProcessMetricsMarkdown(t *testing.T) {
 	out := GetProcessMetricsOutput{
 		Processes: []ProcessItem{
@@ -241,7 +247,7 @@ func TestFormatProcessMetricsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatJobStatsMarkdown verifies the behavior of format job stats markdown.
+// TestFormatJobStatsMarkdown verifies FormatJobStatsMarkdown.
 func TestFormatJobStatsMarkdown(t *testing.T) {
 	out := GetJobStatsOutput{
 		Jobs: JobStatsItem{Processed: 100000, Failed: 50, Enqueued: 25},
@@ -252,7 +258,7 @@ func TestFormatJobStatsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCompoundMetricsMarkdown verifies the behavior of format compound metrics markdown.
+// TestFormatCompoundMetricsMarkdown verifies FormatCompoundMetricsMarkdown.
 func TestFormatCompoundMetricsMarkdown(t *testing.T) {
 	out := GetCompoundMetricsOutput{
 		Queues:    []QueueItem{{Name: "default", Backlog: 10, Latency: 5}},
@@ -277,7 +283,7 @@ func TestFormatCompoundMetricsMarkdown(t *testing.T) {
 // Formatters — empty states
 // ---------------------------------------------------------------------------.
 
-// TestFormatQueueMetricsMarkdown_Empty verifies the behavior of format queue metrics markdown empty.
+// TestFormatQueueMetricsMarkdown_Empty verifies FormatQueueMetricsMarkdown when empty.
 func TestFormatQueueMetricsMarkdown_Empty(t *testing.T) {
 	md := FormatQueueMetricsMarkdown(GetQueueMetricsOutput{})
 	if !strings.Contains(md, "No queues found") {
@@ -285,7 +291,7 @@ func TestFormatQueueMetricsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatProcessMetricsMarkdown_Empty verifies the behavior of format process metrics markdown empty.
+// TestFormatProcessMetricsMarkdown_Empty verifies FormatProcessMetricsMarkdown when empty.
 func TestFormatProcessMetricsMarkdown_Empty(t *testing.T) {
 	md := FormatProcessMetricsMarkdown(GetProcessMetricsOutput{})
 	if !strings.Contains(md, "No processes found") {
@@ -293,7 +299,7 @@ func TestFormatProcessMetricsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCompoundMetricsMarkdown_Empty verifies the behavior of format compound metrics markdown empty.
+// TestFormatCompoundMetricsMarkdown_Empty verifies FormatCompoundMetricsMarkdown when empty.
 func TestFormatCompoundMetricsMarkdown_Empty(t *testing.T) {
 	md := FormatCompoundMetricsMarkdown(GetCompoundMetricsOutput{})
 	if !strings.Contains(md, "No queues found") {
@@ -364,6 +370,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // Helper: route specs factory
 // ---------------------------------------------------------------------------.
 
+// newSidekiqRouteSpecs constructs sidekiq route specs test fixtures.
 func newSidekiqRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -391,6 +398,7 @@ func newSidekiqRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return sidekiqSpecsByTool(ActionSpecs(client))
 }
 
+// sidekiqSpecsByTool supports sidekiq specs by tool assertions in sidekiq tests.
 func sidekiqSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

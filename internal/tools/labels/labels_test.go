@@ -15,13 +15,17 @@ import (
 )
 
 const (
+	// pathProjectLabels identifies the path project labels constant used by this package.
 	pathProjectLabels = "/api/v4/projects/42/labels"
-	pathLabelBug      = "/api/v4/projects/42/labels/bug"
-	pathLabel1        = "/api/v4/projects/42/labels/1"
-	labelJSON         = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
+	// pathLabelBug identifies the path label bug constant used by this package.
+	pathLabelBug = "/api/v4/projects/42/labels/bug"
+	// pathLabel1 identifies the path label 1 constant used by this package.
+	pathLabel1 = "/api/v4/projects/42/labels/1"
+	// labelJSON identifies the label JSON constant used by this package.
+	labelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
 )
 
-// TestLabelList_Success verifies the behavior of label list success.
+// TestLabelList_Success verifies LabelList when success.
 func TestLabelList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
@@ -76,7 +80,7 @@ func TestLabelList_Success(t *testing.T) {
 	}
 }
 
-// TestLabelList_WithSearch verifies the behavior of label list with search.
+// TestLabelList_WithSearch verifies LabelList when with search.
 func TestLabelList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
@@ -102,7 +106,7 @@ func TestLabelList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestLabelList_EmptyProjectID verifies the behavior of label list empty project i d.
+// TestLabelList_EmptyProjectID verifies LabelList when empty project ID.
 func TestLabelList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -114,7 +118,7 @@ func TestLabelList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestLabelListServer_Error verifies the behavior of label list server error.
+// TestLabelListServer_Error verifies LabelListServer when error.
 func TestLabelListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Internal Server Error"}`)
@@ -128,7 +132,7 @@ func TestLabelListServer_Error(t *testing.T) {
 	}
 }
 
-// TestLabelList_CancelledContext verifies the behavior of label list cancelled context.
+// TestLabelList_CancelledContext verifies LabelList when cancelled context.
 func TestLabelList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -142,7 +146,7 @@ func TestLabelList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestLabelGet_Success verifies the behavior of label get success.
+// TestLabelGet_Success verifies LabelGet when success.
 func TestLabelGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathLabelBug {
@@ -164,7 +168,7 @@ func TestLabelGet_Success(t *testing.T) {
 	}
 }
 
-// TestLabelGet_NotFound verifies the behavior of label get not found.
+// TestLabelGet_NotFound verifies LabelGet when not found.
 func TestLabelGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -176,7 +180,7 @@ func TestLabelGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestLabelCreate_Success verifies the behavior of label create success.
+// TestLabelCreate_Success verifies LabelCreate when success.
 func TestLabelCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectLabels {
@@ -203,7 +207,7 @@ func TestLabelCreate_Success(t *testing.T) {
 	}
 }
 
-// TestLabelCreate_MissingProject verifies the behavior of label create missing project.
+// TestLabelCreate_MissingProject verifies LabelCreate when missing project.
 func TestLabelCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -215,7 +219,7 @@ func TestLabelCreate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestLabelUpdate_Success verifies the behavior of label update success.
+// TestLabelUpdate_Success verifies LabelUpdate when success.
 func TestLabelUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathLabelBug {
@@ -239,7 +243,7 @@ func TestLabelUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestLabelUpdate_NotFound verifies the behavior of label update not found.
+// TestLabelUpdate_NotFound verifies LabelUpdate when not found.
 func TestLabelUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -251,7 +255,7 @@ func TestLabelUpdate_NotFound(t *testing.T) {
 	}
 }
 
-// TestLabelDelete_Success verifies the behavior of label delete success.
+// TestLabelDelete_Success verifies LabelDelete when success.
 func TestLabelDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathLabelBug {
@@ -267,7 +271,7 @@ func TestLabelDelete_Success(t *testing.T) {
 	}
 }
 
-// TestLabelDelete_NotFound verifies the behavior of label delete not found.
+// TestLabelDelete_NotFound verifies LabelDelete when not found.
 func TestLabelDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -279,7 +283,7 @@ func TestLabelDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestLabelSubscribe_Success verifies the behavior of label subscribe success.
+// TestLabelSubscribe_Success verifies LabelSubscribe when success.
 func TestLabelSubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/labels/1/subscribe" {
@@ -298,7 +302,7 @@ func TestLabelSubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestLabelSubscribe_Error verifies the behavior of label subscribe error.
+// TestLabelSubscribe_Error verifies LabelSubscribe when error.
 func TestLabelSubscribe_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -310,7 +314,7 @@ func TestLabelSubscribe_Error(t *testing.T) {
 	}
 }
 
-// TestLabelUnsubscribe_Success verifies the behavior of label unsubscribe success.
+// TestLabelUnsubscribe_Success verifies LabelUnsubscribe when success.
 func TestLabelUnsubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/labels/1/unsubscribe" {
@@ -326,7 +330,7 @@ func TestLabelUnsubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestLabelUnsubscribe_Error verifies the behavior of label unsubscribe error.
+// TestLabelUnsubscribe_Error verifies LabelUnsubscribe when error.
 func TestLabelUnsubscribe_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -338,7 +342,7 @@ func TestLabelUnsubscribe_Error(t *testing.T) {
 	}
 }
 
-// TestLabelPromote_Success verifies the behavior of label promote success.
+// TestLabelPromote_Success verifies LabelPromote when success.
 func TestLabelPromote_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/labels/1/promote" {
@@ -354,7 +358,7 @@ func TestLabelPromote_Success(t *testing.T) {
 	}
 }
 
-// TestLabelPromote_Error verifies the behavior of label promote error.
+// TestLabelPromote_Error verifies LabelPromote when error.
 func TestLabelPromote_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -373,21 +377,29 @@ func TestLabelPromote_Error(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
+	// errProjectIDRequired identifies the err project ID required constant used by this package.
 	errProjectIDRequired = "project_id is required"
-	errExpectedErr       = "expected error"
-	errExpCancelledCtx   = "expected error for canceled context"
-	fmtUnexpErr          = "unexpected error: %v"
-	covLabelJSON         = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
-	covLabelMinimalJSON  = `{"id":2,"name":"wontfix","color":"#000000","text_color":"#FFFFFF","is_project_label":true}`
-	covLabelListJSON     = `[` + covLabelJSON + `]`
-	covLabelWithPriJSON  = `{"id":3,"name":"critical","color":"#FF0000","text_color":"#000","description":"Critical","priority":5,"is_project_label":true}`
+	// errExpectedErr identifies the err expected err constant used by this package.
+	errExpectedErr = "expected error"
+	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
+	errExpCancelledCtx = "expected error for canceled context"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// covLabelJSON identifies the cov label JSON constant used by this package.
+	covLabelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
+	// covLabelMinimalJSON identifies the cov label minimal JSON constant used by this package.
+	covLabelMinimalJSON = `{"id":2,"name":"wontfix","color":"#000000","text_color":"#FFFFFF","is_project_label":true}`
+	// covLabelListJSON identifies the cov label list JSON constant used by this package.
+	covLabelListJSON = `[` + covLabelJSON + `]`
+	// covLabelWithPriJSON identifies the cov label with pri JSON constant used by this package.
+	covLabelWithPriJSON = `{"id":3,"name":"critical","color":"#FF0000","text_color":"#000","description":"Critical","priority":5,"is_project_label":true}`
 )
 
 // ---------------------------------------------------------------------------
 // List — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestList_WithCounts verifies the behavior of cov list with counts.
+// TestList_WithCounts verifies List when with counts.
 func TestList_WithCounts(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("with_counts") != "true" {
@@ -401,7 +413,7 @@ func TestList_WithCounts(t *testing.T) {
 	}
 }
 
-// TestList_IncludeAncestorGroups verifies the behavior of cov list include ancestor groups.
+// TestList_IncludeAncestorGroups verifies List when include ancestor groups.
 func TestList_IncludeAncestorGroups(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("include_ancestor_groups") != "true" {
@@ -415,7 +427,7 @@ func TestList_IncludeAncestorGroups(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of cov list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -443,7 +455,7 @@ func TestList_WithPagination(t *testing.T) {
 // Get — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of cov get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -455,7 +467,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of cov get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -466,7 +478,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_ServerError verifies the behavior of cov get server error.
+// TestGet_ServerError verifies Get when server error.
 func TestGet_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -481,7 +493,7 @@ func TestGet_ServerError(t *testing.T) {
 // Create — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithPriority verifies the behavior of cov create with priority.
+// TestCreate_WithPriority verifies Create when with priority.
 func TestCreate_WithPriority(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -501,7 +513,7 @@ func TestCreate_WithPriority(t *testing.T) {
 	}
 }
 
-// TestCreate_ServerError verifies the behavior of cov create server error.
+// TestCreate_ServerError verifies Create when server error.
 func TestCreate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -512,7 +524,7 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of cov create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -528,7 +540,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 // Update — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_WithDescAndPriority verifies the behavior of cov update with desc and priority.
+// TestUpdate_WithDescAndPriority verifies Update when with desc and priority.
 func TestUpdate_WithDescAndPriority(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -548,7 +560,7 @@ func TestUpdate_WithDescAndPriority(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of cov update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -559,7 +571,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_ServerError verifies the behavior of cov update server error.
+// TestUpdate_ServerError verifies Update when server error.
 func TestUpdate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -570,7 +582,7 @@ func TestUpdate_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of cov update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -586,7 +598,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 // Delete — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestDelete_MissingProjectID verifies the behavior of cov delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -597,7 +609,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_ServerError verifies the behavior of cov delete server error.
+// TestDelete_ServerError verifies Delete when server error.
 func TestDelete_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -608,7 +620,7 @@ func TestDelete_ServerError(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of cov delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -624,7 +636,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // Subscribe — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestSubscribe_MissingProjectID verifies the behavior of cov subscribe missing project i d.
+// TestSubscribe_MissingProjectID verifies Subscribe when missing project ID.
 func TestSubscribe_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -635,7 +647,7 @@ func TestSubscribe_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestSubscribe_CancelledContext verifies the behavior of cov subscribe cancelled context.
+// TestSubscribe_CancelledContext verifies Subscribe when cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -651,7 +663,7 @@ func TestSubscribe_CancelledContext(t *testing.T) {
 // Unsubscribe — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestUnsubscribe_MissingProjectID verifies the behavior of cov unsubscribe missing project i d.
+// TestUnsubscribe_MissingProjectID verifies Unsubscribe when missing project ID.
 func TestUnsubscribe_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -662,7 +674,7 @@ func TestUnsubscribe_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_CancelledContext verifies the behavior of cov unsubscribe cancelled context.
+// TestUnsubscribe_CancelledContext verifies Unsubscribe when cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -678,7 +690,7 @@ func TestUnsubscribe_CancelledContext(t *testing.T) {
 // Promote — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestPromote_MissingProjectID verifies the behavior of cov promote missing project i d.
+// TestPromote_MissingProjectID verifies Promote when missing project ID.
 func TestPromote_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -689,7 +701,7 @@ func TestPromote_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPromote_CancelledContext verifies the behavior of cov promote cancelled context.
+// TestPromote_CancelledContext verifies Promote when cancelled context.
 func TestPromote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -705,7 +717,7 @@ func TestPromote_CancelledContext(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies the behavior of cov format markdown all fields.
+// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug report",
@@ -720,7 +732,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies the behavior of cov format markdown minimal.
+// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	o := Output{ID: 2, Name: "wontfix", Color: "#000"}
 	md := FormatMarkdown(o)
@@ -735,7 +747,7 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of cov format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No labels found") {
@@ -743,7 +755,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithLabels verifies the behavior of cov format list markdown string with labels.
+// TestFormatListMarkdownString_WithLabels verifies FormatListMarkdownString when with labels.
 func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
@@ -760,7 +772,7 @@ func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of cov format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Labels:     []Output{{ID: 1, Name: "test", Color: "#000"}},
@@ -996,6 +1008,7 @@ func TestActionSpecs_LabelGetRoute(t *testing.T) {
 	}
 }
 
+// labelSpecsByTool supports label specs by tool assertions in labels tests.
 func labelSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

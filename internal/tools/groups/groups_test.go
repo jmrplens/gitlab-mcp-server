@@ -592,21 +592,32 @@ func TestGroupList_EnrichedNewFilters(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	fmtGroupCreateErr          = "Create() unexpected error: %v"
-	fmtGroupUpdateErr          = "Update() unexpected error: %v"
-	fmtGroupDeleteErr          = "Delete() unexpected error: %v"
-	fmtGroupRestoreErr         = "Restore() unexpected error: %v"
-	fmtGroupSearchErr          = "Search() unexpected error: %v"
+	// fmtGroupCreateErr identifies the fmt group create err constant used by this package.
+	fmtGroupCreateErr = "Create() unexpected error: %v"
+	// fmtGroupUpdateErr identifies the fmt group update err constant used by this package.
+	fmtGroupUpdateErr = "Update() unexpected error: %v"
+	// fmtGroupDeleteErr identifies the fmt group delete err constant used by this package.
+	fmtGroupDeleteErr = "Delete() unexpected error: %v"
+	// fmtGroupRestoreErr identifies the fmt group restore err constant used by this package.
+	fmtGroupRestoreErr = "Restore() unexpected error: %v"
+	// fmtGroupSearchErr identifies the fmt group search err constant used by this package.
+	fmtGroupSearchErr = "Search() unexpected error: %v"
+	// fmtGroupTransferProjectErr identifies the fmt group transfer project err constant used by this package.
 	fmtGroupTransferProjectErr = "TransferProject() unexpected error: %v"
-	fmtGroupListProjectsErr    = "ListProjects() unexpected error: %v"
-	pathGroup99Restore         = "/api/v4/groups/99/restore"
-	pathGroup99Projects        = "/api/v4/groups/99/projects"
-	pathGroup99Transfer        = "/api/v4/groups/99/transfer"
+	// fmtGroupListProjectsErr identifies the fmt group list projects err constant used by this package.
+	fmtGroupListProjectsErr = "ListProjects() unexpected error: %v"
+	// pathGroup99Restore identifies the path group 99 restore constant used by this package.
+	pathGroup99Restore = "/api/v4/groups/99/restore"
+	// pathGroup99Projects identifies the path group 99 projects constant used by this package.
+	pathGroup99Projects = "/api/v4/groups/99/projects"
+	// pathGroup99Transfer identifies the path group 99 transfer constant used by this package.
+	pathGroup99Transfer = "/api/v4/groups/99/transfer"
 )
 
+// groupProjectsJSON stores the package-level group projects JSON state.
 var groupProjectsJSON = `[{"id":42,"name":"my-project","path_with_namespace":"org/infra/my-project","description":"A project","visibility":"private","web_url":"https://gitlab.example.com/org/infra/my-project","default_branch":"main","archived":false,"created_at":"2026-02-01T12:00:00Z"}]`
 
-// TestGroupCreate_Success verifies the behavior of group create success.
+// TestGroupCreate_Success verifies GroupCreate when success.
 func TestGroupCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroups {
@@ -625,7 +636,7 @@ func TestGroupCreate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_MissingName verifies the behavior of group create missing name.
+// TestGroupCreate_MissingName verifies GroupCreate when missing name.
 func TestGroupCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -636,7 +647,7 @@ func TestGroupCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestGroupCreateServer_Error verifies the behavior of group create server error.
+// TestGroupCreateServer_Error verifies GroupCreateServer when error.
 func TestGroupCreateServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -651,7 +662,7 @@ func TestGroupCreateServer_Error(t *testing.T) {
 // Update tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupUpdate_Success verifies the behavior of group update success.
+// TestGroupUpdate_Success verifies GroupUpdate when success.
 func TestGroupUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroup99 {
@@ -673,7 +684,7 @@ func TestGroupUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupUpdate_MissingGroupID verifies the behavior of group update missing group i d.
+// TestGroupUpdate_MissingGroupID verifies GroupUpdate when missing group ID.
 func TestGroupUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -684,7 +695,7 @@ func TestGroupUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupUpdateServer_Error verifies the behavior of group update server error.
+// TestGroupUpdateServer_Error verifies GroupUpdateServer when error.
 func TestGroupUpdateServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -699,7 +710,7 @@ func TestGroupUpdateServer_Error(t *testing.T) {
 // Delete tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupDelete_Success verifies the behavior of group delete success.
+// TestGroupDelete_Success verifies GroupDelete when success.
 func TestGroupDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroup99 {
@@ -715,7 +726,7 @@ func TestGroupDelete_Success(t *testing.T) {
 	}
 }
 
-// TestGroupDelete_MissingGroupID verifies the behavior of group delete missing group i d.
+// TestGroupDelete_MissingGroupID verifies GroupDelete when missing group ID.
 func TestGroupDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -726,7 +737,7 @@ func TestGroupDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupDeleteServer_Error verifies the behavior of group delete server error.
+// TestGroupDeleteServer_Error verifies GroupDeleteServer when error.
 func TestGroupDeleteServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -741,7 +752,7 @@ func TestGroupDeleteServer_Error(t *testing.T) {
 // Restore tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupRestore_Success verifies the behavior of group restore success.
+// TestGroupRestore_Success verifies GroupRestore when success.
 func TestGroupRestore_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroup99Restore {
@@ -760,7 +771,7 @@ func TestGroupRestore_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRestore_MissingGroupID verifies the behavior of group restore missing group i d.
+// TestGroupRestore_MissingGroupID verifies GroupRestore when missing group ID.
 func TestGroupRestore_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -775,7 +786,7 @@ func TestGroupRestore_MissingGroupID(t *testing.T) {
 // Search tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupSearch_Success verifies the behavior of group search success.
+// TestGroupSearch_Success verifies GroupSearch when success.
 func TestGroupSearch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups && r.URL.Query().Get("search") != "" {
@@ -797,7 +808,7 @@ func TestGroupSearch_Success(t *testing.T) {
 	}
 }
 
-// TestGroupSearch_MissingQuery verifies the behavior of group search missing query.
+// TestGroupSearch_MissingQuery verifies GroupSearch when missing query.
 func TestGroupSearch_MissingQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -812,7 +823,7 @@ func TestGroupSearch_MissingQuery(t *testing.T) {
 // TransferProject tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupTransferProject_Success verifies the behavior of group transfer project success.
+// TestGroupTransferProject_Success verifies GroupTransferProject when success.
 func TestGroupTransferProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/projects/42" {
@@ -831,7 +842,7 @@ func TestGroupTransferProject_Success(t *testing.T) {
 	}
 }
 
-// TestGroupTransferProject_MissingGroupID verifies the behavior of group transfer project missing group i d.
+// TestGroupTransferProject_MissingGroupID verifies GroupTransferProject when missing group ID.
 func TestGroupTransferProject_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -842,7 +853,7 @@ func TestGroupTransferProject_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupTransferProject_MissingProjectID verifies the behavior of group transfer project missing project i d.
+// TestGroupTransferProject_MissingProjectID verifies GroupTransferProject when missing project ID.
 func TestGroupTransferProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -857,7 +868,7 @@ func TestGroupTransferProject_MissingProjectID(t *testing.T) {
 // ListProjects tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupListProjects_Success verifies the behavior of group list projects success.
+// TestGroupListProjects_Success verifies GroupListProjects when success.
 func TestGroupListProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroup99Projects {
@@ -884,7 +895,7 @@ func TestGroupListProjects_Success(t *testing.T) {
 	}
 }
 
-// TestGroupListProjects_MissingGroupID verifies the behavior of group list projects missing group i d.
+// TestGroupListProjects_MissingGroupID verifies GroupListProjects when missing group ID.
 func TestGroupListProjects_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -895,7 +906,7 @@ func TestGroupListProjects_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupListProjectsServer_Error verifies the behavior of group list projects server error.
+// TestGroupListProjectsServer_Error verifies GroupListProjectsServer when error.
 func TestGroupListProjectsServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -908,15 +919,17 @@ func TestGroupListProjectsServer_Error(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // Get — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGet_MissingGroupID verifies the behavior of cov get missing group i d.
+// TestGet_MissingGroupID verifies Get when missing group ID.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{})
@@ -929,7 +942,7 @@ func TestGet_MissingGroupID(t *testing.T) {
 // MembersList — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestMembersList_MissingGroupID verifies the behavior of cov members list missing group i d.
+// TestMembersList_MissingGroupID verifies MembersList when missing group ID.
 func TestMembersList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := MembersList(context.Background(), client, MembersListInput{})
@@ -942,7 +955,7 @@ func TestMembersList_MissingGroupID(t *testing.T) {
 // SubgroupsList — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestSubgroupsList_MissingGroupID verifies the behavior of cov subgroups list missing group i d.
+// TestSubgroupsList_MissingGroupID verifies SubgroupsList when missing group ID.
 func TestSubgroupsList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{})
@@ -955,7 +968,7 @@ func TestSubgroupsList_MissingGroupID(t *testing.T) {
 // List — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of cov list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -984,7 +997,7 @@ func TestList_WithPagination(t *testing.T) {
 // List — with TopLevelOnly
 // ---------------------------------------------------------------------------.
 
-// TestList_TopLevelOnly verifies the behavior of cov list top level only.
+// TestList_TopLevelOnly verifies List when top level only.
 func TestList_TopLevelOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("top_level_only"); got != "true" {
@@ -1002,7 +1015,7 @@ func TestList_TopLevelOnly(t *testing.T) {
 // MembersList — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestMembersList_WithPagination verifies the behavior of cov members list with pagination.
+// TestMembersList_WithPagination verifies MembersList when with pagination.
 func TestMembersList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1027,7 +1040,7 @@ func TestMembersList_WithPagination(t *testing.T) {
 // SubgroupsList — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestSubgroupsList_WithPagination verifies the behavior of cov subgroups list with pagination.
+// TestSubgroupsList_WithPagination verifies SubgroupsList when with pagination.
 func TestSubgroupsList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1052,7 +1065,7 @@ func TestSubgroupsList_WithPagination(t *testing.T) {
 // Create — canceled context, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_CancelledContext verifies the behavior of cov create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1062,7 +1075,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_AllOptionalFields verifies the behavior of cov create all optional fields.
+// TestCreate_AllOptionalFields verifies Create when all optional fields.
 func TestCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups" {
@@ -1099,7 +1112,7 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 // Update — canceled context, with optional bool fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_CancelledContext verifies the behavior of cov update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1109,7 +1122,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of cov update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/99" {
@@ -1143,7 +1156,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — canceled context, with permanently_remove
 // ---------------------------------------------------------------------------.
 
-// TestDelete_CancelledContext verifies the behavior of cov delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1153,7 +1166,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_PermanentlyRemove verifies the behavior of cov delete permanently remove.
+// TestDelete_PermanentlyRemove verifies Delete when permanently remove.
 func TestDelete_PermanentlyRemove(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/99" {
@@ -1177,7 +1190,7 @@ func TestDelete_PermanentlyRemove(t *testing.T) {
 // Restore — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestRestore_CancelledContext verifies the behavior of cov restore cancelled context.
+// TestRestore_CancelledContext verifies Restore when cancelled context.
 func TestRestore_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1187,7 +1200,7 @@ func TestRestore_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRestore_ServerError verifies the behavior of cov restore server error.
+// TestRestore_ServerError verifies Restore when server error.
 func TestRestore_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1302,7 +1315,7 @@ func TestUnarchive_EmptyGroupID(t *testing.T) {
 // Search — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestSearch_CancelledContext verifies the behavior of cov search cancelled context.
+// TestSearch_CancelledContext verifies Search when cancelled context.
 func TestSearch_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1312,7 +1325,7 @@ func TestSearch_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSearch_ServerError verifies the behavior of cov search server error.
+// TestSearch_ServerError verifies Search when server error.
 func TestSearch_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1327,7 +1340,7 @@ func TestSearch_ServerError(t *testing.T) {
 // TransferProject — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestTransferProject_CancelledContext verifies the behavior of cov transfer project cancelled context.
+// TestTransferProject_CancelledContext verifies TransferProject when cancelled context.
 func TestTransferProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1337,7 +1350,7 @@ func TestTransferProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTransferProject_ServerError verifies the behavior of cov transfer project server error.
+// TestTransferProject_ServerError verifies TransferProject when server error.
 func TestTransferProject_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1352,7 +1365,7 @@ func TestTransferProject_ServerError(t *testing.T) {
 // ListProjects — canceled context, with optional filter fields
 // ---------------------------------------------------------------------------.
 
-// TestListProjects_CancelledContext verifies the behavior of cov list projects cancelled context.
+// TestListProjects_CancelledContext verifies ListProjects when cancelled context.
 func TestListProjects_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1362,7 +1375,7 @@ func TestListProjects_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProjects_AllOptionalFilters verifies the behavior of cov list projects all optional filters.
+// TestListProjects_AllOptionalFilters verifies ListProjects when all optional filters.
 func TestListProjects_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/99/projects" {
@@ -1422,7 +1435,7 @@ func TestListProjects_AllOptionalFilters(t *testing.T) {
 // ListHooks — canceled context, missing group_id, empty result
 // ---------------------------------------------------------------------------.
 
-// TestListHooks_CancelledContext verifies the behavior of cov list hooks cancelled context.
+// TestListHooks_CancelledContext verifies ListHooks when cancelled context.
 func TestListHooks_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1432,7 +1445,7 @@ func TestListHooks_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListHooks_MissingGroupID verifies the behavior of cov list hooks missing group i d.
+// TestListHooks_MissingGroupID verifies ListHooks when missing group ID.
 func TestListHooks_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := ListHooks(context.Background(), client, ListHooksInput{})
@@ -1441,7 +1454,7 @@ func TestListHooks_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestListHooks_Empty verifies the behavior of cov list hooks empty.
+// TestListHooks_Empty verifies ListHooks when empty.
 func TestListHooks_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1455,7 +1468,7 @@ func TestListHooks_Empty(t *testing.T) {
 	}
 }
 
-// TestListHooks_WithPagination verifies the behavior of cov list hooks with pagination.
+// TestListHooks_WithPagination verifies ListHooks when with pagination.
 func TestListHooks_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1480,7 +1493,7 @@ func TestListHooks_WithPagination(t *testing.T) {
 // GetHook — canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_CancelledContext verifies the behavior of cov get hook cancelled context.
+// TestGetHook_CancelledContext verifies GetHook when cancelled context.
 func TestGetHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1490,7 +1503,7 @@ func TestGetHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetHook_MissingGroupID verifies the behavior of cov get hook missing group i d.
+// TestGetHook_MissingGroupID verifies GetHook when missing group ID.
 func TestGetHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := GetHook(context.Background(), client, GetHookInput{HookID: 10})
@@ -1503,7 +1516,7 @@ func TestGetHook_MissingGroupID(t *testing.T) {
 // AddHook — canceled context, missing group_id, missing url, with all opts
 // ---------------------------------------------------------------------------.
 
-// TestAddHook_CancelledContext verifies the behavior of cov add hook cancelled context.
+// TestAddHook_CancelledContext verifies AddHook when cancelled context.
 func TestAddHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1516,7 +1529,7 @@ func TestAddHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddHook_MissingGroupID verifies the behavior of cov add hook missing group i d.
+// TestAddHook_MissingGroupID verifies AddHook when missing group ID.
 func TestAddHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := AddHook(context.Background(), client, AddHookInput{
@@ -1527,7 +1540,7 @@ func TestAddHook_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestAddHook_MissingURL verifies the behavior of cov add hook missing u r l.
+// TestAddHook_MissingURL verifies AddHook when missing URL.
 func TestAddHook_MissingURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := AddHook(context.Background(), client, AddHookInput{GroupID: "99"})
@@ -1536,7 +1549,7 @@ func TestAddHook_MissingURL(t *testing.T) {
 	}
 }
 
-// TestAddHook_AllOptionalFields verifies the behavior of cov add hook all optional fields.
+// TestAddHook_AllOptionalFields verifies AddHook when all optional fields.
 func TestAddHook_AllOptionalFields(t *testing.T) {
 	hookResponse := `{"id":20,"url":"https://hooks.example.com/ci","name":"Full Hook","description":"All events","group_id":99,"push_events":true,"tag_push_events":true,"merge_requests_events":true,"issues_events":true,"note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"subgroup_events":true,"member_events":true,"confidential_issues_events":true,"confidential_note_events":true,"enable_ssl_verification":true,"created_at":"2026-03-01T10:00:00Z"}`
 
@@ -1595,7 +1608,7 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 // EditHook — canceled context, missing group_id, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEditHook_CancelledContext verifies the behavior of cov edit hook cancelled context.
+// TestEditHook_CancelledContext verifies EditHook when cancelled context.
 func TestEditHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1609,7 +1622,7 @@ func TestEditHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEditHook_MissingGroupID verifies the behavior of cov edit hook missing group i d.
+// TestEditHook_MissingGroupID verifies EditHook when missing group ID.
 func TestEditHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditHook(context.Background(), client, EditHookInput{
@@ -1621,7 +1634,7 @@ func TestEditHook_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestEditHook_AllOptionalFields verifies the behavior of cov edit hook all optional fields.
+// TestEditHook_AllOptionalFields verifies EditHook when all optional fields.
 func TestEditHook_AllOptionalFields(t *testing.T) {
 	hookResponse := `{"id":10,"url":"https://hooks.example.com/updated","name":"Edited","description":"Updated hook","group_id":99,"push_events":false,"tag_push_events":true,"merge_requests_events":true,"issues_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":true,"releases_events":true,"subgroup_events":false,"member_events":true,"confidential_issues_events":false,"confidential_note_events":true,"enable_ssl_verification":false,"created_at":"2026-01-15T10:00:00Z"}`
 
@@ -1673,7 +1686,7 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 // DeleteHook — canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestDeleteHook_CancelledContext verifies the behavior of cov delete hook cancelled context.
+// TestDeleteHook_CancelledContext verifies DeleteHook when cancelled context.
 func TestDeleteHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1683,7 +1696,7 @@ func TestDeleteHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_MissingGroupID verifies the behavior of cov delete hook missing group i d.
+// TestDeleteHook_MissingGroupID verifies DeleteHook when missing group ID.
 func TestDeleteHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteHook(context.Background(), client, DeleteHookInput{HookID: 10})
@@ -1696,7 +1709,7 @@ func TestDeleteHook_MissingGroupID(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithData verifies the behavior of format output markdown with data.
+// TestFormatOutputMarkdown_WithData verifies FormatOutputMarkdown when with data.
 func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                99,
@@ -1730,7 +1743,7 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Minimal verifies the behavior of format output markdown minimal.
+// TestFormatOutputMarkdown_Minimal verifies FormatOutputMarkdown when minimal.
 func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:         1,
@@ -1760,7 +1773,7 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Groups: []Output{
@@ -1788,7 +1801,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No groups found") {
@@ -1803,7 +1816,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatMemberListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatMemberListMarkdown_WithData verifies the behavior of format member list markdown with data.
+// TestFormatMemberListMarkdown_WithData verifies FormatMemberListMarkdown when with data.
 func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 	out := MemberListOutput{
 		Members: []MemberOutput{
@@ -1829,7 +1842,7 @@ func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatMemberListMarkdown_Empty verifies the behavior of format member list markdown empty.
+// TestFormatMemberListMarkdown_Empty verifies FormatMemberListMarkdown when empty.
 func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 	md := FormatMemberListMarkdown(MemberListOutput{})
 	if !strings.Contains(md, "No members found") {
@@ -1844,7 +1857,7 @@ func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 // FormatListProjectsMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListProjectsMarkdown_WithData verifies the behavior of format list projects markdown with data.
+// TestFormatListProjectsMarkdown_WithData verifies FormatListProjectsMarkdown when with data.
 func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	out := ListProjectsOutput{
 		Projects: []ProjectItem{
@@ -1871,7 +1884,7 @@ func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListProjectsMarkdown_Empty verifies the behavior of format list projects markdown empty.
+// TestFormatListProjectsMarkdown_Empty verifies FormatListProjectsMarkdown when empty.
 func TestFormatListProjectsMarkdown_Empty(t *testing.T) {
 	md := FormatListProjectsMarkdown(ListProjectsOutput{})
 	if !strings.Contains(md, "No projects found") {
@@ -1886,7 +1899,7 @@ func TestFormatListProjectsMarkdown_Empty(t *testing.T) {
 // FormatHookMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookMarkdown_WithNameAndAllEvents verifies the behavior of format hook markdown with name and all events.
+// TestFormatHookMarkdown_WithNameAndAllEvents verifies FormatHookMarkdown when with name and all events.
 func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:                       10,
@@ -1933,7 +1946,7 @@ func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_WithoutName verifies the behavior of format hook markdown without name.
+// TestFormatHookMarkdown_WithoutName verifies FormatHookMarkdown when without name.
 func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:  5,
@@ -1957,7 +1970,7 @@ func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_NoEventsEnabled verifies the behavior of format hook markdown no events enabled.
+// TestFormatHookMarkdown_NoEventsEnabled verifies FormatHookMarkdown when no events enabled.
 func TestFormatHookMarkdown_NoEventsEnabled(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:  1,
@@ -1973,7 +1986,7 @@ func TestFormatHookMarkdown_NoEventsEnabled(t *testing.T) {
 // FormatHookListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookListMarkdown_WithData verifies the behavior of format hook list markdown with data.
+// TestFormatHookListMarkdown_WithData verifies FormatHookListMarkdown when with data.
 func TestFormatHookListMarkdown_WithData(t *testing.T) {
 	out := HookListOutput{
 		Hooks: []HookOutput{
@@ -2001,7 +2014,7 @@ func TestFormatHookListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatHookListMarkdown_Empty verifies the behavior of format hook list markdown empty.
+// TestFormatHookListMarkdown_Empty verifies FormatHookListMarkdown when empty.
 func TestFormatHookListMarkdown_Empty(t *testing.T) {
 	md := FormatHookListMarkdown(HookListOutput{})
 	if !strings.Contains(md, "No group webhooks found.") {
@@ -2016,7 +2029,7 @@ func TestFormatHookListMarkdown_Empty(t *testing.T) {
 // enabledEvents — comprehensive
 // ---------------------------------------------------------------------------.
 
-// TestEnabledEvents_All verifies the behavior of enabled events all.
+// TestEnabledEvents_All verifies EnabledEvents when all.
 func TestEnabledEvents_All(t *testing.T) {
 	h := HookOutput{
 		PushEvents:          true,
@@ -2041,7 +2054,7 @@ func TestEnabledEvents_All(t *testing.T) {
 	}
 }
 
-// TestEnabledEvents_None verifies the behavior of enabled events none.
+// TestEnabledEvents_None verifies EnabledEvents when none.
 func TestEnabledEvents_None(t *testing.T) {
 	result := enabledEvents(HookOutput{})
 	if result != "none" {
@@ -2124,7 +2137,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newGroupsRouteSpecs is an internal helper for the groups package.
+// newGroupsRouteSpecs constructs groups route specs test fixtures.
 func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -2253,6 +2266,7 @@ func TestActionSpecs_GroupGetRoute(t *testing.T) {
 	}
 }
 
+// groupSpecsByTool supports group specs by tool assertions in groups tests.
 func groupSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

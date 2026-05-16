@@ -211,7 +211,7 @@ func TestAnalyzeCIConfig_FullFlow(t *testing.T) {
 // FormatIssueForSummary — note with empty CreatedAt → "unknown"
 // ---------------------------------------------------------------------------.
 
-// TestFormatIssueForSummary_NoteUnknownTime verifies the behavior of cov format issue for summary note unknown time.
+// TestFormatIssueForSummary_NoteUnknownTime verifies FormatIssueForSummary when note unknown time.
 func TestFormatIssueForSummary_NoteUnknownTime(t *testing.T) {
 	issue := issues.Output{IID: 20, Title: "empty ts"}
 	notes := issuenotes.ListOutput{
@@ -229,7 +229,7 @@ func TestFormatIssueForSummary_NoteUnknownTime(t *testing.T) {
 // FormatAnalyzeMRChangesMarkdown — empty model
 // ---------------------------------------------------------------------------.
 
-// TestFormatAnalyzeMRChangesMarkdown_EmptyModel verifies the behavior of cov format analyze m r changes markdown empty model.
+// TestFormatAnalyzeMRChangesMarkdown_EmptyModel verifies FormatAnalyzeMRChangesMarkdown when empty model.
 func TestFormatAnalyzeMRChangesMarkdown_EmptyModel(t *testing.T) {
 	a := AnalyzeMRChangesOutput{
 		MRIID:    1,
@@ -250,7 +250,7 @@ func TestFormatAnalyzeMRChangesMarkdown_EmptyModel(t *testing.T) {
 // FormatSummarizeIssueMarkdown — truncated
 // ---------------------------------------------------------------------------.
 
-// TestFormatSummarizeIssueMarkdown_Truncated verifies the behavior of cov format summarize issue markdown truncated.
+// TestFormatSummarizeIssueMarkdown_Truncated verifies FormatSummarizeIssueMarkdown when truncated.
 func TestFormatSummarizeIssueMarkdown_Truncated(t *testing.T) {
 	s := SummarizeIssueOutput{
 		IssueIID:  5,
@@ -272,7 +272,7 @@ func TestFormatSummarizeIssueMarkdown_Truncated(t *testing.T) {
 // FormatSummarizeIssueMarkdown — empty model
 // ---------------------------------------------------------------------------.
 
-// TestFormatSummarizeIssueMarkdown_EmptyModel verifies the behavior of cov format summarize issue markdown empty model.
+// TestFormatSummarizeIssueMarkdown_EmptyModel verifies FormatSummarizeIssueMarkdown when empty model.
 func TestFormatSummarizeIssueMarkdown_EmptyModel(t *testing.T) {
 	s := SummarizeIssueOutput{
 		IssueIID: 6,
@@ -500,6 +500,7 @@ func TestActionSpecs_WithSampling(t *testing.T) {
 	}
 }
 
+// samplingSpecsByTool supports sampling specs by tool assertions in samplingtools tests.
 func samplingSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

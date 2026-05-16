@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 )
 
+// TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec verifies RegisterServerMaintenanceSurfaceTools when safe mode wraps mutating spec.
 func TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec(t *testing.T) {
 	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
 		Mode:           autoupdate.ModeCheck,
@@ -59,6 +60,7 @@ func TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec(t *test
 	}
 }
 
+// toolsByName converts the GitLab API response to the tool output format.
 func toolsByName(items []*mcp.Tool) map[string]*mcp.Tool {
 	out := make(map[string]*mcp.Tool, len(items))
 	for _, item := range items {

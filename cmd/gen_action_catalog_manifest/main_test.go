@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestDiscoverActionSpecGroupBuilders_SortsBuilders verifies DiscoverActionSpecGroupBuilders sorts builders.
 func TestDiscoverActionSpecGroupBuilders_SortsBuilders(t *testing.T) {
 	sourceDir := t.TempDir()
 	writeTestFile(t, filepath.Join(sourceDir, "action_specs.go"), `package tools
@@ -27,6 +28,7 @@ func buildAccessActionSpecs() {}
 	}
 }
 
+// TestGenerateManifest_IsDeterministic verifies GenerateManifest is deterministic.
 func TestGenerateManifest_IsDeterministic(t *testing.T) {
 	builders := []string{"buildAccessActionSpecs", "buildWikiActionSpecs"}
 	first, err := generateManifest(builders)
@@ -52,6 +54,7 @@ func TestGenerateManifest_IsDeterministic(t *testing.T) {
 	}
 }
 
+// TestCheckManifest_DetectsStaleOutput verifies CheckManifest detects stale output.
 func TestCheckManifest_DetectsStaleOutput(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "action_specs_manifest_gen.go")
 	writeTestFile(t, path, "old")
@@ -60,6 +63,7 @@ func TestCheckManifest_DetectsStaleOutput(t *testing.T) {
 	}
 }
 
+// writeTestFile writes test file fixture data for tests.
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {

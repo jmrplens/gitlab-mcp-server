@@ -13,15 +13,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -50,7 +54,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -62,7 +66,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate verifies the behavior of create.
+// TestCreate verifies Create.
 func TestCreate(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -100,7 +104,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -112,7 +116,7 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_ValidationError verifies the behavior of delete validation error.
+// TestDelete_ValidationError verifies Delete when validation error.
 func TestDelete_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called")
@@ -125,7 +129,7 @@ func TestDelete_ValidationError(t *testing.T) {
 	}
 }
 
-// TestDelete verifies the behavior of delete.
+// TestDelete verifies Delete.
 func TestDelete(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications/3" {
@@ -143,7 +147,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -155,7 +159,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Applications: []ApplicationItem{
@@ -171,7 +175,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Applications: nil}
 	md := FormatListMarkdown(out)
@@ -180,7 +184,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCreateMarkdown verifies the behavior of format create markdown.
+// TestFormatCreateMarkdown verifies FormatCreateMarkdown.
 func TestFormatCreateMarkdown(t *testing.T) {
 	out := CreateOutput{ApplicationItem: ApplicationItem{
 		ID: 2, ApplicationName: "New", ApplicationID: "aid-2", Secret: "sec", CallbackURL: "http://cb", Confidential: false,
@@ -200,7 +204,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 // List — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
@@ -228,7 +232,7 @@ func TestList_WithPagination(t *testing.T) {
 // Create — with confidential flag
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithConfidential verifies the behavior of create with confidential.
+// TestCreate_WithConfidential verifies Create when with confidential.
 func TestCreate_WithConfidential(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodPost {
@@ -336,6 +340,7 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	}
 }
 
+// newErrorRouteSpecs constructs error route specs test fixtures.
 func newErrorRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -344,6 +349,7 @@ func newErrorRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return applicationSpecsByTool(client)
 }
 
+// newApplicationsRouteSpecs constructs applications route specs test fixtures.
 func newApplicationsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -362,6 +368,7 @@ func newApplicationsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return applicationSpecsByTool(client)
 }
 
+// applicationSpecsByTool supports application specs by tool assertions in applications tests.
 func applicationSpecsByTool(client *gitlabclient.Client) map[string]toolutil.ActionSpec {
 	specs := ActionSpecs(client)
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))

@@ -237,6 +237,7 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 	return nil
 }
 
+// removeMemberOutput removes member output and returns [toolutil.DeleteOutput].
 func removeMemberOutput(ctx context.Context, client *gitlabclient.Client, input RemoveInput) (toolutil.DeleteOutput, error) {
 	if err := RemoveMember(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -304,6 +305,7 @@ func UnshareGroup(ctx context.Context, client *gitlabclient.Client, input Unshar
 	return nil
 }
 
+// unshareGroupOutput unshares group output and returns [toolutil.DeleteOutput].
 func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input UnshareInput) (toolutil.DeleteOutput, error) {
 	if err := UnshareGroup(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -326,7 +328,7 @@ var groupAccessLevelNames = map[gl.AccessLevelValue]string{
 	gl.OwnerPermissions:         "Owner",
 }
 
-// accessLevelDescription is an internal helper for the groupmembers package.
+// accessLevelDescription implements the access level description helper used by groupmembers.
 func accessLevelDescription(level gl.AccessLevelValue) string {
 	if name, ok := groupAccessLevelNames[level]; ok {
 		return name
@@ -334,7 +336,7 @@ func accessLevelDescription(level gl.AccessLevelValue) string {
 	return "Unknown"
 }
 
-// convertMember is an internal helper for the groupmembers package.
+// convertMember implements the convert member helper used by groupmembers.
 func convertMember(m *gl.GroupMember) Output {
 	out := Output{
 		ID:                     m.ID,

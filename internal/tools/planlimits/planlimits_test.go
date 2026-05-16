@@ -12,8 +12,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// planLimitJSON identifies the plan limit JSON constant used by this package.
 const planLimitJSON = `{
 	"conan_max_file_size": 3221225472,
 	"generic_packages_max_file_size": 5368709120,
@@ -25,7 +27,7 @@ const planLimitJSON = `{
 	"terraform_module_max_file_size": 1073741824
 }`
 
-// TestGet_Success verifies that Get handles the success scenario correctly.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodGet {
@@ -47,7 +49,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_WithPlanName verifies that Get handles the with plan name scenario correctly.
+// TestGet_WithPlanName verifies Get when with plan name.
 func TestGet_WithPlanName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodGet {
@@ -69,7 +71,7 @@ func TestGet_WithPlanName(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -81,7 +83,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestChange_Success verifies that Change handles the success scenario correctly.
+// TestChange_Success verifies Change when success.
 func TestChange_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodPut {
@@ -104,7 +106,7 @@ func TestChange_Success(t *testing.T) {
 	}
 }
 
-// TestChange_Error verifies that Change handles the error scenario correctly.
+// TestChange_Error verifies Change when error.
 func TestChange_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -116,7 +118,7 @@ func TestChange_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -139,7 +141,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatChangeMarkdown verifies the behavior of format change markdown.
+// TestFormatChangeMarkdown verifies FormatChangeMarkdown.
 func TestFormatChangeMarkdown(t *testing.T) {
 	out := ChangeOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -159,7 +161,7 @@ func TestFormatChangeMarkdown(t *testing.T) {
 // FormatGetMarkdown — all fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies the behavior of format get markdown all fields.
+// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	out := GetOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -185,7 +187,7 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // FormatChangeMarkdown — all fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatChangeMarkdown_AllFields verifies the behavior of format change markdown all fields.
+// TestFormatChangeMarkdown_AllFields verifies FormatChangeMarkdown when all fields.
 func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 	out := ChangeOutput{
 		PlanLimitItem: PlanLimitItem{
@@ -214,7 +216,7 @@ func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 // Change — all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestChange_AllOptionalFields verifies the behavior of change all optional fields.
+// TestChange_AllOptionalFields verifies Change when all optional fields.
 func TestChange_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodPut {
@@ -296,6 +298,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// newPlanLimitsRouteSpecs constructs plan limits route specs test fixtures.
 func newPlanLimitsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -311,6 +314,7 @@ func newPlanLimitsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return planLimitSpecsByTool(ActionSpecs(client))
 }
 
+// planLimitSpecsByTool supports plan limit specs by tool assertions in planlimits tests.
 func planLimitSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

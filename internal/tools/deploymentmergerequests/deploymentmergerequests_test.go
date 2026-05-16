@@ -16,7 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/deployments/7/merge_requests" {
@@ -81,7 +81,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -100,7 +100,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies the behavior of list with filters.
+// TestList_WithFilters verifies List when with filters.
 func TestList_WithFilters(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -129,7 +129,7 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_InvalidDeploymentID verifies the behavior of list invalid deployment i d.
+// TestList_InvalidDeploymentID verifies List when invalid deployment ID.
 func TestList_InvalidDeploymentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -147,7 +147,7 @@ func TestList_InvalidDeploymentID(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -164,7 +164,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -172,7 +172,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -187,15 +187,17 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — API error (404), canceled context, pagination, nil author
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError404 verifies the behavior of list a p i error404.
+// TestList_APIError404 verifies List when API error 404.
 func TestList_APIError404(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -209,7 +211,7 @@ func TestList_APIError404(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -219,7 +221,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/deployments/5/merge_requests" {
@@ -253,7 +255,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_NilAuthor verifies the behavior of list nil author.
+// TestList_NilAuthor verifies List when nil author.
 func TestList_NilAuthor(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -273,7 +275,7 @@ func TestList_NilAuthor(t *testing.T) {
 	}
 }
 
-// TestList_AllOptionalFilters verifies the behavior of list all optional filters.
+// TestList_AllOptionalFilters verifies List when all optional filters.
 func TestList_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -313,7 +315,7 @@ func TestList_AllOptionalFilters(t *testing.T) {
 // FormatListMarkdown — multiple items, special characters, pagination info
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_MultipleItems verifies the behavior of format list markdown multiple items.
+// TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -353,7 +355,7 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharacters verifies the behavior of format list markdown special characters.
+// TestFormatListMarkdown_SpecialCharacters verifies FormatListMarkdown when special characters.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -370,7 +372,7 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyOutput verifies the behavior of format list markdown empty output.
+// TestFormatListMarkdown_EmptyOutput verifies FormatListMarkdown when empty output.
 func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{MergeRequests: []MergeRequestItem{}})
 	if result == nil {
@@ -385,7 +387,7 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NilSlice verifies the behavior of format list markdown nil slice.
+// TestFormatListMarkdown_NilSlice verifies FormatListMarkdown when nil slice.
 func TestFormatListMarkdown_NilSlice(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -499,6 +501,7 @@ func TestActionSpecs_CallRouteEmptyResult(t *testing.T) {
 // Helper: route factory
 // ---------------------------------------------------------------------------.
 
+// newDeploymentMRSpecsByTool constructs deployment MR specs by tool test fixtures.
 func newDeploymentMRSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -532,6 +535,7 @@ func newDeploymentMRSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return deploymentMRSpecsByTool(t, ActionSpecs(client))
 }
 
+// deploymentMRSpecsByTool supports deployment MR specs by tool assertions in deploymentmergerequests tests.
 func deploymentMRSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

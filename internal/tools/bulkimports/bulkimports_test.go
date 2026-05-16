@@ -12,7 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestStartMigration verifies the behavior of start migration.
+// TestStartMigration verifies StartMigration.
 func TestStartMigration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/bulk_imports" {
@@ -62,7 +62,7 @@ func TestStartMigration(t *testing.T) {
 	}
 }
 
-// TestStartMigration_Error verifies that StartMigration handles the error scenario correctly.
+// TestStartMigration_Error verifies StartMigration when error.
 func TestStartMigration_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -78,7 +78,7 @@ func TestStartMigration_Error(t *testing.T) {
 	}
 }
 
-// TestFormatStartMigrationMarkdown verifies the behavior of format start migration markdown.
+// TestFormatStartMigrationMarkdown verifies FormatStartMigrationMarkdown.
 func TestFormatStartMigrationMarkdown(t *testing.T) {
 	out := MigrationOutput{
 		ID:          1,
@@ -104,7 +104,7 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 // StartMigration — with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestStartMigration_WithOptionalFields verifies the behavior of start migration with optional fields.
+// TestStartMigration_WithOptionalFields verifies StartMigration when with optional fields.
 func TestStartMigration_WithOptionalFields(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/bulk_imports" && r.Method == http.MethodPost {
@@ -151,7 +151,7 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 // FormatStartMigrationMarkdown — with failures
 // ---------------------------------------------------------------------------.
 
-// TestFormatStartMigrationMarkdown_WithFailures verifies the behavior of format start migration markdown with failures.
+// TestFormatStartMigrationMarkdown_WithFailures verifies FormatStartMigrationMarkdown when with failures.
 func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 	out := MigrationOutput{
 		ID:          2,

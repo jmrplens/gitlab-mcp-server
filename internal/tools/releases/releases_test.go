@@ -227,7 +227,7 @@ func TestReleaseCreateInput_EnrichedFields(t *testing.T) {
 	}
 }
 
-// TestReleaseList_PaginationQueryParamsAndMetadata verifies the behavior of release list pagination query params and metadata.
+// TestReleaseList_PaginationQueryParamsAndMetadata verifies ReleaseList when pagination query params and metadata.
 func TestReleaseList_PaginationQueryParamsAndMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectReleases {
@@ -349,15 +349,17 @@ func TestReleaseGetLatest_NotFound(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // Create — API error, empty project_id, canceled context, tag_message field
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -370,7 +372,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingProjectID verifies the behavior of create missing project i d.
+// TestCreate_MissingProjectID verifies Create when missing project ID.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Create(context.Background(), client, CreateInput{TagName: "v1.0.0"})
@@ -379,7 +381,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -389,7 +391,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_WithTagMessage verifies the behavior of create with tag message.
+// TestCreate_WithTagMessage verifies Create when with tag message.
 func TestCreate_WithTagMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/releases" {
@@ -416,7 +418,7 @@ func TestCreate_WithTagMessage(t *testing.T) {
 // Update — API error, empty project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -429,7 +431,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{TagName: "v1.0.0"})
@@ -438,7 +440,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -452,7 +454,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 // Delete — API error, empty project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -463,7 +465,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies the behavior of delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Delete(context.Background(), client, DeleteInput{TagName: "v1.0.0"})
@@ -472,7 +474,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -486,7 +488,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // Get — API error, empty project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -497,7 +499,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{TagName: "v1.0.0"})
@@ -506,7 +508,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -520,7 +522,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // GetLatest — API error, empty project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetLatest_APIError verifies the behavior of get latest a p i error.
+// TestGetLatest_APIError verifies GetLatest when API error.
 func TestGetLatest_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -531,7 +533,7 @@ func TestGetLatest_APIError(t *testing.T) {
 	}
 }
 
-// TestGetLatest_MissingProjectID verifies the behavior of get latest missing project i d.
+// TestGetLatest_MissingProjectID verifies GetLatest when missing project ID.
 func TestGetLatest_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := GetLatest(context.Background(), client, GetLatestInput{})
@@ -540,7 +542,7 @@ func TestGetLatest_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetLatest_CancelledContext verifies the behavior of get latest cancelled context.
+// TestGetLatest_CancelledContext verifies GetLatest when cancelled context.
 func TestGetLatest_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -554,7 +556,7 @@ func TestGetLatest_CancelledContext(t *testing.T) {
 // List — API error, empty project_id, canceled context, sort/order_by params
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -565,7 +567,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies the behavior of list missing project i d.
+// TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := List(context.Background(), client, ListInput{})
@@ -574,7 +576,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -584,7 +586,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithOrderByAndSort verifies the behavior of list with order by and sort.
+// TestList_WithOrderByAndSort verifies List when with order by and sort.
 func TestList_WithOrderByAndSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/releases" {
@@ -617,7 +619,7 @@ func TestList_WithOrderByAndSort(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/releases" {
@@ -639,7 +641,7 @@ func TestList_EmptyResult(t *testing.T) {
 // FormatMarkdown — all fields, minimal fields, upcoming release
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies the behavior of format markdown all fields.
+// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		TagName:         "v2.0.0",
@@ -668,7 +670,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_MinimalFields verifies the behavior of format markdown minimal fields.
+// TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		TagName:   "v0.1.0",
@@ -695,7 +697,7 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_WithReleasedAt verifies the behavior of format markdown with released at.
+// TestFormatMarkdown_WithReleasedAt verifies FormatMarkdown when with released at.
 func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
 	md := FormatMarkdown(Output{
 		TagName:    "v1.5.0",
@@ -712,7 +714,7 @@ func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
 // FormatListMarkdown — with data, empty, pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
@@ -738,7 +740,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		Releases:   []Output{},
@@ -753,7 +755,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_FallbackToCreatedAt verifies the behavior of format list markdown fallback to created at.
+// TestFormatListMarkdown_FallbackToCreatedAt verifies FormatListMarkdown when fallback to created at.
 func TestFormatListMarkdown_FallbackToCreatedAt(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
@@ -771,7 +773,7 @@ func TestFormatListMarkdown_FallbackToCreatedAt(t *testing.T) {
 // ToOutput — edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilTimestamps verifies the behavior of to output nil timestamps.
+// TestToOutput_NilTimestamps verifies ToOutput when nil timestamps.
 func TestToOutput_NilTimestamps(t *testing.T) {
 	out := ToOutput(&gl.Release{})
 	if out.CreatedAt != "" {
@@ -782,7 +784,7 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoAssetsSources verifies the behavior of to output no assets sources.
+// TestToOutput_NoAssetsSources verifies ToOutput when no assets sources.
 func TestToOutput_NoAssetsSources(t *testing.T) {
 	out := ToOutput(&gl.Release{})
 	if out.AssetsSources != nil {
@@ -790,7 +792,7 @@ func TestToOutput_NoAssetsSources(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoEvidences verifies the behavior of to output no evidences.
+// TestToOutput_NoEvidences verifies ToOutput when no evidences.
 func TestToOutput_NoEvidences(t *testing.T) {
 	out := ToOutput(&gl.Release{})
 	if out.Evidences != nil {
@@ -798,7 +800,7 @@ func TestToOutput_NoEvidences(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoMilestones verifies the behavior of to output no milestones.
+// TestToOutput_NoMilestones verifies ToOutput when no milestones.
 func TestToOutput_NoMilestones(t *testing.T) {
 	out := ToOutput(&gl.Release{})
 	if out.Milestones != nil {
@@ -806,7 +808,7 @@ func TestToOutput_NoMilestones(t *testing.T) {
 	}
 }
 
-// TestToOutput_EmptyCommitID verifies the behavior of to output empty commit i d.
+// TestToOutput_EmptyCommitID verifies ToOutput when empty commit ID.
 func TestToOutput_EmptyCommitID(t *testing.T) {
 	out := ToOutput(&gl.Release{})
 	if out.CommitSHA != "" {
@@ -1079,6 +1081,7 @@ func TestCreate_ForbiddenError(t *testing.T) {
 // Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
+// newReleaseSpecsByTool constructs release specs by tool test fixtures.
 func newReleaseSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1191,6 +1194,7 @@ func TestActionSpecs_ReleaseGetRoute(t *testing.T) {
 	}
 }
 
+// releaseSpecsByTool supports release specs by tool assertions in releases tests.
 func releaseSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

@@ -16,19 +16,25 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
+// pathMRContextCommits identifies the path MR context commits constant used by this package.
 const pathMRContextCommits = "/api/v4/projects/1/merge_requests/10/context_commits"
 
+// testCommitSHA identifies the test commit SHA constant used by this package.
 const testCommitSHA = "abc123"
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -58,7 +64,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the behavior of list empty.
+// TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -73,7 +79,7 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -85,7 +91,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -115,7 +121,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -131,7 +137,7 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathMRContextCommits {
@@ -153,7 +159,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -169,7 +175,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -181,7 +187,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Commits: []CommitItem{
@@ -203,7 +209,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 // MRIID required-field validation
 // ---------------------------------------------------------------------------.
 
-// assertContains is an internal helper for the mrcontextcommits package.
+// assertContains checks contains invariants for tests.
 func assertContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -214,7 +220,7 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation validates m r i i d required validation across multiple scenarios using table-driven subtests.
+// TestMRIIDRequired_Validation covers MRIIDRequired with table-driven subtests for validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when merge_request_iid is missing")
@@ -249,7 +255,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 // List — CreatedAt branch + canceled context
 // ---------------------------------------------------------------------------.
 
-// TestList_WithCreatedAt verifies the behavior of list with created at.
+// TestList_WithCreatedAt verifies List when with created at.
 func TestList_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -269,7 +275,7 @@ func TestList_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -286,7 +292,7 @@ func TestList_CancelledContext(t *testing.T) {
 // Create — CreatedAt branch + canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithCreatedAt verifies the behavior of create with created at.
+// TestCreate_WithCreatedAt verifies Create when with created at.
 func TestCreate_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -310,7 +316,7 @@ func TestCreate_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -331,7 +337,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 // Delete — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -352,7 +358,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // FormatListMarkdown — content validation
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_ContentValidation verifies the behavior of format list markdown content validation.
+// TestFormatListMarkdown_ContentValidation verifies FormatListMarkdown when content validation.
 func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 	out := ListOutput{
 		Commits: []CommitItem{
@@ -443,6 +449,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------.
 
+// newMRContextCommitsSpecsByTool constructs MR context commits specs by tool test fixtures.
 func newMRContextCommitsSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 

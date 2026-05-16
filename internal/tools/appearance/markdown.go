@@ -14,7 +14,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	a := out.Appearance
 	var sb strings.Builder
 	sb.WriteString("# Application Appearance\n\n")
-	sb.WriteString("| Property | Value |\n|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&sb, "| Title | %s |\n", a.Title)
 	fmt.Fprintf(&sb, "| Description | %s |\n", a.Description)
 	if a.PWAName != "" {

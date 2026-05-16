@@ -18,7 +18,9 @@ import (
 )
 
 const (
-	fmtErrWant       = "Error() = %q, want %q"
+	// fmtErrWant identifies the fmt err want constant used by this package.
+	fmtErrWant = "Error() = %q, want %q"
+	// msgUnexpectedErr identifies the msg unexpected err constant used by this package.
 	msgUnexpectedErr = "unexpected error"
 )
 
@@ -177,7 +179,7 @@ func TestWrapErr_PropagatesSemanticClassification(t *testing.T) {
 // timeoutError is a test helper implementing net.Error with Timeout() = true.
 type timeoutError struct{ msg string }
 
-// Error performs the error operation on *timeoutError.
+// Error returns the error message for timeoutError.
 func (e *timeoutError) Error() string { return e.msg }
 
 // Timeout reports whether the *timeoutError satisfies the timeout condition.

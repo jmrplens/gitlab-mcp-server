@@ -14,13 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testFileName identifies the test file name constant used by this package.
 const testFileName = "key.pem"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files" || r.Method != http.MethodGet {
@@ -38,7 +41,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -49,7 +52,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestShow verifies the behavior of show.
+// TestShow verifies Show.
 func TestShow(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files/1" || r.Method != http.MethodGet {
@@ -67,7 +70,7 @@ func TestShow(t *testing.T) {
 	}
 }
 
-// TestShow_Error verifies the behavior of show error.
+// TestShow_Error verifies Show when error.
 func TestShow_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -78,7 +81,7 @@ func TestShow_Error(t *testing.T) {
 	}
 }
 
-// TestShow_InvalidFileID verifies the behavior of show invalid file i d.
+// TestShow_InvalidFileID verifies Show when invalid file ID.
 func TestShow_InvalidFileID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -92,7 +95,7 @@ func TestShow_InvalidFileID(t *testing.T) {
 	}
 }
 
-// TestRemove_InvalidFileID verifies the behavior of remove invalid file i d.
+// TestRemove_InvalidFileID verifies Remove when invalid file ID.
 func TestRemove_InvalidFileID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -106,7 +109,7 @@ func TestRemove_InvalidFileID(t *testing.T) {
 	}
 }
 
-// TestCreate verifies the behavior of create.
+// TestCreate verifies Create.
 func TestCreate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -125,7 +128,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies the behavior of create error.
+// TestCreate_Error verifies Create when error.
 func TestCreate_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -203,7 +206,7 @@ func TestCreate_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestRemove verifies the behavior of remove.
+// TestRemove verifies Remove.
 func TestRemove(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files/1" || r.Method != http.MethodDelete {
@@ -218,7 +221,7 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-// TestRemove_Error verifies the behavior of remove error.
+// TestRemove_Error verifies Remove when error.
 func TestRemove_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -229,7 +232,7 @@ func TestRemove_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{{ID: 1, Name: testFileName}}})
 	if md == "" {
@@ -237,7 +240,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatShowMarkdown verifies the behavior of format show markdown.
+// TestFormatShowMarkdown verifies FormatShowMarkdown.
 func TestFormatShowMarkdown(t *testing.T) {
 	md := FormatShowMarkdown(SecureFileItem{ID: 1, Name: testFileName})
 	if md == "" {
@@ -251,7 +254,7 @@ func TestFormatShowMarkdown(t *testing.T) {
 // List — pagination branch (Page > 0 || PerPage > 0)
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of cov list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/secure_files" || r.Method != http.MethodGet {
@@ -279,7 +282,7 @@ func TestList_WithPagination(t *testing.T) {
 // FormatListMarkdown — empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No secure files found") {
@@ -294,7 +297,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies the behavior of cov format list markdown with pagination.
+// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Files: []SecureFileItem{

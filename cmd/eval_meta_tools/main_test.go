@@ -26,6 +26,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// requireContainsAll returns contains all test data or fails the test.
 func requireContainsAll(t *testing.T, name, content string, wants []string) {
 	t.Helper()
 	for _, want := range wants {
@@ -35,6 +36,7 @@ func requireContainsAll(t *testing.T, name, content string, wants []string) {
 	}
 }
 
+// TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues verifies LiveUniqueSuffix returns distinct non empty values.
 func TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues(t *testing.T) {
 	first := liveUniqueSuffix()
 	second := liveUniqueSuffix()
@@ -46,6 +48,7 @@ func TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues(t *testing.T) {
 	}
 }
 
+// TestGitLabSkipTLSVerify_ParsesEnvironment verifies GitLabSkipTLSVerify parses environment.
 func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 	got, err := gitlabSkipTLSVerify()
@@ -62,6 +65,7 @@ func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
 	}
 }
 
+// TestWaitForContext_CanceledContextReturnsError verifies WaitForContext when canceled context returns error.
 func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -70,7 +74,7 @@ func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
 	}
 }
 
-// TestParseTasksMarkdown_ParsesTaskRows verifies that ParseTasksMarkdown handles the parses task rows scenario correctly.
+// TestParseTasksMarkdown_ParsesTaskRows verifies ParseTasksMarkdown parses task rows.
 func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
 	markdown := `# Test
 
@@ -100,7 +104,7 @@ func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
 	}
 }
 
-// TestParseTasksMarkdown_ParsesMultiStepRows verifies that ParseTasksMarkdown handles the parses multi step rows scenario correctly.
+// TestParseTasksMarkdown_ParsesMultiStepRows verifies ParseTasksMarkdown parses multi step rows.
 func TestParseTasksMarkdown_ParsesMultiStepRows(t *testing.T) {
 	markdown := `# Test
 
@@ -130,7 +134,7 @@ func TestParseTasksMarkdown_ParsesMultiStepRows(t *testing.T) {
 	}
 }
 
-// TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes verifies that ParseTasksMarkdown handles the parses failure rows and escaped pipes scenario correctly.
+// TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes verifies ParseTasksMarkdown parses failure rows and escaped pipes.
 func TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes(t *testing.T) {
 	markdown := `# Test
 
@@ -169,7 +173,7 @@ func TestModelToolFromParts_TypedNilInputSchemaUsesFallback(t *testing.T) {
 	}
 }
 
-// TestFilterTasksByDestructive verifies the behavior of filter tasks by destructive.
+// TestFilterTasksByDestructive verifies FilterTasksByDestructive.
 func TestFilterTasksByDestructive(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "read"},
@@ -196,7 +200,7 @@ func TestFilterTasksByDestructive(t *testing.T) {
 	}
 }
 
-// TestFilterTasksByDestructive_RejectsConflictingFlags verifies that FilterTasksByDestructive handles the rejects conflicting flags scenario correctly.
+// TestFilterTasksByDestructive_RejectsConflictingFlags verifies FilterTasksByDestructive rejects conflicting flags.
 func TestFilterTasksByDestructive_RejectsConflictingFlags(t *testing.T) {
 	_, err := filterTasksByDestructive(nil, true, true)
 	if err == nil {
@@ -204,7 +208,7 @@ func TestFilterTasksByDestructive_RejectsConflictingFlags(t *testing.T) {
 	}
 }
 
-// TestReplaceAllPromptBacktickValuesAfter_ReplacesRepeatedMarkers verifies that ReplaceAllPromptBacktickValuesAfter handles the replaces repeated markers scenario correctly.
+// TestReplaceAllPromptBacktickValuesAfter_ReplacesRepeatedMarkers verifies ReplaceAllPromptBacktickValuesAfter when replaces repeated markers.
 func TestReplaceAllPromptBacktickValuesAfter_ReplacesRepeatedMarkers(t *testing.T) {
 	prompt := "List files for package ID `55`, then delete package ID `52`."
 	got, err := replaceAllPromptBacktickValuesAfter(prompt, "package ID ", 61)
@@ -217,7 +221,7 @@ func TestReplaceAllPromptBacktickValuesAfter_ReplacesRepeatedMarkers(t *testing.
 	}
 }
 
-// TestFilterTasksByMutation verifies the behavior of filter tasks by mutation.
+// TestFilterTasksByMutation verifies FilterTasksByMutation.
 func TestFilterTasksByMutation(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
@@ -244,7 +248,7 @@ func TestFilterTasksByMutation(t *testing.T) {
 	}
 }
 
-// TestFilterTasksByMutation_RejectsConflictingFlags verifies that FilterTasksByMutation handles the rejects conflicting flags scenario correctly.
+// TestFilterTasksByMutation_RejectsConflictingFlags verifies FilterTasksByMutation rejects conflicting flags.
 func TestFilterTasksByMutation_RejectsConflictingFlags(t *testing.T) {
 	_, err := filterTasksByMutation(nil, true, true)
 	if err == nil {
@@ -252,7 +256,7 @@ func TestFilterTasksByMutation_RejectsConflictingFlags(t *testing.T) {
 	}
 }
 
-// TestFilterTasksByAvailableRoutes verifies the behavior of filter tasks by available routes.
+// TestFilterTasksByAvailableRoutes verifies FilterTasksByAvailableRoutes.
 func TestFilterTasksByAvailableRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab": {
@@ -325,7 +329,7 @@ func TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities(t *tes
 	}
 }
 
-// TestFilterTasksByPartition verifies the behavior of filter tasks by partition.
+// TestFilterTasksByPartition verifies FilterTasksByPartition.
 func TestFilterTasksByPartition(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "base-read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
@@ -416,7 +420,7 @@ func TestTerraformStateLockEndpoint_PreservesEscapedProjectPath(t *testing.T) {
 	}
 }
 
-// TestRouteLooksMutating_IgnoresDomainTokens verifies that RouteLooksMutating handles the ignores domain tokens scenario correctly.
+// TestRouteLooksMutating_IgnoresDomainTokens verifies RouteLooksMutating ignores domain tokens.
 func TestRouteLooksMutating_IgnoresDomainTokens(t *testing.T) {
 	if routeLooksMutating("gitlab", "merge_request.list") {
 		t.Fatal("merge_request.list should be read-only")
@@ -426,7 +430,7 @@ func TestRouteLooksMutating_IgnoresDomainTokens(t *testing.T) {
 	}
 }
 
-// TestApplyPresetDefaults_UsesDockerReadDefaults verifies that ApplyPresetDefaults handles the uses docker read defaults scenario correctly.
+// TestApplyPresetDefaults_UsesDockerReadDefaults verifies ApplyPresetDefaults uses docker read defaults.
 func TestApplyPresetDefaults_UsesDockerReadDefaults(t *testing.T) {
 	opts, err := applyPresetDefaults(options{Preset: presetDockerRead, explicitFlags: map[string]bool{}})
 	if err != nil {
@@ -446,7 +450,7 @@ func TestApplyPresetDefaults_UsesDockerReadDefaults(t *testing.T) {
 	}
 }
 
-// TestApplyPresetDefaults_PreservesExplicitFlags verifies that ApplyPresetDefaults handles the preserves explicit flags scenario correctly.
+// TestApplyPresetDefaults_PreservesExplicitFlags verifies ApplyPresetDefaults preserves explicit flags.
 func TestApplyPresetDefaults_PreservesExplicitFlags(t *testing.T) {
 	opts, err := applyPresetDefaults(options{
 		Preset:        presetDockerMutatingSafe,
@@ -468,7 +472,7 @@ func TestApplyPresetDefaults_PreservesExplicitFlags(t *testing.T) {
 	}
 }
 
-// TestApplyPresetDefaults_RejectsUnknownPreset verifies that ApplyPresetDefaults handles the rejects unknown preset scenario correctly.
+// TestApplyPresetDefaults_RejectsUnknownPreset verifies ApplyPresetDefaults rejects unknown preset.
 func TestApplyPresetDefaults_RejectsUnknownPreset(t *testing.T) {
 	_, err := applyPresetDefaults(options{Preset: "surprise"})
 	if err == nil {
@@ -476,7 +480,7 @@ func TestApplyPresetDefaults_RejectsUnknownPreset(t *testing.T) {
 	}
 }
 
-// TestFilterTasksByPreset_SelectsSafeDockerBatches verifies that FilterTasksByPreset handles the selects safe docker batches scenario correctly.
+// TestFilterTasksByPreset_SelectsSafeDockerBatches verifies FilterTasksByPreset selects safe docker batches.
 func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
@@ -519,8 +523,7 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	}
 }
 
-// TestFailureDiagnosticCategory_SeparatesPhase4Buckets validates failure diagnostic category across multiple scenarios using table-driven subtests
-// for the separates phase4 buckets case.
+// TestFailureDiagnosticCategory_SeparatesPhase4Buckets covers FailureDiagnosticCategory with table-driven subtests for separates phase 4 buckets.
 func TestFailureDiagnosticCategory_SeparatesPhase4Buckets(t *testing.T) {
 	tests := []struct {
 		notes []string
@@ -680,7 +683,7 @@ func TestDynamicDiscoveryResult_FindIncludesSchema(t *testing.T) {
 	}
 }
 
-// TestTaskToolCallLimit_ScalesForLongWorkflows verifies that TaskToolCallLimit handles the scales for long workflows scenario correctly.
+// TestTaskToolCallLimit_ScalesForLongWorkflows verifies TaskToolCallLimit scales for long workflows.
 func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
 	if got := taskToolCallLimit(3); got != 13 {
 		t.Fatalf("taskToolCallLimit(3) = %d, want enough turns for schema lookups and 3 steps", got)
@@ -721,7 +724,7 @@ func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
 	}
 }
 
-// TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes verifies that BuildRouteCoverageReport handles the lists uncovered high risk routes scenario correctly.
+// TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes verifies BuildRouteCoverageReport lists uncovered high risk routes.
 func TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab": {
@@ -741,7 +744,7 @@ func TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes(t *testing.T) {
 	}
 }
 
-// taskIDs is an internal helper for the main package.
+// taskIDs supports task IDs assertions in main tests.
 func taskIDs(tasks []evalTask) string {
 	ids := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -750,7 +753,7 @@ func taskIDs(tasks []evalTask) string {
 	return strings.Join(ids, ",")
 }
 
-// TestBuildCatalogSession_UsesClientEnterpriseMode verifies that BuildCatalogSession handles the uses client enterprise mode scenario correctly.
+// TestBuildCatalogSession_UsesClientEnterpriseMode verifies BuildCatalogSession uses client enterprise mode.
 func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	client := newEvalTestClient(t, false)
 	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta)
@@ -946,6 +949,7 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	})
 }
 
+// TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks verifies DynamicCallBudgetForTask classifies exact and ambiguous tasks.
 func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T) {
 	exactTask := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
@@ -964,6 +968,7 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 	}
 }
 
+// TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams verifies DynamicWorkflowPlanPreamble lists actions and required params.
 func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T) {
 	task := evalTask{ID: "MS-PLAN", Prompt: "Create an issue and then list it.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
@@ -982,6 +987,7 @@ func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T)
 	}
 }
 
+// TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall verifies DiscoveryBudgetFeedback blocks redundant discovery for exact call.
 func TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall(t *testing.T) {
 	task := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
@@ -1168,6 +1174,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 	}
 }
 
+// TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList verifies DynamicSingleTaskPrompt uses exact call for optional only list.
 func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) {
 	task := evalTask{ID: "MT-003", Prompt: "List the 10 most recently updated projects I can access.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.list", OptionalParams: []string{"order_by", "sort", "per_page"}},
@@ -1184,6 +1191,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) 
 	})
 }
 
+// TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects verifies DynamicSingleTaskPrompt uses exact call for search projects.
 func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
 	task := evalTask{ID: "MT-033", Prompt: "Search all projects for `gitlab-mcp-server`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "search.projects", RequiredParams: []string{"query"}},
@@ -1198,6 +1206,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
 	})
 }
 
+// TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe verifies DynamicWorkflowPlanPreamble suppresses planned action describe.
 func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.T) {
 	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
@@ -1219,6 +1228,7 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.
 	})
 }
 
+// TestDynamicExactCallProvenance_BindsRoleSensitiveParams covers DynamicExactCallProvenance with table-driven subtests for binds role sensitive params.
 func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1273,6 +1283,7 @@ func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
 	}
 }
 
+// TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCalls covers DynamicExactCallProvenance with table-driven subtests for unresolved role sensitive params suppress exact calls.
 func TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCalls(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1514,7 +1525,7 @@ func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T)
 	}
 }
 
-// newEvalTestClient is an internal helper for the main package.
+// newEvalTestClient constructs eval test client test fixtures.
 func newEvalTestClient(t *testing.T, enterprise bool) *gitlabclient.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1536,7 +1547,7 @@ func newEvalTestClient(t *testing.T, enterprise bool) *gitlabclient.Client {
 	return client
 }
 
-// TestValidateTaskFixture_RequiresProjectGrounding verifies that ValidateTaskFixture handles the requires project grounding scenario correctly.
+// TestValidateTaskFixture_RequiresProjectGrounding verifies ValidateTaskFixture requires project grounding.
 func TestValidateTaskFixture_RequiresProjectGrounding(t *testing.T) {
 	tasks := []evalTask{{
 		ID:             "MT-001",
@@ -1553,7 +1564,7 @@ func TestValidateTaskFixture_RequiresProjectGrounding(t *testing.T) {
 	}
 }
 
-// TestValidateTaskFixture_AcceptsGroundedProject verifies that ValidateTaskFixture handles the accepts grounded project scenario correctly.
+// TestValidateTaskFixture_AcceptsGroundedProject verifies ValidateTaskFixture accepts grounded project.
 func TestValidateTaskFixture_AcceptsGroundedProject(t *testing.T) {
 	tasks := []evalTask{{
 		ID:             "MT-001",
@@ -1569,7 +1580,7 @@ func TestValidateTaskFixture_AcceptsGroundedProject(t *testing.T) {
 	}
 }
 
-// TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch verifies that ValidateTaskFixtureAgainstRoutes handles the catches destructive mismatch scenario correctly.
+// TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch verifies ValidateTaskFixtureAgainstRoutes catches destructive mismatch.
 func TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch(t *testing.T) {
 	tasks := []evalTask{{
 		ID:             "MT-017",
@@ -1595,7 +1606,7 @@ func TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch(t *testing.
 	}
 }
 
-// TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam verifies that ValidateTaskFixtureAgainstRoutes handles the catches unknown fixture param scenario correctly.
+// TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam verifies ValidateTaskFixtureAgainstRoutes catches unknown fixture param.
 func TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam(t *testing.T) {
 	tasks := []evalTask{{
 		ID:             "MT-001",
@@ -1620,7 +1631,7 @@ func TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam(t *testing.
 	}
 }
 
-// TestValidateToolCall_RequiresNestedParams verifies that ValidateToolCall handles the requires nested params scenario correctly.
+// TestValidateToolCall_RequiresNestedParams verifies ValidateToolCall requires nested params.
 func TestValidateToolCall_RequiresNestedParams(t *testing.T) {
 	task := evalTask{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
 	result := validateToolCall(task, "gitlab_issue", map[string]any{
@@ -1635,7 +1646,7 @@ func TestValidateToolCall_RequiresNestedParams(t *testing.T) {
 	}
 }
 
-// TestValidateToolCall_AcceptsConfirmedDestructiveCall verifies that ValidateToolCall handles the accepts confirmed destructive call scenario correctly.
+// TestValidateToolCall_AcceptsConfirmedDestructiveCall verifies ValidateToolCall accepts confirmed destructive call.
 func TestValidateToolCall_AcceptsConfirmedDestructiveCall(t *testing.T) {
 	task := evalTask{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
 	result := validateToolCall(task, "gitlab_issue", map[string]any{
@@ -1654,7 +1665,7 @@ func TestValidateToolCall_AcceptsConfirmedDestructiveCall(t *testing.T) {
 	}
 }
 
-// TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt verifies that ValidateToolCall handles the does not require confirm for wrong read only attempt scenario correctly.
+// TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt verifies ValidateToolCall does not require confirm for wrong read only attempt.
 func TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt(t *testing.T) {
 	task := evalTask{ExpectedTool: "gitlab_repository", ExpectedAction: "file_delete", RequiredParams: []string{"project_id", "file_path", "branch"}, Destructive: true}
 	result := validateToolCall(task, "gitlab_repository", map[string]any{
@@ -1673,7 +1684,7 @@ func TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt(t *testin
 	}
 }
 
-// TestValidateToolCall_AcceptsAddLabelsForLabelRequirement verifies that ValidateToolCall handles the accepts add labels for label requirement scenario correctly.
+// TestValidateToolCall_AcceptsAddLabelsForLabelRequirement verifies ValidateToolCall accepts add labels for label requirement.
 func TestValidateToolCall_AcceptsAddLabelsForLabelRequirement(t *testing.T) {
 	task := evalTask{ExpectedTool: "gitlab", ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "labels"}}
 	result := validateToolCall(task, "gitlab", map[string]any{
@@ -1689,7 +1700,7 @@ func TestValidateToolCall_AcceptsAddLabelsForLabelRequirement(t *testing.T) {
 	}
 }
 
-// TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema verifies that ValidateStepCallWithRoutes handles the rejects unknown params from schema scenario correctly.
+// TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema verifies ValidateStepCallWithRoutes rejects unknown params from schema.
 func TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
 	routes := map[string]toolutil.ActionMap{
@@ -1714,7 +1725,7 @@ func TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema(t *testing.T)
 	}
 }
 
-// TestValidateStepCallWithRoutes_AcceptsActionAlias verifies that ValidateStepCallWithRoutes handles the accepts action alias scenario correctly.
+// TestValidateStepCallWithRoutes_AcceptsActionAlias verifies ValidateStepCallWithRoutes accepts action alias.
 func TestValidateStepCallWithRoutes_AcceptsActionAlias(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.milestone_create", RequiredParams: []string{"project_id", "title"}}
 	routes := map[string]toolutil.ActionMap{
@@ -1917,7 +1928,7 @@ func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *test
 	}
 }
 
-// TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies that ValidationRepairMessage handles the includes action envelope and project hint scenario correctly.
+// TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies ValidationRepairMessage includes action envelope and project hint.
 func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}
 	task := evalTask{Prompt: "Fetch project `my-org/tools/gitlab-mcp-server`."}
@@ -1933,7 +1944,7 @@ func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing
 	}
 }
 
-// TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm verifies that ValidationRepairMessage handles the destructive envelope includes confirm scenario correctly.
+// TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm verifies ValidationRepairMessage when destructive envelope includes confirm.
 func TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true}
 	task := evalTask{Prompt: "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`."}
@@ -1995,6 +2006,7 @@ func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) 
 	}
 }
 
+// TestValidationRepairMessage_ReturnsStructuredRepairPayload verifies ValidationRepairMessage returns structured repair payload.
 func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true}
 	task := evalTask{Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`."}
@@ -2015,6 +2027,7 @@ func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
 	}
 }
 
+// TestInvalidToolUseFingerprint_StableForRepeatedInvalidRetry verifies InvalidToolUseFingerprint when stable for repeated invalid retry.
 func TestInvalidToolUseFingerprint_StableForRepeatedInvalidRetry(t *testing.T) {
 	toolUse := modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "project.delete", "params": map[string]any{"project_id": "my-org/project"}}}
 	first := invalidToolUseFingerprint(toolUse)
@@ -2024,6 +2037,7 @@ func TestInvalidToolUseFingerprint_StableForRepeatedInvalidRetry(t *testing.T) {
 	}
 }
 
+// TestToolExecutionNote_ClassifiesGitLabRoleConfusion verifies ToolExecutionNote classifies GitLab role confusion.
 func TestToolExecutionNote_ClassifiesGitLabRoleConfusion(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}}
 	note := toolExecutionNote(1, step, errors.New("GitLab 400 Bad Request: target project is not in scope"))
@@ -2040,6 +2054,7 @@ func TestToolExecutionNote_ClassifiesGitLabRoleConfusion(t *testing.T) {
 	}
 }
 
+// TestValidationRepairMessage_ClassifiesWrongIntegerType verifies ValidationRepairMessage classifies wrong integer type.
 func TestValidationRepairMessage_ClassifiesWrongIntegerType(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}}
 	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "expected params.runner_id to be integer; got string", Action: "runner.remove"}, map[string]any{
@@ -2056,7 +2071,7 @@ func TestValidationRepairMessage_ClassifiesWrongIntegerType(t *testing.T) {
 	}
 }
 
-// TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam verifies that ValidateStepCallWithRoutes handles the rejects missing nested schema required param scenario correctly.
+// TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam verifies ValidateStepCallWithRoutes rejects missing nested schema required param.
 func TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "snippet.project_update", RequiredParams: []string{"project_id", "snippet_id", "files"}}
 	routes := map[string]toolutil.ActionMap{
@@ -2102,7 +2117,7 @@ func TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam(t *t
 	}
 }
 
-// TestValidateStandaloneToolCall_AcceptsTopLevelInput verifies that ValidateStandaloneToolCall handles the accepts top level input scenario correctly.
+// TestValidateStandaloneToolCall_AcceptsTopLevelInput verifies ValidateStandaloneToolCall accepts top level input.
 func TestValidateStandaloneToolCall_AcceptsTopLevelInput(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
 	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
@@ -2113,7 +2128,7 @@ func TestValidateStandaloneToolCall_AcceptsTopLevelInput(t *testing.T) {
 	}
 }
 
-// TestValidateStandaloneToolCall_RejectsMetaEnvelope verifies that ValidateStandaloneToolCall handles the rejects meta envelope scenario correctly.
+// TestValidateStandaloneToolCall_RejectsMetaEnvelope verifies ValidateStandaloneToolCall rejects meta envelope.
 func TestValidateStandaloneToolCall_RejectsMetaEnvelope(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
 	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
@@ -2128,7 +2143,7 @@ func TestValidateStandaloneToolCall_RejectsMetaEnvelope(t *testing.T) {
 	}
 }
 
-// TestRunStaticValidation_ValidatesMultiStepRoutes verifies that RunStaticValidation handles the validates multi step routes scenario correctly.
+// TestRunStaticValidation_ValidatesMultiStepRoutes verifies RunStaticValidation validates multi step routes.
 func TestRunStaticValidation_ValidatesMultiStepRoutes(t *testing.T) {
 	tasks := []evalTask{{
 		ID: "MS-001",
@@ -2149,7 +2164,7 @@ func TestRunStaticValidation_ValidatesMultiStepRoutes(t *testing.T) {
 	}
 }
 
-// TestLoadToolsSnapshot_DerivesRoutes verifies that LoadToolsSnapshot handles the derives routes scenario correctly.
+// TestLoadToolsSnapshot_DerivesRoutes verifies LoadToolsSnapshot derives routes.
 func TestLoadToolsSnapshot_DerivesRoutes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tools.json")
 	snapshot := `[
@@ -2183,7 +2198,7 @@ func TestLoadToolsSnapshot_DerivesRoutes(t *testing.T) {
 	}
 }
 
-// TestSchemaLookupResult_IndexAndActionSchema verifies that SchemaLookupResult handles the index and action schema scenario correctly.
+// TestSchemaLookupResult_IndexAndActionSchema verifies SchemaLookupResult when index and action schema.
 func TestSchemaLookupResult_IndexAndActionSchema(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -2211,7 +2226,7 @@ func TestSchemaLookupResult_IndexAndActionSchema(t *testing.T) {
 	}
 }
 
-// TestSchemaLookupResult_UnknownToolReturnsError verifies that SchemaLookupResult handles the unknown tool returns error scenario correctly.
+// TestSchemaLookupResult_UnknownToolReturnsError verifies SchemaLookupResult when unknown tool returns error.
 func TestSchemaLookupResult_UnknownToolReturnsError(t *testing.T) {
 	_, err := schemaLookupResult(map[string]toolutil.ActionMap{}, map[string]any{"action": "schema_index", "params": map[string]any{"tool": "gitlab_missing"}})
 	if err == nil || !strings.Contains(err.Error(), "unknown tool") {
@@ -2219,7 +2234,7 @@ func TestSchemaLookupResult_UnknownToolReturnsError(t *testing.T) {
 	}
 }
 
-// TestSchemaLookupResult_MissingToolReturnsUsageExamples verifies that SchemaLookupResult handles the missing tool returns usage examples scenario correctly.
+// TestSchemaLookupResult_MissingToolReturnsUsageExamples verifies SchemaLookupResult when missing tool returns usage examples.
 func TestSchemaLookupResult_MissingToolReturnsUsageExamples(t *testing.T) {
 	payload, err := schemaLookupResult(map[string]toolutil.ActionMap{}, map[string]any{"action": "schema_get", "params": map[string]any{}})
 	if err != nil {
@@ -2230,7 +2245,7 @@ func TestSchemaLookupResult_MissingToolReturnsUsageExamples(t *testing.T) {
 	}
 }
 
-// TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject verifies that SuccessfulSimulatedToolContent handles the includes discovered project scenario correctly.
+// TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject verifies SuccessfulSimulatedToolContent includes discovered project.
 func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) {
 	content := successfulSimulatedToolContent(evalStep{}, modelContentBlock{
 		Name:  "gitlab_discover_project",
@@ -2254,7 +2269,7 @@ func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) 
 	}
 }
 
-// TestTaskPrompt_ClarifiesTransientRetry verifies that TaskPrompt handles the clarifies transient retry scenario correctly.
+// TestTaskPrompt_ClarifiesTransientRetry verifies TaskPrompt when clarifies transient retry.
 func TestTaskPrompt_ClarifiesTransientRetry(t *testing.T) {
 	task := evalTask{
 		ID:             "MF-001",
@@ -2272,7 +2287,7 @@ func TestTaskPrompt_ClarifiesTransientRetry(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SingleOperationPrefersOneClearToolCall verifies that TaskPrompt handles the single operation prefers one clear tool call scenario correctly.
+// TestTaskPrompt_SingleOperationPrefersOneClearToolCall verifies TaskPrompt when single operation prefers one clear tool call.
 func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-003",
@@ -2358,7 +2373,7 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies that TaskPrompt handles the multi step avoids implicit pagination scenario correctly.
+// TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies TaskPrompt when multi step avoids implicit pagination.
 func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-037",
@@ -2382,7 +2397,7 @@ func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages verifies that TaskPrompt handles the broad inventory uses exact order and small pages scenario correctly.
+// TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages verifies TaskPrompt when broad inventory uses exact order and small pages.
 func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-037",
@@ -2414,7 +2429,7 @@ func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder verifies that TaskPrompt handles the merge request time emoji uses exact order scenario correctly.
+// TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder verifies TaskPrompt when merge request time emoji uses exact order.
 func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-033",
@@ -2443,7 +2458,7 @@ func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder verifies that TaskPrompt handles the merge request note c r u d uses exact order scenario correctly.
+// TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder verifies TaskPrompt when merge request note CRUD uses exact order.
 func TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-027",
@@ -2469,7 +2484,7 @@ func TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_MergeRequestNotePrefersNoteCreate verifies that TaskPrompt handles the merge request note prefers note create scenario correctly.
+// TestTaskPrompt_MergeRequestNotePrefersNoteCreate verifies TaskPrompt when merge request note prefers note create.
 func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-016",
@@ -2492,7 +2507,7 @@ func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters verifies that TaskPrompt handles the runner list project avoids implicit filters scenario correctly.
+// TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters verifies TaskPrompt when runner list project avoids implicit filters.
 func TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-008",
@@ -2548,7 +2563,7 @@ func TestFixtureSetupToolEnvelope_KeepsMetaDispatcher(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_PipelineTriggerCreateOmitsRef verifies that TaskPrompt handles the pipeline trigger create omits ref scenario correctly.
+// TestTaskPrompt_PipelineTriggerCreateOmitsRef verifies TaskPrompt when pipeline trigger create omits ref.
 func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-019",
@@ -2575,7 +2590,7 @@ func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate verifies that TaskPrompt handles the repository file c r u d uses ref and deletes after update scenario correctly.
+// TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate verifies TaskPrompt when repository file CRUD uses ref and deletes after update.
 func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-017",
@@ -2603,7 +2618,7 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 	}
 }
 
-// TestTaskPrompt_SingleFileCreateUsesExactToolCall verifies that TaskPrompt handles the single file create uses exact tool call scenario correctly.
+// TestTaskPrompt_SingleFileCreateUsesExactToolCall verifies TaskPrompt when single file create uses exact tool call.
 func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-030",
@@ -2628,7 +2643,7 @@ func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_InstanceVariableCreateUsesExactToolCall verifies that TaskPrompt handles the instance variable create uses exact tool call scenario correctly.
+// TestTaskPrompt_InstanceVariableCreateUsesExactToolCall verifies TaskPrompt when instance variable create uses exact tool call.
 func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-068",
@@ -2653,7 +2668,7 @@ func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes verifies that TaskPrompt handles the pipeline schedule c r u d avoids project prefetch and confirms deletes scenario correctly.
+// TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes verifies TaskPrompt when pipeline schedule CRUD avoids project prefetch and confirms deletes.
 func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-020",
@@ -2685,7 +2700,7 @@ func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(
 	}
 }
 
-// TestTaskPrompt_DiscoverProjectUsesStandaloneInput verifies that TaskPrompt handles the discover project uses standalone input scenario correctly.
+// TestTaskPrompt_DiscoverProjectUsesStandaloneInput verifies TaskPrompt when discover project uses standalone input.
 func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-001",
@@ -2709,7 +2724,7 @@ func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies verifies that TaskPrompt handles the feature flag lifecycle omits array strategies scenario correctly.
+// TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies verifies TaskPrompt when feature flag lifecycle omits array strategies.
 func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-029",
@@ -2738,7 +2753,7 @@ func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp verifies that TaskPrompt handles the deploy token lifecycle avoids invented timestamp scenario correctly.
+// TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp verifies TaskPrompt when deploy token lifecycle avoids invented timestamp.
 func TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-030",
@@ -2763,8 +2778,7 @@ func TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DestructiveScenarioWarningGuidance validates task prompt across multiple scenarios using table-driven subtests
-// for the destructive scenario warning guidance case.
+// TestTaskPrompt_DestructiveScenarioWarningGuidance covers TaskPrompt with table-driven subtests for destructive scenario warning guidance.
 func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -2857,7 +2871,7 @@ func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch verifies that TaskPrompt handles the project snippet c r u d avoids project prefetch scenario correctly.
+// TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch verifies TaskPrompt when project snippet CRUD avoids project prefetch.
 func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-024",
@@ -2885,7 +2899,7 @@ func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks verifies that TaskPrompt handles the project hook c r u d avoids group hooks scenario correctly.
+// TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks verifies TaskPrompt when project hook CRUD avoids group hooks.
 func TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-021",
@@ -2909,7 +2923,7 @@ func TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance verifies that TaskPrompt handles the discussion resolve includes quoted envelope guidance scenario correctly.
+// TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance verifies TaskPrompt when discussion resolve includes quoted envelope guidance.
 func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-061",
@@ -2927,7 +2941,7 @@ func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T
 	}
 }
 
-// TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall verifies that TaskPrompt handles the split discussion resolve uses exact tool call scenario correctly.
+// TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall verifies TaskPrompt when split discussion resolve uses exact tool call.
 func TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-061",
@@ -2954,7 +2968,7 @@ func TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SearchCodeAvoidsProjectDiscovery verifies that TaskPrompt handles the search code avoids project discovery scenario correctly.
+// TestTaskPrompt_SearchCodeAvoidsProjectDiscovery verifies TaskPrompt when search code avoids project discovery.
 func TestTaskPrompt_SearchCodeAvoidsProjectDiscovery(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-032",
@@ -2969,7 +2983,7 @@ func TestTaskPrompt_SearchCodeAvoidsProjectDiscovery(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ReleaseCreateMapsFromRef verifies that TaskPrompt handles the release create maps from ref scenario correctly.
+// TestTaskPrompt_ReleaseCreateMapsFromRef verifies TaskPrompt when release create maps from ref.
 func TestTaskPrompt_ReleaseCreateMapsFromRef(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-036",
@@ -2984,7 +2998,7 @@ func TestTaskPrompt_ReleaseCreateMapsFromRef(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_AdminSettingsUsesDispatcherDirectly verifies that TaskPrompt handles the admin settings uses dispatcher directly scenario correctly.
+// TestTaskPrompt_AdminSettingsUsesDispatcherDirectly verifies TaskPrompt when admin settings uses dispatcher directly.
 func TestTaskPrompt_AdminSettingsUsesDispatcherDirectly(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-052",
@@ -2999,7 +3013,7 @@ func TestTaskPrompt_AdminSettingsUsesDispatcherDirectly(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact verifies that TaskPrompt handles the artifact from numeric job uses single artifact scenario correctly.
+// TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact verifies TaskPrompt when artifact from numeric job uses single artifact.
 func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-065",
@@ -3017,7 +3031,7 @@ func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_FailedPipelineJobsUseJobList verifies that TaskPrompt handles the failed pipeline jobs use job list scenario correctly.
+// TestTaskPrompt_FailedPipelineJobsUseJobList verifies TaskPrompt when failed pipeline jobs use job list.
 func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-002",
@@ -3038,7 +3052,7 @@ func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall verifies that TaskPrompt handles the single failed pipeline jobs uses exact tool call scenario correctly.
+// TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall verifies TaskPrompt when single failed pipeline jobs uses exact tool call.
 func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-021",
@@ -3070,8 +3084,7 @@ func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls validates task prompt across multiple scenarios using table-driven subtests
-// for the single destructive split actions use exact tool calls case.
+// TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls covers TaskPrompt with table-driven subtests for single destructive split actions use exact tool calls.
 func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -3124,7 +3137,7 @@ func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T)
 	}
 }
 
-// TestTaskPrompt_AnalyzerTasksAvoidPrefetch verifies that TaskPrompt handles the analyzer tasks avoid prefetch scenario correctly.
+// TestTaskPrompt_AnalyzerTasksAvoidPrefetch verifies TaskPrompt when analyzer tasks avoid prefetch.
 func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-093",
@@ -3148,7 +3161,7 @@ func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample verifies that TaskPrompt handles the analyzer tasks include optional ref example scenario correctly.
+// TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample verifies TaskPrompt when analyzer tasks include optional ref example.
 func TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-097",
@@ -3173,7 +3186,7 @@ func TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance verifies that TaskPrompt handles the split analyzer tasks include exact tool guidance scenario correctly.
+// TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance verifies TaskPrompt when split analyzer tasks include exact tool guidance.
 func TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-097",
@@ -3198,7 +3211,7 @@ func TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID verifies that TaskPrompt handles the pipeline trigger delete uses trigger i d scenario correctly.
+// TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID verifies TaskPrompt when pipeline trigger delete uses trigger ID.
 func TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-102",
@@ -3234,7 +3247,7 @@ func TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID verifies that TaskPrompt handles the pipeline schedule delete uses schedule i d scenario correctly.
+// TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID verifies TaskPrompt when pipeline schedule delete uses schedule ID.
 func TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-103",
@@ -3270,7 +3283,7 @@ func TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_UserBlockUsesUserID verifies that TaskPrompt handles the user block uses user i d scenario correctly.
+// TestTaskPrompt_UserBlockUsesUserID verifies TaskPrompt when user block uses user ID.
 func TestTaskPrompt_UserBlockUsesUserID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-104",
@@ -3299,7 +3312,7 @@ func TestTaskPrompt_UserBlockUsesUserID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_FeatureFlagDeleteUsesName verifies that TaskPrompt handles the feature flag delete uses name scenario correctly.
+// TestTaskPrompt_FeatureFlagDeleteUsesName verifies TaskPrompt when feature flag delete uses name.
 func TestTaskPrompt_FeatureFlagDeleteUsesName(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-106",
@@ -3330,7 +3343,7 @@ func TestTaskPrompt_FeatureFlagDeleteUsesName(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_WikiDeleteUsesSlug verifies that TaskPrompt handles the wiki delete uses slug scenario correctly.
+// TestTaskPrompt_WikiDeleteUsesSlug verifies TaskPrompt when wiki delete uses slug.
 func TestTaskPrompt_WikiDeleteUsesSlug(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-108",
@@ -3361,7 +3374,7 @@ func TestTaskPrompt_WikiDeleteUsesSlug(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_MRAwardDeleteUsesAwardID verifies that TaskPrompt handles the m r award delete uses award i d scenario correctly.
+// TestTaskPrompt_MRAwardDeleteUsesAwardID verifies TaskPrompt when MR award delete uses award ID.
 func TestTaskPrompt_MRAwardDeleteUsesAwardID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-109",
@@ -3392,7 +3405,7 @@ func TestTaskPrompt_MRAwardDeleteUsesAwardID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_IssueAwardDeleteUsesAwardID verifies that TaskPrompt handles the issue award delete uses award i d scenario correctly.
+// TestTaskPrompt_IssueAwardDeleteUsesAwardID verifies TaskPrompt when issue award delete uses award ID.
 func TestTaskPrompt_IssueAwardDeleteUsesAwardID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-110",
@@ -3423,7 +3436,7 @@ func TestTaskPrompt_IssueAwardDeleteUsesAwardID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID verifies that TaskPrompt handles the deploy key delete uses deploy key i d scenario correctly.
+// TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID verifies TaskPrompt when deploy key delete uses deploy key ID.
 func TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-111",
@@ -3448,7 +3461,7 @@ func TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID verifies that TaskPrompt handles the deploy token delete uses deploy token i d scenario correctly.
+// TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID verifies TaskPrompt when deploy token delete uses deploy token ID.
 func TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-112",
@@ -3473,7 +3486,7 @@ func TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote verifies that TaskPrompt handles the commit discussion delete uses discussion and note scenario correctly.
+// TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote verifies TaskPrompt when commit discussion delete uses discussion and note.
 func TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-113",
@@ -3505,7 +3518,7 @@ func TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_AttestationDownloadUsesAttestationIID verifies that TaskPrompt handles the attestation download uses attestation i i d scenario correctly.
+// TestTaskPrompt_AttestationDownloadUsesAttestationIID verifies TaskPrompt when attestation download uses attestation IID.
 func TestTaskPrompt_AttestationDownloadUsesAttestationIID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-117",
@@ -3528,7 +3541,7 @@ func TestTaskPrompt_AttestationDownloadUsesAttestationIID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_AuditEventGetUsesEventID verifies that TaskPrompt handles the audit event get uses event i d scenario correctly.
+// TestTaskPrompt_AuditEventGetUsesEventID verifies TaskPrompt when audit event get uses event ID.
 func TestTaskPrompt_AuditEventGetUsesEventID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-118",
@@ -3553,7 +3566,7 @@ func TestTaskPrompt_AuditEventGetUsesEventID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_AuditEventListUsesCreatedRange verifies that TaskPrompt handles the audit event list uses created range scenario correctly.
+// TestTaskPrompt_AuditEventListUsesCreatedRange verifies TaskPrompt when audit event list uses created range.
 func TestTaskPrompt_AuditEventListUsesCreatedRange(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-119",
@@ -3578,7 +3591,7 @@ func TestTaskPrompt_AuditEventListUsesCreatedRange(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID verifies that TaskPrompt handles the compliance policy update uses namespace i d scenario correctly.
+// TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID verifies TaskPrompt when compliance policy update uses namespace ID.
 func TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-120",
@@ -3603,7 +3616,7 @@ func TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DependencyExportCreateUsesPipelineID verifies that TaskPrompt handles the dependency export create uses pipeline i d scenario correctly.
+// TestTaskPrompt_DependencyExportCreateUsesPipelineID verifies TaskPrompt when dependency export create uses pipeline ID.
 func TestTaskPrompt_DependencyExportCreateUsesPipelineID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-121",
@@ -3626,7 +3639,7 @@ func TestTaskPrompt_DependencyExportCreateUsesPipelineID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DependencyExportDownloadUsesExportID verifies that TaskPrompt handles the dependency export download uses export i d scenario correctly.
+// TestTaskPrompt_DependencyExportDownloadUsesExportID verifies TaskPrompt when dependency export download uses export ID.
 func TestTaskPrompt_DependencyExportDownloadUsesExportID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-122",
@@ -3653,7 +3666,7 @@ func TestTaskPrompt_DependencyExportDownloadUsesExportID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_DORAMetricsGroupUsesMetric verifies that TaskPrompt handles the d o r a metrics group uses metric scenario correctly.
+// TestTaskPrompt_DORAMetricsGroupUsesMetric verifies TaskPrompt when dora metrics group uses metric.
 func TestTaskPrompt_DORAMetricsGroupUsesMetric(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-123",
@@ -3679,7 +3692,7 @@ func TestTaskPrompt_DORAMetricsGroupUsesMetric(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID verifies that TaskPrompt handles the enterprise user get uses group and user i d scenario correctly.
+// TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID verifies TaskPrompt when enterprise user get uses group and user ID.
 func TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-124",
@@ -3702,7 +3715,7 @@ func TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction verifies that TaskPrompt handles the enterprise user disable2 f a uses enterprise action scenario correctly.
+// TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction verifies TaskPrompt uses enterprise action for enterprise user disable 2FA.
 func TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-125",
@@ -3731,7 +3744,7 @@ func TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL verifies that TaskPrompt handles the external status check create uses external u r l scenario correctly.
+// TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL verifies TaskPrompt when external status check create uses external URL.
 func TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-126",
@@ -3756,7 +3769,7 @@ func TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID verifies that TaskPrompt handles the external status check status uses check i d scenario correctly.
+// TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID verifies TaskPrompt when external status check status uses check ID.
 func TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-127",
@@ -3782,7 +3795,7 @@ func TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID verifies that TaskPrompt handles the external status check delete uses check i d scenario correctly.
+// TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID verifies TaskPrompt when external status check delete uses check ID.
 func TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-128",
@@ -3813,7 +3826,7 @@ func TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GeoGetUsesID verifies that TaskPrompt handles the geo get uses i d scenario correctly.
+// TestTaskPrompt_GeoGetUsesID verifies TaskPrompt when geo get uses ID.
 func TestTaskPrompt_GeoGetUsesID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-129",
@@ -3835,7 +3848,7 @@ func TestTaskPrompt_GeoGetUsesID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GeoCreateUsesEnabledAndPrimary verifies that TaskPrompt handles the geo create uses enabled and primary scenario correctly.
+// TestTaskPrompt_GeoCreateUsesEnabledAndPrimary verifies TaskPrompt when geo create uses enabled and primary.
 func TestTaskPrompt_GeoCreateUsesEnabledAndPrimary(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-130",
@@ -3864,7 +3877,7 @@ func TestTaskPrompt_GeoCreateUsesEnabledAndPrimary(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GeoDeleteUsesID verifies that TaskPrompt handles the geo delete uses i d scenario correctly.
+// TestTaskPrompt_GeoDeleteUsesID verifies TaskPrompt when geo delete uses ID.
 func TestTaskPrompt_GeoDeleteUsesID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-131",
@@ -3894,7 +3907,7 @@ func TestTaskPrompt_GeoDeleteUsesID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupCredentialListUsesCredentialAction verifies that TaskPrompt handles the group credential list uses credential action scenario correctly.
+// TestTaskPrompt_GroupCredentialListUsesCredentialAction verifies TaskPrompt when group credential list uses credential action.
 func TestTaskPrompt_GroupCredentialListUsesCredentialAction(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-133",
@@ -3918,7 +3931,7 @@ func TestTaskPrompt_GroupCredentialListUsesCredentialAction(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupCredentialRevokeUsesTokenID verifies that TaskPrompt handles the group credential revoke uses token i d scenario correctly.
+// TestTaskPrompt_GroupCredentialRevokeUsesTokenID verifies TaskPrompt when group credential revoke uses token ID.
 func TestTaskPrompt_GroupCredentialRevokeUsesTokenID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-134",
@@ -3944,7 +3957,7 @@ func TestTaskPrompt_GroupCredentialRevokeUsesTokenID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction verifies that TaskPrompt handles the group epic board list uses epic board action scenario correctly.
+// TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction verifies TaskPrompt when group epic board list uses epic board action.
 func TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-135",
@@ -3967,7 +3980,7 @@ func TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicListUsesFullPath verifies that TaskPrompt handles the group epic list uses full path scenario correctly.
+// TestTaskPrompt_GroupEpicListUsesFullPath verifies TaskPrompt when group epic list uses full path.
 func TestTaskPrompt_GroupEpicListUsesFullPath(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-136",
@@ -3996,7 +4009,7 @@ func TestTaskPrompt_GroupEpicListUsesFullPath(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle verifies that TaskPrompt handles the group epic create uses full path and title scenario correctly.
+// TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle verifies TaskPrompt when group epic create uses full path and title.
 func TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-137",
@@ -4020,7 +4033,7 @@ func TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicUpdateUsesEpicIID verifies that TaskPrompt handles the group epic update uses epic i i d scenario correctly.
+// TestTaskPrompt_GroupEpicUpdateUsesEpicIID verifies TaskPrompt when group epic update uses epic IID.
 func TestTaskPrompt_GroupEpicUpdateUsesEpicIID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-138",
@@ -4045,7 +4058,7 @@ func TestTaskPrompt_GroupEpicUpdateUsesEpicIID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicDeleteUsesEpicIID verifies that TaskPrompt handles the group epic delete uses epic i i d scenario correctly.
+// TestTaskPrompt_GroupEpicDeleteUsesEpicIID verifies TaskPrompt when group epic delete uses epic IID.
 func TestTaskPrompt_GroupEpicDeleteUsesEpicIID(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-139",
@@ -4071,7 +4084,7 @@ func TestTaskPrompt_GroupEpicDeleteUsesEpicIID(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_GroupEpicIssueAssignUsesChildParams verifies that TaskPrompt handles the group epic issue assign uses child params scenario correctly.
+// TestTaskPrompt_GroupEpicIssueAssignUsesChildParams verifies TaskPrompt when group epic issue assign uses child params.
 func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-140",
@@ -4101,7 +4114,7 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 	}
 }
 
-// TestDefaultFixture_ValidatesAgainstLiveCatalog verifies that DefaultFixture handles the validates against live catalog scenario correctly.
+// TestDefaultFixture_ValidatesAgainstLiveCatalog verifies DefaultFixture validates against live catalog.
 func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 	tasks, err := parseTasksFile(filepath.Join("..", "..", defaultTasksPath))
 	if err != nil {
@@ -4121,7 +4134,7 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 	}
 }
 
-// TestLoadCatalog_RejectsUnknownBackend verifies that LoadCatalog handles the rejects unknown backend scenario correctly.
+// TestLoadCatalog_RejectsUnknownBackend verifies LoadCatalog rejects unknown backend.
 func TestLoadCatalog_RejectsUnknownBackend(t *testing.T) {
 	_, _, err := loadCatalog(options{Backend: "missing"})
 	if err == nil || !strings.Contains(err.Error(), "unknown backend") {
@@ -4129,7 +4142,7 @@ func TestLoadCatalog_RejectsUnknownBackend(t *testing.T) {
 	}
 }
 
-// TestRunMCPSmokeRequiresGitLabBackend verifies the behavior of run m c p smoke requires git lab backend.
+// TestRunMCPSmokeRequiresGitLabBackend verifies RunMCPSmokeRequiresGitLabBackend.
 func TestRunMCPSmokeRequiresGitLabBackend(t *testing.T) {
 	err := runMCPSmoke(options{Backend: backendMock})
 	if err == nil || !strings.Contains(err.Error(), "--backend=gitlab") {
@@ -4137,7 +4150,7 @@ func TestRunMCPSmokeRequiresGitLabBackend(t *testing.T) {
 	}
 }
 
-// TestValidateExecutionOptionsRequiresDockerGuard verifies the behavior of validate execution options requires docker guard.
+// TestValidateExecutionOptionsRequiresDockerGuard verifies ValidateExecutionOptionsRequiresDockerGuard.
 func TestValidateExecutionOptionsRequiresDockerGuard(t *testing.T) {
 	t.Setenv("E2E_MODE", "")
 	err := validateExecutionOptions(options{Backend: backendGitLab})
@@ -4149,7 +4162,7 @@ func TestValidateExecutionOptionsRequiresDockerGuard(t *testing.T) {
 	}
 }
 
-// TestValidateExecutionOptions_AllowsExternalCommandWithDockerEnvFile verifies that ValidateExecutionOptions handles the allows external command with docker env file scenario correctly.
+// TestValidateExecutionOptions_AllowsExternalCommandWithDockerEnvFile verifies ValidateExecutionOptions allows external command with docker env file.
 func TestValidateExecutionOptions_AllowsExternalCommandWithDockerEnvFile(t *testing.T) {
 	t.Setenv("E2E_MODE", "")
 	envFile := filepath.Join(t.TempDir(), "docker.env")
@@ -4163,7 +4176,7 @@ func TestValidateExecutionOptions_AllowsExternalCommandWithDockerEnvFile(t *test
 	}
 }
 
-// TestValidateExecutionOptions_ExternalCommandRequiresDockerGuard verifies that ValidateExecutionOptions handles the external command requires docker guard scenario correctly.
+// TestValidateExecutionOptions_ExternalCommandRequiresDockerGuard verifies ValidateExecutionOptions when external command requires docker guard.
 func TestValidateExecutionOptions_ExternalCommandRequiresDockerGuard(t *testing.T) {
 	t.Setenv("E2E_MODE", "")
 	err := validateExecutionOptions(options{ToolsFile: "snapshot.json", MCPCommand: "gitlab-mcp-server"})
@@ -4172,7 +4185,7 @@ func TestValidateExecutionOptions_ExternalCommandRequiresDockerGuard(t *testing.
 	}
 }
 
-// TestValidateExecutionOptions_ExternalCommandRequiresToolsFile verifies that ValidateExecutionOptions handles the external command requires tools file scenario correctly.
+// TestValidateExecutionOptions_ExternalCommandRequiresToolsFile verifies ValidateExecutionOptions when external command requires tools file.
 func TestValidateExecutionOptions_ExternalCommandRequiresToolsFile(t *testing.T) {
 	t.Setenv("E2E_MODE", "docker")
 	err := validateExecutionOptions(options{MCPCommand: "gitlab-mcp-server"})
@@ -4181,7 +4194,7 @@ func TestValidateExecutionOptions_ExternalCommandRequiresToolsFile(t *testing.T)
 	}
 }
 
-// TestCallFixtureSetupTool_FallsBackToSplitMetaTool verifies that CallFixtureSetupTool handles the falls back to split meta tool scenario correctly.
+// TestCallFixtureSetupTool_FallsBackToSplitMetaTool verifies CallFixtureSetupTool falls back to split meta tool.
 func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "fixture-test", Version: "0"}, nil)
 	called := false
@@ -4217,7 +4230,7 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	}
 }
 
-// TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer verifies that EvalCreateMessageHandler handles the advertises sampling to m c p server scenario correctly.
+// TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer verifies EvalCreateMessageHandler when advertises sampling to MCP server.
 func TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "sampling-probe", Version: "0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "sampling_probe", Description: "sampling probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
@@ -4354,7 +4367,7 @@ func TestEvalElicitationSchemaValue_TypeAwareDefaults(t *testing.T) {
 	}
 }
 
-// TestParseComparisonInput_EvaluationAndTokenReports verifies that ParseComparisonInput handles the evaluation and token reports scenario correctly.
+// TestParseComparisonInput_EvaluationAndTokenReports verifies ParseComparisonInput when evaluation and token reports.
 func TestParseComparisonInput_EvaluationAndTokenReports(t *testing.T) {
 	tmp := t.TempDir()
 	evalPath := filepath.Join(tmp, "current-abc123", "schema-base-read.md")
@@ -4447,7 +4460,7 @@ Tools file: ` + "`dist/evaluation/meta-tools/snapshots/current-abc123/tools.json
 	}
 }
 
-// TestToolResultContentPrefersStructuredContent verifies the behavior of tool result content prefers structured content.
+// TestToolResultContentPrefersStructuredContent verifies ToolResultContentPrefersStructuredContent.
 func TestToolResultContentPrefersStructuredContent(t *testing.T) {
 	result := &mcp.CallToolResult{
 		StructuredContent: map[string]any{"username": "e2e-tester"},
@@ -4459,8 +4472,7 @@ func TestToolResultContentPrefersStructuredContent(t *testing.T) {
 	}
 }
 
-// TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors validates failure diagnostic category across multiple scenarios using table-driven subtests
-// for the classifies common live errors case.
+// TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors covers FailureDiagnosticCategory with table-driven subtests for classifies common live errors.
 func TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -4483,7 +4495,7 @@ func TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors(t *testing.T) {
 	}
 }
 
-// TestEvaluateTask_UsesSchemaLookupThenFinalCall verifies that EvaluateTask handles the uses schema lookup then final call scenario correctly.
+// TestEvaluateTask_UsesSchemaLookupThenFinalCall verifies EvaluateTask uses schema lookup then final call.
 func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("schema", "gitlab_server", map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab_project", "action": "get"}}),
@@ -4561,7 +4573,7 @@ func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing
 	})
 }
 
-// TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies that EvaluateTask handles the records trace for prompt tool use and validation scenario correctly.
+// TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies EvaluateTask when records trace for prompt tool use and validation.
 func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
@@ -4591,7 +4603,7 @@ func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 	}
 }
 
-// TestEvaluateTask_RepairsUnknownSchemaParam verifies that EvaluateTask handles the repairs unknown schema param scenario correctly.
+// TestEvaluateTask_RepairsUnknownSchemaParam verifies EvaluateTask when repairs unknown schema param.
 func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "iid": 7}}),
@@ -4628,7 +4640,7 @@ func TestEvaluateTask_RepairsNoToolUseResponse(t *testing.T) {
 	}
 }
 
-// TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting verifies that EvaluateTask handles the invalid matching call uses m c p error when executing scenario correctly.
+// TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting verifies EvaluateTask when invalid matching call uses MCP error when executing.
 func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{}}),
@@ -4658,7 +4670,7 @@ func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T)
 	}
 }
 
-// TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting verifies that EvaluateTask handles the wrong read only call uses m c p when executing scenario correctly.
+// TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting verifies EvaluateTask when wrong read only call uses MCP when executing.
 func TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("search", "gitlab_search", map[string]any{"action": "projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
@@ -4681,7 +4693,7 @@ func TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting(t *testing.T) {
 	}
 }
 
-// TestCanExecuteInvalidToolCallSkipsUnexpectedMutations verifies the behavior of can execute invalid tool call skips unexpected mutations.
+// TestCanExecuteInvalidToolCallSkipsUnexpectedMutations verifies CanExecuteInvalidToolCallSkipsUnexpectedMutations.
 func TestCanExecuteInvalidToolCallSkipsUnexpectedMutations(t *testing.T) {
 	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
 	step := evalStep{ExpectedTool: "gitlab_mr_review", ExpectedAction: "note_create", RequiredParams: []string{"project_id", "merge_request_iid", "body"}}
@@ -4694,7 +4706,7 @@ func TestCanExecuteInvalidToolCallSkipsUnexpectedMutations(t *testing.T) {
 	}
 }
 
-// TestCanExecuteInvalidToolCallSkipsUnknownParams verifies the behavior of can execute invalid tool call skips unknown params.
+// TestCanExecuteInvalidToolCallSkipsUnknownParams verifies CanExecuteInvalidToolCallSkipsUnknownParams.
 func TestCanExecuteInvalidToolCallSkipsUnknownParams(t *testing.T) {
 	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
 	step := evalStep{ExpectedTool: "gitlab_pipeline", ExpectedAction: "trigger_create", RequiredParams: []string{"project_id", "description"}}
@@ -4741,7 +4753,7 @@ func TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls(t *testing.T) {
 	}
 }
 
-// TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn verifies that EvaluateTask handles the repairs multiple invalid tool calls from same turn scenario correctly.
+// TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn verifies EvaluateTask when repairs multiple invalid tool calls from same turn.
 func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) {
 	runner := newScriptedRunner(t,
 		multiToolUseResponse(
@@ -4762,7 +4774,7 @@ func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) 
 	}
 }
 
-// TestEvaluateTask_RetriesTransientSimulation verifies that EvaluateTask handles the retries transient simulation scenario correctly.
+// TestEvaluateTask_RetriesTransientSimulation verifies EvaluateTask when retries transient simulation.
 func TestEvaluateTask_RetriesTransientSimulation(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("first", "gitlab_pipeline", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "pipeline_id": 12345}}),
@@ -4776,7 +4788,7 @@ func TestEvaluateTask_RetriesTransientSimulation(t *testing.T) {
 	}
 }
 
-// TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool verifies that EvaluateTask handles the poisoned output does not change next expected tool scenario correctly.
+// TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool verifies EvaluateTask when poisoned output does not change next expected tool.
 func TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("file", "gitlab_repository", map[string]any{"action": "file_get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "file_path": "README.md", "ref": "main"}}),
@@ -4796,7 +4808,7 @@ func TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool(t *testing.T) 
 	}
 }
 
-// TestCalculateMetrics_HandlesNoRepairs verifies that CalculateMetrics handles the handles no repairs scenario correctly.
+// TestCalculateMetrics_HandlesNoRepairs verifies CalculateMetrics handles no repairs.
 func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
 	results := []taskResult{{
 		Task:            evalTask{ExpectedTool: "gitlab_user", ExpectedAction: "current"},
@@ -4812,7 +4824,7 @@ func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
 	}
 }
 
-// TestCalculateMetrics_AggregatesRepeatedAttempts verifies that CalculateMetrics handles the aggregates repeated attempts scenario correctly.
+// TestCalculateMetrics_AggregatesRepeatedAttempts verifies CalculateMetrics when aggregates repeated attempts.
 func TestCalculateMetrics_AggregatesRepeatedAttempts(t *testing.T) {
 	results := []taskResult{
 		{
@@ -4839,7 +4851,7 @@ func TestCalculateMetrics_AggregatesRepeatedAttempts(t *testing.T) {
 	}
 }
 
-// TestAggregateUsage_SumsRequestsToolCallsAndTokens verifies that AggregateUsage handles the sums requests tool calls and tokens scenario correctly.
+// TestAggregateUsage_SumsRequestsToolCallsAndTokens verifies AggregateUsage when sums requests tool calls and tokens.
 func TestAggregateUsage_SumsRequestsToolCallsAndTokens(t *testing.T) {
 	results := []taskResult{
 		{ModelCalls: 2, ToolCalls: 3, Usage: modelUsage{InputTokens: 100, OutputTokens: 20, CacheCreationInputTokens: 50}},
@@ -4854,7 +4866,7 @@ func TestAggregateUsage_SumsRequestsToolCallsAndTokens(t *testing.T) {
 	}
 }
 
-// TestEstimateCostUSD_UsesPerMillionPricing verifies that EstimateCostUSD handles the uses per million pricing scenario correctly.
+// TestEstimateCostUSD_UsesPerMillionPricing verifies EstimateCostUSD uses per million pricing.
 func TestEstimateCostUSD_UsesPerMillionPricing(t *testing.T) {
 	cost := estimateCostUSD(modelUsage{InputTokens: 1_000_000, OutputTokens: 100_000}, pricingOptions{InputPerMTok: 3, OutputPerMTok: 15})
 	if cost != 4.5 {
@@ -4862,7 +4874,7 @@ func TestEstimateCostUSD_UsesPerMillionPricing(t *testing.T) {
 	}
 }
 
-// TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles verifies that WriteTraceArtifacts handles the writes j s o n l index and per task files scenario correctly.
+// TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles verifies WriteTraceArtifacts writes jsonl index and per task files.
 func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 	trace := taskTrace{
 		Run:          2,
@@ -4898,7 +4910,7 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 	}
 }
 
-// TestDefaultTraceDir_ReplacesReportExtension verifies that DefaultTraceDir handles the replaces report extension scenario correctly.
+// TestDefaultTraceDir_ReplacesReportExtension verifies DefaultTraceDir when replaces report extension.
 func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
 	got := defaultTraceDir("dist/evaluation/meta-tools/report.md")
 	if got != "dist/evaluation/meta-tools/report.traces" {
@@ -4906,7 +4918,7 @@ func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
 	}
 }
 
-// TestDefaultOutputPath_UsesIgnoredDistDirectory verifies that DefaultOutputPath handles the uses ignored dist directory scenario correctly.
+// TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
 func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
 	got := defaultOutputPath("claude/sonnet:4 6")
 	if !strings.HasPrefix(got, "dist/evaluation/meta-tools/model-") {
@@ -4917,7 +4929,7 @@ func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
 	}
 }
 
-// TestDefaultOutputPath_UsesShortNameForMultiModel verifies that DefaultOutputPath handles the uses short name for multi model scenario correctly.
+// TestDefaultOutputPath_UsesShortNameForMultiModel verifies DefaultOutputPath uses short name for multi model.
 func TestDefaultOutputPath_UsesShortNameForMultiModel(t *testing.T) {
 	got := defaultOutputPath("anthropic:claude-sonnet-4-6,openai:gpt-5.4-mini")
 	if !strings.HasSuffix(got, "-multi-model.md") {
@@ -4982,7 +4994,7 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 	}
 }
 
-// TestResolveModelSpecs_UsesEvalModels verifies that ResolveModelSpecs handles the uses eval models scenario correctly.
+// TestResolveModelSpecs_UsesEvalModels verifies ResolveModelSpecs uses eval models.
 func TestResolveModelSpecs_UsesEvalModels(t *testing.T) {
 	t.Setenv("EVAL_MODELS", "anthropic:claude-sonnet-4-6, google:gemini-3.0-flash, openai:gpt-5.4-mini, qwen:qwen3.6-flash")
 	specs, err := resolveModelSpecs(options{})
@@ -4996,7 +5008,7 @@ func TestResolveModelSpecs_UsesEvalModels(t *testing.T) {
 	}
 }
 
-// TestResolveModelSpecs_IgnoresEmptyEntries verifies that ResolveModelSpecs handles the ignores empty entries scenario correctly.
+// TestResolveModelSpecs_IgnoresEmptyEntries verifies ResolveModelSpecs ignores empty entries.
 func TestResolveModelSpecs_IgnoresEmptyEntries(t *testing.T) {
 	t.Setenv("EVAL_MODELS", "anthropic:claude-sonnet-4-6,")
 	specs, err := resolveModelSpecs(options{})
@@ -5008,7 +5020,7 @@ func TestResolveModelSpecs_IgnoresEmptyEntries(t *testing.T) {
 	}
 }
 
-// TestResolveModelSpecs_ModelFlagOverridesEvalModels verifies that ResolveModelSpecs handles the model flag overrides eval models scenario correctly.
+// TestResolveModelSpecs_ModelFlagOverridesEvalModels verifies ResolveModelSpecs when model flag overrides eval models.
 func TestResolveModelSpecs_ModelFlagOverridesEvalModels(t *testing.T) {
 	t.Setenv("EVAL_MODELS", "google:gemini-3.0-flash")
 	specs, err := resolveModelSpecs(options{Model: "claude-haiku-4-6"})
@@ -5020,7 +5032,7 @@ func TestResolveModelSpecs_ModelFlagOverridesEvalModels(t *testing.T) {
 	}
 }
 
-// TestParseModelSpec_RejectsUnsupportedProvider verifies that ParseModelSpec handles the rejects unsupported provider scenario correctly.
+// TestParseModelSpec_RejectsUnsupportedProvider verifies ParseModelSpec rejects unsupported provider.
 func TestParseModelSpec_RejectsUnsupportedProvider(t *testing.T) {
 	_, err := parseModelSpec("local:llama")
 	if err == nil || !strings.Contains(err.Error(), "unsupported model provider") {
@@ -5028,7 +5040,7 @@ func TestParseModelSpec_RejectsUnsupportedProvider(t *testing.T) {
 	}
 }
 
-// TestParseModelSpec_StripsGoogleModelsPrefix verifies that ParseModelSpec handles the strips google models prefix scenario correctly.
+// TestParseModelSpec_StripsGoogleModelsPrefix verifies ParseModelSpec when strips google models prefix.
 func TestParseModelSpec_StripsGoogleModelsPrefix(t *testing.T) {
 	spec, err := parseModelSpec("google:models/gemini-3-flash-preview")
 	if err != nil {
@@ -5039,7 +5051,7 @@ func TestParseModelSpec_StripsGoogleModelsPrefix(t *testing.T) {
 	}
 }
 
-// TestAPIKeyForModelProvider_RequiresQwenAPIKey verifies that APIKeyForModelProvider handles the requires qwen a p i key scenario correctly.
+// TestAPIKeyForModelProvider_RequiresQwenAPIKey verifies APIKeyForModelProvider requires qwen API key.
 func TestAPIKeyForModelProvider_RequiresQwenAPIKey(t *testing.T) {
 	t.Setenv("QWEN_API_KEY", "")
 	_, err := apiKeyForModelProvider(providerQwen)
@@ -5051,7 +5063,7 @@ func TestAPIKeyForModelProvider_RequiresQwenAPIKey(t *testing.T) {
 	}
 }
 
-// TestQwenEndpoint_UsesConfiguredBaseURL verifies that QwenEndpoint handles the uses configured base u r l scenario correctly.
+// TestQwenEndpoint_UsesConfiguredBaseURL verifies QwenEndpoint uses configured base URL.
 func TestQwenEndpoint_UsesConfiguredBaseURL(t *testing.T) {
 	t.Setenv("QWEN_CHAT_COMPLETIONS_URL", "")
 	t.Setenv("QWEN_BASE_URL", "https://example.test/v1/")
@@ -5060,7 +5072,7 @@ func TestQwenEndpoint_UsesConfiguredBaseURL(t *testing.T) {
 	}
 }
 
-// TestOpenAIProvider_CallOnceConvertsToolCall verifies that OpenAIProvider handles the call once converts tool call scenario correctly.
+// TestOpenAIProvider_CallOnceConvertsToolCall verifies OpenAIProvider when call once converts tool call.
 func TestOpenAIProvider_CallOnceConvertsToolCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
@@ -5109,7 +5121,7 @@ func TestOpenAIProvider_CallOnceConvertsToolCall(t *testing.T) {
 	}
 }
 
-// TestOpenAIProvider_QwenDisablesThinking verifies that OpenAIProvider handles the qwen disables thinking scenario correctly.
+// TestOpenAIProvider_QwenDisablesThinking verifies OpenAIProvider when qwen disables thinking.
 func TestOpenAIProvider_QwenDisablesThinking(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request openAIRequest
@@ -5151,7 +5163,7 @@ func TestOpenAIProvider_QwenDisablesThinking(t *testing.T) {
 	}
 }
 
-// TestOpenAIProvider_EmptyToolArgumentsAreRetryable verifies that OpenAIProvider handles the empty tool arguments are retryable scenario correctly.
+// TestOpenAIProvider_EmptyToolArgumentsAreRetryable verifies OpenAIProvider when empty tool arguments are retryable.
 func TestOpenAIProvider_EmptyToolArgumentsAreRetryable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -5184,7 +5196,7 @@ func TestOpenAIProvider_EmptyToolArgumentsAreRetryable(t *testing.T) {
 	}
 }
 
-// TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments verifies that OpenAIToolUseBlocks handles the repairs leading comma arguments scenario correctly.
+// TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments verifies OpenAIToolUseBlocks when repairs leading comma arguments.
 func TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments(t *testing.T) {
 	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
 		ID:   "call-1",
@@ -5205,7 +5217,7 @@ func TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments(t *testing.T) {
 	}
 }
 
-// TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments verifies that OpenAIToolUseBlocks handles the repairs interleaved leading comma arguments scenario correctly.
+// TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments verifies OpenAIToolUseBlocks when repairs interleaved leading comma arguments.
 func TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments(t *testing.T) {
 	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
 		ID:   "call-1",
@@ -5226,7 +5238,7 @@ func TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments(t *testing.
 	}
 }
 
-// TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments verifies that OpenAIToolUseBlocks handles the extracts wrapped j s o n arguments scenario correctly.
+// TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments verifies OpenAIToolUseBlocks when extracts wrapped JSON arguments.
 func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
 	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
 		ID:   "call-1",
@@ -5247,7 +5259,7 @@ func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
 	}
 }
 
-// TestGoogleContentConversion_RoundTripsFunctionResponseNames verifies that GoogleContentConversion handles the round trips function response names scenario correctly.
+// TestGoogleContentConversion_RoundTripsFunctionResponseNames verifies GoogleContentConversion when round trips function response names.
 func TestGoogleContentConversion_RoundTripsFunctionResponseNames(t *testing.T) {
 	messages := []modelMessage{
 		{Role: "assistant", Content: []modelContentBlock{{Type: "tool_use", ID: "call-1", Name: "gitlab", Input: map[string]any{"action": "user.current"}, ThoughtSignature: "thought-token"}}},
@@ -5284,7 +5296,7 @@ func TestGoogleContentConversion_RoundTripsFunctionResponseNames(t *testing.T) {
 	}
 }
 
-// TestGoogleFunctionCallingMode_DefaultsToValidated verifies that GoogleFunctionCallingMode handles the defaults to validated scenario correctly.
+// TestGoogleFunctionCallingMode_DefaultsToValidated verifies GoogleFunctionCallingMode when defaults to validated.
 func TestGoogleFunctionCallingMode_DefaultsToValidated(t *testing.T) {
 	t.Setenv("EVAL_GOOGLE_FUNCTION_MODE", "")
 	if got := googleFunctionCallingMode(); got != "VALIDATED" {
@@ -5297,7 +5309,7 @@ func TestGoogleFunctionCallingMode_DefaultsToValidated(t *testing.T) {
 	}
 }
 
-// TestSanitizeGoogleSchema_FlattensTypeUnion verifies that SanitizeGoogleSchema handles the flattens type union scenario correctly.
+// TestSanitizeGoogleSchema_FlattensTypeUnion verifies SanitizeGoogleSchema when flattens type union.
 func TestSanitizeGoogleSchema_FlattensTypeUnion(t *testing.T) {
 	schema := map[string]any{
 		"type": []any{"string", "integer"},
@@ -5317,7 +5329,7 @@ func TestSanitizeGoogleSchema_FlattensTypeUnion(t *testing.T) {
 	}
 }
 
-// TestSanitizeGoogleSchema_PreservesTitleProperty verifies that SanitizeGoogleSchema handles the preserves title property scenario correctly.
+// TestSanitizeGoogleSchema_PreservesTitleProperty verifies SanitizeGoogleSchema preserves title property.
 func TestSanitizeGoogleSchema_PreservesTitleProperty(t *testing.T) {
 	schema := map[string]any{
 		"title": "Root schema title",
@@ -5348,7 +5360,7 @@ func TestSanitizeGoogleSchema_PreservesTitleProperty(t *testing.T) {
 	}
 }
 
-// TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons verifies that GoogleEmptyResponseError handles the includes finish and block reasons scenario correctly.
+// TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons verifies GoogleEmptyResponseError includes finish and block reasons.
 func TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons(t *testing.T) {
 	decoded := googleResponse{}
 	decoded.Candidates = append(decoded.Candidates, struct {
@@ -5370,7 +5382,7 @@ func TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons(t *testing.T) {
 	}
 }
 
-// TestGoogleResponseDecode_PreservesNestedParams verifies that GoogleResponseDecode handles the preserves nested params scenario correctly.
+// TestGoogleResponseDecode_PreservesNestedParams verifies GoogleResponseDecode preserves nested params.
 func TestGoogleResponseDecode_PreservesNestedParams(t *testing.T) {
 	raw := []byte(`{"candidates":[{"content":{"parts":[{"functionCall":{"name":"gitlab_project","args":{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server"}},"id":"call-1"}}]}}]}`)
 	var decoded googleResponse
@@ -5394,15 +5406,15 @@ func TestGoogleResponseDecode_PreservesNestedParams(t *testing.T) {
 	}
 }
 
-// roundTripFunc holds data for main operations.
+// roundTripFunc holds round trip func data for the main package.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
-// RoundTrip performs the round trip operation on roundTripFunc.
+// RoundTrip executes an HTTP request through roundTripFunc.
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-// newScriptedRunner is an internal helper for the main package.
+// newScriptedRunner constructs scripted runner test fixtures.
 func newScriptedRunner(t *testing.T, responses ...modelResponse) *modelRunner {
 	t.Helper()
 	index := 0
@@ -5429,7 +5441,7 @@ func newScriptedRunner(t *testing.T, responses ...modelResponse) *modelRunner {
 	return &modelRunner{apiKey: "test-key", model: "test-model", maxTokens: 256, client: client, traceBodies: true}
 }
 
-// newProjectGetSession is an internal helper for the main package.
+// newProjectGetSession constructs project get session test fixtures.
 func newProjectGetSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-test", Version: "0"}, nil)
@@ -5462,12 +5474,12 @@ func toolUseResponse(id, name string, input map[string]any) modelResponse {
 	return modelResponse{Content: []modelContentBlock{{Type: "tool_use", ID: id, Name: name, Input: input}}}
 }
 
-// multiToolUseResponse is an internal helper for the main package.
+// multiToolUseResponse supports multi tool use response assertions in main tests.
 func multiToolUseResponse(blocks ...modelContentBlock) modelResponse {
 	return modelResponse{Content: blocks}
 }
 
-// traceHasKind is an internal helper for the main package.
+// traceHasKind supports trace has kind assertions in main tests.
 func traceHasKind(trace taskTrace, kind string) bool {
 	for _, event := range trace.Events {
 		if event.Kind == kind {
@@ -5487,7 +5499,7 @@ func traceEventByKind(trace taskTrace, kind string) (traceEvent, bool) {
 	return traceEvent{}, false
 }
 
-// traceContainsToolResult is an internal helper for the main package.
+// traceContainsToolResult supports trace contains tool result assertions in main tests.
 func traceContainsToolResult(trace taskTrace, text string) bool {
 	for _, event := range trace.Events {
 		if event.Kind == "tool_result" && strings.Contains(event.Content, text) {
@@ -5497,7 +5509,7 @@ func traceContainsToolResult(trace taskTrace, text string) bool {
 	return false
 }
 
-// projectGetRoute is an internal helper for the main package.
+// projectGetRoute supports project get route assertions in main tests.
 func projectGetRoute() toolutil.ActionRoute {
 	return toolutil.ActionRoute{InputSchema: map[string]any{
 		"type": "object",
@@ -5507,7 +5519,7 @@ func projectGetRoute() toolutil.ActionRoute {
 	}}
 }
 
-// pipelineGetRoute is an internal helper for the main package.
+// pipelineGetRoute supports pipeline get route assertions in main tests.
 func pipelineGetRoute() toolutil.ActionRoute {
 	return toolutil.ActionRoute{InputSchema: map[string]any{
 		"type": "object",
@@ -5518,7 +5530,7 @@ func pipelineGetRoute() toolutil.ActionRoute {
 	}}
 }
 
-// repositoryFileGetRoute is an internal helper for the main package.
+// repositoryFileGetRoute supports repository file get route assertions in main tests.
 func repositoryFileGetRoute() toolutil.ActionRoute {
 	return toolutil.ActionRoute{InputSchema: map[string]any{
 		"type": "object",

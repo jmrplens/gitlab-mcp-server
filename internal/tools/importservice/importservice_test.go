@@ -13,17 +13,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// testGHPToken identifies the test ghp token constant used by this package.
 const testGHPToken = "ghp_token"
 
+// testNamespace identifies the test namespace constant used by this package.
 const testNamespace = "ns"
 
+// testMyRepoName identifies the test my repo name constant used by this package.
 const testMyRepoName = "my-repo"
 
+// testBBSRepoName identifies the test bbs repo name constant used by this package.
 const testBBSRepoName = "bbs-repo"
 
-// TestImportFromGitHub verifies the behavior of import from git hub.
+// TestImportFromGitHub verifies ImportFromGitHub.
 func TestImportFromGitHub(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github" {
@@ -48,7 +53,7 @@ func TestImportFromGitHub(t *testing.T) {
 	}
 }
 
-// TestImportFromGitHub_InvalidRepoID verifies the behavior of import from git hub invalid repo i d.
+// TestImportFromGitHub_InvalidRepoID verifies ImportFromGitHub when invalid repo ID.
 func TestImportFromGitHub_InvalidRepoID(t *testing.T) {
 	_, err := ImportFromGitHub(t.Context(), nil, ImportFromGitHubInput{
 		PersonalAccessToken: testGHPToken,
@@ -63,7 +68,7 @@ func TestImportFromGitHub_InvalidRepoID(t *testing.T) {
 	}
 }
 
-// TestImportFromGitHub_Error verifies the behavior of import from git hub error.
+// TestImportFromGitHub_Error verifies ImportFromGitHub when error.
 func TestImportFromGitHub_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -78,7 +83,7 @@ func TestImportFromGitHub_Error(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport verifies the behavior of cancel git hub import.
+// TestCancelGitHubImport verifies CancelGitHubImport.
 func TestCancelGitHubImport(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github/cancel" {
@@ -96,7 +101,7 @@ func TestCancelGitHubImport(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport_InvalidProjectID verifies the behavior of cancel git hub import invalid project i d.
+// TestCancelGitHubImport_InvalidProjectID verifies CancelGitHubImport when invalid project ID.
 func TestCancelGitHubImport_InvalidProjectID(t *testing.T) {
 	_, err := CancelGitHubImport(t.Context(), nil, CancelGitHubImportInput{ProjectID: -1})
 	if err == nil {
@@ -107,7 +112,7 @@ func TestCancelGitHubImport_InvalidProjectID(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport_Error verifies the behavior of cancel git hub import error.
+// TestCancelGitHubImport_Error verifies CancelGitHubImport when error.
 func TestCancelGitHubImport_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -118,7 +123,7 @@ func TestCancelGitHubImport_Error(t *testing.T) {
 	}
 }
 
-// TestImportGists verifies the behavior of import gists.
+// TestImportGists verifies ImportGists.
 func TestImportGists(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github/gists" {
@@ -133,7 +138,7 @@ func TestImportGists(t *testing.T) {
 	}
 }
 
-// TestImportGists_Error verifies the behavior of import gists error.
+// TestImportGists_Error verifies ImportGists when error.
 func TestImportGists_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -144,7 +149,7 @@ func TestImportGists_Error(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketCloud verifies the behavior of import from bitbucket cloud.
+// TestImportFromBitbucketCloud verifies ImportFromBitbucketCloud.
 func TestImportFromBitbucketCloud(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/bitbucket" {
@@ -167,7 +172,7 @@ func TestImportFromBitbucketCloud(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketCloud_Error verifies the behavior of import from bitbucket cloud error.
+// TestImportFromBitbucketCloud_Error verifies ImportFromBitbucketCloud when error.
 func TestImportFromBitbucketCloud_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -183,7 +188,7 @@ func TestImportFromBitbucketCloud_Error(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketServer verifies the behavior of import from bitbucket server.
+// TestImportFromBitbucketServer verifies ImportFromBitbucketServer.
 func TestImportFromBitbucketServer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/bitbucket_server" {
@@ -207,7 +212,7 @@ func TestImportFromBitbucketServer(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketServer_Error verifies the behavior of import from bitbucket server error.
+// TestImportFromBitbucketServer_Error verifies ImportFromBitbucketServer when error.
 func TestImportFromBitbucketServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -224,7 +229,7 @@ func TestImportFromBitbucketServer_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGitHubImport verifies the behavior of format git hub import.
+// TestFormatGitHubImport verifies FormatGitHubImport.
 func TestFormatGitHubImport(t *testing.T) {
 	out := &GitHubImportOutput{ID: 1, Name: testMyRepoName, FullPath: "ns/my-repo", ImportStatus: "scheduled"}
 	md := FormatGitHubImport(out)
@@ -233,7 +238,7 @@ func TestFormatGitHubImport(t *testing.T) {
 	}
 }
 
-// TestFormatBitbucketServerImport verifies the behavior of format bitbucket server import.
+// TestFormatBitbucketServerImport verifies FormatBitbucketServerImport.
 func TestFormatBitbucketServerImport(t *testing.T) {
 	out := &BitbucketServerImportOutput{ID: 3, Name: testBBSRepoName, FullPath: "ns/bbs-repo"}
 	md := FormatBitbucketServerImport(out)
@@ -244,13 +249,14 @@ func TestFormatBitbucketServerImport(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ImportFromGitHub — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromGitHub_WithAllOptionalFields verifies the behavior of import from git hub with all optional fields.
+// TestImportFromGitHub_WithAllOptionalFields verifies ImportFromGitHub when with all optional fields.
 func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +296,7 @@ func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 // CancelGitHubImport — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestCancelGitHubImport_APIError400 verifies the behavior of cancel git hub import a p i error400.
+// TestCancelGitHubImport_APIError400 verifies CancelGitHubImport when API error 400.
 func TestCancelGitHubImport_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -305,7 +311,7 @@ func TestCancelGitHubImport_APIError400(t *testing.T) {
 // ImportGists — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestImportGists_APIError400 verifies the behavior of import gists a p i error400.
+// TestImportGists_APIError400 verifies ImportGists when API error 400.
 func TestImportGists_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -320,7 +326,7 @@ func TestImportGists_APIError400(t *testing.T) {
 // ImportFromBitbucketCloud — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromBitbucketCloud_WithOptionalFields verifies the behavior of import from bitbucket cloud with optional fields.
+// TestImportFromBitbucketCloud_WithOptionalFields verifies ImportFromBitbucketCloud when with optional fields.
 func TestImportFromBitbucketCloud_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/bitbucket" {
@@ -348,7 +354,7 @@ func TestImportFromBitbucketCloud_WithOptionalFields(t *testing.T) {
 // ImportFromBitbucketServer — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromBitbucketServer_WithOptionalFields verifies the behavior of import from bitbucket server with optional fields.
+// TestImportFromBitbucketServer_WithOptionalFields verifies ImportFromBitbucketServer when with optional fields.
 func TestImportFromBitbucketServer_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/bitbucket_server" {
@@ -379,7 +385,7 @@ func TestImportFromBitbucketServer_WithOptionalFields(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatGitHubImport_WithHumanStatus verifies the behavior of format git hub import with human status.
+// TestFormatGitHubImport_WithHumanStatus verifies FormatGitHubImport when with human status.
 func TestFormatGitHubImport_WithHumanStatus(t *testing.T) {
 	out := &GitHubImportOutput{
 		ID: 1, Name: "my-repo", FullPath: "ns/my-repo",
@@ -392,7 +398,7 @@ func TestFormatGitHubImport_WithHumanStatus(t *testing.T) {
 	}
 }
 
-// TestFormatCancelledImport verifies the behavior of format cancelled import.
+// TestFormatCancelledImport verifies FormatCancelledImport.
 func TestFormatCancelledImport(t *testing.T) {
 	out := &CancelledImportOutput{
 		ID: 1, Name: "my-repo", FullPath: "ns/my-repo",
@@ -407,7 +413,7 @@ func TestFormatCancelledImport(t *testing.T) {
 	}
 }
 
-// TestFormatBitbucketCloudImport verifies the behavior of format bitbucket cloud import.
+// TestFormatBitbucketCloudImport verifies FormatBitbucketCloudImport.
 func TestFormatBitbucketCloudImport(t *testing.T) {
 	out := &BitbucketCloudImportOutput{
 		ID: 2, Name: "bb-repo", FullPath: "ns/bb-repo",
@@ -422,7 +428,7 @@ func TestFormatBitbucketCloudImport(t *testing.T) {
 	}
 }
 
-// TestFormatImportGists verifies the behavior of format import gists.
+// TestFormatImportGists verifies FormatImportGists.
 func TestFormatImportGists(t *testing.T) {
 	md := FormatImportGists()
 	if !strings.Contains(md, "gists") {
@@ -517,7 +523,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // Helpers: MCP session factories
 // ---------------------------------------------------------------------------.
 
-// importHandler is an internal helper for the importservice package.
+// importHandler supports import handler assertions in importservice tests.
 func importHandler() *http.ServeMux {
 	handler := http.NewServeMux()
 
@@ -572,6 +578,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
+// importServiceSpecsByTool supports import service specs by tool assertions in importservice tests.
 func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

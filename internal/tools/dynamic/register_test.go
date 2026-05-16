@@ -18,6 +18,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// dynamicSearchCorpusCase describes one dynamic search corpus fixture row.
 type dynamicSearchCorpusCase struct {
 	Category             string                     `json:"category"`
 	Query                string                     `json:"query"`
@@ -32,6 +33,7 @@ type dynamicSearchCorpusCase struct {
 	Notes                string                     `json:"notes"`
 }
 
+// dynamicSearchCorpusAlias maps an ad hoc query alias to its canonical action.
 type dynamicSearchCorpusAlias struct {
 	Alias     string `json:"alias"`
 	Canonical string `json:"canonical"`
@@ -348,6 +350,7 @@ func TestDynamicSearchCorpus(t *testing.T) {
 	}
 }
 
+// loadDynamicSearchCorpus loads dynamic search corpus fixture data for tests.
 func loadDynamicSearchCorpus(t *testing.T) []dynamicSearchCorpusCase {
 	t.Helper()
 	content, err := os.ReadFile("testdata/dynamic_search_queries.json")
@@ -712,6 +715,12 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 
 	projectList := actionDescriptionByID(t, output, "project.list")
 	assertSchemaHasProperties(t, projectList.InputSchema, "search", "owned", "per_page")
+	if len(projectList.Docs) == 0 || projectList.Docs[0].URL != "https://docs.gitlab.com/api/projects/" {
+		t.Fatalf("project.list Docs = %+v, want Projects API reference", projectList.Docs)
+	}
+	if !strings.Contains(markdown, "[Projects API](https://docs.gitlab.com/api/projects/)") {
+		t.Fatalf("Describe() markdown missing Projects API docs link: %s", markdown)
+	}
 	if projectList.OutputSchema == nil {
 		t.Fatal("project.list OutputSchema is nil")
 	}
@@ -1309,6 +1318,7 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 	}
 }
 
+// TestDescribe_IncludesConsolidatedRegisterMetaReplacementActions verifies Describe includes consolidated register meta replacement actions.
 func TestDescribe_IncludesConsolidatedRegisterMetaReplacementActions(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
@@ -2566,6 +2576,7 @@ func TestSearch_TypoQueryReturnsResultsOnMetaCatalog(t *testing.T) {
 	}
 }
 
+// actionDescriptionByID supports action description by ID assertions in dynamic tests.
 func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) ActionDescription {
 	t.Helper()
 	for _, action := range output.Actions {
@@ -2577,6 +2588,7 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	return ActionDescription{}
 }
 
+// realCatalogRegistry supports real catalog registry assertions in dynamic tests.
 func realCatalogRegistry(t *testing.T) *Registry {
 	t.Helper()
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
@@ -2590,6 +2602,7 @@ func realCatalogRegistry(t *testing.T) *Registry {
 	return NewRegistryFromCatalog(catalog)
 }
 
+// gitLabDotComEnterpriseRegistry supports GitLab dot com enterprise registry assertions in dynamic tests.
 func gitLabDotComEnterpriseRegistry(t *testing.T) (*actioncatalog.Catalog, *Registry) {
 	t.Helper()
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
@@ -2607,6 +2620,7 @@ func gitLabDotComEnterpriseRegistry(t *testing.T) (*actioncatalog.Catalog, *Regi
 	return catalog, NewRegistryFromCatalog(catalog)
 }
 
+// assertSearchResultsContain checks search results contain invariants for tests.
 func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...string) {
 	t.Helper()
 	for _, actionID := range want {
@@ -2617,6 +2631,7 @@ func assertSearchResultsContain(t *testing.T, results []SearchResult, want ...st
 	}
 }
 
+// assertSearchResultIDsEqual checks search result IDs equal invariants for tests.
 func assertSearchResultIDsEqual(t *testing.T, results []SearchResult, want ...string) {
 	t.Helper()
 	if len(results) != len(want) {
@@ -2656,6 +2671,7 @@ func scoredActionIDs(matches []scoredActionEntry) []string {
 	return ids
 }
 
+// assertSchemaHasProperties checks schema has properties invariants for tests.
 func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...string) {
 	t.Helper()
 	properties := schemaProperties(schema)
@@ -2666,6 +2682,7 @@ func assertSchemaHasProperties(t *testing.T, schema map[string]any, names ...str
 	}
 }
 
+// assertSchemaPropertyNamesEqual checks schema property names equal invariants for tests.
 func assertSchemaPropertyNamesEqual(t *testing.T, actionID string, gotSchema, wantSchema map[string]any) {
 	t.Helper()
 	gotNames := sortedPropertyNames(schemaProperties(gotSchema))
@@ -2675,6 +2692,7 @@ func assertSchemaPropertyNamesEqual(t *testing.T, actionID string, gotSchema, wa
 	}
 }
 
+// schemaProperties extracts schema properties details for schema assertions.
 func schemaProperties(schema map[string]any) map[string]any {
 	properties, _ := schema["properties"].(map[string]any)
 	if properties == nil {
@@ -2683,6 +2701,7 @@ func schemaProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
+// schemaRequired extracts schema required details for schema assertions.
 func schemaRequired(schema map[string]any) []string {
 	var required []string
 	switch values := schema["required"].(type) {
@@ -2699,6 +2718,7 @@ func schemaRequired(schema map[string]any) []string {
 	return required
 }
 
+// listedToolInputSchema supports listed tool input schema assertions in dynamic tests.
 func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[string]any {
 	t.Helper()
 	for _, tool := range tools {
@@ -2719,6 +2739,7 @@ func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[str
 	return nil
 }
 
+// sortedPropertyNames sorts ed property names fixtures into deterministic order.
 func sortedPropertyNames(properties map[string]any) []string {
 	names := make([]string, 0, len(properties))
 	for name := range properties {
@@ -2728,6 +2749,7 @@ func sortedPropertyNames(properties map[string]any) []string {
 	return names
 }
 
+// testRoutes supports test routes assertions in dynamic tests.
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	t.Helper()
 	return map[string]toolutil.ActionMap{
@@ -3268,6 +3290,7 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	}
 }
 
+// textContent extracts text content from MCP result content for assertions.
 func textContent(result *mcp.CallToolResult) string {
 	if result == nil || len(result.Content) == 0 {
 		return ""
@@ -3279,11 +3302,11 @@ func textContent(result *mcp.CallToolResult) string {
 	return text.Text
 }
 
-// Additional dynamic dispatcher coverage tests migrated from register_coverage_test.go.
 // TestRegistry_DefensiveBranches covers small validation and fallback branches
 // in the dynamic registry dispatcher. These scenarios matter because the catalog
 // action surface should return helpful tool errors for malformed calls instead
-// of leaking empty or ambiguous execution attempts.
+// of leaking empty or ambiguous execution attempts. The cases preserve coverage
+// migrated from the former register_coverage_test.go file.
 func TestRegistry_DefensiveBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
@@ -3837,8 +3860,10 @@ func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
 	}
 }
 
+// testEnumStringer holds test enum stringer data for the dynamic package.
 type testEnumStringer string
 
+// String returns the display label for testEnumStringer.
 func (value testEnumStringer) String() string { return string(value) }
 
 // TestSchemaSearchTermHelpers_Branches verifies schema descriptions and enum
@@ -3983,6 +4008,7 @@ func TestRequiredParamAndPlaceholderBranches(t *testing.T) {
 	}
 }
 
+// schemaWithProperties extracts schema with properties details for schema assertions.
 func schemaWithProperties(names ...string) map[string]any {
 	properties := make(map[string]any, len(names))
 	for _, name := range names {
@@ -4065,9 +4091,9 @@ func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
 	}
 }
 
-// Benchmarks migrated from register_benchmark_test.go.
 // BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
-// allocations against the captured meta catalog plus standalone routes.
+// allocations against the captured meta catalog plus standalone routes. It
+// preserves the benchmark coverage migrated from register_benchmark_test.go.
 func BenchmarkSearch_BaselineMetaCatalog(b *testing.B) {
 	registry := benchmarkRegistry(b)
 	ctx := context.Background()
@@ -4143,6 +4169,7 @@ func BenchmarkSearch_FieldAwareIndex(b *testing.B) {
 	}
 }
 
+// benchmarkRegistry supports benchmark registry assertions in dynamic tests.
 func benchmarkRegistry(b *testing.B) *Registry {
 	b.Helper()
 
@@ -4163,6 +4190,7 @@ func benchmarkRegistry(b *testing.B) *Registry {
 	return registry
 }
 
+// benchmarkName supports benchmark name assertions in dynamic tests.
 func benchmarkName(query string) string {
 	parts := strings.Fields(strings.ToLower(query))
 	if len(parts) == 0 {

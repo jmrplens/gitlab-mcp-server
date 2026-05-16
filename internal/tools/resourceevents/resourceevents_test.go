@@ -16,10 +16,14 @@ import (
 )
 
 const (
-	errNoReachAPI   = "should not reach API"
+	// errNoReachAPI identifies the err no reach API constant used by this package.
+	errNoReachAPI = "should not reach API"
+	// fmtWantOneEvent identifies the fmt want one event constant used by this package.
 	fmtWantOneEvent = "got %d events, want 1"
+	// fmtGotStateWant identifies the fmt got state want constant used by this package.
 	fmtGotStateWant = "got state %q, want %q"
-	fmtGotWant      = "got %q, want %q"
+	// fmtGotWant identifies the fmt got want constant used by this package.
+	fmtGotWant = "got %q, want %q"
 )
 
 // TestListIssueLabelEvents_Success_DetailedFields verifies ListIssueLabelEvents returns correct fields.
@@ -74,7 +78,7 @@ func TestGetIssueLabelEvent_Success_DetailedFields(t *testing.T) {
 	}
 }
 
-// TestListIssueLabelEvents_ValidationError verifies the behavior of list issue label events validation error.
+// TestListIssueLabelEvents_ValidationError verifies ListIssueLabelEvents when validation error.
 func TestListIssueLabelEvents_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -259,7 +263,7 @@ func TestFormatStateEventsMarkdown_Empty_NoEvents(t *testing.T) {
 
 // Int64 validation tests.
 
-// assertErrContains is an internal helper for the resourceevents package.
+// assertErrContains checks err contains invariants for tests.
 func assertErrContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if err == nil {
@@ -270,7 +274,7 @@ func assertErrContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// contains is an internal helper for the resourceevents package.
+// contains reports whether contains.
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
@@ -280,7 +284,7 @@ func contains(s, substr string) bool {
 	return false
 }
 
-// TestListIssueLabelEvents_InvalidIID verifies the behavior of list issue label events invalid i i d.
+// TestListIssueLabelEvents_InvalidIID verifies ListIssueLabelEvents when invalid IID.
 func TestListIssueLabelEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -289,7 +293,7 @@ func TestListIssueLabelEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "issue_iid")
 }
 
-// TestGetIssueLabelEvent_InvalidIDs verifies the behavior of get issue label event invalid i ds.
+// TestGetIssueLabelEvent_InvalidIDs verifies GetIssueLabelEvent when invalid IDs.
 func TestGetIssueLabelEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -300,7 +304,7 @@ func TestGetIssueLabelEvent_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, "label_event_id")
 }
 
-// TestListIssueMilestoneEvents_InvalidIID verifies the behavior of list issue milestone events invalid i i d.
+// TestListIssueMilestoneEvents_InvalidIID verifies ListIssueMilestoneEvents when invalid IID.
 func TestListIssueMilestoneEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -309,7 +313,7 @@ func TestListIssueMilestoneEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "issue_iid")
 }
 
-// TestGetIssueMilestoneEvent_InvalidIDs verifies the behavior of get issue milestone event invalid i ds.
+// TestGetIssueMilestoneEvent_InvalidIDs verifies GetIssueMilestoneEvent when invalid IDs.
 func TestGetIssueMilestoneEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -320,7 +324,7 @@ func TestGetIssueMilestoneEvent_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, "milestone_event_id")
 }
 
-// TestListIssueStateEvents_InvalidIID verifies the behavior of list issue state events invalid i i d.
+// TestListIssueStateEvents_InvalidIID verifies ListIssueStateEvents when invalid IID.
 func TestListIssueStateEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -329,7 +333,7 @@ func TestListIssueStateEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "issue_iid")
 }
 
-// TestGetIssueStateEvent_InvalidIDs verifies the behavior of get issue state event invalid i ds.
+// TestGetIssueStateEvent_InvalidIDs verifies GetIssueStateEvent when invalid IDs.
 func TestGetIssueStateEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -340,7 +344,7 @@ func TestGetIssueStateEvent_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, "state_event_id")
 }
 
-// TestListMRLabelEvents_InvalidIID verifies the behavior of list m r label events invalid i i d.
+// TestListMRLabelEvents_InvalidIID verifies ListMRLabelEvents when invalid IID.
 func TestListMRLabelEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -349,7 +353,7 @@ func TestListMRLabelEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "merge_request_iid")
 }
 
-// TestGetMRLabelEvent_InvalidIDs verifies the behavior of get m r label event invalid i ds.
+// TestGetMRLabelEvent_InvalidIDs verifies GetMRLabelEvent when invalid IDs.
 func TestGetMRLabelEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -360,7 +364,7 @@ func TestGetMRLabelEvent_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, "label_event_id")
 }
 
-// TestListMRMilestoneEvents_InvalidIID verifies the behavior of list m r milestone events invalid i i d.
+// TestListMRMilestoneEvents_InvalidIID verifies ListMRMilestoneEvents when invalid IID.
 func TestListMRMilestoneEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -369,7 +373,7 @@ func TestListMRMilestoneEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "merge_request_iid")
 }
 
-// TestGetMRMilestoneEvent_InvalidIDs verifies the behavior of get m r milestone event invalid i ds.
+// TestGetMRMilestoneEvent_InvalidIDs verifies GetMRMilestoneEvent when invalid IDs.
 func TestGetMRMilestoneEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -380,7 +384,7 @@ func TestGetMRMilestoneEvent_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, "milestone_event_id")
 }
 
-// TestListMRStateEvents_InvalidIID verifies the behavior of list m r state events invalid i i d.
+// TestListMRStateEvents_InvalidIID verifies ListMRStateEvents when invalid IID.
 func TestListMRStateEvents_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -389,7 +393,7 @@ func TestListMRStateEvents_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, "merge_request_iid")
 }
 
-// TestGetMRStateEvent_InvalidIDs verifies the behavior of get m r state event invalid i ds.
+// TestGetMRStateEvent_InvalidIDs verifies GetMRStateEvent when invalid IDs.
 func TestGetMRStateEvent_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -414,10 +418,10 @@ const (
 	covStateSingle        = `{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}`
 )
 
-// covPID is an internal helper for the resourceevents package.
+// covPID supports cov pid assertions in resourceevents tests.
 func covPID() toolutil.StringOrInt { return toolutil.StringOrInt("42") }
 
-// covBadHandler is an internal helper for the resourceevents package.
+// covBadHandler supports cov bad handler assertions in resourceevents tests.
 func covBadHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -426,7 +430,7 @@ func covBadHandler() http.Handler {
 
 // ======================== Label Events ========================.
 
-// TestListIssueLabelEvents_Validation verifies the behavior of cov list issue label events validation.
+// TestListIssueLabelEvents_Validation verifies ListIssueLabelEvents when validation.
 func TestListIssueLabelEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueLabelEvents(t.Context(), client, ListIssueLabelEventsInput{})
@@ -435,7 +439,7 @@ func TestListIssueLabelEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueLabelEvents_APIError verifies the behavior of cov list issue label events a p i error.
+// TestListIssueLabelEvents_APIError verifies ListIssueLabelEvents when API error.
 func TestListIssueLabelEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueLabelEvents(t.Context(), client, ListIssueLabelEventsInput{ProjectID: covPID(), IssueIID: 1})
@@ -444,7 +448,7 @@ func TestListIssueLabelEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueLabelEvents_Success verifies the behavior of cov list issue label events success.
+// TestListIssueLabelEvents_Success verifies ListIssueLabelEvents when success.
 func TestListIssueLabelEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covLabelEventJSON)
@@ -458,7 +462,7 @@ func TestListIssueLabelEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueLabelEvent_Validation verifies the behavior of cov get issue label event validation.
+// TestGetIssueLabelEvent_Validation verifies GetIssueLabelEvent when validation.
 func TestGetIssueLabelEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueLabelEvent(t.Context(), client, GetIssueLabelEventInput{})
@@ -467,7 +471,7 @@ func TestGetIssueLabelEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueLabelEvent_APIError verifies the behavior of cov get issue label event a p i error.
+// TestGetIssueLabelEvent_APIError verifies GetIssueLabelEvent when API error.
 func TestGetIssueLabelEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueLabelEvent(t.Context(), client, GetIssueLabelEventInput{ProjectID: covPID(), IssueIID: 1, LabelEventID: 10})
@@ -476,7 +480,7 @@ func TestGetIssueLabelEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssueLabelEvent_Success verifies the behavior of cov get issue label event success.
+// TestGetIssueLabelEvent_Success verifies GetIssueLabelEvent when success.
 func TestGetIssueLabelEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covLabelEventSingle)
@@ -490,7 +494,7 @@ func TestGetIssueLabelEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRLabelEvents_Validation verifies the behavior of cov list m r label events validation.
+// TestListMRLabelEvents_Validation verifies ListMRLabelEvents when validation.
 func TestListMRLabelEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRLabelEvents(t.Context(), client, ListMRLabelEventsInput{})
@@ -499,7 +503,7 @@ func TestListMRLabelEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRLabelEvents_APIError verifies the behavior of cov list m r label events a p i error.
+// TestListMRLabelEvents_APIError verifies ListMRLabelEvents when API error.
 func TestListMRLabelEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRLabelEvents(t.Context(), client, ListMRLabelEventsInput{ProjectID: covPID(), MRIID: 1})
@@ -508,7 +512,7 @@ func TestListMRLabelEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRLabelEvents_Success verifies the behavior of cov list m r label events success.
+// TestListMRLabelEvents_Success verifies ListMRLabelEvents when success.
 func TestListMRLabelEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covLabelEventJSON)
@@ -522,7 +526,7 @@ func TestListMRLabelEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRLabelEvent_Validation verifies the behavior of cov get m r label event validation.
+// TestGetMRLabelEvent_Validation verifies GetMRLabelEvent when validation.
 func TestGetMRLabelEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRLabelEvent(t.Context(), client, GetMRLabelEventInput{})
@@ -531,7 +535,7 @@ func TestGetMRLabelEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRLabelEvent_APIError verifies the behavior of cov get m r label event a p i error.
+// TestGetMRLabelEvent_APIError verifies GetMRLabelEvent when API error.
 func TestGetMRLabelEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRLabelEvent(t.Context(), client, GetMRLabelEventInput{ProjectID: covPID(), MRIID: 1, LabelEventID: 10})
@@ -540,7 +544,7 @@ func TestGetMRLabelEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMRLabelEvent_Success verifies the behavior of cov get m r label event success.
+// TestGetMRLabelEvent_Success verifies GetMRLabelEvent when success.
 func TestGetMRLabelEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covLabelEventSingle)
@@ -556,7 +560,7 @@ func TestGetMRLabelEvent_Success(t *testing.T) {
 
 // ======================== Milestone Events ========================.
 
-// TestListIssueMilestoneEvents_Validation verifies the behavior of cov list issue milestone events validation.
+// TestListIssueMilestoneEvents_Validation verifies ListIssueMilestoneEvents when validation.
 func TestListIssueMilestoneEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueMilestoneEvents(t.Context(), client, ListIssueMilestoneEventsInput{})
@@ -565,7 +569,7 @@ func TestListIssueMilestoneEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueMilestoneEvents_APIError verifies the behavior of cov list issue milestone events a p i error.
+// TestListIssueMilestoneEvents_APIError verifies ListIssueMilestoneEvents when API error.
 func TestListIssueMilestoneEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueMilestoneEvents(t.Context(), client, ListIssueMilestoneEventsInput{ProjectID: covPID(), IssueIID: 1})
@@ -574,7 +578,7 @@ func TestListIssueMilestoneEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueMilestoneEvents_Success verifies the behavior of cov list issue milestone events success.
+// TestListIssueMilestoneEvents_Success verifies ListIssueMilestoneEvents when success.
 func TestListIssueMilestoneEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneEventJSON)
@@ -588,7 +592,7 @@ func TestListIssueMilestoneEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueMilestoneEvent_Validation verifies the behavior of cov get issue milestone event validation.
+// TestGetIssueMilestoneEvent_Validation verifies GetIssueMilestoneEvent when validation.
 func TestGetIssueMilestoneEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueMilestoneEvent(t.Context(), client, GetIssueMilestoneEventInput{})
@@ -597,7 +601,7 @@ func TestGetIssueMilestoneEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueMilestoneEvent_APIError verifies the behavior of cov get issue milestone event a p i error.
+// TestGetIssueMilestoneEvent_APIError verifies GetIssueMilestoneEvent when API error.
 func TestGetIssueMilestoneEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueMilestoneEvent(t.Context(), client, GetIssueMilestoneEventInput{ProjectID: covPID(), IssueIID: 1, MilestoneEventID: 30})
@@ -606,7 +610,7 @@ func TestGetIssueMilestoneEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssueMilestoneEvent_Success verifies the behavior of cov get issue milestone event success.
+// TestGetIssueMilestoneEvent_Success verifies GetIssueMilestoneEvent when success.
 func TestGetIssueMilestoneEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneSingle)
@@ -620,7 +624,7 @@ func TestGetIssueMilestoneEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRMilestoneEvents_Validation verifies the behavior of cov list m r milestone events validation.
+// TestListMRMilestoneEvents_Validation verifies ListMRMilestoneEvents when validation.
 func TestListMRMilestoneEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRMilestoneEvents(t.Context(), client, ListMRMilestoneEventsInput{})
@@ -629,7 +633,7 @@ func TestListMRMilestoneEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRMilestoneEvents_APIError verifies the behavior of cov list m r milestone events a p i error.
+// TestListMRMilestoneEvents_APIError verifies ListMRMilestoneEvents when API error.
 func TestListMRMilestoneEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRMilestoneEvents(t.Context(), client, ListMRMilestoneEventsInput{ProjectID: covPID(), MRIID: 1})
@@ -638,7 +642,7 @@ func TestListMRMilestoneEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRMilestoneEvents_Success verifies the behavior of cov list m r milestone events success.
+// TestListMRMilestoneEvents_Success verifies ListMRMilestoneEvents when success.
 func TestListMRMilestoneEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneEventJSON)
@@ -652,7 +656,7 @@ func TestListMRMilestoneEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRMilestoneEvent_Validation verifies the behavior of cov get m r milestone event validation.
+// TestGetMRMilestoneEvent_Validation verifies GetMRMilestoneEvent when validation.
 func TestGetMRMilestoneEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRMilestoneEvent(t.Context(), client, GetMRMilestoneEventInput{})
@@ -661,7 +665,7 @@ func TestGetMRMilestoneEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRMilestoneEvent_APIError verifies the behavior of cov get m r milestone event a p i error.
+// TestGetMRMilestoneEvent_APIError verifies GetMRMilestoneEvent when API error.
 func TestGetMRMilestoneEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRMilestoneEvent(t.Context(), client, GetMRMilestoneEventInput{ProjectID: covPID(), MRIID: 1, MilestoneEventID: 30})
@@ -670,7 +674,7 @@ func TestGetMRMilestoneEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMRMilestoneEvent_Success verifies the behavior of cov get m r milestone event success.
+// TestGetMRMilestoneEvent_Success verifies GetMRMilestoneEvent when success.
 func TestGetMRMilestoneEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneSingle)
@@ -686,7 +690,7 @@ func TestGetMRMilestoneEvent_Success(t *testing.T) {
 
 // ======================== State Events ========================.
 
-// TestListIssueStateEvents_Validation verifies the behavior of cov list issue state events validation.
+// TestListIssueStateEvents_Validation verifies ListIssueStateEvents when validation.
 func TestListIssueStateEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueStateEvents(t.Context(), client, ListIssueStateEventsInput{})
@@ -695,7 +699,7 @@ func TestListIssueStateEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueStateEvents_APIError verifies the behavior of cov list issue state events a p i error.
+// TestListIssueStateEvents_APIError verifies ListIssueStateEvents when API error.
 func TestListIssueStateEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueStateEvents(t.Context(), client, ListIssueStateEventsInput{ProjectID: covPID(), IssueIID: 1})
@@ -704,7 +708,7 @@ func TestListIssueStateEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueStateEvents_Success verifies the behavior of cov list issue state events success.
+// TestListIssueStateEvents_Success verifies ListIssueStateEvents when success.
 func TestListIssueStateEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStateEventJSON)
@@ -718,7 +722,7 @@ func TestListIssueStateEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueStateEvent_Validation verifies the behavior of cov get issue state event validation.
+// TestGetIssueStateEvent_Validation verifies GetIssueStateEvent when validation.
 func TestGetIssueStateEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueStateEvent(t.Context(), client, GetIssueStateEventInput{})
@@ -727,7 +731,7 @@ func TestGetIssueStateEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueStateEvent_APIError verifies the behavior of cov get issue state event a p i error.
+// TestGetIssueStateEvent_APIError verifies GetIssueStateEvent when API error.
 func TestGetIssueStateEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueStateEvent(t.Context(), client, GetIssueStateEventInput{ProjectID: covPID(), IssueIID: 1, StateEventID: 40})
@@ -736,7 +740,7 @@ func TestGetIssueStateEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssueStateEvent_Success verifies the behavior of cov get issue state event success.
+// TestGetIssueStateEvent_Success verifies GetIssueStateEvent when success.
 func TestGetIssueStateEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStateSingle)
@@ -750,7 +754,7 @@ func TestGetIssueStateEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRStateEvents_Validation verifies the behavior of cov list m r state events validation.
+// TestListMRStateEvents_Validation verifies ListMRStateEvents when validation.
 func TestListMRStateEvents_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRStateEvents(t.Context(), client, ListMRStateEventsInput{})
@@ -759,7 +763,7 @@ func TestListMRStateEvents_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRStateEvents_APIError verifies the behavior of cov list m r state events a p i error.
+// TestListMRStateEvents_APIError verifies ListMRStateEvents when API error.
 func TestListMRStateEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRStateEvents(t.Context(), client, ListMRStateEventsInput{ProjectID: covPID(), MRIID: 1})
@@ -768,7 +772,7 @@ func TestListMRStateEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRStateEvents_Success verifies the behavior of cov list m r state events success.
+// TestListMRStateEvents_Success verifies ListMRStateEvents when success.
 func TestListMRStateEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStateEventJSON)
@@ -782,7 +786,7 @@ func TestListMRStateEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRStateEvent_Validation verifies the behavior of cov get m r state event validation.
+// TestGetMRStateEvent_Validation verifies GetMRStateEvent when validation.
 func TestGetMRStateEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRStateEvent(t.Context(), client, GetMRStateEventInput{})
@@ -791,7 +795,7 @@ func TestGetMRStateEvent_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRStateEvent_APIError verifies the behavior of cov get m r state event a p i error.
+// TestGetMRStateEvent_APIError verifies GetMRStateEvent when API error.
 func TestGetMRStateEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRStateEvent(t.Context(), client, GetMRStateEventInput{ProjectID: covPID(), MRIID: 1, StateEventID: 40})
@@ -800,7 +804,7 @@ func TestGetMRStateEvent_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMRStateEvent_Success verifies the behavior of cov get m r state event success.
+// TestGetMRStateEvent_Success verifies GetMRStateEvent when success.
 func TestGetMRStateEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStateSingle)
@@ -816,7 +820,7 @@ func TestGetMRStateEvent_Success(t *testing.T) {
 
 // ======================== Converters: Edge cases ========================.
 
-// TestCovtoLabelEventOutput_Nil verifies the behavior of covto label event output nil.
+// TestCovtoLabelEventOutput_Nil verifies CovtoLabelEventOutput when nil.
 func TestCovtoLabelEventOutput_Nil(t *testing.T) {
 	out := toLabelEventOutput(nil)
 	if out.ID != 0 {
@@ -824,7 +828,7 @@ func TestCovtoLabelEventOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestCovtoMilestoneEventOutput_Nil verifies the behavior of covto milestone event output nil.
+// TestCovtoMilestoneEventOutput_Nil verifies CovtoMilestoneEventOutput when nil.
 func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
 	out := toMilestoneEventOutput(nil)
 	if out.ID != 0 {
@@ -832,7 +836,7 @@ func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestCovtoMilestoneEventOutput_NilUserAndMilestone verifies the behavior of covto milestone event output nil user and milestone.
+// TestCovtoMilestoneEventOutput_NilUserAndMilestone verifies CovtoMilestoneEventOutput when nil user and milestone.
 func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 	e := &gl.MilestoneEvent{ID: 1, Action: "add"}
 	out := toMilestoneEventOutput(e)
@@ -841,7 +845,7 @@ func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 	}
 }
 
-// TestCovtoStateEventOutput_Nil verifies the behavior of covto state event output nil.
+// TestCovtoStateEventOutput_Nil verifies CovtoStateEventOutput when nil.
 func TestCovtoStateEventOutput_Nil(t *testing.T) {
 	out := toStateEventOutput(nil)
 	if out.ID != 0 {
@@ -849,7 +853,7 @@ func TestCovtoStateEventOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestCovtoStateEventOutput_NilUser verifies the behavior of covto state event output nil user.
+// TestCovtoStateEventOutput_NilUser verifies CovtoStateEventOutput when nil user.
 func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 	e := &gl.StateEvent{ID: 1, State: "opened"}
 	out := toStateEventOutput(e)
@@ -863,7 +867,7 @@ func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 
 // ======================== Formatters ========================.
 
-// TestFormatLabelEventsMarkdown_Empty verifies the behavior of cov format label events markdown empty.
+// TestFormatLabelEventsMarkdown_Empty verifies FormatLabelEventsMarkdown when empty.
 func TestFormatLabelEventsMarkdown_Empty(t *testing.T) {
 	md := FormatLabelEventsMarkdown(ListLabelEventsOutput{})
 	if !strings.Contains(md, "No label events found") {
@@ -871,7 +875,7 @@ func TestFormatLabelEventsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatLabelEventsMarkdown_WithEvents verifies the behavior of cov format label events markdown with events.
+// TestFormatLabelEventsMarkdown_WithEvents verifies FormatLabelEventsMarkdown when with events.
 func TestFormatLabelEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListLabelEventsOutput{
 		Events: []LabelEventOutput{{ID: 1, Action: "add", Label: LabelEventLabelOutput{Name: "bug"}, Username: "alice"}},
@@ -882,7 +886,7 @@ func TestFormatLabelEventsMarkdown_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatLabelEventMarkdown verifies the behavior of cov format label event markdown.
+// TestFormatLabelEventMarkdown verifies FormatLabelEventMarkdown.
 func TestFormatLabelEventMarkdown(t *testing.T) {
 	out := LabelEventOutput{ID: 10, Action: "add", Label: LabelEventLabelOutput{Name: "bug"}, Username: "alice", ResourceType: "Issue", ResourceID: 1}
 	md := FormatLabelEventMarkdown(out)
@@ -891,7 +895,7 @@ func TestFormatLabelEventMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMilestoneEventsMarkdown_Empty verifies the behavior of cov format milestone events markdown empty.
+// TestFormatMilestoneEventsMarkdown_Empty verifies FormatMilestoneEventsMarkdown when empty.
 func TestFormatMilestoneEventsMarkdown_Empty(t *testing.T) {
 	md := FormatMilestoneEventsMarkdown(ListMilestoneEventsOutput{})
 	if !strings.Contains(md, "No milestone events found") {
@@ -899,7 +903,7 @@ func TestFormatMilestoneEventsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMilestoneEventsMarkdown_WithEvents verifies the behavior of cov format milestone events markdown with events.
+// TestFormatMilestoneEventsMarkdown_WithEvents verifies FormatMilestoneEventsMarkdown when with events.
 func TestFormatMilestoneEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListMilestoneEventsOutput{
 		Events: []MilestoneEventOutput{{ID: 1, Action: "add", MilestoneTitle: "v1.0", Username: "alice"}},
@@ -910,7 +914,7 @@ func TestFormatMilestoneEventsMarkdown_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatMilestoneEventMarkdown verifies the behavior of cov format milestone event markdown.
+// TestFormatMilestoneEventMarkdown verifies FormatMilestoneEventMarkdown.
 func TestFormatMilestoneEventMarkdown(t *testing.T) {
 	out := MilestoneEventOutput{ID: 30, Action: "add", MilestoneTitle: "v1.0", MilestoneID: 200, Username: "alice", ResourceType: "Issue", ResourceID: 1}
 	md := FormatMilestoneEventMarkdown(out)
@@ -919,7 +923,7 @@ func TestFormatMilestoneEventMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatStateEventsMarkdown_Empty verifies the behavior of cov format state events markdown empty.
+// TestFormatStateEventsMarkdown_Empty verifies FormatStateEventsMarkdown when empty.
 func TestFormatStateEventsMarkdown_Empty(t *testing.T) {
 	md := FormatStateEventsMarkdown(ListStateEventsOutput{})
 	if !strings.Contains(md, "No state events found") {
@@ -927,7 +931,7 @@ func TestFormatStateEventsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatStateEventsMarkdown_WithEvents verifies the behavior of cov format state events markdown with events.
+// TestFormatStateEventsMarkdown_WithEvents verifies FormatStateEventsMarkdown when with events.
 func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListStateEventsOutput{
 		Events: []StateEventOutput{{ID: 1, State: "closed", Username: "alice", ResourceType: "Issue", ResourceID: 1}},
@@ -938,7 +942,7 @@ func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatStateEventMarkdown verifies the behavior of cov format state event markdown.
+// TestFormatStateEventMarkdown verifies FormatStateEventMarkdown.
 func TestFormatStateEventMarkdown(t *testing.T) {
 	out := StateEventOutput{ID: 40, State: "closed", Username: "alice", ResourceType: "Issue", ResourceID: 1}
 	md := FormatStateEventMarkdown(out)

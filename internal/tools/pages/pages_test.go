@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestGetPages_Success verifies that GetPages handles the success scenario correctly.
+// TestGetPages_Success verifies GetPages when success.
 func TestGetPages_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/pages" {
@@ -47,7 +47,7 @@ func TestGetPages_Success(t *testing.T) {
 	}
 }
 
-// TestGetPages_ValidationError verifies that GetPages handles the validation error scenario correctly.
+// TestGetPages_ValidationError verifies GetPages when validation error.
 func TestGetPages_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -58,7 +58,7 @@ func TestGetPages_ValidationError(t *testing.T) {
 	}
 }
 
-// TestUpdatePages_Success verifies that UpdatePages handles the success scenario correctly.
+// TestUpdatePages_Success verifies UpdatePages when success.
 func TestUpdatePages_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
@@ -85,7 +85,7 @@ func TestUpdatePages_Success(t *testing.T) {
 	}
 }
 
-// TestUnpublishPages_Success verifies that UnpublishPages handles the success scenario correctly.
+// TestUnpublishPages_Success verifies UnpublishPages when success.
 func TestUnpublishPages_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -100,7 +100,7 @@ func TestUnpublishPages_Success(t *testing.T) {
 	}
 }
 
-// TestUnpublishPages_ValidationError verifies that UnpublishPages handles the validation error scenario correctly.
+// TestUnpublishPages_ValidationError verifies UnpublishPages when validation error.
 func TestUnpublishPages_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -111,7 +111,7 @@ func TestUnpublishPages_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListAllDomains_Success verifies that ListAllDomains handles the success scenario correctly.
+// TestListAllDomains_Success verifies ListAllDomains when success.
 func TestListAllDomains_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/pages/domains" {
@@ -136,7 +136,7 @@ func TestListAllDomains_Success(t *testing.T) {
 	}
 }
 
-// TestListDomains_Success verifies that ListDomains handles the success scenario correctly.
+// TestListDomains_Success verifies ListDomains when success.
 func TestListDomains_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/pages/domains" {
@@ -160,7 +160,7 @@ func TestListDomains_Success(t *testing.T) {
 	}
 }
 
-// TestGetDomain_Success verifies that GetDomain handles the success scenario correctly.
+// TestGetDomain_Success verifies GetDomain when success.
 func TestGetDomain_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/pages/domains/example.com" {
@@ -185,7 +185,7 @@ func TestGetDomain_Success(t *testing.T) {
 	}
 }
 
-// TestGetDomain_ValidationError verifies that GetDomain handles the validation error scenario correctly.
+// TestGetDomain_ValidationError verifies GetDomain when validation error.
 func TestGetDomain_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -196,7 +196,7 @@ func TestGetDomain_ValidationError(t *testing.T) {
 	}
 }
 
-// TestCreateDomain_Success verifies that CreateDomain handles the success scenario correctly.
+// TestCreateDomain_Success verifies CreateDomain when success.
 func TestCreateDomain_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -221,7 +221,7 @@ func TestCreateDomain_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateDomain_Success verifies that UpdateDomain handles the success scenario correctly.
+// TestUpdateDomain_Success verifies UpdateDomain when success.
 func TestUpdateDomain_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -246,7 +246,7 @@ func TestUpdateDomain_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteDomain_Success verifies that DeleteDomain handles the success scenario correctly.
+// TestDeleteDomain_Success verifies DeleteDomain when success.
 func TestDeleteDomain_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -264,7 +264,7 @@ func TestDeleteDomain_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteDomain_APIError verifies that DeleteDomain handles the a p i error scenario correctly.
+// TestDeleteDomain_APIError verifies DeleteDomain when API error.
 func TestDeleteDomain_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -282,28 +282,43 @@ func TestDeleteDomain_APIError(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	argProjectID       = "project_id"
-	argDomain          = "domain"
-	msgBadRequest      = "bad request"
-	testDomain         = "example.com"
-	testPagesURL       = "https://p.io"
-	testExampleURL     = "https://example.com"
-	testDomainA        = "a.com"
-	testGroupProject   = "group/project"
+	// argProjectID identifies the arg project ID constant used by this package.
+	argProjectID = "project_id"
+	// argDomain identifies the arg domain constant used by this package.
+	argDomain = "domain"
+	// msgBadRequest identifies the msg bad request constant used by this package.
+	msgBadRequest = "bad request"
+	// testDomain identifies the test domain constant used by this package.
+	testDomain = "example.com"
+	// testPagesURL identifies the test pages URL constant used by this package.
+	testPagesURL = "https://p.io"
+	// testExampleURL identifies the test example URL constant used by this package.
+	testExampleURL = "https://example.com"
+	// testDomainA identifies the test domain a constant used by this package.
+	testDomainA = "a.com"
+	// testGroupProject identifies the test group project constant used by this package.
+	testGroupProject = "group/project"
+	// testMyGroupProject identifies the test my group project constant used by this package.
 	testMyGroupProject = "mygroup/myproject"
-	errNoHandler       = "handler should not be called"
-	errExpectedAPI     = "expected API error, got nil"
-	errEmptyProjID     = "expected validation error for empty project_id"
-	errEmptyDomain     = "expected validation error for empty domain"
-	fmtUnexpErr        = "unexpected error: %v"
-	testDomainAURL     = "https://a.com"
+	// errNoHandler identifies the err no handler constant used by this package.
+	errNoHandler = "handler should not be called"
+	// errExpectedAPI identifies the err expected API constant used by this package.
+	errExpectedAPI = "expected API error, got nil"
+	// errEmptyProjID identifies the err empty proj ID constant used by this package.
+	errEmptyProjID = "expected validation error for empty project_id"
+	// errEmptyDomain identifies the err empty domain constant used by this package.
+	errEmptyDomain = "expected validation error for empty domain"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// testDomainAURL identifies the test domain aurl constant used by this package.
+	testDomainAURL = "https://a.com"
 )
 
 // ---------------------------------------------------------------------------
 // UpdatePages -- validation error, API error
 // ---------------------------------------------------------------------------.
 
-// TestUpdatePages_ValidationError verifies the behavior of update pages validation error.
+// TestUpdatePages_ValidationError verifies UpdatePages when validation error.
 func TestUpdatePages_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -314,7 +329,7 @@ func TestUpdatePages_ValidationError(t *testing.T) {
 	}
 }
 
-// TestUpdatePages_APIError verifies the behavior of update pages a p i error.
+// TestUpdatePages_APIError verifies UpdatePages when API error.
 func TestUpdatePages_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -325,7 +340,7 @@ func TestUpdatePages_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdatePages_AllOptionalFields verifies the behavior of update pages all optional fields.
+// TestUpdatePages_AllOptionalFields verifies UpdatePages when all optional fields.
 func TestUpdatePages_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch {
@@ -354,7 +369,7 @@ func TestUpdatePages_AllOptionalFields(t *testing.T) {
 // GetPages -- API error
 // ---------------------------------------------------------------------------.
 
-// TestGetPages_APIError verifies the behavior of get pages a p i error.
+// TestGetPages_APIError verifies GetPages when API error.
 func TestGetPages_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -369,7 +384,7 @@ func TestGetPages_APIError(t *testing.T) {
 // UnpublishPages -- API error
 // ---------------------------------------------------------------------------.
 
-// TestUnpublishPages_APIError verifies the behavior of unpublish pages a p i error.
+// TestUnpublishPages_APIError verifies UnpublishPages when API error.
 func TestUnpublishPages_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -384,7 +399,7 @@ func TestUnpublishPages_APIError(t *testing.T) {
 // ListAllDomains -- API error
 // ---------------------------------------------------------------------------.
 
-// TestListAllDomains_APIError verifies the behavior of list all domains a p i error.
+// TestListAllDomains_APIError verifies ListAllDomains when API error.
 func TestListAllDomains_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -399,7 +414,7 @@ func TestListAllDomains_APIError(t *testing.T) {
 // ListDomains -- validation error, API error
 // ---------------------------------------------------------------------------.
 
-// TestListDomains_ValidationError verifies the behavior of list domains validation error.
+// TestListDomains_ValidationError verifies ListDomains when validation error.
 func TestListDomains_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -410,7 +425,7 @@ func TestListDomains_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListDomains_APIError verifies the behavior of list domains a p i error.
+// TestListDomains_APIError verifies ListDomains when API error.
 func TestListDomains_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -425,7 +440,7 @@ func TestListDomains_APIError(t *testing.T) {
 // GetDomain -- validation (missing project_id)
 // ---------------------------------------------------------------------------.
 
-// TestGetDomain_ValidationMissingProjectID verifies the behavior of get domain validation missing project i d.
+// TestGetDomain_ValidationMissingProjectID verifies GetDomain when validation missing project ID.
 func TestGetDomain_ValidationMissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -436,7 +451,7 @@ func TestGetDomain_ValidationMissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetDomain_APIError verifies the behavior of get domain a p i error.
+// TestGetDomain_APIError verifies GetDomain when API error.
 func TestGetDomain_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -451,7 +466,7 @@ func TestGetDomain_APIError(t *testing.T) {
 // CreateDomain -- validation errors, API error, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreateDomain_ValidationMissingProjectID verifies the behavior of create domain validation missing project i d.
+// TestCreateDomain_ValidationMissingProjectID verifies CreateDomain when validation missing project ID.
 func TestCreateDomain_ValidationMissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -462,7 +477,7 @@ func TestCreateDomain_ValidationMissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateDomain_ValidationMissingDomain verifies the behavior of create domain validation missing domain.
+// TestCreateDomain_ValidationMissingDomain verifies CreateDomain when validation missing domain.
 func TestCreateDomain_ValidationMissingDomain(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -473,7 +488,7 @@ func TestCreateDomain_ValidationMissingDomain(t *testing.T) {
 	}
 }
 
-// TestCreateDomain_APIError verifies the behavior of create domain a p i error.
+// TestCreateDomain_APIError verifies CreateDomain when API error.
 func TestCreateDomain_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -484,7 +499,7 @@ func TestCreateDomain_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateDomain_WithCert verifies the behavior of create domain with cert.
+// TestCreateDomain_WithCert verifies CreateDomain when with cert.
 func TestCreateDomain_WithCert(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -511,7 +526,7 @@ func TestCreateDomain_WithCert(t *testing.T) {
 // UpdateDomain -- validation errors, API error, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdateDomain_ValidationMissingProjectID verifies the behavior of update domain validation missing project i d.
+// TestUpdateDomain_ValidationMissingProjectID verifies UpdateDomain when validation missing project ID.
 func TestUpdateDomain_ValidationMissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -522,7 +537,7 @@ func TestUpdateDomain_ValidationMissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdateDomain_ValidationMissingDomain verifies the behavior of update domain validation missing domain.
+// TestUpdateDomain_ValidationMissingDomain verifies UpdateDomain when validation missing domain.
 func TestUpdateDomain_ValidationMissingDomain(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -533,7 +548,7 @@ func TestUpdateDomain_ValidationMissingDomain(t *testing.T) {
 	}
 }
 
-// TestUpdateDomain_APIError verifies the behavior of update domain a p i error.
+// TestUpdateDomain_APIError verifies UpdateDomain when API error.
 func TestUpdateDomain_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -544,7 +559,7 @@ func TestUpdateDomain_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateDomain_WithCert verifies the behavior of update domain with cert.
+// TestUpdateDomain_WithCert verifies UpdateDomain when with cert.
 func TestUpdateDomain_WithCert(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -571,7 +586,7 @@ func TestUpdateDomain_WithCert(t *testing.T) {
 // DeleteDomain -- validation errors
 // ---------------------------------------------------------------------------.
 
-// TestDeleteDomain_ValidationMissingProjectID verifies the behavior of delete domain validation missing project i d.
+// TestDeleteDomain_ValidationMissingProjectID verifies DeleteDomain when validation missing project ID.
 func TestDeleteDomain_ValidationMissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -582,7 +597,7 @@ func TestDeleteDomain_ValidationMissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteDomain_ValidationMissingDomain verifies the behavior of delete domain validation missing domain.
+// TestDeleteDomain_ValidationMissingDomain verifies DeleteDomain when validation missing domain.
 func TestDeleteDomain_ValidationMissingDomain(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoHandler)
@@ -597,7 +612,7 @@ func TestDeleteDomain_ValidationMissingDomain(t *testing.T) {
 // Formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatPagesMarkdown verifies the behavior of format pages markdown.
+// TestFormatPagesMarkdown verifies FormatPagesMarkdown.
 func TestFormatPagesMarkdown(t *testing.T) {
 	md := FormatPagesMarkdown(Output{
 		URL:        testPagesURL,
@@ -614,7 +629,7 @@ func TestFormatPagesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatPagesMarkdown_NoDeployments verifies the behavior of format pages markdown no deployments.
+// TestFormatPagesMarkdown_NoDeployments verifies FormatPagesMarkdown when no deployments.
 func TestFormatPagesMarkdown_NoDeployments(t *testing.T) {
 	md := FormatPagesMarkdown(Output{URL: testPagesURL})
 	if strings.Contains(md, "Deployments") {
@@ -622,7 +637,7 @@ func TestFormatPagesMarkdown_NoDeployments(t *testing.T) {
 	}
 }
 
-// TestFormatDomainMarkdown_WithOptionalFields verifies the behavior of format domain markdown with optional fields.
+// TestFormatDomainMarkdown_WithOptionalFields verifies FormatDomainMarkdown when with optional fields.
 func TestFormatDomainMarkdown_WithOptionalFields(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
 		Domain:       testDomain,
@@ -639,7 +654,7 @@ func TestFormatDomainMarkdown_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestFormatDomainListMarkdown_Empty verifies the behavior of format domain list markdown empty.
+// TestFormatDomainListMarkdown_Empty verifies FormatDomainListMarkdown when empty.
 func TestFormatDomainListMarkdown_Empty(t *testing.T) {
 	md := FormatDomainListMarkdown(ListDomainsOutput{})
 	if !strings.Contains(md, "No Pages domains found") {
@@ -647,7 +662,7 @@ func TestFormatDomainListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatAllDomainsMarkdown_Empty verifies the behavior of format all domains markdown empty.
+// TestFormatAllDomainsMarkdown_Empty verifies FormatAllDomainsMarkdown when empty.
 func TestFormatAllDomainsMarkdown_Empty(t *testing.T) {
 	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{})
 	if !strings.Contains(md, "No Pages domains found") {
@@ -655,7 +670,7 @@ func TestFormatAllDomainsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatAllDomainsMarkdown_NonEmpty verifies the behavior of format all domains markdown non empty.
+// TestFormatAllDomainsMarkdown_NonEmpty verifies FormatAllDomainsMarkdown when non empty.
 func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
 		Domains: []DomainOutput{{Domain: testDomainA, URL: testDomainAURL, ProjectID: 1}},
@@ -665,7 +680,7 @@ func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
-// TestFormatDeleteMarkdown verifies the behavior of format delete markdown.
+// TestFormatDeleteMarkdown verifies FormatDeleteMarkdown.
 func TestFormatDeleteMarkdown(t *testing.T) {
 	md := FormatDeleteMarkdown(testDomain)
 	if !strings.Contains(md, testDomain) {
@@ -673,7 +688,7 @@ func TestFormatDeleteMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatUnpublishMarkdown verifies the behavior of format unpublish markdown.
+// TestFormatUnpublishMarkdown verifies FormatUnpublishMarkdown.
 func TestFormatUnpublishMarkdown(t *testing.T) {
 	md := FormatUnpublishMarkdown()
 	if !strings.Contains(md, "unpublished") {
@@ -685,7 +700,7 @@ func TestFormatUnpublishMarkdown(t *testing.T) {
 // Markdown formatters -- project display
 // ---------------------------------------------------------------------------.
 
-// TestProjectDisplay validates project display across multiple scenarios using table-driven subtests.
+// TestProjectDisplay covers ProjectDisplay with table-driven subtests.
 func TestProjectDisplay(t *testing.T) {
 	tests := []struct {
 		name string
@@ -707,7 +722,7 @@ func TestProjectDisplay(t *testing.T) {
 	}
 }
 
-// TestSetProjectPathFromInput validates set project path from input across multiple scenarios using table-driven subtests.
+// TestSetProjectPathFromInput covers SetProjectPathFromInput with table-driven subtests.
 func TestSetProjectPathFromInput(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -729,7 +744,7 @@ func TestSetProjectPathFromInput(t *testing.T) {
 	}
 }
 
-// TestFormatDomainMarkdown_WithProjectPath verifies the behavior of format domain markdown with project path.
+// TestFormatDomainMarkdown_WithProjectPath verifies FormatDomainMarkdown when with project path.
 func TestFormatDomainMarkdown_WithProjectPath(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
 		Domain:      testDomain,
@@ -746,7 +761,7 @@ func TestFormatDomainMarkdown_WithProjectPath(t *testing.T) {
 	}
 }
 
-// TestFormatDomainMarkdown_NumericFallback verifies the behavior of format domain markdown numeric fallback.
+// TestFormatDomainMarkdown_NumericFallback verifies FormatDomainMarkdown when numeric fallback.
 func TestFormatDomainMarkdown_NumericFallback(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
 		Domain:    testDomain,
@@ -759,7 +774,7 @@ func TestFormatDomainMarkdown_NumericFallback(t *testing.T) {
 	}
 }
 
-// TestFormatDomainListMarkdown_WithProjectPath verifies the behavior of format domain list markdown with project path.
+// TestFormatDomainListMarkdown_WithProjectPath verifies FormatDomainListMarkdown when with project path.
 func TestFormatDomainListMarkdown_WithProjectPath(t *testing.T) {
 	md := FormatDomainListMarkdown(ListDomainsOutput{
 		Domains: []DomainOutput{
@@ -775,7 +790,7 @@ func TestFormatDomainListMarkdown_WithProjectPath(t *testing.T) {
 	}
 }
 
-// TestFormatAllDomainsMarkdown_WithProjectPath verifies the behavior of format all domains markdown with project path.
+// TestFormatAllDomainsMarkdown_WithProjectPath verifies FormatAllDomainsMarkdown when with project path.
 func TestFormatAllDomainsMarkdown_WithProjectPath(t *testing.T) {
 	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
 		Domains: []DomainOutput{
@@ -790,7 +805,7 @@ func TestFormatAllDomainsMarkdown_WithProjectPath(t *testing.T) {
 	}
 }
 
-// TestGetDomain_PropagatesProjectPath verifies the behavior of get domain propagates project path.
+// TestGetDomain_PropagatesProjectPath verifies GetDomain when propagates project path.
 func TestGetDomain_PropagatesProjectPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -807,7 +822,7 @@ func TestGetDomain_PropagatesProjectPath(t *testing.T) {
 	}
 }
 
-// TestGetDomain_NumericInputNoPath verifies the behavior of get domain numeric input no path.
+// TestGetDomain_NumericInputNoPath verifies GetDomain when numeric input no path.
 func TestGetDomain_NumericInputNoPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

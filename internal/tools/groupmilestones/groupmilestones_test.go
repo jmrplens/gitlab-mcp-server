@@ -13,19 +13,27 @@ import (
 )
 
 const (
+	// pathGroupMilestones identifies the path group milestones constant used by this package.
 	pathGroupMilestones = "/api/v4/groups/10/milestones"
-	pathMilestone1      = "/api/v4/groups/10/milestones/1"
-	testMilestoneTitle  = "v1.0"
-	testGroupID         = "10"
-	testStateActive     = "active"
-	testActionAdd       = "add"
-	fmtTitleWant        = "Title = %q, want %q"
-	milestoneJSON       = `{"id":1,"iid":1,"group_id":10,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-06-30","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T00:00:00Z","expired":false}`
+	// pathMilestone1 identifies the path milestone 1 constant used by this package.
+	pathMilestone1 = "/api/v4/groups/10/milestones/1"
+	// testMilestoneTitle identifies the test milestone title constant used by this package.
+	testMilestoneTitle = "v1.0"
+	// testGroupID identifies the test group ID constant used by this package.
+	testGroupID = "10"
+	// testStateActive identifies the test state active constant used by this package.
+	testStateActive = "active"
+	// testActionAdd identifies the test action add constant used by this package.
+	testActionAdd = "add"
+	// fmtTitleWant identifies the fmt title want constant used by this package.
+	fmtTitleWant = "Title = %q, want %q"
+	// milestoneJSON identifies the milestone JSON constant used by this package.
+	milestoneJSON = `{"id":1,"iid":1,"group_id":10,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-06-30","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T00:00:00Z","expired":false}`
 )
 
 // ---------- List ----------.
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
@@ -54,7 +62,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies the behavior of list with filters.
+// TestList_WithFilters verifies List when with filters.
 func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
@@ -88,7 +96,7 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies the behavior of list missing group i d.
+// TestList_MissingGroupID verifies List when missing group ID.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -100,7 +108,7 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_InvalidDate verifies the behavior of list invalid date.
+// TestList_InvalidDate verifies List when invalid date.
 func TestList_InvalidDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -114,7 +122,7 @@ func TestList_InvalidDate(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -140,7 +148,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID verifies the behavior of get missing group i d.
+// TestGet_MissingGroupID verifies Get when missing group ID.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -152,7 +160,7 @@ func TestGet_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_MissingMilestoneIID verifies the behavior of get missing milestone i i d.
+// TestGet_MissingMilestoneIID verifies Get when missing milestone IID.
 func TestGet_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -166,7 +174,7 @@ func TestGet_MissingMilestoneIID(t *testing.T) {
 
 // ---------- Create ----------.
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupMilestones {
@@ -188,7 +196,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_WithDates verifies the behavior of create with dates.
+// TestCreate_WithDates verifies Create when with dates.
 func TestCreate_WithDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupMilestones {
@@ -212,7 +220,7 @@ func TestCreate_WithDates(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingGroupID verifies the behavior of create missing group i d.
+// TestCreate_MissingGroupID verifies Create when missing group ID.
 func TestCreate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -224,7 +232,7 @@ func TestCreate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidDate verifies the behavior of create invalid date.
+// TestCreate_InvalidDate verifies Create when invalid date.
 func TestCreate_InvalidDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -238,7 +246,7 @@ func TestCreate_InvalidDate(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -265,7 +273,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingGroupID verifies the behavior of update missing group i d.
+// TestUpdate_MissingGroupID verifies Update when missing group ID.
 func TestUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -277,7 +285,7 @@ func TestUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingMilestoneIID verifies the behavior of update missing milestone i i d.
+// TestUpdate_MissingMilestoneIID verifies Update when missing milestone IID.
 func TestUpdate_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -291,7 +299,7 @@ func TestUpdate_MissingMilestoneIID(t *testing.T) {
 
 // ---------- Delete ----------.
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -311,7 +319,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID verifies the behavior of delete missing group i d.
+// TestDelete_MissingGroupID verifies Delete when missing group ID.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -325,7 +333,7 @@ func TestDelete_MissingGroupID(t *testing.T) {
 
 // ---------- GetIssues ----------.
 
-// TestGetIssues_Success verifies the behavior of get issues success.
+// TestGetIssues_Success verifies GetIssues when success.
 func TestGetIssues_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -356,7 +364,7 @@ func TestGetIssues_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssues_MissingMilestoneIID verifies the behavior of get issues missing milestone i i d.
+// TestGetIssues_MissingMilestoneIID verifies GetIssues when missing milestone IID.
 func TestGetIssues_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -370,7 +378,7 @@ func TestGetIssues_MissingMilestoneIID(t *testing.T) {
 
 // ---------- GetMergeRequests ----------.
 
-// TestGetMergeRequests_Success verifies the behavior of get merge requests success.
+// TestGetMergeRequests_Success verifies GetMergeRequests when success.
 func TestGetMergeRequests_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -401,7 +409,7 @@ func TestGetMergeRequests_Success(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_MissingGroupID verifies the behavior of get merge requests missing group i d.
+// TestGetMergeRequests_MissingGroupID verifies GetMergeRequests when missing group ID.
 func TestGetMergeRequests_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -415,7 +423,7 @@ func TestGetMergeRequests_MissingGroupID(t *testing.T) {
 
 // ---------- GetBurndownChartEvents ----------.
 
-// TestGetBurndownChartEvents_Success verifies the behavior of get burndown chart events success.
+// TestGetBurndownChartEvents_Success verifies GetBurndownChartEvents when success.
 func TestGetBurndownChartEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -446,7 +454,7 @@ func TestGetBurndownChartEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetBurndownChartEvents_MissingMilestoneIID verifies the behavior of get burndown chart events missing milestone i i d.
+// TestGetBurndownChartEvents_MissingMilestoneIID verifies GetBurndownChartEvents when missing milestone IID.
 func TestGetBurndownChartEvents_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -460,7 +468,7 @@ func TestGetBurndownChartEvents_MissingMilestoneIID(t *testing.T) {
 
 // ---------- Formatters ----------.
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 1, GroupID: 10, Title: testMilestoneTitle,
@@ -474,7 +482,7 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		Milestones: nil,
@@ -486,7 +494,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdown verifies the behavior of format issues markdown.
+// TestFormatIssuesMarkdown verifies FormatIssuesMarkdown.
 func TestFormatIssuesMarkdown(t *testing.T) {
 	out := IssuesOutput{
 		Issues:     []IssueItem{{ID: 100, IID: 5, Title: "Fix", State: "opened"}},
@@ -498,7 +506,7 @@ func TestFormatIssuesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdown verifies the behavior of format merge requests markdown.
+// TestFormatMergeRequestsMarkdown verifies FormatMergeRequestsMarkdown.
 func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	out := MergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{{ID: 200, IID: 10, Title: "Feature", State: "merged"}},
@@ -510,7 +518,7 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBurndownChartEventsMarkdown verifies the behavior of format burndown chart events markdown.
+// TestFormatBurndownChartEventsMarkdown verifies FormatBurndownChartEventsMarkdown.
 func TestFormatBurndownChartEventsMarkdown(t *testing.T) {
 	out := BurndownChartEventsOutput{
 		Events:     []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: testActionAdd}},
@@ -524,25 +532,32 @@ func TestFormatBurndownChartEventsMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// testDateStart identifies the test date start constant used by this package.
 const testDateStart = "2026-01-01"
 
+// fmtMarkdownMissing identifies the fmt markdown missing constant used by this package.
 const fmtMarkdownMissing = "markdown missing %q:\n%s"
 
+// testTableHeaderID identifies the test table header ID constant used by this package.
 const testTableHeaderID = "| ID |"
 
+// fmtExpectedEmptyMsg identifies the fmt expected empty msg constant used by this package.
 const fmtExpectedEmptyMsg = "expected empty message:\n%s"
 
 // ---------------------------------------------------------------------------
 // List — API error, canceled context, pagination, date filters
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies the behavior of list a p i error.
+// TestList_APIError verifies List when API error.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -553,7 +568,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -565,7 +580,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
@@ -597,7 +612,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_InvalidUpdatedAfterDate verifies the behavior of list invalid updated after date.
+// TestList_InvalidUpdatedAfterDate verifies List when invalid updated after date.
 func TestList_InvalidUpdatedAfterDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -608,7 +623,7 @@ func TestList_InvalidUpdatedAfterDate(t *testing.T) {
 	}
 }
 
-// TestList_InvalidContainingDate verifies the behavior of list invalid containing date.
+// TestList_InvalidContainingDate verifies List when invalid containing date.
 func TestList_InvalidContainingDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -619,7 +634,7 @@ func TestList_InvalidContainingDate(t *testing.T) {
 	}
 }
 
-// TestList_AllFilterParams verifies the behavior of list all filter params.
+// TestList_AllFilterParams verifies List when all filter params.
 func TestList_AllFilterParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
@@ -661,7 +676,7 @@ func TestList_AllFilterParams(t *testing.T) {
 // Get — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -672,7 +687,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -688,7 +703,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Create — API error, canceled context, invalid due_date
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -699,7 +714,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -711,7 +726,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidDueDate verifies the behavior of create invalid due date.
+// TestCreate_InvalidDueDate verifies Create when invalid due date.
 func TestCreate_InvalidDueDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -722,7 +737,7 @@ func TestCreate_InvalidDueDate(t *testing.T) {
 	}
 }
 
-// TestCreate_WithDescription verifies the behavior of create with description.
+// TestCreate_WithDescription verifies Create when with description.
 func TestCreate_WithDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupMilestones {
@@ -748,7 +763,7 @@ func TestCreate_WithDescription(t *testing.T) {
 // Update — API error, canceled context, invalid dates
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -759,7 +774,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -771,7 +786,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidStartDate verifies the behavior of update invalid start date.
+// TestUpdate_InvalidStartDate verifies Update when invalid start date.
 func TestUpdate_InvalidStartDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -782,7 +797,7 @@ func TestUpdate_InvalidStartDate(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidDueDate verifies the behavior of update invalid due date.
+// TestUpdate_InvalidDueDate verifies Update when invalid due date.
 func TestUpdate_InvalidDueDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -793,7 +808,7 @@ func TestUpdate_InvalidDueDate(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies the behavior of update all optional fields.
+// TestUpdate_AllOptionalFields verifies Update when all optional fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -827,7 +842,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, canceled context, missing milestone_iid
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -838,7 +853,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -850,7 +865,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingMilestoneIID verifies the behavior of delete missing milestone i i d.
+// TestDelete_MissingMilestoneIID verifies Delete when missing milestone IID.
 func TestDelete_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -865,7 +880,7 @@ func TestDelete_MissingMilestoneIID(t *testing.T) {
 // GetIssues — API error, canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGetIssues_APIError verifies the behavior of get issues a p i error.
+// TestGetIssues_APIError verifies GetIssues when API error.
 func TestGetIssues_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -876,7 +891,7 @@ func TestGetIssues_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssues_CancelledContext verifies the behavior of get issues cancelled context.
+// TestGetIssues_CancelledContext verifies GetIssues when cancelled context.
 func TestGetIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -888,7 +903,7 @@ func TestGetIssues_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetIssues_MissingGroupID verifies the behavior of get issues missing group i d.
+// TestGetIssues_MissingGroupID verifies GetIssues when missing group ID.
 func TestGetIssues_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -899,7 +914,7 @@ func TestGetIssues_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetIssues_WithPagination verifies the behavior of get issues with pagination.
+// TestGetIssues_WithPagination verifies GetIssues when with pagination.
 func TestGetIssues_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -937,7 +952,7 @@ func TestGetIssues_WithPagination(t *testing.T) {
 // GetMergeRequests — API error, canceled context, missing milestone_iid
 // ---------------------------------------------------------------------------.
 
-// TestGetMergeRequests_APIError verifies the behavior of get merge requests a p i error.
+// TestGetMergeRequests_APIError verifies GetMergeRequests when API error.
 func TestGetMergeRequests_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -948,7 +963,7 @@ func TestGetMergeRequests_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_CancelledContext verifies the behavior of get merge requests cancelled context.
+// TestGetMergeRequests_CancelledContext verifies GetMergeRequests when cancelled context.
 func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -960,7 +975,7 @@ func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_MissingMilestoneIID verifies the behavior of get merge requests missing milestone i i d.
+// TestGetMergeRequests_MissingMilestoneIID verifies GetMergeRequests when missing milestone IID.
 func TestGetMergeRequests_MissingMilestoneIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -971,7 +986,7 @@ func TestGetMergeRequests_MissingMilestoneIID(t *testing.T) {
 	}
 }
 
-// TestGetMergeRequests_WithPagination verifies the behavior of get merge requests with pagination.
+// TestGetMergeRequests_WithPagination verifies GetMergeRequests when with pagination.
 func TestGetMergeRequests_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -1009,7 +1024,7 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 // GetBurndownChartEvents — API error, canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGetBurndownChartEvents_APIError verifies the behavior of get burndown chart events a p i error.
+// TestGetBurndownChartEvents_APIError verifies GetBurndownChartEvents when API error.
 func TestGetBurndownChartEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -1020,7 +1035,7 @@ func TestGetBurndownChartEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestGetBurndownChartEvents_CancelledContext verifies the behavior of get burndown chart events cancelled context.
+// TestGetBurndownChartEvents_CancelledContext verifies GetBurndownChartEvents when cancelled context.
 func TestGetBurndownChartEvents_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -1032,7 +1047,7 @@ func TestGetBurndownChartEvents_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetBurndownChartEvents_MissingGroupID verifies the behavior of get burndown chart events missing group i d.
+// TestGetBurndownChartEvents_MissingGroupID verifies GetBurndownChartEvents when missing group ID.
 func TestGetBurndownChartEvents_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -1043,7 +1058,7 @@ func TestGetBurndownChartEvents_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetBurndownChartEvents_WithPagination verifies the behavior of get burndown chart events with pagination.
+// TestGetBurndownChartEvents_WithPagination verifies GetBurndownChartEvents when with pagination.
 func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
@@ -1081,7 +1096,7 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 // FormatMarkdown — with data, empty/zero
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_WithAllFields verifies the behavior of format markdown with all fields.
+// TestFormatMarkdown_WithAllFields verifies FormatMarkdown when with all fields.
 func TestFormatMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 1, IID: 1, GroupID: 10, GroupPath: "my-org/backend", Title: "v1.0",
@@ -1112,7 +1127,7 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_FallbackNumericGroupID verifies the behavior of format markdown fallback numeric group i d.
+// TestFormatMarkdown_FallbackNumericGroupID verifies FormatMarkdown when fallback numeric group ID.
 func TestFormatMarkdown_FallbackNumericGroupID(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 3, IID: 3, GroupID: 42, Title: "Fallback", State: "active",
@@ -1122,7 +1137,7 @@ func TestFormatMarkdown_FallbackNumericGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_MinimalFields verifies the behavior of format markdown minimal fields.
+// TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 2, IID: 2, GroupID: 10, Title: "Bare", State: "closed",
@@ -1147,7 +1162,7 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithMilestones verifies the behavior of format list markdown with milestones.
+// TestFormatListMarkdown_WithMilestones verifies FormatListMarkdown when with milestones.
 func TestFormatListMarkdown_WithMilestones(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{
@@ -1175,7 +1190,7 @@ func TestFormatListMarkdown_WithMilestones(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyList verifies the behavior of format list markdown empty list.
+// TestFormatListMarkdown_EmptyList verifies FormatListMarkdown when empty list.
 func TestFormatListMarkdown_EmptyList(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{
 		Pagination: toolutil.PaginationOutput{TotalItems: 0, Page: 1, PerPage: 20, TotalPages: 0},
@@ -1192,7 +1207,7 @@ func TestFormatListMarkdown_EmptyList(t *testing.T) {
 // FormatIssuesMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatIssuesMarkdown_WithData verifies the behavior of format issues markdown with data.
+// TestFormatIssuesMarkdown_WithData verifies FormatIssuesMarkdown when with data.
 func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 	out := IssuesOutput{
 		Issues: []IssueItem{
@@ -1217,7 +1232,7 @@ func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatIssuesMarkdown_Empty verifies the behavior of format issues markdown empty.
+// TestFormatIssuesMarkdown_Empty verifies FormatIssuesMarkdown when empty.
 func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 	md := FormatIssuesMarkdownString(IssuesOutput{
 		Pagination: toolutil.PaginationOutput{TotalItems: 0},
@@ -1231,7 +1246,7 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 // FormatMergeRequestsMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatMergeRequestsMarkdown_WithData verifies the behavior of format merge requests markdown with data.
+// TestFormatMergeRequestsMarkdown_WithData verifies FormatMergeRequestsMarkdown when with data.
 func TestFormatMergeRequestsMarkdown_WithData(t *testing.T) {
 	out := MergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{
@@ -1256,7 +1271,7 @@ func TestFormatMergeRequestsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdown_Empty verifies the behavior of format merge requests markdown empty.
+// TestFormatMergeRequestsMarkdown_Empty verifies FormatMergeRequestsMarkdown when empty.
 func TestFormatMergeRequestsMarkdown_Empty(t *testing.T) {
 	md := FormatMergeRequestsMarkdownString(MergeRequestsOutput{
 		Pagination: toolutil.PaginationOutput{TotalItems: 0},
@@ -1270,7 +1285,7 @@ func TestFormatMergeRequestsMarkdown_Empty(t *testing.T) {
 // FormatBurndownChartEventsMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatBurndownChartEventsMarkdown_WithData verifies the behavior of format burndown chart events markdown with data.
+// TestFormatBurndownChartEventsMarkdown_WithData verifies FormatBurndownChartEventsMarkdown when with data.
 func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 	out := BurndownChartEventsOutput{
 		Events: []BurndownChartEventItem{
@@ -1296,7 +1311,7 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatBurndownChartEventsMarkdown_Empty verifies the behavior of format burndown chart events markdown empty.
+// TestFormatBurndownChartEventsMarkdown_Empty verifies FormatBurndownChartEventsMarkdown when empty.
 func TestFormatBurndownChartEventsMarkdown_Empty(t *testing.T) {
 	md := FormatBurndownChartEventsMarkdownString(BurndownChartEventsOutput{
 		Pagination: toolutil.PaginationOutput{TotalItems: 0},
@@ -1310,7 +1325,7 @@ func TestFormatBurndownChartEventsMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown (MCP result wrapper)
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_ReturnsCallToolResult verifies the behavior of format list markdown returns call tool result.
+// TestFormatListMarkdown_ReturnsCallToolResult verifies FormatListMarkdown returns call tool result.
 func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{{ID: 1, IID: 1, Title: "v1.0", State: "active"}},
@@ -1326,7 +1341,7 @@ func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 // parseISODate edge case
 // ---------------------------------------------------------------------------.
 
-// TestParseISODate_Valid verifies the behavior of parse i s o date valid.
+// TestParseISODate_Valid verifies ParseISODate when valid.
 func TestParseISODate_Valid(t *testing.T) {
 	d, err := parseISODate("2026-06-15")
 	if err != nil {
@@ -1337,7 +1352,7 @@ func TestParseISODate_Valid(t *testing.T) {
 	}
 }
 
-// TestParseISODate_Invalid verifies the behavior of parse i s o date invalid.
+// TestParseISODate_Invalid verifies ParseISODate when invalid.
 func TestParseISODate_Invalid(t *testing.T) {
 	_, err := parseISODate("June 15, 2026")
 	if err == nil {
@@ -1543,6 +1558,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
+// requireGroupMilestoneRouteSuccess returns group milestone route success test data or fails the test.
 func requireGroupMilestoneRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, toolName string, args map[string]any) {
 	t.Helper()
 	result, err := specs[toolName].Route.Handler(t.Context(), args)
@@ -1558,6 +1574,7 @@ func requireGroupMilestoneRouteSuccess(t *testing.T, specs map[string]toolutil.A
 // Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
+// newGroupMilestonesSpecsByTool constructs group milestones specs by tool test fixtures.
 func newGroupMilestonesSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1647,6 +1664,7 @@ func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	}
 }
 
+// groupMilestoneSpecsByTool supports group milestone specs by tool assertions in groupmilestones tests.
 func groupMilestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

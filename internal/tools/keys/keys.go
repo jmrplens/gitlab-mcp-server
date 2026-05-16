@@ -94,7 +94,7 @@ func toOutput(k *gl.Key) Output {
 
 // Formatters.
 
-// truncateKey is an internal helper for the keys package.
+// truncateKey implements the truncate key helper used by keys.
 func truncateKey(key string) string {
 	if len(key) > 60 {
 		return key[:57] + "..."

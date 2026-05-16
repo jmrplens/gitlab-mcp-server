@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/templates/licenses" {
@@ -34,7 +34,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -45,7 +45,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/templates/licenses/mit" {
@@ -77,7 +77,7 @@ func TestGet_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -88,7 +88,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateItem{{Key: "mit", Name: "MIT", Popular: true}}})
 	if !strings.Contains(md, "MIT") || !strings.Contains(md, "Yes") {
@@ -96,7 +96,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the behavior of format get markdown.
+// TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{Name: "MIT", Key: "mit", Content: "text", Permissions: []string{"use"}}})
 	if !strings.Contains(md, "MIT") || !strings.Contains(md, "use") {
@@ -110,7 +110,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: nil})
 	if !strings.Contains(md, "No templates found") {
@@ -122,7 +122,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown — non-popular item (no "Yes" in Popular column)
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_NonPopular verifies the behavior of format list markdown non popular.
+// TestFormatListMarkdown_NonPopular verifies FormatListMarkdown when non popular.
 func TestFormatListMarkdown_NonPopular(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateItem{
 		{Key: "test", Name: "Test", Popular: false},
@@ -136,7 +136,7 @@ func TestFormatListMarkdown_NonPopular(t *testing.T) {
 // FormatGetMarkdown — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies the behavior of format get markdown all fields.
+// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{
 		Key:         "mit",
@@ -160,7 +160,7 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // FormatGetMarkdown — minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_MinimalFields verifies the behavior of format get markdown minimal fields.
+// TestFormatGetMarkdown_MinimalFields verifies FormatGetMarkdown when minimal fields.
 func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{
 		Key:  "basic",
@@ -184,7 +184,7 @@ func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 // List — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies the behavior of list a p i error400.
+// TestList_APIError400 verifies List when API error 400.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -199,7 +199,7 @@ func TestList_APIError400(t *testing.T) {
 // Get — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError400 verifies the behavior of get a p i error400.
+// TestGet_APIError400 verifies Get when API error 400.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -214,7 +214,7 @@ func TestGet_APIError400(t *testing.T) {
 // List — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "3" || r.URL.Query().Get("per_page") != "10" {
@@ -237,7 +237,7 @@ func TestList_WithPagination(t *testing.T) {
 // List — zero pagination (no Page/PerPage set)
 // ---------------------------------------------------------------------------.
 
-// TestList_ZeroPagination verifies the behavior of list zero pagination.
+// TestList_ZeroPagination verifies List when zero pagination.
 func TestList_ZeroPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"ruby","name":"Ruby"}]`)
@@ -346,6 +346,7 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 // Helper: route specs factory
 // ---------------------------------------------------------------------------.
 
+// newProjectTemplateRouteSpecs constructs project template route specs test fixtures.
 func newProjectTemplateRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -363,6 +364,7 @@ func newProjectTemplateRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return projectTemplateSpecsByTool(ActionSpecs(client))
 }
 
+// projectTemplateSpecsByTool supports project template specs by tool assertions in projecttemplates tests.
 func projectTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

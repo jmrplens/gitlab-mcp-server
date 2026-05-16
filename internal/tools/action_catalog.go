@@ -151,6 +151,7 @@ func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, e
 		specGroup.OwnerPackage = "tools"
 	}
 	specGroup.Actions = ensureActionSpecOwners(specGroup.Actions, specGroup.OwnerPackage)
+	specGroup.Actions = ensureActionSpecDocs(specGroup.Actions, specGroup.ToolName)
 	if specGroup.SurfaceKind == "" {
 		specGroup.SurfaceKind = actioncatalog.SurfaceKindMetaGroup
 	}

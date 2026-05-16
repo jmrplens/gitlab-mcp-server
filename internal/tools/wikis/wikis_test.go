@@ -15,11 +15,13 @@ import (
 )
 
 const (
-	pathProjectWikis    = "/api/v4/projects/42/wikis"
+	// pathProjectWikis identifies the path project wikis constant used by this package.
+	pathProjectWikis = "/api/v4/projects/42/wikis"
+	// pathProjectWikiSlug identifies the path project wiki slug constant used by this package.
 	pathProjectWikiSlug = "/api/v4/projects/42/wikis/my-page"
 )
 
-// TestWikiList_Success verifies the behavior of wiki list success.
+// TestWikiList_Success verifies WikiList when success.
 func TestWikiList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectWikis {
@@ -49,7 +51,7 @@ func TestWikiList_Success(t *testing.T) {
 	}
 }
 
-// TestWikiList_WithContent verifies the behavior of wiki list with content.
+// TestWikiList_WithContent verifies WikiList when with content.
 func TestWikiList_WithContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectWikis {
@@ -80,7 +82,7 @@ func TestWikiList_WithContent(t *testing.T) {
 	}
 }
 
-// TestWikiList_EmptyProjectID verifies the behavior of wiki list empty project i d.
+// TestWikiList_EmptyProjectID verifies WikiList when empty project ID.
 func TestWikiList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -92,7 +94,7 @@ func TestWikiList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestWikiListServer_Error verifies the behavior of wiki list server error.
+// TestWikiListServer_Error verifies WikiListServer when error.
 func TestWikiListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Internal Server Error"}`)
@@ -104,7 +106,7 @@ func TestWikiListServer_Error(t *testing.T) {
 	}
 }
 
-// TestWikiList_CancelledContext verifies the behavior of wiki list cancelled context.
+// TestWikiList_CancelledContext verifies WikiList when cancelled context.
 func TestWikiList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -120,7 +122,7 @@ func TestWikiList_CancelledContext(t *testing.T) {
 
 // Get.
 
-// TestWikiGet_Success verifies the behavior of wiki get success.
+// TestWikiGet_Success verifies WikiGet when success.
 func TestWikiGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectWikiSlug {
@@ -151,7 +153,7 @@ func TestWikiGet_Success(t *testing.T) {
 	}
 }
 
-// TestWikiGet_WithRenderHTML verifies the behavior of wiki get with render h t m l.
+// TestWikiGet_WithRenderHTML verifies WikiGet when with render HTML.
 func TestWikiGet_WithRenderHTML(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectWikiSlug {
@@ -183,7 +185,7 @@ func TestWikiGet_WithRenderHTML(t *testing.T) {
 	}
 }
 
-// TestWikiGet_EmptyProjectID verifies the behavior of wiki get empty project i d.
+// TestWikiGet_EmptyProjectID verifies WikiGet when empty project ID.
 func TestWikiGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -195,7 +197,7 @@ func TestWikiGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestWikiGet_EmptySlug verifies the behavior of wiki get empty slug.
+// TestWikiGet_EmptySlug verifies WikiGet when empty slug.
 func TestWikiGet_EmptySlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -207,7 +209,7 @@ func TestWikiGet_EmptySlug(t *testing.T) {
 	}
 }
 
-// TestWikiGet_NotFound verifies the behavior of wiki get not found.
+// TestWikiGet_NotFound verifies WikiGet when not found.
 func TestWikiGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Wiki Page Not Found"}`)
@@ -222,7 +224,7 @@ func TestWikiGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestWikiGet_CancelledContext verifies the behavior of wiki get cancelled context.
+// TestWikiGet_CancelledContext verifies WikiGet when cancelled context.
 func TestWikiGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -238,7 +240,7 @@ func TestWikiGet_CancelledContext(t *testing.T) {
 
 // Create.
 
-// TestWikiCreate_Success verifies the behavior of wiki create success.
+// TestWikiCreate_Success verifies WikiCreate when success.
 func TestWikiCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectWikis {
@@ -269,7 +271,7 @@ func TestWikiCreate_Success(t *testing.T) {
 	}
 }
 
-// TestWikiCreate_WithFormat verifies the behavior of wiki create with format.
+// TestWikiCreate_WithFormat verifies WikiCreate when with format.
 func TestWikiCreate_WithFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectWikis {
@@ -298,7 +300,7 @@ func TestWikiCreate_WithFormat(t *testing.T) {
 	}
 }
 
-// TestWikiCreate_EmptyProjectID verifies the behavior of wiki create empty project i d.
+// TestWikiCreate_EmptyProjectID verifies WikiCreate when empty project ID.
 func TestWikiCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -313,7 +315,7 @@ func TestWikiCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestWikiCreate_EmptyTitle verifies the behavior of wiki create empty title.
+// TestWikiCreate_EmptyTitle verifies WikiCreate when empty title.
 func TestWikiCreate_EmptyTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -328,7 +330,7 @@ func TestWikiCreate_EmptyTitle(t *testing.T) {
 	}
 }
 
-// TestWikiCreate_EmptyContent verifies the behavior of wiki create empty content.
+// TestWikiCreate_EmptyContent verifies WikiCreate when empty content.
 func TestWikiCreate_EmptyContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -343,7 +345,7 @@ func TestWikiCreate_EmptyContent(t *testing.T) {
 	}
 }
 
-// TestWikiCreate_CancelledContext verifies the behavior of wiki create cancelled context.
+// TestWikiCreate_CancelledContext verifies WikiCreate when cancelled context.
 func TestWikiCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -363,7 +365,7 @@ func TestWikiCreate_CancelledContext(t *testing.T) {
 
 // Update.
 
-// TestWikiUpdate_Success verifies the behavior of wiki update success.
+// TestWikiUpdate_Success verifies WikiUpdate when success.
 func TestWikiUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProjectWikiSlug {
@@ -392,7 +394,7 @@ func TestWikiUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestWikiUpdate_EmptyProjectID verifies the behavior of wiki update empty project i d.
+// TestWikiUpdate_EmptyProjectID verifies WikiUpdate when empty project ID.
 func TestWikiUpdate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -407,7 +409,7 @@ func TestWikiUpdate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestWikiUpdate_EmptySlug verifies the behavior of wiki update empty slug.
+// TestWikiUpdate_EmptySlug verifies WikiUpdate when empty slug.
 func TestWikiUpdate_EmptySlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -422,7 +424,7 @@ func TestWikiUpdate_EmptySlug(t *testing.T) {
 	}
 }
 
-// TestWikiUpdate_CancelledContext verifies the behavior of wiki update cancelled context.
+// TestWikiUpdate_CancelledContext verifies WikiUpdate when cancelled context.
 func TestWikiUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -442,7 +444,7 @@ func TestWikiUpdate_CancelledContext(t *testing.T) {
 
 // Delete.
 
-// TestWikiDelete_Success verifies the behavior of wiki delete success.
+// TestWikiDelete_Success verifies WikiDelete when success.
 func TestWikiDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProjectWikiSlug {
@@ -461,7 +463,7 @@ func TestWikiDelete_Success(t *testing.T) {
 	}
 }
 
-// TestWikiDelete_EmptyProjectID verifies the behavior of wiki delete empty project i d.
+// TestWikiDelete_EmptyProjectID verifies WikiDelete when empty project ID.
 func TestWikiDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -473,7 +475,7 @@ func TestWikiDelete_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestWikiDelete_EmptySlug verifies the behavior of wiki delete empty slug.
+// TestWikiDelete_EmptySlug verifies WikiDelete when empty slug.
 func TestWikiDelete_EmptySlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -485,7 +487,7 @@ func TestWikiDelete_EmptySlug(t *testing.T) {
 	}
 }
 
-// TestWikiDelete_NotFound verifies the behavior of wiki delete not found.
+// TestWikiDelete_NotFound verifies WikiDelete when not found.
 func TestWikiDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Wiki Page Not Found"}`)
@@ -500,7 +502,7 @@ func TestWikiDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestWikiDelete_CancelledContext verifies the behavior of wiki delete cancelled context.
+// TestWikiDelete_CancelledContext verifies WikiDelete when cancelled context.
 func TestWikiDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -516,9 +518,10 @@ func TestWikiDelete_CancelledContext(t *testing.T) {
 
 // Upload Attachment Tests.
 
+// pathProjectWikiAttachments identifies the path project wiki attachments constant used by this package.
 const pathProjectWikiAttachments = "/api/v4/projects/42/wikis/attachments"
 
-// TestUploadAttachment_Base64Success verifies the behavior of upload attachment base64 success.
+// TestUploadAttachment_Base64Success verifies UploadAttachment when base 64 success.
 func TestUploadAttachment_Base64Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectWikiAttachments {
@@ -559,7 +562,7 @@ func TestUploadAttachment_Base64Success(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_MissingProjectID verifies the behavior of upload attachment missing project i d.
+// TestUploadAttachment_MissingProjectID verifies UploadAttachment when missing project ID.
 func TestUploadAttachment_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -574,7 +577,7 @@ func TestUploadAttachment_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_MissingFilename verifies the behavior of upload attachment missing filename.
+// TestUploadAttachment_MissingFilename verifies UploadAttachment when missing filename.
 func TestUploadAttachment_MissingFilename(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -589,7 +592,7 @@ func TestUploadAttachment_MissingFilename(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_BothContentAndFilePath verifies the behavior of upload attachment both content and file path.
+// TestUploadAttachment_BothContentAndFilePath verifies UploadAttachment when both content and file path.
 func TestUploadAttachment_BothContentAndFilePath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -606,7 +609,7 @@ func TestUploadAttachment_BothContentAndFilePath(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_NeitherContentNorFilePath verifies the behavior of upload attachment neither content nor file path.
+// TestUploadAttachment_NeitherContentNorFilePath verifies UploadAttachment when neither content nor file path.
 func TestUploadAttachment_NeitherContentNorFilePath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -621,7 +624,7 @@ func TestUploadAttachment_NeitherContentNorFilePath(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_InvalidBase64 verifies the behavior of upload attachment invalid base64.
+// TestUploadAttachment_InvalidBase64 verifies UploadAttachment when invalid base 64.
 func TestUploadAttachment_InvalidBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -637,7 +640,7 @@ func TestUploadAttachment_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_APIError verifies the behavior of upload attachment a p i error.
+// TestUploadAttachment_APIError verifies UploadAttachment when API error.
 func TestUploadAttachment_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -653,7 +656,7 @@ func TestUploadAttachment_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatAttachmentMarkdownString verifies the behavior of format attachment markdown string.
+// TestFormatAttachmentMarkdownString verifies FormatAttachmentMarkdownString.
 func TestFormatAttachmentMarkdownString(t *testing.T) {
 	out := AttachmentOutput{
 		FileName: "diagram.png",
@@ -677,9 +680,13 @@ func TestFormatAttachmentMarkdownString(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	errExpected       = "expected error"
-	fmtUnexpectedErr  = "unexpected error: %v"
-	testFileName      = "test.txt"
+	// errExpected identifies the err expected constant used by this package.
+	errExpected = "expected error"
+	// fmtUnexpectedErr identifies the fmt unexpected err constant used by this package.
+	fmtUnexpectedErr = "unexpected error: %v"
+	// testFileName identifies the test file name constant used by this package.
+	testFileName = "test.txt"
+	// errExpectedNonNil identifies the err expected non nil constant used by this package.
 	errExpectedNonNil = "expected non-nil"
 )
 
@@ -687,7 +694,7 @@ const (
 // Get with Version parameter
 // ---------------------------------------------------------------------------.
 
-// TestGet_WithVersion verifies the behavior of get with version.
+// TestGet_WithVersion verifies Get when with version.
 func TestGet_WithVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("version") != "abc123" {
@@ -709,7 +716,7 @@ func TestGet_WithVersion(t *testing.T) {
 // Update with Format parameter
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_WithFormat verifies the behavior of update with format.
+// TestUpdate_WithFormat verifies Update when with format.
 func TestUpdate_WithFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"title":"P","slug":"p","format":"rdoc","content":"x"}`)
@@ -724,7 +731,7 @@ func TestUpdate_WithFormat(t *testing.T) {
 	}
 }
 
-// TestUpdate_ServerError verifies the behavior of update server error.
+// TestUpdate_ServerError verifies Update when server error.
 func TestUpdate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -736,7 +743,7 @@ func TestUpdate_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreate_ServerError verifies the behavior of create server error.
+// TestCreate_ServerError verifies Create when server error.
 func TestCreate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -748,7 +755,7 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestGet_ServerError verifies the behavior of get server error.
+// TestGet_ServerError verifies Get when server error.
 func TestGet_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -764,7 +771,7 @@ func TestGet_ServerError(t *testing.T) {
 // UploadAttachment with file path
 // ---------------------------------------------------------------------------.
 
-// TestUploadAttachment_FilePath verifies the behavior of upload attachment file path.
+// TestUploadAttachment_FilePath verifies UploadAttachment when file path.
 func TestUploadAttachment_FilePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, testFileName)
@@ -789,7 +796,7 @@ func TestUploadAttachment_FilePath(t *testing.T) {
 	}
 }
 
-// TestUploadAttachment_NoBranch verifies the behavior of upload attachment no branch.
+// TestUploadAttachment_NoBranch verifies UploadAttachment when no branch.
 func TestUploadAttachment_NoBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"file_name":"f.png","file_path":"uploads/x/f.png","branch":"","link":{"url":"/u","markdown":"![f](u)"}}`)
@@ -809,7 +816,7 @@ func TestUploadAttachment_NoBranch(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString_WithEncodingAndContent verifies the behavior of format output markdown string with encoding and content.
+// TestFormatOutputMarkdownString_WithEncodingAndContent verifies FormatOutputMarkdownString when with encoding and content.
 func TestFormatOutputMarkdownString_WithEncodingAndContent(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
 		Title: "Test", Slug: "test", Format: "markdown",
@@ -823,7 +830,7 @@ func TestFormatOutputMarkdownString_WithEncodingAndContent(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdownString_Minimal verifies the behavior of format output markdown string minimal.
+// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
 func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{Title: "T", Slug: "t", Format: "markdown"})
 	if strings.Contains(s, "Encoding") {
@@ -834,7 +841,7 @@ func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NonNil verifies the behavior of format output markdown non nil.
+// TestFormatOutputMarkdown_NonNil verifies FormatOutputMarkdown when non nil.
 func TestFormatOutputMarkdown_NonNil(t *testing.T) {
 	r := FormatOutputMarkdown(Output{Title: "T"})
 	if r == nil {
@@ -842,7 +849,7 @@ func TestFormatOutputMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithPages verifies the behavior of format list markdown string with pages.
+// TestFormatListMarkdownString_WithPages verifies FormatListMarkdownString when with pages.
 func TestFormatListMarkdownString_WithPages(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{WikiPages: []Output{
 		{Title: "Home", Slug: "home", Format: "markdown"},
@@ -856,7 +863,7 @@ func TestFormatListMarkdownString_WithPages(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the behavior of format list markdown string empty.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(s, "No wiki pages found") {
@@ -864,7 +871,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NonNil verifies the behavior of format list markdown non nil.
+// TestFormatListMarkdown_NonNil verifies FormatListMarkdown when non nil.
 func TestFormatListMarkdown_NonNil(t *testing.T) {
 	r := FormatListMarkdown(ListOutput{})
 	if r == nil {
@@ -872,7 +879,7 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatAttachmentMarkdownString_NoBranch verifies the behavior of format attachment markdown string no branch.
+// TestFormatAttachmentMarkdownString_NoBranch verifies FormatAttachmentMarkdownString when no branch.
 func TestFormatAttachmentMarkdownString_NoBranch(t *testing.T) {
 	s := FormatAttachmentMarkdownString(AttachmentOutput{FileName: "f", FilePath: "p", URL: "u", Markdown: "m"})
 	if strings.Contains(s, "Branch") {
@@ -880,7 +887,7 @@ func TestFormatAttachmentMarkdownString_NoBranch(t *testing.T) {
 	}
 }
 
-// TestFormatAttachmentMarkdown_NonNil verifies the behavior of format attachment markdown non nil.
+// TestFormatAttachmentMarkdown_NonNil verifies FormatAttachmentMarkdown when non nil.
 func TestFormatAttachmentMarkdown_NonNil(t *testing.T) {
 	r := FormatAttachmentMarkdown(AttachmentOutput{FileName: "f"})
 	if r == nil {
@@ -986,6 +993,7 @@ func TestActionSpecs_WikiGetRoute(t *testing.T) {
 	}
 }
 
+// wikiSpecsByTool supports wiki specs by tool assertions in wikis tests.
 func wikiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

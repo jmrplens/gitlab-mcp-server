@@ -15,15 +15,21 @@ import (
 )
 
 const (
-	errExpAPIFailure     = "expected error for API failure, got nil"
+	// errExpAPIFailure identifies the err exp API failure constant used by this package.
+	errExpAPIFailure = "expected error for API failure, got nil"
+	// errExpEmptyProjectID identifies the err exp empty project ID constant used by this package.
 	errExpEmptyProjectID = "expected error for empty project_id, got nil"
-	errExpCancelledNil   = "expected error for canceled context, got nil"
-	pathRepoTree         = "/api/v4/projects/42/repository/tree"
-	pathRepoCompare      = "/api/v4/projects/42/repository/compare"
-	testReadmeName       = "README.md"
+	// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
+	errExpCancelledNil = "expected error for canceled context, got nil"
+	// pathRepoTree identifies the path repo tree constant used by this package.
+	pathRepoTree = "/api/v4/projects/42/repository/tree"
+	// pathRepoCompare identifies the path repo compare constant used by this package.
+	pathRepoCompare = "/api/v4/projects/42/repository/compare"
+	// testReadmeName identifies the test readme name constant used by this package.
+	testReadmeName = "README.md"
 )
 
-// TestRepositoryTree_Success verifies the behavior of repository tree success.
+// TestRepositoryTree_Success verifies RepositoryTree when success.
 func TestRepositoryTree_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {
@@ -56,7 +62,7 @@ func TestRepositoryTree_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryTree_WithOptions verifies the behavior of repository tree with options.
+// TestRepositoryTree_WithOptions verifies RepositoryTree when with options.
 func TestRepositoryTree_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {
@@ -93,7 +99,7 @@ func TestRepositoryTree_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryTree_EmptyProjectID verifies the behavior of repository tree empty project i d.
+// TestRepositoryTree_EmptyProjectID verifies RepositoryTree when empty project ID.
 func TestRepositoryTree_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -105,7 +111,7 @@ func TestRepositoryTree_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRepositoryTree_APIError verifies the behavior of repository tree a p i error.
+// TestRepositoryTree_APIError verifies RepositoryTree when API error.
 func TestRepositoryTree_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
@@ -119,7 +125,7 @@ func TestRepositoryTree_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryCompare_Success verifies the behavior of repository compare success.
+// TestRepositoryCompare_Success verifies RepositoryCompare when success.
 func TestRepositoryCompare_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoCompare {
@@ -164,7 +170,7 @@ func TestRepositoryCompare_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryCompare_EmptyProjectID verifies the behavior of repository compare empty project i d.
+// TestRepositoryCompare_EmptyProjectID verifies RepositoryCompare when empty project ID.
 func TestRepositoryCompare_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -179,7 +185,7 @@ func TestRepositoryCompare_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRepositoryCompare_APIError verifies the behavior of repository compare a p i error.
+// TestRepositoryCompare_APIError verifies RepositoryCompare when API error.
 func TestRepositoryCompare_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
@@ -195,7 +201,7 @@ func TestRepositoryCompare_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryTree_CancelledContext verifies the behavior of repository tree cancelled context.
+// TestRepositoryTree_CancelledContext verifies RepositoryTree when cancelled context.
 func TestRepositoryTree_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -209,7 +215,7 @@ func TestRepositoryTree_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryCompare_CancelledContext verifies the behavior of repository compare cancelled context.
+// TestRepositoryCompare_CancelledContext verifies RepositoryCompare when cancelled context.
 func TestRepositoryCompare_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -231,7 +237,7 @@ func TestRepositoryCompare_CancelledContext(t *testing.T) {
 // Contributors
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryContributors_Success verifies the behavior of repository contributors success.
+// TestRepositoryContributors_Success verifies RepositoryContributors when success.
 func TestRepositoryContributors_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/contributors" {
@@ -259,7 +265,7 @@ func TestRepositoryContributors_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryContributors_EmptyProjectID verifies the behavior of repository contributors empty project i d.
+// TestRepositoryContributors_EmptyProjectID verifies RepositoryContributors when empty project ID.
 func TestRepositoryContributors_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -275,7 +281,7 @@ func TestRepositoryContributors_EmptyProjectID(t *testing.T) {
 // MergeBase
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryMergeBase_Success verifies the behavior of repository merge base success.
+// TestRepositoryMergeBase_Success verifies RepositoryMergeBase when success.
 func TestRepositoryMergeBase_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/merge_base" {
@@ -304,7 +310,7 @@ func TestRepositoryMergeBase_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryMergeBase_EmptyProjectID verifies the behavior of repository merge base empty project i d.
+// TestRepositoryMergeBase_EmptyProjectID verifies RepositoryMergeBase when empty project ID.
 func TestRepositoryMergeBase_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -316,7 +322,7 @@ func TestRepositoryMergeBase_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRepositoryMerge_BaseTooFewRefs verifies the behavior of repository merge base too few refs.
+// TestRepositoryMerge_BaseTooFewRefs verifies RepositoryMerge when base too few refs.
 func TestRepositoryMerge_BaseTooFewRefs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -332,7 +338,7 @@ func TestRepositoryMerge_BaseTooFewRefs(t *testing.T) {
 // Blob
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryBlob_Success verifies the behavior of repository blob success.
+// TestRepositoryBlob_Success verifies RepositoryBlob when success.
 func TestRepositoryBlob_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/blobs/abc123" {
@@ -359,7 +365,7 @@ func TestRepositoryBlob_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryBlob_EmptyProjectID verifies the behavior of repository blob empty project i d.
+// TestRepositoryBlob_EmptyProjectID verifies RepositoryBlob when empty project ID.
 func TestRepositoryBlob_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -375,7 +381,7 @@ func TestRepositoryBlob_EmptyProjectID(t *testing.T) {
 // RawBlobContent
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryRawBlobContent_Success verifies the behavior of repository raw blob content success.
+// TestRepositoryRawBlobContent_Success verifies RepositoryRawBlobContent when success.
 func TestRepositoryRawBlobContent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/blobs/abc123/raw" {
@@ -402,7 +408,7 @@ func TestRepositoryRawBlobContent_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryRawBlobContent_EmptyProjectID verifies the behavior of repository raw blob content empty project i d.
+// TestRepositoryRawBlobContent_EmptyProjectID verifies RepositoryRawBlobContent when empty project ID.
 func TestRepositoryRawBlobContent_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -418,7 +424,7 @@ func TestRepositoryRawBlobContent_EmptyProjectID(t *testing.T) {
 // Archive
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryArchive_Success verifies the behavior of repository archive success.
+// TestRepositoryArchive_Success verifies RepositoryArchive when success.
 func TestRepositoryArchive_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -439,7 +445,7 @@ func TestRepositoryArchive_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_DefaultFormat verifies the behavior of repository archive default format.
+// TestRepositoryArchive_DefaultFormat verifies RepositoryArchive when default format.
 func TestRepositoryArchive_DefaultFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -454,7 +460,7 @@ func TestRepositoryArchive_DefaultFormat(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_EmptyProjectID verifies the behavior of repository archive empty project i d.
+// TestRepositoryArchive_EmptyProjectID verifies RepositoryArchive when empty project ID.
 func TestRepositoryArchive_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -470,7 +476,7 @@ func TestRepositoryArchive_EmptyProjectID(t *testing.T) {
 // AddChangelog
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryAddChangelog_Success verifies the behavior of repository add changelog success.
+// TestRepositoryAddChangelog_Success verifies RepositoryAddChangelog when success.
 func TestRepositoryAddChangelog_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
@@ -495,7 +501,7 @@ func TestRepositoryAddChangelog_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_EmptyProjectID verifies the behavior of repository add changelog empty project i d.
+// TestRepositoryAddChangelog_EmptyProjectID verifies RepositoryAddChangelog when empty project ID.
 func TestRepositoryAddChangelog_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -507,7 +513,7 @@ func TestRepositoryAddChangelog_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_EmptyVersion verifies the behavior of repository add changelog empty version.
+// TestRepositoryAddChangelog_EmptyVersion verifies RepositoryAddChangelog when empty version.
 func TestRepositoryAddChangelog_EmptyVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -523,7 +529,7 @@ func TestRepositoryAddChangelog_EmptyVersion(t *testing.T) {
 // GenerateChangelogData
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryGenerateChangelogData_Success verifies the behavior of repository generate changelog data success.
+// TestRepositoryGenerateChangelogData_Success verifies RepositoryGenerateChangelogData when success.
 func TestRepositoryGenerateChangelogData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
@@ -545,7 +551,7 @@ func TestRepositoryGenerateChangelogData_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_EmptyProjectID verifies the behavior of repository generate changelog data empty project i d.
+// TestRepositoryGenerateChangelogData_EmptyProjectID verifies RepositoryGenerateChangelogData when empty project ID.
 func TestRepositoryGenerateChangelogData_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -557,7 +563,7 @@ func TestRepositoryGenerateChangelogData_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_EmptyVersion verifies the behavior of repository generate changelog data empty version.
+// TestRepositoryGenerateChangelogData_EmptyVersion verifies RepositoryGenerateChangelogData when empty version.
 func TestRepositoryGenerateChangelogData_EmptyVersion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -573,7 +579,7 @@ func TestRepositoryGenerateChangelogData_EmptyVersion(t *testing.T) {
 // Canceled Context Tests
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryContributors_CancelledContext verifies the behavior of repository contributors cancelled context.
+// TestRepositoryContributors_CancelledContext verifies RepositoryContributors when cancelled context.
 func TestRepositoryContributors_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -585,7 +591,7 @@ func TestRepositoryContributors_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryMergeBase_CancelledContext verifies the behavior of repository merge base cancelled context.
+// TestRepositoryMergeBase_CancelledContext verifies RepositoryMergeBase when cancelled context.
 func TestRepositoryMergeBase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -597,7 +603,7 @@ func TestRepositoryMergeBase_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryBlob_CancelledContext verifies the behavior of repository blob cancelled context.
+// TestRepositoryBlob_CancelledContext verifies RepositoryBlob when cancelled context.
 func TestRepositoryBlob_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -609,7 +615,7 @@ func TestRepositoryBlob_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryRawBlobContent_CancelledContext verifies the behavior of repository raw blob content cancelled context.
+// TestRepositoryRawBlobContent_CancelledContext verifies RepositoryRawBlobContent when cancelled context.
 func TestRepositoryRawBlobContent_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -621,7 +627,7 @@ func TestRepositoryRawBlobContent_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_CancelledContext verifies the behavior of repository archive cancelled context.
+// TestRepositoryArchive_CancelledContext verifies RepositoryArchive when cancelled context.
 func TestRepositoryArchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -633,7 +639,7 @@ func TestRepositoryArchive_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_CancelledContext verifies the behavior of repository add changelog cancelled context.
+// TestRepositoryAddChangelog_CancelledContext verifies RepositoryAddChangelog when cancelled context.
 func TestRepositoryAddChangelog_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -645,7 +651,7 @@ func TestRepositoryAddChangelog_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_CancelledContext verifies the behavior of repository generate changelog data cancelled context.
+// TestRepositoryGenerateChangelogData_CancelledContext verifies RepositoryGenerateChangelogData when cancelled context.
 func TestRepositoryGenerateChangelogData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"notes":""}`)
@@ -661,7 +667,7 @@ func TestRepositoryGenerateChangelogData_CancelledContext(t *testing.T) {
 // API Error Tests
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryContributors_APIError verifies the behavior of repository contributors a p i error.
+// TestRepositoryContributors_APIError verifies RepositoryContributors when API error.
 func TestRepositoryContributors_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -672,7 +678,7 @@ func TestRepositoryContributors_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryMergeBase_APIError verifies the behavior of repository merge base a p i error.
+// TestRepositoryMergeBase_APIError verifies RepositoryMergeBase when API error.
 func TestRepositoryMergeBase_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -683,7 +689,7 @@ func TestRepositoryMergeBase_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryBlob_APIError verifies the behavior of repository blob a p i error.
+// TestRepositoryBlob_APIError verifies RepositoryBlob when API error.
 func TestRepositoryBlob_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Blob Not Found"}`)
@@ -694,7 +700,7 @@ func TestRepositoryBlob_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryRawBlobContent_APIError verifies the behavior of repository raw blob content a p i error.
+// TestRepositoryRawBlobContent_APIError verifies RepositoryRawBlobContent when API error.
 func TestRepositoryRawBlobContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Blob Not Found"}`)
@@ -705,7 +711,7 @@ func TestRepositoryRawBlobContent_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_APIError verifies the behavior of repository add changelog a p i error.
+// TestRepositoryAddChangelog_APIError verifies RepositoryAddChangelog when API error.
 func TestRepositoryAddChangelog_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -716,7 +722,7 @@ func TestRepositoryAddChangelog_APIError(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_APIError verifies the behavior of repository generate changelog data a p i error.
+// TestRepositoryGenerateChangelogData_APIError verifies RepositoryGenerateChangelogData when API error.
 func TestRepositoryGenerateChangelogData_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -731,7 +737,7 @@ func TestRepositoryGenerateChangelogData_APIError(t *testing.T) {
 // Handler Edge Cases (optional fields, query parameters)
 // ---------------------------------------------------------------------------.
 
-// TestRepositoryCompare_WithOptions verifies the behavior of repository compare with options.
+// TestRepositoryCompare_WithOptions verifies RepositoryCompare when with options.
 func TestRepositoryCompare_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoCompare {
@@ -767,7 +773,7 @@ func TestRepositoryCompare_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryContributors_WithOptions verifies the behavior of repository contributors with options.
+// TestRepositoryContributors_WithOptions verifies RepositoryContributors when with options.
 func TestRepositoryContributors_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/contributors" {
@@ -806,7 +812,7 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_WithOptions verifies the behavior of repository add changelog with options.
+// TestRepositoryAddChangelog_WithOptions verifies RepositoryAddChangelog when with options.
 func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
@@ -838,7 +844,7 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_WithOptions verifies the behavior of repository generate changelog data with options.
+// TestRepositoryGenerateChangelogData_WithOptions verifies RepositoryGenerateChangelogData when with options.
 func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
@@ -864,7 +870,7 @@ func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_WithPath verifies the behavior of repository archive with path.
+// TestRepositoryArchive_WithPath verifies RepositoryArchive when with path.
 func TestRepositoryArchive_WithPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -887,7 +893,7 @@ func TestRepositoryArchive_WithPath(t *testing.T) {
 	}
 }
 
-// TestRepositoryTree_WithPagination verifies the behavior of repository tree with pagination.
+// TestRepositoryTree_WithPagination verifies RepositoryTree when with pagination.
 func TestRepositoryTree_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {
@@ -926,7 +932,7 @@ func TestRepositoryTree_WithPagination(t *testing.T) {
 // Format*Markdown Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatTreeMarkdown verifies the behavior of format tree markdown.
+// TestFormatTreeMarkdown verifies FormatTreeMarkdown.
 func TestFormatTreeMarkdown(t *testing.T) {
 	out := TreeOutput{
 		Tree: []TreeNodeOutput{
@@ -947,7 +953,7 @@ func TestFormatTreeMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatTreeMarkdown_Empty verifies the behavior of format tree markdown empty.
+// TestFormatTreeMarkdown_Empty verifies FormatTreeMarkdown when empty.
 func TestFormatTreeMarkdown_Empty(t *testing.T) {
 	out := TreeOutput{
 		Tree:       nil,
@@ -959,7 +965,7 @@ func TestFormatTreeMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCompareMarkdown verifies the behavior of format compare markdown.
+// TestFormatCompareMarkdown verifies FormatCompareMarkdown.
 func TestFormatCompareMarkdown(t *testing.T) {
 	out := CompareOutput{
 		Commits: []commits.Output{
@@ -988,7 +994,7 @@ func TestFormatCompareMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCompareMarkdown_NewDeletedRenamed verifies the behavior of format compare markdown new deleted renamed.
+// TestFormatCompareMarkdown_NewDeletedRenamed verifies FormatCompareMarkdown when new deleted renamed.
 func TestFormatCompareMarkdown_NewDeletedRenamed(t *testing.T) {
 	out := CompareOutput{
 		Diffs: []DiffOutput{
@@ -1009,7 +1015,7 @@ func TestFormatCompareMarkdown_NewDeletedRenamed(t *testing.T) {
 	}
 }
 
-// TestFormatCompareMarkdown_SameRef verifies the behavior of format compare markdown same ref.
+// TestFormatCompareMarkdown_SameRef verifies FormatCompareMarkdown when same ref.
 func TestFormatCompareMarkdown_SameRef(t *testing.T) {
 	out := CompareOutput{CompareSameRef: true}
 	md := FormatCompareMarkdown(out)
@@ -1018,7 +1024,7 @@ func TestFormatCompareMarkdown_SameRef(t *testing.T) {
 	}
 }
 
-// TestFormatCompareMarkdown_Timeout verifies the behavior of format compare markdown timeout.
+// TestFormatCompareMarkdown_Timeout verifies FormatCompareMarkdown when timeout.
 func TestFormatCompareMarkdown_Timeout(t *testing.T) {
 	out := CompareOutput{CompareTimeout: true}
 	md := FormatCompareMarkdown(out)
@@ -1027,7 +1033,7 @@ func TestFormatCompareMarkdown_Timeout(t *testing.T) {
 	}
 }
 
-// TestFormatContributorsMarkdown verifies the behavior of format contributors markdown.
+// TestFormatContributorsMarkdown verifies FormatContributorsMarkdown.
 func TestFormatContributorsMarkdown(t *testing.T) {
 	out := ContributorsOutput{
 		Contributors: []ContributorOutput{
@@ -1047,7 +1053,7 @@ func TestFormatContributorsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatContributorsMarkdown_Empty verifies the behavior of format contributors markdown empty.
+// TestFormatContributorsMarkdown_Empty verifies FormatContributorsMarkdown when empty.
 func TestFormatContributorsMarkdown_Empty(t *testing.T) {
 	out := ContributorsOutput{Contributors: nil}
 	md := FormatContributorsMarkdown(out)
@@ -1056,7 +1062,7 @@ func TestFormatContributorsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatBlobMarkdown verifies the behavior of format blob markdown.
+// TestFormatBlobMarkdown verifies FormatBlobMarkdown.
 func TestFormatBlobMarkdown(t *testing.T) {
 	out := BlobOutput{SHA: "abc123", Size: 1024, Content: "base64data"}
 	md := FormatBlobMarkdown(out)
@@ -1071,7 +1077,7 @@ func TestFormatBlobMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatRawBlobContentMarkdown verifies the behavior of format raw blob content markdown.
+// TestFormatRawBlobContentMarkdown verifies FormatRawBlobContentMarkdown.
 func TestFormatRawBlobContentMarkdown(t *testing.T) {
 	out := RawBlobContentOutput{SHA: "def456", Size: 42, Content: "hello world"}
 	md := FormatRawBlobContentMarkdown(out)
@@ -1086,7 +1092,7 @@ func TestFormatRawBlobContentMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatArchiveMarkdown verifies the behavior of format archive markdown.
+// TestFormatArchiveMarkdown verifies FormatArchiveMarkdown.
 func TestFormatArchiveMarkdown(t *testing.T) {
 	out := ArchiveOutput{ProjectID: "42", SHA: "main", Format: "zip", URL: "https://example.com/archive.zip"}
 	md := FormatArchiveMarkdown(out)
@@ -1104,7 +1110,7 @@ func TestFormatArchiveMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatArchiveMarkdown_NoSHA verifies the behavior of format archive markdown no s h a.
+// TestFormatArchiveMarkdown_NoSHA verifies FormatArchiveMarkdown when no SHA.
 func TestFormatArchiveMarkdown_NoSHA(t *testing.T) {
 	out := ArchiveOutput{ProjectID: "42", Format: "tar.gz", URL: "https://example.com/archive.tar.gz"}
 	md := FormatArchiveMarkdown(out)
@@ -1113,7 +1119,7 @@ func TestFormatArchiveMarkdown_NoSHA(t *testing.T) {
 	}
 }
 
-// TestFormatAddChangelogMarkdown_Success verifies the behavior of format add changelog markdown success.
+// TestFormatAddChangelogMarkdown_Success verifies FormatAddChangelogMarkdown when success.
 func TestFormatAddChangelogMarkdown_Success(t *testing.T) {
 	out := AddChangelogOutput{Success: true, Version: "1.0.0"}
 	md := FormatAddChangelogMarkdown(out)
@@ -1125,7 +1131,7 @@ func TestFormatAddChangelogMarkdown_Success(t *testing.T) {
 	}
 }
 
-// TestFormatAddChangelogMarkdown_Failure verifies the behavior of format add changelog markdown failure.
+// TestFormatAddChangelogMarkdown_Failure verifies FormatAddChangelogMarkdown when failure.
 func TestFormatAddChangelogMarkdown_Failure(t *testing.T) {
 	out := AddChangelogOutput{Success: false}
 	md := FormatAddChangelogMarkdown(out)
@@ -1134,7 +1140,7 @@ func TestFormatAddChangelogMarkdown_Failure(t *testing.T) {
 	}
 }
 
-// TestFormatChangelogDataMarkdown verifies the behavior of format changelog data markdown.
+// TestFormatChangelogDataMarkdown verifies FormatChangelogDataMarkdown.
 func TestFormatChangelogDataMarkdown(t *testing.T) {
 	out := ChangelogDataOutput{Notes: "## 1.0.0\n\n- feat: initial release\n"}
 	md := FormatChangelogDataMarkdown(out)
@@ -1146,7 +1152,7 @@ func TestFormatChangelogDataMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatChangelogDataMarkdown_Empty verifies the behavior of format changelog data markdown empty.
+// TestFormatChangelogDataMarkdown_Empty verifies FormatChangelogDataMarkdown when empty.
 func TestFormatChangelogDataMarkdown_Empty(t *testing.T) {
 	out := ChangelogDataOutput{Notes: ""}
 	md := FormatChangelogDataMarkdown(out)
@@ -1180,6 +1186,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// newRepositorySpecsByTool constructs repository specs by tool test fixtures.
 func newRepositorySpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1264,6 +1271,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
+// repositorySpecsByTool supports repository specs by tool assertions in repository tests.
 func repositorySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

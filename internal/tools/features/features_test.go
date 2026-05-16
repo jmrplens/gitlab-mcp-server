@@ -14,11 +14,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestList_Success verifies that List handles the success scenario correctly.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/features" {
@@ -54,7 +56,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -66,7 +68,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestListDefinitions_Success verifies that ListDefinitions handles the success scenario correctly.
+// TestListDefinitions_Success verifies ListDefinitions when success.
 func TestListDefinitions_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/features/definitions" {
@@ -93,7 +95,7 @@ func TestListDefinitions_Success(t *testing.T) {
 	}
 }
 
-// TestSet_Success verifies that Set handles the success scenario correctly.
+// TestSet_Success verifies Set when success.
 func TestSet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -117,7 +119,7 @@ func TestSet_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete handles the success scenario correctly.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -135,7 +137,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies that Delete handles the error scenario correctly.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -147,7 +149,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Features: []FeatureItem{
@@ -164,7 +166,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies that FormatListMarkdown handles the empty scenario correctly.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -173,7 +175,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListDefinitionsMarkdown verifies the behavior of format list definitions markdown.
+// TestFormatListDefinitionsMarkdown verifies FormatListDefinitionsMarkdown.
 func TestFormatListDefinitionsMarkdown(t *testing.T) {
 	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{
 		Definitions: []DefinitionItem{
@@ -186,7 +188,7 @@ func TestFormatListDefinitionsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatFeatureMarkdown verifies the behavior of format feature markdown.
+// TestFormatFeatureMarkdown verifies FormatFeatureMarkdown.
 func TestFormatFeatureMarkdown(t *testing.T) {
 	result := FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{
@@ -212,7 +214,7 @@ func TestFormatFeatureMarkdown(t *testing.T) {
 // Set — API error
 // ---------------------------------------------------------------------------.
 
-// TestSet_APIError verifies the behavior of set a p i error.
+// TestSet_APIError verifies Set when API error.
 func TestSet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -227,7 +229,7 @@ func TestSet_APIError(t *testing.T) {
 // Set — with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestSet_AllOptionalFields verifies the behavior of set all optional fields.
+// TestSet_AllOptionalFields verifies Set when all optional fields.
 func TestSet_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -260,7 +262,7 @@ func TestSet_AllOptionalFields(t *testing.T) {
 // ListDefinitions — API error
 // ---------------------------------------------------------------------------.
 
-// TestListDefinitions_APIError verifies the behavior of list definitions a p i error.
+// TestListDefinitions_APIError verifies ListDefinitions when API error.
 func TestListDefinitions_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -275,7 +277,7 @@ func TestListDefinitions_APIError(t *testing.T) {
 // Formatter — empty definitions
 // ---------------------------------------------------------------------------.
 
-// TestFormatListDefinitionsMarkdown_Empty verifies the behavior of format list definitions markdown empty.
+// TestFormatListDefinitionsMarkdown_Empty verifies FormatListDefinitionsMarkdown when empty.
 func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
 	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -288,7 +290,7 @@ func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
 // Formatter — feature without definition
 // ---------------------------------------------------------------------------.
 
-// TestFormatFeatureMarkdown_NoDefinition verifies the behavior of format feature markdown no definition.
+// TestFormatFeatureMarkdown_NoDefinition verifies FormatFeatureMarkdown when no definition.
 func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 	result := FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{

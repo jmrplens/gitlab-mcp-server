@@ -12,11 +12,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestListAll verifies the behavior of list all.
+// TestListAll verifies ListAll.
 func TestListAll(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups" || r.Method != http.MethodGet {
@@ -34,7 +36,7 @@ func TestListAll(t *testing.T) {
 	}
 }
 
-// TestListAll_Error verifies that ListAll handles the error scenario correctly.
+// TestListAll_Error verifies ListAll when error.
 func TestListAll_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -45,7 +47,7 @@ func TestListAll_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodGet {
@@ -63,7 +65,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -74,7 +76,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestEdit verifies the behavior of edit.
+// TestEdit verifies Edit.
 func TestEdit(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodPut {
@@ -92,7 +94,7 @@ func TestEdit(t *testing.T) {
 	}
 }
 
-// TestEdit_Error verifies that Edit handles the error scenario correctly.
+// TestEdit_Error verifies Edit when error.
 func TestEdit_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -103,7 +105,7 @@ func TestEdit_Error(t *testing.T) {
 	}
 }
 
-// TestListUpcomingJobs verifies the behavior of list upcoming jobs.
+// TestListUpcomingJobs verifies ListUpcomingJobs.
 func TestListUpcomingJobs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production/upcoming_jobs" || r.Method != http.MethodGet {
@@ -121,7 +123,7 @@ func TestListUpcomingJobs(t *testing.T) {
 	}
 }
 
-// TestListUpcomingJobs_Error verifies that ListUpcomingJobs handles the error scenario correctly.
+// TestListUpcomingJobs_Error verifies ListUpcomingJobs when error.
 func TestListUpcomingJobs_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -132,7 +134,7 @@ func TestListUpcomingJobs_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Groups: []ResourceGroupItem{{ID: 1, Key: "prod", ProcessMode: "unordered"}}})
 	if md == "" {
@@ -146,7 +148,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // FormatListMarkdown — empty groups
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies the behavior of cov format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Groups: nil})
 	if !strings.Contains(md, "No resource groups found") {
@@ -161,7 +163,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatGroupMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupMarkdown verifies the behavior of cov format group markdown.
+// TestFormatGroupMarkdown verifies FormatGroupMarkdown.
 func TestFormatGroupMarkdown(t *testing.T) {
 	md := FormatGroupMarkdown(ResourceGroupItem{ID: 42, Key: "staging", ProcessMode: "oldest_first"})
 	for _, want := range []string{
@@ -180,7 +182,7 @@ func TestFormatGroupMarkdown(t *testing.T) {
 // FormatJobsMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatJobsMarkdown_WithData verifies the behavior of cov format jobs markdown with data.
+// TestFormatJobsMarkdown_WithData verifies FormatJobsMarkdown when with data.
 func TestFormatJobsMarkdown_WithData(t *testing.T) {
 	md := FormatJobsMarkdown(ListUpcomingJobsOutput{
 		Jobs: []JobItem{
@@ -204,7 +206,7 @@ func TestFormatJobsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatJobsMarkdown_Empty verifies the behavior of cov format jobs markdown empty.
+// TestFormatJobsMarkdown_Empty verifies FormatJobsMarkdown when empty.
 func TestFormatJobsMarkdown_Empty(t *testing.T) {
 	md := FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: nil})
 	if !strings.Contains(md, "No upcoming jobs") {
@@ -317,6 +319,7 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
+// covNewResourceGroupsRouteSpecs supports cov new resource groups route specs assertions in resourcegroups tests.
 func covNewResourceGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -344,6 +347,7 @@ func covNewResourceGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec
 	return resourceGroupSpecsByTool(ActionSpecs(client))
 }
 
+// resourceGroupSpecsByTool supports resource group specs by tool assertions in resourcegroups tests.
 func resourceGroupSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

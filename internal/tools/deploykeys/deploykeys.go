@@ -73,7 +73,7 @@ type InstanceListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// timeStr is an internal helper for the deploykeys package.
+// timeStr implements the time str helper used by deploykeys.
 func timeStr(t *time.Time) string {
 	if t == nil {
 		return ""

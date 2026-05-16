@@ -7,7 +7,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// FormatListMarkdown performs the format list markdown operation for the resourcegroups package.
+// FormatListMarkdown renders resource groups as a compact Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Resource Groups\n\n")
@@ -15,7 +15,7 @@ func FormatListMarkdown(out ListOutput) string {
 		sb.WriteString("No resource groups found.\n")
 		return sb.String()
 	}
-	sb.WriteString("| ID | Key | Process Mode |\n|----|-----|-----------|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Key", "Process Mode"))
 	for _, g := range out.Groups {
 		fmt.Fprintf(&sb, "| %d | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Key), g.ProcessMode)
 	}
@@ -23,7 +23,7 @@ func FormatListMarkdown(out ListOutput) string {
 	return sb.String()
 }
 
-// FormatGroupMarkdown performs the format group markdown operation for the resourcegroups package.
+// FormatGroupMarkdown renders a single resource group summary.
 func FormatGroupMarkdown(g ResourceGroupItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Resource Group\n\n- **ID**: %d\n- **Key**: %s\n- **Process Mode**: %s\n", g.ID, g.Key, g.ProcessMode)
@@ -31,7 +31,7 @@ func FormatGroupMarkdown(g ResourceGroupItem) string {
 	return b.String()
 }
 
-// FormatJobsMarkdown performs the format jobs markdown operation for the resourcegroups package.
+// FormatJobsMarkdown renders upcoming resource-group jobs as a Markdown table.
 func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Upcoming Jobs\n\n")
@@ -39,7 +39,7 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 		sb.WriteString("No upcoming jobs.\n")
 		return sb.String()
 	}
-	sb.WriteString("| ID | Name | Status | Stage |\n|----|------|--------|-------|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage"))
 	for _, j := range out.Jobs {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, j.Stage)
 	}

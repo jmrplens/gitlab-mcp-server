@@ -264,7 +264,7 @@ func TestFileGet_TextContentCategory(t *testing.T) {
 // CreateFile
 // ---------------------------------------------------------------------------.
 
-// TestFileCreate_Success verifies the behavior of file create success.
+// TestFileCreate_Success verifies FileCreate when success.
 func TestFileCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/files/new_file.txt" {
@@ -292,7 +292,7 @@ func TestFileCreate_Success(t *testing.T) {
 	}
 }
 
-// TestFileCreate_EmptyProjectID verifies the behavior of file create empty project i d.
+// TestFileCreate_EmptyProjectID verifies FileCreate when empty project ID.
 func TestFileCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -304,7 +304,7 @@ func TestFileCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestFileCreate_MissingBranch verifies the behavior of file create missing branch.
+// TestFileCreate_MissingBranch verifies FileCreate when missing branch.
 func TestFileCreate_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -320,7 +320,7 @@ func TestFileCreate_MissingBranch(t *testing.T) {
 // UpdateFile
 // ---------------------------------------------------------------------------.
 
-// TestFileUpdate_Success verifies the behavior of file update success.
+// TestFileUpdate_Success verifies FileUpdate when success.
 func TestFileUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/repository/files/main.go" {
@@ -345,7 +345,7 @@ func TestFileUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_EmptyProjectID verifies the behavior of file update empty project i d.
+// TestFileUpdate_EmptyProjectID verifies FileUpdate when empty project ID.
 func TestFileUpdate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -361,7 +361,7 @@ func TestFileUpdate_EmptyProjectID(t *testing.T) {
 // DeleteFile
 // ---------------------------------------------------------------------------.
 
-// TestFileDelete_Success verifies the behavior of file delete success.
+// TestFileDelete_Success verifies FileDelete when success.
 func TestFileDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/files/old_file.txt" {
@@ -382,7 +382,7 @@ func TestFileDelete_Success(t *testing.T) {
 	}
 }
 
-// TestFileDelete_EmptyProjectID verifies the behavior of file delete empty project i d.
+// TestFileDelete_EmptyProjectID verifies FileDelete when empty project ID.
 func TestFileDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -398,7 +398,7 @@ func TestFileDelete_EmptyProjectID(t *testing.T) {
 // GetFileBlame
 // ---------------------------------------------------------------------------.
 
-// TestFileBlame_Success verifies the behavior of file blame success.
+// TestFileBlame_Success verifies FileBlame when success.
 func TestFileBlame_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/blame" {
@@ -431,7 +431,7 @@ func TestFileBlame_Success(t *testing.T) {
 	}
 }
 
-// TestFileBlame_EmptyProjectID verifies the behavior of file blame empty project i d.
+// TestFileBlame_EmptyProjectID verifies FileBlame when empty project ID.
 func TestFileBlame_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -447,7 +447,7 @@ func TestFileBlame_EmptyProjectID(t *testing.T) {
 // GetFileMetaData
 // ---------------------------------------------------------------------------.
 
-// TestFileMetaData_Success verifies the behavior of file meta data success.
+// TestFileMetaData_Success verifies FileMetaData when success.
 func TestFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go" && (r.Method == http.MethodHead || r.Method == http.MethodGet) {
@@ -485,7 +485,7 @@ func TestFileMetaData_Success(t *testing.T) {
 	}
 }
 
-// TestFileMetaData_EmptyProjectID verifies the behavior of file meta data empty project i d.
+// TestFileMetaData_EmptyProjectID verifies FileMetaData when empty project ID.
 func TestFileMetaData_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -501,7 +501,7 @@ func TestFileMetaData_EmptyProjectID(t *testing.T) {
 // GetRawFile
 // ---------------------------------------------------------------------------.
 
-// TestFileGetRaw_Success verifies the behavior of file get raw success.
+// TestFileGetRaw_Success verifies FileGetRaw when success.
 func TestFileGetRaw_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
@@ -528,7 +528,7 @@ func TestFileGetRaw_Success(t *testing.T) {
 	}
 }
 
-// TestFileGetRaw_EmptyProjectID verifies the behavior of file get raw empty project i d.
+// TestFileGetRaw_EmptyProjectID verifies FileGetRaw when empty project ID.
 func TestFileGetRaw_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -610,7 +610,7 @@ func TestFileGetRaw_BinaryFile(t *testing.T) {
 // Canceled-context tests for ALL handlers
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -623,7 +623,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies the behavior of create cancelled context.
+// TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -636,7 +636,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -649,7 +649,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -662,7 +662,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBlame_CancelledContext verifies the behavior of blame cancelled context.
+// TestBlame_CancelledContext verifies Blame when cancelled context.
 func TestBlame_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -675,7 +675,7 @@ func TestBlame_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetMetaData_CancelledContext verifies the behavior of get meta data cancelled context.
+// TestGetMetaData_CancelledContext verifies GetMetaData when cancelled context.
 func TestGetMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -688,7 +688,7 @@ func TestGetMetaData_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRaw_CancelledContext verifies the behavior of get raw cancelled context.
+// TestGetRaw_CancelledContext verifies GetRaw when cancelled context.
 func TestGetRaw_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -701,7 +701,7 @@ func TestGetRaw_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_CancelledContext verifies the behavior of get raw file meta data cancelled context.
+// TestGetRawFileMetaData_CancelledContext verifies GetRawFileMetaData when cancelled context.
 func TestGetRawFileMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -718,7 +718,7 @@ func TestGetRawFileMetaData_CancelledContext(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestGet_EmptyProjectID verifies the behavior of get empty project i d.
+// TestGet_EmptyProjectID verifies Get when empty project ID.
 func TestGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -733,7 +733,7 @@ func TestGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies the behavior of create a p i error.
+// TestCreate_APIError verifies Create when API error.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -747,7 +747,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingCommitMessage verifies the behavior of create missing commit message.
+// TestCreate_MissingCommitMessage verifies Create when missing commit message.
 func TestCreate_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -762,7 +762,7 @@ func TestCreate_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -776,7 +776,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingBranch verifies the behavior of update missing branch.
+// TestUpdate_MissingBranch verifies Update when missing branch.
 func TestUpdate_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -791,7 +791,7 @@ func TestUpdate_MissingBranch(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingCommitMessage verifies the behavior of update missing commit message.
+// TestUpdate_MissingCommitMessage verifies Update when missing commit message.
 func TestUpdate_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -806,7 +806,7 @@ func TestUpdate_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -820,7 +820,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingBranch verifies the behavior of delete missing branch.
+// TestDelete_MissingBranch verifies Delete when missing branch.
 func TestDelete_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -835,7 +835,7 @@ func TestDelete_MissingBranch(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingCommitMessage verifies the behavior of delete missing commit message.
+// TestDelete_MissingCommitMessage verifies Delete when missing commit message.
 func TestDelete_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -850,7 +850,7 @@ func TestDelete_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestBlame_APIError verifies the behavior of blame a p i error.
+// TestBlame_APIError verifies Blame when API error.
 func TestBlame_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -862,7 +862,7 @@ func TestBlame_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMetaData_APIError verifies the behavior of get meta data a p i error.
+// TestGetMetaData_APIError verifies GetMetaData when API error.
 func TestGetMetaData_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -874,7 +874,7 @@ func TestGetMetaData_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRaw_APIError verifies the behavior of get raw a p i error.
+// TestGetRaw_APIError verifies GetRaw when API error.
 func TestGetRaw_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -890,7 +890,7 @@ func TestGetRaw_APIError(t *testing.T) {
 // GetRawFileMetaData
 // ---------------------------------------------------------------------------.
 
-// TestGetRawFileMetaData_Success verifies the behavior of get raw file meta data success.
+// TestGetRawFileMetaData_Success verifies GetRawFileMetaData when success.
 func TestGetRawFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" && r.Method == http.MethodHead {
@@ -929,7 +929,7 @@ func TestGetRawFileMetaData_Success(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_EmptyProjectID verifies the behavior of get raw file meta data empty project i d.
+// TestGetRawFileMetaData_EmptyProjectID verifies GetRawFileMetaData when empty project ID.
 func TestGetRawFileMetaData_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -944,7 +944,7 @@ func TestGetRawFileMetaData_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_APIError verifies the behavior of get raw file meta data a p i error.
+// TestGetRawFileMetaData_APIError verifies GetRawFileMetaData when API error.
 func TestGetRawFileMetaData_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -962,7 +962,7 @@ func TestGetRawFileMetaData_APIError(t *testing.T) {
 // Optional fields — Create with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithAllOptionalFields verifies the behavior of create with all optional fields.
+// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1009,7 +1009,7 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // Optional fields — Update with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_WithAllOptionalFields verifies the behavior of update with all optional fields.
+// TestUpdate_WithAllOptionalFields verifies Update when with all optional fields.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1053,7 +1053,7 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 // Optional fields — Delete with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestDelete_WithAllOptionalFields verifies the behavior of delete with all optional fields.
+// TestDelete_WithAllOptionalFields verifies Delete when with all optional fields.
 func TestDelete_WithAllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/files/old.txt" {
@@ -1082,7 +1082,7 @@ func TestDelete_WithAllOptionalFields(t *testing.T) {
 // Blame with ref and range options
 // ---------------------------------------------------------------------------.
 
-// TestBlame_WithRefAndRange verifies the behavior of blame with ref and range.
+// TestBlame_WithRefAndRange verifies Blame when with ref and range.
 func TestBlame_WithRefAndRange(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/blame" {
@@ -1129,7 +1129,7 @@ func TestBlame_WithRefAndRange(t *testing.T) {
 // MetaData with ref option
 // ---------------------------------------------------------------------------.
 
-// TestGetMetaData_WithRef verifies the behavior of get meta data with ref.
+// TestGetMetaData_WithRef verifies GetMetaData when with ref.
 func TestGetMetaData_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go" {
@@ -1168,7 +1168,7 @@ func TestGetMetaData_WithRef(t *testing.T) {
 // Raw with ref option
 // ---------------------------------------------------------------------------.
 
-// TestGetRaw_WithRef verifies the behavior of get raw with ref.
+// TestGetRaw_WithRef verifies GetRaw when with ref.
 func TestGetRaw_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
@@ -1199,7 +1199,7 @@ func TestGetRaw_WithRef(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	t.Run("empty file path returns empty string", func(t *testing.T) {
 		got := FormatOutputMarkdown(Output{})
@@ -1230,7 +1230,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatFileInfoMarkdown verifies the behavior of format file info markdown.
+// TestFormatFileInfoMarkdown verifies FormatFileInfoMarkdown.
 func TestFormatFileInfoMarkdown(t *testing.T) {
 	got := FormatFileInfoMarkdown(FileInfoOutput{
 		FilePath: "new_file.txt",
@@ -1247,7 +1247,7 @@ func TestFormatFileInfoMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBlameMarkdown verifies the behavior of format blame markdown.
+// TestFormatBlameMarkdown verifies FormatBlameMarkdown.
 func TestFormatBlameMarkdown(t *testing.T) {
 	t.Run("empty ranges", func(t *testing.T) {
 		got := FormatBlameMarkdown(BlameOutput{
@@ -1308,7 +1308,7 @@ func TestFormatBlameMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatMetaDataMarkdown verifies the behavior of format meta data markdown.
+// TestFormatMetaDataMarkdown verifies FormatMetaDataMarkdown.
 func TestFormatMetaDataMarkdown(t *testing.T) {
 	t.Run("without execute filemode", func(t *testing.T) {
 		got := FormatMetaDataMarkdown(MetaDataOutput{
@@ -1349,7 +1349,7 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatRawMarkdown verifies the behavior of format raw markdown.
+// TestFormatRawMarkdown verifies FormatRawMarkdown.
 func TestFormatRawMarkdown(t *testing.T) {
 	got := FormatRawMarkdown(RawOutput{
 		FilePath: "readme.md",
@@ -1372,7 +1372,7 @@ func TestFormatRawMarkdown(t *testing.T) {
 // minLen helper
 // ---------------------------------------------------------------------------.
 
-// TestMinLen validates min len across multiple scenarios using table-driven subtests.
+// TestMinLen covers MinLen with table-driven subtests.
 func TestMinLen(t *testing.T) {
 	tests := []struct {
 		a, b, want int
@@ -1394,7 +1394,7 @@ func TestMinLen(t *testing.T) {
 // Get: invalid base64 content triggers decode error
 // ---------------------------------------------------------------------------.
 
-// TestGet_InvalidBase64Content verifies the behavior of get invalid base64 content.
+// TestGet_InvalidBase64Content verifies Get when invalid base 64 content.
 func TestGet_InvalidBase64Content(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/bad.txt" {
@@ -1430,7 +1430,7 @@ func TestGet_InvalidBase64Content(t *testing.T) {
 // Get: non-base64 encoding (content returned as-is)
 // ---------------------------------------------------------------------------.
 
-// TestGet_NonBase64Encoding verifies the behavior of get non base64 encoding.
+// TestGet_NonBase64Encoding verifies Get when non base 64 encoding.
 func TestGet_NonBase64Encoding(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/plain.txt" {
@@ -1469,7 +1469,7 @@ func TestGet_NonBase64Encoding(t *testing.T) {
 // Get: API error (not found)
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)

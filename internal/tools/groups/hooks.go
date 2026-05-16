@@ -209,7 +209,7 @@ func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
 	return opts
 }
 
-// applyAddHookIdentity is an internal helper for the groups package.
+// applyAddHookIdentity applies add hook identity transformations.
 func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
@@ -231,7 +231,7 @@ func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
 	}
 }
 
-// applyAddHookEvents is an internal helper for the groups package.
+// applyAddHookEvents applies add hook events transformations.
 func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
@@ -285,7 +285,7 @@ func applyEditHookOpts(input HookInput) *gl.EditGroupHookOptions {
 	return opts
 }
 
-// applyEditHookIdentity is an internal helper for the groups package.
+// applyEditHookIdentity applies edit hook identity transformations.
 func applyEditHookIdentity(input HookInput, opts *gl.EditGroupHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
@@ -307,7 +307,7 @@ func applyEditHookIdentity(input HookInput, opts *gl.EditGroupHookOptions) {
 	}
 }
 
-// applyEditHookEvents is an internal helper for the groups package.
+// applyEditHookEvents applies edit hook events transformations.
 func applyEditHookEvents(input HookInput, opts *gl.EditGroupHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents

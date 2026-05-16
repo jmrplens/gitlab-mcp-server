@@ -15,7 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// TestUpdate_Success verifies that Update handles the success scenario correctly.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -54,7 +54,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_WithCommitMessage verifies that Update handles the with commit message scenario correctly.
+// TestUpdate_WithCommitMessage verifies Update when with commit message.
 func TestUpdate_WithCommitMessage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -83,7 +83,7 @@ func TestUpdate_WithCommitMessage(t *testing.T) {
 	}
 }
 
-// TestUpdate_Error verifies that Update handles the error scenario correctly.
+// TestUpdate_Error verifies Update when error.
 func TestUpdate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -102,7 +102,7 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestFormatUpdateMarkdown verifies the behavior of format update markdown.
+// TestFormatUpdateMarkdown verifies FormatUpdateMarkdown.
 func TestFormatUpdateMarkdown(t *testing.T) {
 	r := FormatUpdateMarkdown(UpdateOutput{
 		ID:         "abc123",
@@ -115,7 +115,7 @@ func TestFormatUpdateMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatUpdateMarkdown_Content verifies that FormatUpdateMarkdown handles the content scenario correctly.
+// TestFormatUpdateMarkdown_Content verifies FormatUpdateMarkdown when content.
 func TestFormatUpdateMarkdown_Content(t *testing.T) {
 	out := UpdateOutput{
 		ID:          "abc123def456",
@@ -141,7 +141,7 @@ func TestFormatUpdateMarkdown_Content(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies that Update handles the cancelled context scenario correctly.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -153,7 +153,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyProjectID verifies that Update handles the empty project i d scenario correctly.
+// TestUpdate_EmptyProjectID verifies Update when empty project ID.
 func TestUpdate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -209,6 +209,7 @@ func TestActionSpecs_UpdateRoute(t *testing.T) {
 	}
 }
 
+// repositorySubmoduleSpecsByTool supports repository submodule specs by tool assertions in repositorysubmodules tests.
 func repositorySubmoduleSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

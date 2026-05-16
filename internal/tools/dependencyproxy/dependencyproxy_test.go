@@ -10,7 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestPurge verifies the behavior of purge.
+// TestPurge verifies Purge.
 func TestPurge(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/5/dependency_proxy/cache" || r.Method != http.MethodDelete {
@@ -25,7 +25,7 @@ func TestPurge(t *testing.T) {
 	}
 }
 
-// TestPurge_Error verifies that Purge handles the error scenario correctly.
+// TestPurge_Error verifies Purge when error.
 func TestPurge_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)

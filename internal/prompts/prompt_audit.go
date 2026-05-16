@@ -72,7 +72,7 @@ func registerAuditProjectSettingsPrompt(server *mcp.Server, client *gitlabclient
 	})
 }
 
-// handleAuditProjectSettings performs the handle audit project settings operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleAuditProjectSettings handles handle audit project settings and returns [*mcp.GetPromptResult].
 func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -191,7 +191,7 @@ func registerAuditBranchProtectionPrompt(server *mcp.Server, client *gitlabclien
 	})
 }
 
-// handleAuditBranchProtection performs the handle audit branch protection operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleAuditBranchProtection handles handle audit branch protection and returns [*mcp.GetPromptResult].
 func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -351,7 +351,7 @@ func writeSharedGroups(b *strings.Builder, groups []gl.ProjectSharedWithGroup) {
 	b.WriteString("\n")
 }
 
-// handleAuditProjectAccess performs the handle audit project access operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleAuditProjectAccess handles handle audit project access and returns [*mcp.GetPromptResult].
 func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -451,7 +451,7 @@ func registerAuditProjectWorkflowPrompt(server *mcp.Server, client *gitlabclient
 	})
 }
 
-// handleAuditProjectWorkflow performs the handle audit project workflow operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleAuditProjectWorkflow handles handle audit project workflow and returns [*mcp.GetPromptResult].
 func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -608,7 +608,7 @@ func registerAuditProjectFullPrompt(server *mcp.Server, client *gitlabclient.Cli
 	})
 }
 
-// handleAuditProjectFull performs the handle audit project full operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleAuditProjectFull handles handle audit project full and returns [*mcp.GetPromptResult].
 func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -861,7 +861,7 @@ func emptyDash(s string) string {
 	return s
 }
 
-// accessLevelIcon is an internal helper for the prompts package.
+// accessLevelIcon implements the access level icon helper used by prompts.
 func accessLevelIcon(v gl.AccessControlValue) string {
 	if v != "" && v != gl.DisabledAccessControl {
 		return toolutil.EmojiSuccess

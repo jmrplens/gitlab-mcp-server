@@ -14,13 +14,19 @@ import (
 )
 
 const (
-	testListName        = "beta-users"
-	fmtUnexpErr         = "unexpected error: %v"
-	fmtWantName         = "expected name 'beta-users', got %q"
+	// testListName identifies the test list name constant used by this package.
+	testListName = "beta-users"
+	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
+	fmtUnexpErr = "unexpected error: %v"
+	// fmtWantName identifies the fmt want name constant used by this package.
+	fmtWantName = "expected name 'beta-users', got %q"
+	// errExpMissingParams identifies the err exp missing params constant used by this package.
 	errExpMissingParams = "expected error for missing params"
-	errExpMissingIID    = "expected error for missing iid"
+	// errExpMissingIID identifies the err exp missing IID constant used by this package.
+	errExpMissingIID = "expected error for missing iid"
 )
 
+// userListJSON identifies the user list JSON constant used by this package.
 const userListJSON = `{
 	"name": "beta-users",
 	"user_xids": "user1,user2,user3",
@@ -31,11 +37,12 @@ const userListJSON = `{
 	"updated_at": "2026-01-02T00:00:00Z"
 }`
 
+// userListArrayJSON identifies the user list array JSON constant used by this package.
 const userListArrayJSON = `[` + userListJSON + `]`
 
 // -- List --.
 
-// TestListUserLists_Success verifies the behavior of list user lists success.
+// TestListUserLists_Success verifies ListUserLists when success.
 func TestListUserLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +64,7 @@ func TestListUserLists_Success(t *testing.T) {
 	}
 }
 
-// TestListUserLists_MissingProjectID verifies the behavior of list user lists missing project i d.
+// TestListUserLists_MissingProjectID verifies ListUserLists when missing project ID.
 func TestListUserLists_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListUserLists(context.Background(), client, ListInput{})
@@ -68,7 +75,7 @@ func TestListUserLists_MissingProjectID(t *testing.T) {
 
 // -- Get --.
 
-// TestGetUserList_Success verifies the behavior of get user list success.
+// TestGetUserList_Success verifies GetUserList when success.
 func TestGetUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +95,7 @@ func TestGetUserList_Success(t *testing.T) {
 	}
 }
 
-// TestGetUserList_MissingParams verifies the behavior of get user list missing params.
+// TestGetUserList_MissingParams verifies GetUserList when missing params.
 func TestGetUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetUserList(context.Background(), client, GetInput{})
@@ -103,7 +110,7 @@ func TestGetUserList_MissingParams(t *testing.T) {
 
 // -- Create --.
 
-// TestCreateUserList_Success verifies the behavior of create user list success.
+// TestCreateUserList_Success verifies CreateUserList when success.
 func TestCreateUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +129,7 @@ func TestCreateUserList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateUserList_MissingParams verifies the behavior of create user list missing params.
+// TestCreateUserList_MissingParams verifies CreateUserList when missing params.
 func TestCreateUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateUserList(context.Background(), client, CreateInput{})
@@ -137,7 +144,7 @@ func TestCreateUserList_MissingParams(t *testing.T) {
 
 // -- Update --.
 
-// TestUpdateUserList_Success verifies the behavior of update user list success.
+// TestUpdateUserList_Success verifies UpdateUserList when success.
 func TestUpdateUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +163,7 @@ func TestUpdateUserList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateUserList_MissingParams verifies the behavior of update user list missing params.
+// TestUpdateUserList_MissingParams verifies UpdateUserList when missing params.
 func TestUpdateUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateUserList(context.Background(), client, UpdateInput{})
@@ -171,7 +178,7 @@ func TestUpdateUserList_MissingParams(t *testing.T) {
 
 // -- Delete --.
 
-// TestDeleteUserList_Success verifies the behavior of delete user list success.
+// TestDeleteUserList_Success verifies DeleteUserList when success.
 func TestDeleteUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +192,7 @@ func TestDeleteUserList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteUserList_MissingParams verifies the behavior of delete user list missing params.
+// TestDeleteUserList_MissingParams verifies DeleteUserList when missing params.
 func TestDeleteUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteUserList(context.Background(), client, DeleteInput{})
@@ -200,7 +207,7 @@ func TestDeleteUserList_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatUserListMarkdown verifies the behavior of format user list markdown.
+// TestFormatUserListMarkdown verifies FormatUserListMarkdown.
 func TestFormatUserListMarkdown(t *testing.T) {
 	out := Output{ID: 1, IID: 10, ProjectID: 42, Name: testListName, UserXIDs: "user1,user2"}
 	md := FormatUserListMarkdown(out)
@@ -212,7 +219,7 @@ func TestFormatUserListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatUserListMarkdown_NameInHeading verifies the behavior of format user list markdown name in heading.
+// TestFormatUserListMarkdown_NameInHeading verifies FormatUserListMarkdown when name in heading.
 func TestFormatUserListMarkdown_NameInHeading(t *testing.T) {
 	out := Output{ID: 5, IID: 3, ProjectID: 10, Name: "my-list", UserXIDs: "x1"}
 	md := FormatUserListMarkdown(out)
@@ -227,7 +234,7 @@ func TestFormatUserListMarkdown_NameInHeading(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown_NoIDColumn verifies the behavior of format list user lists markdown no i d column.
+// TestFormatListUserListsMarkdown_NoIDColumn verifies FormatListUserListsMarkdown when no ID column.
 func TestFormatListUserListsMarkdown_NoIDColumn(t *testing.T) {
 	out := ListOutput{
 		UserLists: []Output{
@@ -244,7 +251,7 @@ func TestFormatListUserListsMarkdown_NoIDColumn(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown verifies the behavior of format list user lists markdown.
+// TestFormatListUserListsMarkdown verifies FormatListUserListsMarkdown.
 func TestFormatListUserListsMarkdown(t *testing.T) {
 	out := ListOutput{
 		UserLists: []Output{
@@ -259,7 +266,7 @@ func TestFormatListUserListsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown_Empty verifies the behavior of format list user lists markdown empty.
+// TestFormatListUserListsMarkdown_Empty verifies FormatListUserListsMarkdown when empty.
 func TestFormatListUserListsMarkdown_Empty(t *testing.T) {
 	out := ListOutput{UserLists: []Output{}}
 	md := FormatListUserListsMarkdown(out)
@@ -270,12 +277,14 @@ func TestFormatListUserListsMarkdown_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
 // Constants — prefixed with cov to avoid redeclaration
 // ---------------------------------------------------------------------------.
 
+// covUserListJSON identifies the cov user list JSON constant used by this package.
 const covUserListJSON = `{
 	"name": "cov-users",
 	"user_xids": "u1,u2",
@@ -290,7 +299,7 @@ const covUserListJSON = `{
 // List — API error, search param
 // ---------------------------------------------------------------------------.
 
-// TestListUserLists_APIError verifies the behavior of list user lists a p i error.
+// TestListUserLists_APIError verifies ListUserLists when API error.
 func TestListUserLists_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -301,7 +310,7 @@ func TestListUserLists_APIError(t *testing.T) {
 	}
 }
 
-// TestListUserLists_WithSearch verifies the behavior of list user lists with search.
+// TestListUserLists_WithSearch verifies ListUserLists when with search.
 func TestListUserLists_WithSearch(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +337,7 @@ func TestListUserLists_WithSearch(t *testing.T) {
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetUserList_APIError verifies the behavior of get user list a p i error.
+// TestGetUserList_APIError verifies GetUserList when API error.
 func TestGetUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -343,7 +352,7 @@ func TestGetUserList_APIError(t *testing.T) {
 // Create — API error
 // ---------------------------------------------------------------------------.
 
-// TestCreateUserList_APIError verifies the behavior of create user list a p i error.
+// TestCreateUserList_APIError verifies CreateUserList when API error.
 func TestCreateUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -360,7 +369,7 @@ func TestCreateUserList_APIError(t *testing.T) {
 // Update — API error
 // ---------------------------------------------------------------------------.
 
-// TestUpdateUserList_APIError verifies the behavior of update user list a p i error.
+// TestUpdateUserList_APIError verifies UpdateUserList when API error.
 func TestUpdateUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -377,7 +386,7 @@ func TestUpdateUserList_APIError(t *testing.T) {
 // Delete — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteUserList_APIError verifies the behavior of delete user list a p i error.
+// TestDeleteUserList_APIError verifies DeleteUserList when API error.
 func TestDeleteUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -392,7 +401,7 @@ func TestDeleteUserList_APIError(t *testing.T) {
 // FormatUserListMarkdown — with CreatedAt / UpdatedAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatUserListMarkdown_WithDates verifies the behavior of format user list markdown with dates.
+// TestFormatUserListMarkdown_WithDates verifies FormatUserListMarkdown when with dates.
 func TestFormatUserListMarkdown_WithDates(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 10, ProjectID: 42,

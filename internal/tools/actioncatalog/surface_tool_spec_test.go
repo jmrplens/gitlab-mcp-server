@@ -7,14 +7,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// surfaceSpecInput defines parameters for the surface spec operation.
 type surfaceSpecInput struct {
 	Value string `json:"value" jsonschema:"value to echo"`
 }
 
+// surfaceSpecOutput represents the response from the surface spec operation.
 type surfaceSpecOutput struct {
 	OK bool `json:"ok" jsonschema:"operation result"`
 }
 
+// TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata verifies SurfaceToolSpec preserves catalog metadata with action spec.
 func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	route := toolutil.RouteFunc(func(context.Context, surfaceSpecInput) (surfaceSpecOutput, error) {
 		return surfaceSpecOutput{OK: true}, nil
@@ -64,6 +67,7 @@ func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	}
 }
 
+// TestSurfaceToolSpec_Validate_RequiresSchemas verifies SurfaceToolSpec requires schemas with validate.
 func TestSurfaceToolSpec_Validate_RequiresSchemas(t *testing.T) {
 	spec := SurfaceToolSpec{
 		Name:          "gitlab_test_surface",

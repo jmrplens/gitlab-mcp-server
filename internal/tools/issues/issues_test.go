@@ -823,18 +823,26 @@ func TestGet_EpicIssueID(t *testing.T) {
 // TASK-021: ListAll, GetByID, Reorder, Move, Subscribe, Unsubscribe, CreateTodo.
 
 const (
+	// pathGlobalIssues identifies the path global issues constant used by this package.
 	pathGlobalIssues = "/api/v4/issues"
-	pathIssueByID    = "/api/v4/issues/99"
-	pathReorder      = "/api/v4/projects/42/issues/10/reorder"
-	pathMove         = "/api/v4/projects/42/issues/10/move"
-	pathSubscribe    = "/api/v4/projects/42/issues/10/subscribe"
-	pathUnsubscribe  = "/api/v4/projects/42/issues/10/unsubscribe"
-	pathCreateTodo   = "/api/v4/projects/42/issues/10/todo"
+	// pathIssueByID identifies the path issue by ID constant used by this package.
+	pathIssueByID = "/api/v4/issues/99"
+	// pathReorder identifies the path reorder constant used by this package.
+	pathReorder = "/api/v4/projects/42/issues/10/reorder"
+	// pathMove identifies the path move constant used by this package.
+	pathMove = "/api/v4/projects/42/issues/10/move"
+	// pathSubscribe identifies the path subscribe constant used by this package.
+	pathSubscribe = "/api/v4/projects/42/issues/10/subscribe"
+	// pathUnsubscribe identifies the path unsubscribe constant used by this package.
+	pathUnsubscribe = "/api/v4/projects/42/issues/10/unsubscribe"
+	// pathCreateTodo identifies the path create todo constant used by this package.
+	pathCreateTodo = "/api/v4/projects/42/issues/10/todo"
 
+	// todoJSON identifies the todo JSON constant used by this package.
 	todoJSON = `{"id":501,"action_name":"marked","target_type":"Issue","target":{"title":"Test issue","web_url":"https://gitlab.example.com/project/issues/10"},"body":"marked todo","state":"pending","created_at":"2026-03-01T10:00:00Z"}`
 )
 
-// TestListAll_Success verifies the behavior of list all success.
+// TestListAll_Success verifies ListAll when success.
 func TestListAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGlobalIssues && r.Method == http.MethodGet {
@@ -857,7 +865,7 @@ func TestListAll_Success(t *testing.T) {
 	}
 }
 
-// TestListAll_CancelledContext verifies the behavior of list all cancelled context.
+// TestListAll_CancelledContext verifies ListAll when cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -869,7 +877,7 @@ func TestListAll_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetByID_Success verifies the behavior of get by i d success.
+// TestGetByID_Success verifies GetByID when success.
 func TestGetByID_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssueByID && r.Method == http.MethodGet {
@@ -888,7 +896,7 @@ func TestGetByID_Success(t *testing.T) {
 	}
 }
 
-// TestGetByID_MissingID verifies the behavior of get by i d missing i d.
+// TestGetByID_MissingID verifies GetByID when missing ID.
 func TestGetByID_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -902,7 +910,7 @@ func TestGetByID_MissingID(t *testing.T) {
 	}
 }
 
-// TestReorder_Success verifies the behavior of reorder success.
+// TestReorder_Success verifies Reorder when success.
 func TestReorder_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathReorder && r.Method == http.MethodPut {
@@ -924,7 +932,7 @@ func TestReorder_Success(t *testing.T) {
 	}
 }
 
-// TestReorder_MissingProjectID verifies the behavior of reorder missing project i d.
+// TestReorder_MissingProjectID verifies Reorder when missing project ID.
 func TestReorder_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -935,7 +943,7 @@ func TestReorder_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestMove_Success verifies the behavior of move success.
+// TestMove_Success verifies Move when success.
 func TestMove_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathMove && r.Method == http.MethodPost {
@@ -954,7 +962,7 @@ func TestMove_Success(t *testing.T) {
 	}
 }
 
-// TestMove_MissingToProject verifies the behavior of move missing to project.
+// TestMove_MissingToProject verifies Move when missing to project.
 func TestMove_MissingToProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -968,7 +976,7 @@ func TestMove_MissingToProject(t *testing.T) {
 	}
 }
 
-// TestSubscribe_Success verifies the behavior of subscribe success.
+// TestSubscribe_Success verifies Subscribe when success.
 func TestSubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSubscribe && r.Method == http.MethodPost {
@@ -987,7 +995,7 @@ func TestSubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestSubscribe_MissingProjectID verifies the behavior of subscribe missing project i d.
+// TestSubscribe_MissingProjectID verifies Subscribe when missing project ID.
 func TestSubscribe_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -998,7 +1006,7 @@ func TestSubscribe_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_Success verifies the behavior of unsubscribe success.
+// TestUnsubscribe_Success verifies Unsubscribe when success.
 func TestUnsubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathUnsubscribe && r.Method == http.MethodPost {
@@ -1017,7 +1025,7 @@ func TestUnsubscribe_Success(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_MissingProjectID verifies the behavior of unsubscribe missing project i d.
+// TestUnsubscribe_MissingProjectID verifies Unsubscribe when missing project ID.
 func TestUnsubscribe_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1028,7 +1036,7 @@ func TestUnsubscribe_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_Success verifies the behavior of create todo success.
+// TestCreateTodo_Success verifies CreateTodo when success.
 func TestCreateTodo_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathCreateTodo && r.Method == http.MethodPost {
@@ -1056,7 +1064,7 @@ func TestCreateTodo_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_MissingProjectID verifies the behavior of create todo missing project i d.
+// TestCreateTodo_MissingProjectID verifies CreateTodo when missing project ID.
 func TestCreateTodo_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1070,13 +1078,17 @@ func TestCreateTodo_MissingProjectID(t *testing.T) {
 // TASK-022: Time Tracking, Participants, Closing/Related MRs tests.
 
 const (
+	// timeStatsIssueResponse identifies the time stats issue response constant used by this package.
 	timeStatsIssueResponse = `{"human_time_estimate":"3h","human_total_time_spent":"1h30m","time_estimate":10800,"total_time_spent":5400}`
-	participantsResponse   = `[{"id":1,"username":"alice","name":"Alice Dev","web_url":"https://gitlab.example.com/alice"},{"id":2,"username":"bob","name":"Bob QA","web_url":"https://gitlab.example.com/bob"}]`
-	closingMRsResponse     = `[{"id":100,"iid":5,"title":"Fix login","state":"merged","source_branch":"fix-login","target_branch":"main","author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/-/merge_requests/5"}]`
-	relatedMRsResponse     = `[{"id":200,"iid":8,"title":"Refactor auth","state":"opened","source_branch":"refactor-auth","target_branch":"main","author":{"username":"bob"},"web_url":"https://gitlab.example.com/project/-/merge_requests/8"}]`
+	// participantsResponse identifies the participants response constant used by this package.
+	participantsResponse = `[{"id":1,"username":"alice","name":"Alice Dev","web_url":"https://gitlab.example.com/alice"},{"id":2,"username":"bob","name":"Bob QA","web_url":"https://gitlab.example.com/bob"}]`
+	// closingMRsResponse identifies the closing MRs response constant used by this package.
+	closingMRsResponse = `[{"id":100,"iid":5,"title":"Fix login","state":"merged","source_branch":"fix-login","target_branch":"main","author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/-/merge_requests/5"}]`
+	// relatedMRsResponse identifies the related MRs response constant used by this package.
+	relatedMRsResponse = `[{"id":200,"iid":8,"title":"Refactor auth","state":"opened","source_branch":"refactor-auth","target_branch":"main","author":{"username":"bob"},"web_url":"https://gitlab.example.com/project/-/merge_requests/8"}]`
 )
 
-// TestSetTimeEstimate_Success verifies the behavior of set time estimate success.
+// TestSetTimeEstimate_Success verifies SetTimeEstimate when success.
 func TestSetTimeEstimate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/time_estimate" {
@@ -1098,7 +1110,7 @@ func TestSetTimeEstimate_Success(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_MissingDuration verifies the behavior of set time estimate missing duration.
+// TestSetTimeEstimate_MissingDuration verifies SetTimeEstimate when missing duration.
 func TestSetTimeEstimate_MissingDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1109,7 +1121,7 @@ func TestSetTimeEstimate_MissingDuration(t *testing.T) {
 	}
 }
 
-// TestResetTimeEstimate_Success verifies the behavior of reset time estimate success.
+// TestResetTimeEstimate_Success verifies ResetTimeEstimate when success.
 func TestResetTimeEstimate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/reset_time_estimate" {
@@ -1128,7 +1140,7 @@ func TestResetTimeEstimate_Success(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_Success verifies the behavior of add spent time success.
+// TestAddSpentTime_Success verifies AddSpentTime when success.
 func TestAddSpentTime_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/add_spent_time" {
@@ -1147,7 +1159,7 @@ func TestAddSpentTime_Success(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_MissingDuration verifies the behavior of add spent time missing duration.
+// TestAddSpentTime_MissingDuration verifies AddSpentTime when missing duration.
 func TestAddSpentTime_MissingDuration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1158,7 +1170,7 @@ func TestAddSpentTime_MissingDuration(t *testing.T) {
 	}
 }
 
-// TestResetSpentTime_Success verifies the behavior of reset spent time success.
+// TestResetSpentTime_Success verifies ResetSpentTime when success.
 func TestResetSpentTime_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/reset_spent_time" {
@@ -1177,7 +1189,7 @@ func TestResetSpentTime_Success(t *testing.T) {
 	}
 }
 
-// TestGetTimeStats_Success verifies the behavior of get time stats success.
+// TestGetTimeStats_Success verifies GetTimeStats when success.
 func TestGetTimeStats_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/time_stats" {
@@ -1199,7 +1211,7 @@ func TestGetTimeStats_Success(t *testing.T) {
 	}
 }
 
-// TestGetTimeStats_MissingProject verifies the behavior of get time stats missing project.
+// TestGetTimeStats_MissingProject verifies GetTimeStats when missing project.
 func TestGetTimeStats_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1210,7 +1222,7 @@ func TestGetTimeStats_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetParticipants_Success verifies the behavior of get participants success.
+// TestGetParticipants_Success verifies GetParticipants when success.
 func TestGetParticipants_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/participants" {
@@ -1235,7 +1247,7 @@ func TestGetParticipants_Success(t *testing.T) {
 	}
 }
 
-// TestGetParticipants_MissingProject verifies the behavior of get participants missing project.
+// TestGetParticipants_MissingProject verifies GetParticipants when missing project.
 func TestGetParticipants_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1246,7 +1258,7 @@ func TestGetParticipants_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_Success verifies the behavior of list m rs closing success.
+// TestListMRsClosing_Success verifies ListMRsClosing when success.
 func TestListMRsClosing_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/closed_by" {
@@ -1271,7 +1283,7 @@ func TestListMRsClosing_Success(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_MissingProject verifies the behavior of list m rs closing missing project.
+// TestListMRsClosing_MissingProject verifies ListMRsClosing when missing project.
 func TestListMRsClosing_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1282,7 +1294,7 @@ func TestListMRsClosing_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_Success verifies the behavior of list m rs related success.
+// TestListMRsRelated_Success verifies ListMRsRelated when success.
 func TestListMRsRelated_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/related_merge_requests" {
@@ -1307,7 +1319,7 @@ func TestListMRsRelated_Success(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_MissingProject verifies the behavior of list m rs related missing project.
+// TestListMRsRelated_MissingProject verifies ListMRsRelated when missing project.
 func TestListMRsRelated_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1469,13 +1481,19 @@ func TestToProjectIDRequired_Validation(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// testProjectID identifies the test project ID constant used by this package.
 const testProjectID = "42"
 
 const (
-	testDueDateCov       = "2026-06-01"
-	testCreatedAtCov     = "2026-01-01T00:00:00Z"
-	testNoIssuesFound    = "No issues found"
-	testCreatedAfterCov  = "2026-01-01T00:00:00Z"
+	// testDueDateCov identifies the test due date cov constant used by this package.
+	testDueDateCov = "2026-06-01"
+	// testCreatedAtCov identifies the test created at cov constant used by this package.
+	testCreatedAtCov = "2026-01-01T00:00:00Z"
+	// testNoIssuesFound identifies the test no issues found constant used by this package.
+	testNoIssuesFound = "No issues found"
+	// testCreatedAfterCov identifies the test created after cov constant used by this package.
+	testCreatedAfterCov = "2026-01-01T00:00:00Z"
+	// testCreatedBeforeCov identifies the test created before cov constant used by this package.
 	testCreatedBeforeCov = "2026-12-31T23:59:59Z"
 )
 
@@ -1483,7 +1501,7 @@ const (
 // Format*Markdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated verifies the behavior of format markdown populated.
+// TestFormatMarkdown_Populated verifies FormatMarkdown when populated.
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 10, Title: "Big Bug", State: "opened",
@@ -1507,7 +1525,7 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Empty verifies the behavior of format markdown empty.
+// TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(Output{})
 	if md == "" {
@@ -1515,7 +1533,7 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Populated verifies the behavior of format list markdown populated.
+// TestFormatListMarkdown_Populated verifies FormatListMarkdown when populated.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
@@ -1546,7 +1564,7 @@ func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, testNoIssuesFound) {
@@ -1554,7 +1572,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListGroupMarkdown_Populated verifies the behavior of format list group markdown populated.
+// TestFormatListGroupMarkdown_Populated verifies FormatListGroupMarkdown when populated.
 func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
@@ -1584,7 +1602,7 @@ func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	}
 }
 
-// TestFormatListGroupMarkdown_Empty verifies the behavior of format list group markdown empty.
+// TestFormatListGroupMarkdown_Empty verifies FormatListGroupMarkdown when empty.
 func TestFormatListGroupMarkdown_Empty(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{})
 	if !strings.Contains(md, testNoIssuesFound) {
@@ -1592,7 +1610,7 @@ func TestFormatListGroupMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListAllMarkdown_Populated verifies the behavior of format list all markdown populated.
+// TestFormatListAllMarkdown_Populated verifies FormatListAllMarkdown when populated.
 func TestFormatListAllMarkdown_Populated(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
@@ -1607,7 +1625,7 @@ func TestFormatListAllMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatListAllMarkdown_Empty verifies the behavior of format list all markdown empty.
+// TestFormatListAllMarkdown_Empty verifies FormatListAllMarkdown when empty.
 func TestFormatListAllMarkdown_Empty(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{})
 	if !strings.Contains(md, testNoIssuesFound) {
@@ -1630,7 +1648,7 @@ func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 	}
 }
 
-// TestFormatTodoMarkdown_Populated verifies the behavior of format todo markdown populated.
+// TestFormatTodoMarkdown_Populated verifies FormatTodoMarkdown when populated.
 func TestFormatTodoMarkdown_Populated(t *testing.T) {
 	md := FormatTodoMarkdown(TodoOutput{
 		ID: 1, ActionName: "marked", TargetType: "Issue",
@@ -1644,7 +1662,7 @@ func TestFormatTodoMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatTodoMarkdown_Empty verifies the behavior of format todo markdown empty.
+// TestFormatTodoMarkdown_Empty verifies FormatTodoMarkdown when empty.
 func TestFormatTodoMarkdown_Empty(t *testing.T) {
 	md := FormatTodoMarkdown(TodoOutput{})
 	if md == "" {
@@ -1652,7 +1670,7 @@ func TestFormatTodoMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Populated verifies the behavior of format time stats markdown populated.
+// TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
 		HumanTimeEstimate:   "3h",
@@ -1667,7 +1685,7 @@ func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Empty verifies the behavior of format time stats markdown empty.
+// TestFormatTimeStatsMarkdown_Empty verifies FormatTimeStatsMarkdown when empty.
 func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{})
 	if !strings.Contains(md, "Time Tracking") {
@@ -1675,7 +1693,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatParticipantsMarkdown_Populated verifies the behavior of format participants markdown populated.
+// TestFormatParticipantsMarkdown_Populated verifies FormatParticipantsMarkdown when populated.
 func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
@@ -1690,7 +1708,7 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatParticipantsMarkdown_Empty verifies the behavior of format participants markdown empty.
+// TestFormatParticipantsMarkdown_Empty verifies FormatParticipantsMarkdown when empty.
 func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{})
 	if !strings.Contains(md, "No participants found") {
@@ -1698,7 +1716,7 @@ func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRelatedMRsMarkdown_Populated verifies the behavior of format related m rs markdown populated.
+// TestFormatRelatedMRsMarkdown_Populated verifies FormatRelatedMRsMarkdown when populated.
 func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
 		MergeRequests: []RelatedMROutput{
@@ -1713,7 +1731,7 @@ func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatRelatedMRsMarkdown_Empty verifies the behavior of format related m rs markdown empty.
+// TestFormatRelatedMRsMarkdown_Empty verifies FormatRelatedMRsMarkdown when empty.
 func TestFormatRelatedMRsMarkdown_Empty(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{}, "Closing MRs")
 	if !strings.Contains(md, "No merge requests found") {
@@ -1725,7 +1743,7 @@ func TestFormatRelatedMRsMarkdown_Empty(t *testing.T) {
 // prefixAt helper
 // ---------------------------------------------------------------------------.
 
-// TestPrefixAt verifies the behavior of prefix at.
+// TestPrefixAt verifies PrefixAt.
 func TestPrefixAt(t *testing.T) {
 	result := prefixAt([]string{"alice", "bob"})
 	if len(result) != 2 || result[0] != "@alice" || result[1] != "@bob" {
@@ -1741,7 +1759,7 @@ func TestPrefixAt(t *testing.T) {
 // parseDueDate
 // ---------------------------------------------------------------------------.
 
-// TestParseDueDate_Valid verifies the behavior of parse due date valid.
+// TestParseDueDate_Valid verifies ParseDueDate when valid.
 func TestParseDueDate_Valid(t *testing.T) {
 	d, err := parseDueDate("2026-06-15")
 	if err != nil {
@@ -1752,7 +1770,7 @@ func TestParseDueDate_Valid(t *testing.T) {
 	}
 }
 
-// TestParseDueDate_Invalid verifies the behavior of parse due date invalid.
+// TestParseDueDate_Invalid verifies ParseDueDate when invalid.
 func TestParseDueDate_Invalid(t *testing.T) {
 	_, err := parseDueDate("not-a-date")
 	if err == nil {
@@ -1787,7 +1805,7 @@ func TestParseDueDate_RFC3339Rejected(t *testing.T) {
 // buildUpdateOpts
 // ---------------------------------------------------------------------------.
 
-// TestBuildUpdateOpts_AllFields verifies the behavior of build update opts all fields.
+// TestBuildUpdateOpts_AllFields verifies BuildUpdateOpts when all fields.
 func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	conf := true
 	locked := false
@@ -1827,7 +1845,7 @@ func TestBuildUpdateOpts_MilestoneZeroUnsets(t *testing.T) {
 	}
 }
 
-// assertUpdateOptsFields is an internal helper for the issues package.
+// assertUpdateOptsFields checks update opts fields invariants for tests.
 func assertUpdateOptsFields(t *testing.T, opts *gl.UpdateIssueOptions) {
 	t.Helper()
 	if opts.Title == nil || *opts.Title != "New Title" {
@@ -1853,7 +1871,7 @@ func assertUpdateOptsFields(t *testing.T, opts *gl.UpdateIssueOptions) {
 	}
 }
 
-// assertUpdateOptsMetadata is an internal helper for the issues package.
+// assertUpdateOptsMetadata checks update opts metadata invariants for tests.
 func assertUpdateOptsMetadata(t *testing.T, opts *gl.UpdateIssueOptions, wantConf, wantLocked *bool) {
 	t.Helper()
 	if opts.MilestoneID == nil || *opts.MilestoneID != 5 {
@@ -1876,7 +1894,7 @@ func assertUpdateOptsMetadata(t *testing.T, opts *gl.UpdateIssueOptions, wantCon
 	}
 }
 
-// TestBuildUpdateOpts_InvalidDueDate verifies the behavior of build update opts invalid due date.
+// TestBuildUpdateOpts_InvalidDueDate verifies BuildUpdateOpts when invalid due date.
 func TestBuildUpdateOpts_InvalidDueDate(t *testing.T) {
 	_, err := buildUpdateOpts(UpdateInput{DueDate: "bad-date"})
 	if err == nil {
@@ -1884,7 +1902,7 @@ func TestBuildUpdateOpts_InvalidDueDate(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_Empty verifies the behavior of build update opts empty.
+// TestBuildUpdateOpts_Empty verifies BuildUpdateOpts when empty.
 func TestBuildUpdateOpts_Empty(t *testing.T) {
 	opts, err := buildUpdateOpts(UpdateInput{})
 	if err != nil {
@@ -1899,7 +1917,7 @@ func TestBuildUpdateOpts_Empty(t *testing.T) {
 // ToOutput edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_Populated verifies the behavior of to output populated.
+// TestToOutput_Populated verifies ToOutput when populated.
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{
@@ -1966,7 +1984,7 @@ func TestToOutput_Populated(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilOptionalFields verifies the behavior of to output nil optional fields.
+// TestToOutput_NilOptionalFields verifies ToOutput when nil optional fields.
 func TestToOutput_NilOptionalFields(t *testing.T) {
 	issue := &gl.Issue{
 		ID: 2, IID: 20, Title: "Minimal", State: "opened",
@@ -1992,7 +2010,7 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 	}
 }
 
-// TestToOutput_IssueType verifies the behavior of to output issue type.
+// TestToOutput_IssueType verifies ToOutput when issue type.
 func TestToOutput_IssueType(t *testing.T) {
 	issue := &gl.Issue{ID: 3, IssueType: new("task")}
 	out := ToOutput(issue)
@@ -2005,7 +2023,7 @@ func TestToOutput_IssueType(t *testing.T) {
 // timeStatsToOutput
 // ---------------------------------------------------------------------------.
 
-// TestTimeStatsToOutput_Nil verifies the behavior of time stats to output nil.
+// TestTimeStatsToOutput_Nil verifies TimeStatsToOutput when nil.
 func TestTimeStatsToOutput_Nil(t *testing.T) {
 	out := timeStatsToOutput(nil)
 	if out.TimeEstimate != 0 || out.TotalTimeSpent != 0 {
@@ -2013,7 +2031,7 @@ func TestTimeStatsToOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestTimeStatsToOutput_Populated verifies the behavior of time stats to output populated.
+// TestTimeStatsToOutput_Populated verifies TimeStatsToOutput when populated.
 func TestTimeStatsToOutput_Populated(t *testing.T) {
 	ts := &gl.TimeStats{
 		HumanTimeEstimate:   "2h",
@@ -2034,7 +2052,7 @@ func TestTimeStatsToOutput_Populated(t *testing.T) {
 // basicMRToOutput
 // ---------------------------------------------------------------------------.
 
-// TestBasicMRToOutput verifies the behavior of basic m r to output.
+// TestBasicMRToOutput verifies BasicMRToOutput.
 func TestBasicMRToOutput(t *testing.T) {
 	mr := &gl.BasicMergeRequest{
 		ID: 1, IID: 2, Title: "MR1", State: "merged",
@@ -2051,7 +2069,7 @@ func TestBasicMRToOutput(t *testing.T) {
 	}
 }
 
-// TestBasicMRToOutput_NilAuthor verifies the behavior of basic m r to output nil author.
+// TestBasicMRToOutput_NilAuthor verifies BasicMRToOutput when nil author.
 func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ID: 1, IID: 2}
 	out := basicMRToOutput(mr)
@@ -2064,7 +2082,7 @@ func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 // Context cancellation tests for ALL 21 handlers
 // ---------------------------------------------------------------------------.
 
-// nopClient is an internal helper for the issues package.
+// nopClient supports nop client assertions in issues tests.
 func nopClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -2072,119 +2090,119 @@ func nopClient(t *testing.T) *gitlabclient.Client {
 	}))
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	if _, err := Get(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Get: expected error for canceled context")
 	}
 }
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	if _, err := List(testutil.CancelledCtx(t), nopClient(t), ListInput{ProjectID: testProjectID}); err == nil {
 		t.Fatal("List: expected error for canceled context")
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	if _, err := Update(testutil.CancelledCtx(t), nopClient(t), UpdateInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Update: expected error for canceled context")
 	}
 }
 
-// TestGetByID_CancelledContext verifies the behavior of get by i d cancelled context.
+// TestGetByID_CancelledContext verifies GetByID when cancelled context.
 func TestGetByID_CancelledContext(t *testing.T) {
 	if _, err := GetByID(testutil.CancelledCtx(t), nopClient(t), GetByIDInput{IssueID: 10}); err == nil {
 		t.Fatal("GetByID: expected error for canceled context")
 	}
 }
 
-// TestReorder_CancelledContext verifies the behavior of reorder cancelled context.
+// TestReorder_CancelledContext verifies Reorder when cancelled context.
 func TestReorder_CancelledContext(t *testing.T) {
 	if _, err := Reorder(testutil.CancelledCtx(t), nopClient(t), ReorderInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Reorder: expected error for canceled context")
 	}
 }
 
-// TestMove_CancelledContext verifies the behavior of move cancelled context.
+// TestMove_CancelledContext verifies Move when cancelled context.
 func TestMove_CancelledContext(t *testing.T) {
 	if _, err := Move(testutil.CancelledCtx(t), nopClient(t), MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99}); err == nil {
 		t.Fatal("Move: expected error for canceled context")
 	}
 }
 
-// TestSubscribe_CancelledContext verifies the behavior of subscribe cancelled context.
+// TestSubscribe_CancelledContext verifies Subscribe when cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
 	if _, err := Subscribe(testutil.CancelledCtx(t), nopClient(t), SubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Subscribe: expected error for canceled context")
 	}
 }
 
-// TestUnsubscribe_CancelledContext verifies the behavior of unsubscribe cancelled context.
+// TestUnsubscribe_CancelledContext verifies Unsubscribe when cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
 	if _, err := Unsubscribe(testutil.CancelledCtx(t), nopClient(t), UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Unsubscribe: expected error for canceled context")
 	}
 }
 
-// TestCreateTodo_CancelledContext verifies the behavior of create todo cancelled context.
+// TestCreateTodo_CancelledContext verifies CreateTodo when cancelled context.
 func TestCreateTodo_CancelledContext(t *testing.T) {
 	if _, err := CreateTodo(testutil.CancelledCtx(t), nopClient(t), CreateTodoInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("CreateTodo: expected error for canceled context")
 	}
 }
 
-// TestSetTimeEstimate_CancelledContext verifies the behavior of set time estimate cancelled context.
+// TestSetTimeEstimate_CancelledContext verifies SetTimeEstimate when cancelled context.
 func TestSetTimeEstimate_CancelledContext(t *testing.T) {
 	if _, err := SetTimeEstimate(testutil.CancelledCtx(t), nopClient(t), SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "3h"}); err == nil {
 		t.Fatal("SetTimeEstimate: expected error for canceled context")
 	}
 }
 
-// TestResetTimeEstimate_CancelledContext verifies the behavior of reset time estimate cancelled context.
+// TestResetTimeEstimate_CancelledContext verifies ResetTimeEstimate when cancelled context.
 func TestResetTimeEstimate_CancelledContext(t *testing.T) {
 	if _, err := ResetTimeEstimate(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ResetTimeEstimate: expected error for canceled context")
 	}
 }
 
-// TestAddSpentTime_CancelledContext verifies the behavior of add spent time cancelled context.
+// TestAddSpentTime_CancelledContext verifies AddSpentTime when cancelled context.
 func TestAddSpentTime_CancelledContext(t *testing.T) {
 	if _, err := AddSpentTime(testutil.CancelledCtx(t), nopClient(t), AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h"}); err == nil {
 		t.Fatal("AddSpentTime: expected error for canceled context")
 	}
 }
 
-// TestResetSpentTime_CancelledContext verifies the behavior of reset spent time cancelled context.
+// TestResetSpentTime_CancelledContext verifies ResetSpentTime when cancelled context.
 func TestResetSpentTime_CancelledContext(t *testing.T) {
 	if _, err := ResetSpentTime(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ResetSpentTime: expected error for canceled context")
 	}
 }
 
-// TestGetTimeStats_CancelledContext verifies the behavior of get time stats cancelled context.
+// TestGetTimeStats_CancelledContext verifies GetTimeStats when cancelled context.
 func TestGetTimeStats_CancelledContext(t *testing.T) {
 	if _, err := GetTimeStats(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("GetTimeStats: expected error for canceled context")
 	}
 }
 
-// TestGetParticipants_CancelledContext verifies the behavior of get participants cancelled context.
+// TestGetParticipants_CancelledContext verifies GetParticipants when cancelled context.
 func TestGetParticipants_CancelledContext(t *testing.T) {
 	if _, err := GetParticipants(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("GetParticipants: expected error for canceled context")
 	}
 }
 
-// TestListMRsClosing_CancelledContext verifies the behavior of list m rs closing cancelled context.
+// TestListMRsClosing_CancelledContext verifies ListMRsClosing when cancelled context.
 func TestListMRsClosing_CancelledContext(t *testing.T) {
 	if _, err := ListMRsClosing(testutil.CancelledCtx(t), nopClient(t), ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ListMRsClosing: expected error for canceled context")
 	}
 }
 
-// TestListMRsRelated_CancelledContext verifies the behavior of list m rs related cancelled context.
+// TestListMRsRelated_CancelledContext verifies ListMRsRelated when cancelled context.
 func TestListMRsRelated_CancelledContext(t *testing.T) {
 	if _, err := ListMRsRelated(testutil.CancelledCtx(t), nopClient(t), ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ListMRsRelated: expected error for canceled context")
@@ -2195,7 +2213,7 @@ func TestListMRsRelated_CancelledContext(t *testing.T) {
 // Missing project_id validation tests
 // ---------------------------------------------------------------------------.
 
-// TestMove_MissingProjectID verifies the behavior of move missing project i d.
+// TestMove_MissingProjectID verifies Move when missing project ID.
 func TestMove_MissingProjectID(t *testing.T) {
 	client := nopClient(t)
 	_, err := Move(context.Background(), client, MoveInput{IssueIID: 10, ToProjectID: 99})
@@ -2204,7 +2222,7 @@ func TestMove_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_MissingProject verifies the behavior of set time estimate missing project.
+// TestSetTimeEstimate_MissingProject verifies SetTimeEstimate when missing project.
 func TestSetTimeEstimate_MissingProject(t *testing.T) {
 	_, err := SetTimeEstimate(context.Background(), nopClient(t), SetTimeEstimateInput{IssueIID: 10, Duration: "3h"})
 	if err == nil {
@@ -2212,7 +2230,7 @@ func TestSetTimeEstimate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_MissingDuration2 verifies the behavior of set time estimate missing duration2.
+// TestSetTimeEstimate_MissingDuration2 verifies SetTimeEstimate when missing duration 2.
 func TestSetTimeEstimate_MissingDuration2(t *testing.T) {
 	_, err := SetTimeEstimate(context.Background(), nopClient(t), SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10})
 	if err == nil {
@@ -2220,7 +2238,7 @@ func TestSetTimeEstimate_MissingDuration2(t *testing.T) {
 	}
 }
 
-// TestResetTimeEstimate_MissingProject verifies the behavior of reset time estimate missing project.
+// TestResetTimeEstimate_MissingProject verifies ResetTimeEstimate when missing project.
 func TestResetTimeEstimate_MissingProject(t *testing.T) {
 	_, err := ResetTimeEstimate(context.Background(), nopClient(t), GetInput{IssueIID: 10})
 	if err == nil {
@@ -2228,7 +2246,7 @@ func TestResetTimeEstimate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_MissingProject verifies the behavior of add spent time missing project.
+// TestAddSpentTime_MissingProject verifies AddSpentTime when missing project.
 func TestAddSpentTime_MissingProject(t *testing.T) {
 	_, err := AddSpentTime(context.Background(), nopClient(t), AddSpentTimeInput{IssueIID: 10, Duration: "1h"})
 	if err == nil {
@@ -2236,7 +2254,7 @@ func TestAddSpentTime_MissingProject(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_MissingDuration2 verifies the behavior of add spent time missing duration2.
+// TestAddSpentTime_MissingDuration2 verifies AddSpentTime when missing duration 2.
 func TestAddSpentTime_MissingDuration2(t *testing.T) {
 	_, err := AddSpentTime(context.Background(), nopClient(t), AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10})
 	if err == nil {
@@ -2244,7 +2262,7 @@ func TestAddSpentTime_MissingDuration2(t *testing.T) {
 	}
 }
 
-// TestResetSpentTime_MissingProject verifies the behavior of reset spent time missing project.
+// TestResetSpentTime_MissingProject verifies ResetSpentTime when missing project.
 func TestResetSpentTime_MissingProject(t *testing.T) {
 	_, err := ResetSpentTime(context.Background(), nopClient(t), GetInput{IssueIID: 10})
 	if err == nil {
@@ -2252,7 +2270,7 @@ func TestResetSpentTime_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGetParticipants_MissingProject2 verifies the behavior of get participants missing project2.
+// TestGetParticipants_MissingProject2 verifies GetParticipants when missing project 2.
 func TestGetParticipants_MissingProject2(t *testing.T) {
 	_, err := GetParticipants(context.Background(), nopClient(t), GetInput{IssueIID: 10})
 	if err == nil {
@@ -2260,7 +2278,7 @@ func TestGetParticipants_MissingProject2(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_MissingProject2 verifies the behavior of list m rs closing missing project2.
+// TestListMRsClosing_MissingProject2 verifies ListMRsClosing when missing project 2.
 func TestListMRsClosing_MissingProject2(t *testing.T) {
 	_, err := ListMRsClosing(context.Background(), nopClient(t), ListMRsClosingInput{IssueIID: 10})
 	if err == nil {
@@ -2268,7 +2286,7 @@ func TestListMRsClosing_MissingProject2(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_MissingProject2 verifies the behavior of list m rs related missing project2.
+// TestListMRsRelated_MissingProject2 verifies ListMRsRelated when missing project 2.
 func TestListMRsRelated_MissingProject2(t *testing.T) {
 	_, err := ListMRsRelated(context.Background(), nopClient(t), ListMRsRelatedInput{IssueIID: 10})
 	if err == nil {
@@ -2276,7 +2294,7 @@ func TestListMRsRelated_MissingProject2(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingProject verifies the behavior of create missing project.
+// TestCreate_MissingProject verifies Create when missing project.
 func TestCreate_MissingProject(t *testing.T) {
 	_, err := Create(context.Background(), nopClient(t), CreateInput{Title: "t"})
 	if err == nil {
@@ -2284,7 +2302,7 @@ func TestCreate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProject verifies the behavior of get missing project.
+// TestGet_MissingProject verifies Get when missing project.
 func TestGet_MissingProject(t *testing.T) {
 	_, err := Get(context.Background(), nopClient(t), GetInput{IssueIID: 10})
 	if err == nil {
@@ -2292,7 +2310,7 @@ func TestGet_MissingProject(t *testing.T) {
 	}
 }
 
-// TestList_MissingProject verifies the behavior of list missing project.
+// TestList_MissingProject verifies List when missing project.
 func TestList_MissingProject(t *testing.T) {
 	_, err := List(context.Background(), nopClient(t), ListInput{})
 	if err == nil {
@@ -2300,7 +2318,7 @@ func TestList_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProject verifies the behavior of update missing project.
+// TestUpdate_MissingProject verifies Update when missing project.
 func TestUpdate_MissingProject(t *testing.T) {
 	_, err := Update(context.Background(), nopClient(t), UpdateInput{IssueIID: 10})
 	if err == nil {
@@ -2308,7 +2326,7 @@ func TestUpdate_MissingProject(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProject verifies the behavior of delete missing project.
+// TestDelete_MissingProject verifies Delete when missing project.
 func TestDelete_MissingProject(t *testing.T) {
 	err := Delete(context.Background(), nopClient(t), DeleteInput{IssueIID: 10})
 	if err == nil {
@@ -2316,7 +2334,7 @@ func TestDelete_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingGroupID verifies the behavior of list group missing group i d.
+// TestListGroup_MissingGroupID verifies ListGroup when missing group ID.
 func TestListGroup_MissingGroupID(t *testing.T) {
 	_, err := ListGroup(context.Background(), nopClient(t), ListGroupInput{})
 	if err == nil {
@@ -2324,7 +2342,7 @@ func TestListGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetByID_MissingIssueID verifies the behavior of get by i d missing issue i d.
+// TestGetByID_MissingIssueID verifies GetByID when missing issue ID.
 func TestGetByID_MissingIssueID(t *testing.T) {
 	_, err := GetByID(context.Background(), nopClient(t), GetByIDInput{})
 	if err == nil {
@@ -2332,7 +2350,7 @@ func TestGetByID_MissingIssueID(t *testing.T) {
 	}
 }
 
-// TestReorder_MissingProject verifies the behavior of reorder missing project.
+// TestReorder_MissingProject verifies Reorder when missing project.
 func TestReorder_MissingProject(t *testing.T) {
 	_, err := Reorder(context.Background(), nopClient(t), ReorderInput{IssueIID: 10})
 	if err == nil {
@@ -2340,7 +2358,7 @@ func TestReorder_MissingProject(t *testing.T) {
 	}
 }
 
-// TestSubscribe_MissingProject verifies the behavior of subscribe missing project.
+// TestSubscribe_MissingProject verifies Subscribe when missing project.
 func TestSubscribe_MissingProject(t *testing.T) {
 	_, err := Subscribe(context.Background(), nopClient(t), SubscribeInput{IssueIID: 10})
 	if err == nil {
@@ -2348,7 +2366,7 @@ func TestSubscribe_MissingProject(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_MissingProject verifies the behavior of unsubscribe missing project.
+// TestUnsubscribe_MissingProject verifies Unsubscribe when missing project.
 func TestUnsubscribe_MissingProject(t *testing.T) {
 	_, err := Unsubscribe(context.Background(), nopClient(t), UnsubscribeInput{IssueIID: 10})
 	if err == nil {
@@ -2356,7 +2374,7 @@ func TestUnsubscribe_MissingProject(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_MissingProject verifies the behavior of create todo missing project.
+// TestCreateTodo_MissingProject verifies CreateTodo when missing project.
 func TestCreateTodo_MissingProject(t *testing.T) {
 	_, err := CreateTodo(context.Background(), nopClient(t), CreateTodoInput{IssueIID: 10})
 	if err == nil {
@@ -2364,7 +2382,7 @@ func TestCreateTodo_MissingProject(t *testing.T) {
 	}
 }
 
-// TestMove_MissingToProjectCov verifies the behavior of move missing to project cov.
+// TestMove_MissingToProjectCov verifies Move when missing to project cov.
 func TestMove_MissingToProjectCov(t *testing.T) {
 	_, err := Move(context.Background(), nopClient(t), MoveInput{ProjectID: testProjectID, IssueIID: 10})
 	if err == nil {
@@ -2377,12 +2395,18 @@ func TestMove_MissingToProjectCov(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	issueJSONCov       = `{"id":1,"iid":10,"title":"Test Issue","state":"opened","labels":["bug"],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/issue/10","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","project_id":42}`
-	issueListJSONCov   = `[` + issueJSONCov + `]`
-	timeStatsJSONCov   = `{"human_time_estimate":"3h","human_total_time_spent":"1h","time_estimate":10800,"total_time_spent":3600}`
+	// issueJSONCov identifies the issue JSON cov constant used by this package.
+	issueJSONCov = `{"id":1,"iid":10,"title":"Test Issue","state":"opened","labels":["bug"],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/issue/10","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","project_id":42}`
+	// issueListJSONCov identifies the issue list JSON cov constant used by this package.
+	issueListJSONCov = `[` + issueJSONCov + `]`
+	// timeStatsJSONCov identifies the time stats JSON cov constant used by this package.
+	timeStatsJSONCov = `{"human_time_estimate":"3h","human_total_time_spent":"1h","time_estimate":10800,"total_time_spent":3600}`
+	// participantJSONCov identifies the participant JSON cov constant used by this package.
 	participantJSONCov = `[{"id":1,"username":"alice","name":"Alice","web_url":"https://example.com/alice"}]`
-	todoJSONCov        = `{"id":1,"action_name":"marked","target_type":"Issue","target":{"title":"Test","web_url":"https://example.com"},"state":"pending","created_at":"2026-01-01T00:00:00Z"}`
-	closingMRJSONCov   = `[{"id":1,"iid":5,"title":"Fix","state":"merged","source_branch":"fix","target_branch":"main","author":{"username":"bob"},"web_url":"https://example.com/mr/5"}]`
+	// todoJSONCov identifies the todo JSON cov constant used by this package.
+	todoJSONCov = `{"id":1,"action_name":"marked","target_type":"Issue","target":{"title":"Test","web_url":"https://example.com"},"state":"pending","created_at":"2026-01-01T00:00:00Z"}`
+	// closingMRJSONCov identifies the closing mrjson cov constant used by this package.
+	closingMRJSONCov = `[{"id":1,"iid":5,"title":"Fix","state":"merged","source_branch":"fix","target_branch":"main","author":{"username":"bob"},"web_url":"https://example.com/mr/5"}]`
 )
 
 // issueMockResp holds a canned response for a mock issue endpoint.
@@ -2392,7 +2416,7 @@ type issueMockResp struct {
 	pgHdr  *testutil.PaginationHeaders
 }
 
-// issueMockHandler is an internal helper for the issues package.
+// issueMockHandler reports whether issue mock handler.
 func issueMockHandler(w http.ResponseWriter, r *http.Request) {
 	pgDefault := &testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
 	issue10 := "/api/v4/projects/42/issues/10"
@@ -2437,7 +2461,7 @@ func issueMockHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TestCreate_SuccessCov verifies the behavior of create success cov.
+// TestCreate_SuccessCov verifies Create when success cov.
 func TestCreate_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	conf := true
@@ -2456,7 +2480,7 @@ func TestCreate_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestCreate_WithCreatedAt verifies the behavior of create with created at.
+// TestCreate_WithCreatedAt verifies Create when with created at.
 func TestCreate_WithCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Create(context.Background(), client, CreateInput{
@@ -2470,7 +2494,7 @@ func TestCreate_WithCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidCreatedAt verifies the behavior of create invalid created at.
+// TestCreate_InvalidCreatedAt verifies Create when invalid created at.
 func TestCreate_InvalidCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	_, err := Create(context.Background(), client, CreateInput{
@@ -2481,7 +2505,7 @@ func TestCreate_InvalidCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCreate_WithMRResolve verifies the behavior of create with m r resolve.
+// TestCreate_WithMRResolve verifies Create when with MR resolve.
 func TestCreate_WithMRResolve(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Create(context.Background(), client, CreateInput{
@@ -2497,7 +2521,7 @@ func TestCreate_WithMRResolve(t *testing.T) {
 	}
 }
 
-// TestGet_SuccessCov verifies the behavior of get success cov.
+// TestGet_SuccessCov verifies Get when success cov.
 func TestGet_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2509,7 +2533,7 @@ func TestGet_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestList_SuccessCov verifies the behavior of list success cov.
+// TestList_SuccessCov verifies List when success cov.
 func TestList_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
@@ -2521,7 +2545,7 @@ func TestList_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestUpdate_SuccessCov verifies the behavior of update success cov.
+// TestUpdate_SuccessCov verifies Update when success cov.
 func TestUpdate_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Title: "Updated"})
@@ -2533,7 +2557,7 @@ func TestUpdate_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidDueDateCov verifies the behavior of update invalid due date cov.
+// TestUpdate_InvalidDueDateCov verifies Update when invalid due date cov.
 func TestUpdate_InvalidDueDateCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, DueDate: "bad"})
@@ -2542,7 +2566,7 @@ func TestUpdate_InvalidDueDateCov(t *testing.T) {
 	}
 }
 
-// TestDelete_SuccessCov verifies the behavior of delete success cov.
+// TestDelete_SuccessCov verifies Delete when success cov.
 func TestDelete_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2551,7 +2575,7 @@ func TestDelete_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestListGroup_SuccessCov verifies the behavior of list group success cov.
+// TestListGroup_SuccessCov verifies ListGroup when success cov.
 func TestListGroup_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "99"})
@@ -2563,7 +2587,7 @@ func TestListGroup_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestListAll_SuccessCov verifies the behavior of list all success cov.
+// TestListAll_SuccessCov verifies ListAll when success cov.
 func TestListAll_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListAll(context.Background(), client, ListAllInput{})
@@ -2575,7 +2599,7 @@ func TestListAll_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestGetByID_SuccessCov verifies the behavior of get by i d success cov.
+// TestGetByID_SuccessCov verifies GetByID when success cov.
 func TestGetByID_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := GetByID(context.Background(), client, GetByIDInput{IssueID: 10})
@@ -2587,7 +2611,7 @@ func TestGetByID_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestReorder_SuccessCov verifies the behavior of reorder success cov.
+// TestReorder_SuccessCov verifies Reorder when success cov.
 func TestReorder_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	afterID := int64(5)
@@ -2600,7 +2624,7 @@ func TestReorder_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestMove_SuccessCov verifies the behavior of move success cov.
+// TestMove_SuccessCov verifies Move when success cov.
 func TestMove_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Move(context.Background(), client, MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99})
@@ -2612,7 +2636,7 @@ func TestMove_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestSubscribe_SuccessCov verifies the behavior of subscribe success cov.
+// TestSubscribe_SuccessCov verifies Subscribe when success cov.
 func TestSubscribe_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Subscribe(context.Background(), client, SubscribeInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2624,7 +2648,7 @@ func TestSubscribe_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestUnsubscribe_SuccessCov verifies the behavior of unsubscribe success cov.
+// TestUnsubscribe_SuccessCov verifies Unsubscribe when success cov.
 func TestUnsubscribe_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := Unsubscribe(context.Background(), client, UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2636,7 +2660,7 @@ func TestUnsubscribe_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_SuccessCov verifies the behavior of create todo success cov.
+// TestCreateTodo_SuccessCov verifies CreateTodo when success cov.
 func TestCreateTodo_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2651,7 +2675,7 @@ func TestCreateTodo_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestSetTimeEstimate_SuccessCov verifies the behavior of set time estimate success cov.
+// TestSetTimeEstimate_SuccessCov verifies SetTimeEstimate when success cov.
 func TestSetTimeEstimate_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := SetTimeEstimate(context.Background(), client, SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "3h"})
@@ -2663,7 +2687,7 @@ func TestSetTimeEstimate_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestResetTimeEstimate_SuccessCov verifies the behavior of reset time estimate success cov.
+// TestResetTimeEstimate_SuccessCov verifies ResetTimeEstimate when success cov.
 func TestResetTimeEstimate_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ResetTimeEstimate(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2675,7 +2699,7 @@ func TestResetTimeEstimate_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_SuccessCov verifies the behavior of add spent time success cov.
+// TestAddSpentTime_SuccessCov verifies AddSpentTime when success cov.
 func TestAddSpentTime_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h"})
@@ -2687,7 +2711,7 @@ func TestAddSpentTime_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_WithSummaryCov verifies the behavior of add spent time with summary cov.
+// TestAddSpentTime_WithSummaryCov verifies AddSpentTime when with summary cov.
 func TestAddSpentTime_WithSummaryCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h", Summary: "debugging"})
@@ -2699,7 +2723,7 @@ func TestAddSpentTime_WithSummaryCov(t *testing.T) {
 	}
 }
 
-// TestResetSpentTime_SuccessCov verifies the behavior of reset spent time success cov.
+// TestResetSpentTime_SuccessCov verifies ResetSpentTime when success cov.
 func TestResetSpentTime_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ResetSpentTime(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2711,7 +2735,7 @@ func TestResetSpentTime_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestGetTimeStats_SuccessCov verifies the behavior of get time stats success cov.
+// TestGetTimeStats_SuccessCov verifies GetTimeStats when success cov.
 func TestGetTimeStats_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := GetTimeStats(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2723,7 +2747,7 @@ func TestGetTimeStats_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestGetParticipants_SuccessCov verifies the behavior of get participants success cov.
+// TestGetParticipants_SuccessCov verifies GetParticipants when success cov.
 func TestGetParticipants_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2738,7 +2762,7 @@ func TestGetParticipants_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_SuccessCov verifies the behavior of list m rs closing success cov.
+// TestListMRsClosing_SuccessCov verifies ListMRsClosing when success cov.
 func TestListMRsClosing_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2753,7 +2777,7 @@ func TestListMRsClosing_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_SuccessCov verifies the behavior of list m rs related success cov.
+// TestListMRsRelated_SuccessCov verifies ListMRsRelated when success cov.
 func TestListMRsRelated_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10})
@@ -2769,7 +2793,7 @@ func TestListMRsRelated_SuccessCov(t *testing.T) {
 // List with all filter fields (to cover filter branches)
 // ---------------------------------------------------------------------------.
 
-// TestListAll_FilterFieldsCov verifies the behavior of list all filter fields cov.
+// TestListAll_FilterFieldsCov verifies ListAll when filter fields cov.
 func TestListAll_FilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	conf := true
@@ -2790,7 +2814,7 @@ func TestListAll_FilterFieldsCov(t *testing.T) {
 	}
 }
 
-// TestListAll_WithPagination verifies the behavior of list all with pagination.
+// TestListAll_WithPagination verifies ListAll when with pagination.
 func TestListAll_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListAll(context.Background(), client, ListAllInput{
@@ -2804,7 +2828,7 @@ func TestListAll_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListGroup_AllFilterFieldsCov verifies the behavior of list group all filter fields cov.
+// TestListGroup_AllFilterFieldsCov verifies ListGroup when all filter fields cov.
 func TestListGroup_AllFilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
@@ -2822,7 +2846,7 @@ func TestListGroup_AllFilterFieldsCov(t *testing.T) {
 	}
 }
 
-// TestListGroup_WithPagination verifies the behavior of list group with pagination.
+// TestListGroup_WithPagination verifies ListGroup when with pagination.
 func TestListGroup_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
@@ -2837,7 +2861,7 @@ func TestListGroup_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_WithPagination verifies the behavior of list m rs closing with pagination.
+// TestListMRsClosing_WithPagination verifies ListMRsClosing when with pagination.
 func TestListMRsClosing_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
@@ -2852,7 +2876,7 @@ func TestListMRsClosing_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_WithPagination verifies the behavior of list m rs related with pagination.
+// TestListMRsRelated_WithPagination verifies ListMRsRelated when with pagination.
 func TestListMRsRelated_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{

@@ -15,17 +15,20 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // CI Variable List
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableList_Success verifies the behavior of c i variable list success.
+// TestCIVariableList_Success verifies CIVariableList when success.
 func TestCIVariableList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables" && r.Method == http.MethodGet {
@@ -54,7 +57,7 @@ func TestCIVariableList_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_MissingProjectID verifies the behavior of c i variable list missing project i d.
+// TestCIVariableList_MissingProjectID verifies CIVariableList when missing project ID.
 func TestCIVariableList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := List(context.Background(), client, ListInput{})
@@ -63,7 +66,7 @@ func TestCIVariableList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_CancelledContext verifies the behavior of c i variable list cancelled context.
+// TestCIVariableList_CancelledContext verifies CIVariableList when cancelled context.
 func TestCIVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -77,7 +80,7 @@ func TestCIVariableList_CancelledContext(t *testing.T) {
 // CI Variable Get
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableGet_Success verifies the behavior of c i variable get success.
+// TestCIVariableGet_Success verifies CIVariableGet when success.
 func TestCIVariableGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodGet {
@@ -102,7 +105,7 @@ func TestCIVariableGet_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_MissingFields validates c i variable get missing fields across multiple scenarios using table-driven subtests.
+// TestCIVariableGet_MissingFields covers CIVariableGet with table-driven subtests for missing fields.
 func TestCIVariableGet_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -122,7 +125,7 @@ func TestCIVariableGet_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_CancelledContext verifies the behavior of c i variable get cancelled context.
+// TestCIVariableGet_CancelledContext verifies CIVariableGet when cancelled context.
 func TestCIVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -136,7 +139,7 @@ func TestCIVariableGet_CancelledContext(t *testing.T) {
 // CI Variable Create
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableCreate_Success verifies the behavior of c i variable create success.
+// TestCIVariableCreate_Success verifies CIVariableCreate when success.
 func TestCIVariableCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables" && r.Method == http.MethodPost {
@@ -159,7 +162,7 @@ func TestCIVariableCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_MissingFields validates c i variable create missing fields across multiple scenarios using table-driven subtests.
+// TestCIVariableCreate_MissingFields covers CIVariableCreate with table-driven subtests for missing fields.
 func TestCIVariableCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -180,7 +183,7 @@ func TestCIVariableCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_CancelledContext verifies the behavior of c i variable create cancelled context.
+// TestCIVariableCreate_CancelledContext verifies CIVariableCreate when cancelled context.
 func TestCIVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -196,7 +199,7 @@ func TestCIVariableCreate_CancelledContext(t *testing.T) {
 // CI Variable Update
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableUpdate_Success verifies the behavior of c i variable update success.
+// TestCIVariableUpdate_Success verifies CIVariableUpdate when success.
 func TestCIVariableUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -219,7 +222,7 @@ func TestCIVariableUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_MissingFields validates c i variable update missing fields across multiple scenarios using table-driven subtests.
+// TestCIVariableUpdate_MissingFields covers CIVariableUpdate with table-driven subtests for missing fields.
 func TestCIVariableUpdate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -239,7 +242,7 @@ func TestCIVariableUpdate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_CancelledContext verifies the behavior of c i variable update cancelled context.
+// TestCIVariableUpdate_CancelledContext verifies CIVariableUpdate when cancelled context.
 func TestCIVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -255,7 +258,7 @@ func TestCIVariableUpdate_CancelledContext(t *testing.T) {
 // CI Variable Delete
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableDelete_Success verifies the behavior of c i variable delete success.
+// TestCIVariableDelete_Success verifies CIVariableDelete when success.
 func TestCIVariableDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -273,7 +276,7 @@ func TestCIVariableDelete_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_MissingFields validates c i variable delete missing fields across multiple scenarios using table-driven subtests.
+// TestCIVariableDelete_MissingFields covers CIVariableDelete with table-driven subtests for missing fields.
 func TestCIVariableDelete_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -293,7 +296,7 @@ func TestCIVariableDelete_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_CancelledContext verifies the behavior of c i variable delete cancelled context.
+// TestCIVariableDelete_CancelledContext verifies CIVariableDelete when cancelled context.
 func TestCIVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -344,10 +347,14 @@ func TestToOutput_AutoMasking(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
+	// msgServerError identifies the msg server error constant used by this package.
 	msgServerError = "server error"
+	// errExpectedAPI identifies the err expected API constant used by this package.
 	errExpectedAPI = "expected API error, got nil"
-	testEnvScope   = "production"
+	// testEnvScope identifies the test env scope constant used by this package.
+	testEnvScope = "production"
 
+	// fmtEnvironmentScope identifies the fmt environment scope constant used by this package.
 	fmtEnvironmentScope = "EnvironmentScope = %q, want %q"
 )
 
@@ -355,7 +362,7 @@ const (
 // List — API error, with pagination parameters
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableList_APIError verifies the behavior of c i variable list a p i error.
+// TestCIVariableList_APIError verifies CIVariableList when API error.
 func TestCIVariableList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -366,7 +373,7 @@ func TestCIVariableList_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_WithPagination verifies the behavior of c i variable list with pagination.
+// TestCIVariableList_WithPagination verifies CIVariableList when with pagination.
 func TestCIVariableList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/variables" && r.Method == http.MethodGet {
@@ -403,7 +410,7 @@ func TestCIVariableList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_EmptyResult verifies the behavior of c i variable list empty result.
+// TestCIVariableList_EmptyResult verifies CIVariableList when empty result.
 func TestCIVariableList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables" && r.Method == http.MethodGet {
@@ -426,7 +433,7 @@ func TestCIVariableList_EmptyResult(t *testing.T) {
 // Get — API error, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableGet_APIError verifies the behavior of c i variable get a p i error.
+// TestCIVariableGet_APIError verifies CIVariableGet when API error.
 func TestCIVariableGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -437,7 +444,7 @@ func TestCIVariableGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_WithEnvironmentScope verifies the behavior of c i variable get with environment scope.
+// TestCIVariableGet_WithEnvironmentScope verifies CIVariableGet when with environment scope.
 func TestCIVariableGet_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodGet {
@@ -470,7 +477,7 @@ func TestCIVariableGet_WithEnvironmentScope(t *testing.T) {
 // Create — API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableCreate_APIError verifies the behavior of c i variable create a p i error.
+// TestCIVariableCreate_APIError verifies CIVariableCreate when API error.
 func TestCIVariableCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -481,7 +488,7 @@ func TestCIVariableCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_AllOptionalFields verifies the behavior of c i variable create all optional fields.
+// TestCIVariableCreate_AllOptionalFields verifies CIVariableCreate when all optional fields.
 func TestCIVariableCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables" && r.Method == http.MethodPost {
@@ -532,7 +539,7 @@ func TestCIVariableCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableUpdate_APIError verifies the behavior of c i variable update a p i error.
+// TestCIVariableUpdate_APIError verifies CIVariableUpdate when API error.
 func TestCIVariableUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -543,7 +550,7 @@ func TestCIVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_AllOptionalFields verifies the behavior of c i variable update all optional fields.
+// TestCIVariableUpdate_AllOptionalFields verifies CIVariableUpdate when all optional fields.
 func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -584,7 +591,7 @@ func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableDelete_APIError verifies the behavior of c i variable delete a p i error.
+// TestCIVariableDelete_APIError verifies CIVariableDelete when API error.
 func TestCIVariableDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -595,7 +602,7 @@ func TestCIVariableDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_WithEnvironmentScope verifies the behavior of c i variable delete with environment scope.
+// TestCIVariableDelete_WithEnvironmentScope verifies CIVariableDelete when with environment scope.
 func TestCIVariableDelete_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -619,7 +626,7 @@ func TestCIVariableDelete_WithEnvironmentScope(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyKey verifies the behavior of format output markdown empty key.
+// TestFormatOutputMarkdown_EmptyKey verifies FormatOutputMarkdown when empty key.
 func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -627,7 +634,7 @@ func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_FullUnmasked verifies the behavior of format output markdown full unmasked.
+// TestFormatOutputMarkdown_FullUnmasked verifies FormatOutputMarkdown when full unmasked.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "DB_HOST",
@@ -660,7 +667,7 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MaskedValue verifies the behavior of format output markdown masked value.
+// TestFormatOutputMarkdown_MaskedValue verifies FormatOutputMarkdown when masked value.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SECRET",
@@ -678,7 +685,7 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_HiddenValue verifies the behavior of format output markdown hidden value.
+// TestFormatOutputMarkdown_HiddenValue verifies FormatOutputMarkdown when hidden value.
 func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "TOKEN",
@@ -696,7 +703,7 @@ func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies the behavior of format output markdown no description.
+// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown when no description.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SIMPLE",
@@ -714,7 +721,7 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies the behavior of format list markdown with variables.
+// TestFormatListMarkdown_WithVariables verifies FormatListMarkdown when with variables.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -740,7 +747,7 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No CI/CD variables found") {
@@ -751,7 +758,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies the behavior of format list markdown escapes table cells.
+// TestFormatListMarkdown_EscapesTableCells verifies FormatListMarkdown when escapes table cells.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -835,7 +842,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // Helper: route spec factory
 // ---------------------------------------------------------------------------.
 
-// newCIVariableRouteSpecs is an internal helper for the civariables package.
+// newCIVariableRouteSpecs constructs CI variable route specs test fixtures.
 func newCIVariableRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -871,6 +878,7 @@ func newCIVariableRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return ciVariableSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 }
 
+// ciVariableSpecsByTool supports CI variable specs by tool assertions in civariables tests.
 func ciVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

@@ -179,6 +179,7 @@ func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, in
 
 // Helpers.
 
+// levelMap stores the package-level level map state.
 var levelMap = map[string]gl.NotificationLevelValue{
 	"disabled":      gl.DisabledNotificationLevel,
 	"participating": gl.ParticipatingNotificationLevel,
@@ -255,7 +256,7 @@ func toOutput(s *gl.NotificationSettings) Output {
 
 // Formatters.
 
-// eventLine is an internal helper for the notifications package.
+// eventLine implements the event line helper used by notifications.
 func eventLine(name string, enabled bool) string {
 	return fmt.Sprintf("- %s %s\n", toolutil.BoolEmoji(enabled), name)
 }

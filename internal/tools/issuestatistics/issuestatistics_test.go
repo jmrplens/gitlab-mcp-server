@@ -12,9 +12,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
-// TestGet verifies the behavior of get.
+// TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/issues_statistics" {
@@ -32,7 +33,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies the behavior of get error.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -43,7 +44,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestGetGroup verifies the behavior of get group.
+// TestGetGroup verifies GetGroup.
 func TestGetGroup(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/5/issues_statistics" {
@@ -61,7 +62,7 @@ func TestGetGroup(t *testing.T) {
 	}
 }
 
-// TestGetGroup_Error verifies the behavior of get group error.
+// TestGetGroup_Error verifies GetGroup when error.
 func TestGetGroup_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -72,7 +73,7 @@ func TestGetGroup_Error(t *testing.T) {
 	}
 }
 
-// TestGetProject verifies the behavior of get project.
+// TestGetProject verifies GetProject.
 func TestGetProject(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/issues_statistics" {
@@ -90,7 +91,7 @@ func TestGetProject(t *testing.T) {
 	}
 }
 
-// TestGetProject_Error verifies the behavior of get project error.
+// TestGetProject_Error verifies GetProject when error.
 func TestGetProject_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -101,7 +102,7 @@ func TestGetProject_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies the behavior of format markdown.
+// TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
 	md := FormatMarkdown("Test", StatisticsOutput{All: 10, Opened: 7, Closed: 3})
 	if !strings.Contains(md, "10") || !strings.Contains(md, "Test") {
@@ -111,19 +112,28 @@ func TestFormatMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
+// errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// commonStatsJSON identifies the common stats JSON constant used by this package.
 const commonStatsJSON = `{"statistics":{"counts":{"all":5,"closed":2,"opened":3}}}`
 
 const (
-	errExpLabelsParam    = "expected labels query param"
+	// errExpLabelsParam identifies the err exp labels param constant used by this package.
+	errExpLabelsParam = "expected labels query param"
+	// errExpMilestoneParam identifies the err exp milestone param constant used by this package.
 	errExpMilestoneParam = "expected milestone query param"
-	errExpScopeParam     = "expected scope query param"
-	errExpSearchParam    = "expected search query param"
+	// errExpScopeParam identifies the err exp scope param constant used by this package.
+	errExpScopeParam = "expected scope query param"
+	// errExpSearchParam identifies the err exp search param constant used by this package.
+	errExpSearchParam = "expected search query param"
+	// errExpAPIErrResponse identifies the err exp API err response constant used by this package.
 	errExpAPIErrResponse = "expected error for API error response"
 )
 
@@ -131,7 +141,7 @@ const (
 // FormatMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated validates format markdown populated across multiple scenarios using table-driven subtests.
+// TestFormatMarkdown_Populated covers FormatMarkdown with table-driven subtests for populated.
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown("Global", StatisticsOutput{All: 100, Opened: 60, Closed: 40})
 
@@ -151,7 +161,7 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Empty validates format markdown empty across multiple scenarios using table-driven subtests.
+// TestFormatMarkdown_Empty covers FormatMarkdown with table-driven subtests for empty.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown("Empty", StatisticsOutput{})
 
@@ -170,7 +180,7 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_DifferentLabels verifies the behavior of format markdown different labels.
+// TestFormatMarkdown_DifferentLabels verifies FormatMarkdown when different labels.
 func TestFormatMarkdown_DifferentLabels(t *testing.T) {
 	labels := []string{"Group", "Project", "Custom Label"}
 	for _, label := range labels {
@@ -188,7 +198,7 @@ func TestFormatMarkdown_DifferentLabels(t *testing.T) {
 // fromGL converter (tested indirectly via handlers)
 // ---------------------------------------------------------------------------.
 
-// TestFromGL_FullData verifies the behavior of from g l full data.
+// TestFromGL_FullData verifies FromGL when full data.
 func TestFromGL_FullData(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":250,"closed":100,"opened":150}}}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -210,7 +220,7 @@ func TestFromGL_FullData(t *testing.T) {
 	}
 }
 
-// TestFromGL_ZeroCounts verifies the behavior of from g l zero counts.
+// TestFromGL_ZeroCounts verifies FromGL when zero counts.
 func TestFromGL_ZeroCounts(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":0,"closed":0,"opened":0}}}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -230,7 +240,7 @@ func TestFromGL_ZeroCounts(t *testing.T) {
 // Get (global) -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGet_WithAllFilters verifies the behavior of get with all filters.
+// TestGet_WithAllFilters verifies Get when with all filters.
 func TestGet_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":10,"closed":3,"opened":7}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +278,7 @@ func TestGet_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGet_WithLabelsOnly verifies the behavior of get with labels only.
+// TestGet_WithLabelsOnly verifies Get when with labels only.
 func TestGet_WithLabelsOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -283,7 +293,7 @@ func TestGet_WithLabelsOnly(t *testing.T) {
 	}
 }
 
-// TestGet_WithMilestoneOnly verifies the behavior of get with milestone only.
+// TestGet_WithMilestoneOnly verifies Get when with milestone only.
 func TestGet_WithMilestoneOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -298,7 +308,7 @@ func TestGet_WithMilestoneOnly(t *testing.T) {
 	}
 }
 
-// TestGet_WithScopeOnly verifies the behavior of get with scope only.
+// TestGet_WithScopeOnly verifies Get when with scope only.
 func TestGet_WithScopeOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -313,7 +323,7 @@ func TestGet_WithScopeOnly(t *testing.T) {
 	}
 }
 
-// TestGet_WithSearchOnly verifies the behavior of get with search only.
+// TestGet_WithSearchOnly verifies Get when with search only.
 func TestGet_WithSearchOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -328,7 +338,7 @@ func TestGet_WithSearchOnly(t *testing.T) {
 	}
 }
 
-// TestGet_ContextCancelled verifies the behavior of get context cancelled.
+// TestGet_ContextCancelled verifies Get when context cancelled.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":0,"closed":0,"opened":0}}}`)
@@ -340,7 +350,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGet_APIError500 verifies the behavior of get a p i error500.
+// TestGet_APIError500 verifies Get when API error 500.
 func TestGet_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -351,7 +361,7 @@ func TestGet_APIError500(t *testing.T) {
 	}
 }
 
-// TestGet_APIError403 verifies the behavior of get a p i error403.
+// TestGet_APIError403 verifies Get when API error 403.
 func TestGet_APIError403(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -366,7 +376,7 @@ func TestGet_APIError403(t *testing.T) {
 // GetGroup -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGetGroup_WithAllFilters verifies the behavior of get group with all filters.
+// TestGetGroup_WithAllFilters verifies GetGroup when with all filters.
 func TestGetGroup_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":30,"closed":10,"opened":20}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -408,7 +418,7 @@ func TestGetGroup_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGetGroup_WithLabelsOnly verifies the behavior of get group with labels only.
+// TestGetGroup_WithLabelsOnly verifies GetGroup when with labels only.
 func TestGetGroup_WithLabelsOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -419,7 +429,7 @@ func TestGetGroup_WithLabelsOnly(t *testing.T) {
 	}
 }
 
-// TestGetGroup_WithMilestoneOnly verifies the behavior of get group with milestone only.
+// TestGetGroup_WithMilestoneOnly verifies GetGroup when with milestone only.
 func TestGetGroup_WithMilestoneOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -430,7 +440,7 @@ func TestGetGroup_WithMilestoneOnly(t *testing.T) {
 	}
 }
 
-// TestGetGroup_WithScopeOnly verifies the behavior of get group with scope only.
+// TestGetGroup_WithScopeOnly verifies GetGroup when with scope only.
 func TestGetGroup_WithScopeOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -441,7 +451,7 @@ func TestGetGroup_WithScopeOnly(t *testing.T) {
 	}
 }
 
-// TestGetGroup_WithSearchOnly verifies the behavior of get group with search only.
+// TestGetGroup_WithSearchOnly verifies GetGroup when with search only.
 func TestGetGroup_WithSearchOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -452,7 +462,7 @@ func TestGetGroup_WithSearchOnly(t *testing.T) {
 	}
 }
 
-// TestGetGroup_ContextCancelled verifies the behavior of get group context cancelled.
+// TestGetGroup_ContextCancelled verifies GetGroup when context cancelled.
 func TestGetGroup_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":0,"closed":0,"opened":0}}}`)
@@ -464,7 +474,7 @@ func TestGetGroup_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetGroup_APIError500 verifies the behavior of get group a p i error500.
+// TestGetGroup_APIError500 verifies GetGroup when API error 500.
 func TestGetGroup_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -475,7 +485,7 @@ func TestGetGroup_APIError500(t *testing.T) {
 	}
 }
 
-// TestGetGroup_APIError404 verifies the behavior of get group a p i error404.
+// TestGetGroup_APIError404 verifies GetGroup when API error 404.
 func TestGetGroup_APIError404(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"group not found"}`)
@@ -490,7 +500,7 @@ func TestGetGroup_APIError404(t *testing.T) {
 // GetProject -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGetProject_WithAllFilters verifies the behavior of get project with all filters.
+// TestGetProject_WithAllFilters verifies GetProject when with all filters.
 func TestGetProject_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":50,"closed":20,"opened":30}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -535,7 +545,7 @@ func TestGetProject_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGetProject_WithLabelsOnly verifies the behavior of get project with labels only.
+// TestGetProject_WithLabelsOnly verifies GetProject when with labels only.
 func TestGetProject_WithLabelsOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -546,7 +556,7 @@ func TestGetProject_WithLabelsOnly(t *testing.T) {
 	}
 }
 
-// TestGetProject_WithMilestoneOnly verifies the behavior of get project with milestone only.
+// TestGetProject_WithMilestoneOnly verifies GetProject when with milestone only.
 func TestGetProject_WithMilestoneOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -557,7 +567,7 @@ func TestGetProject_WithMilestoneOnly(t *testing.T) {
 	}
 }
 
-// TestGetProject_WithScopeOnly verifies the behavior of get project with scope only.
+// TestGetProject_WithScopeOnly verifies GetProject when with scope only.
 func TestGetProject_WithScopeOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -568,7 +578,7 @@ func TestGetProject_WithScopeOnly(t *testing.T) {
 	}
 }
 
-// TestGetProject_WithSearchOnly verifies the behavior of get project with search only.
+// TestGetProject_WithSearchOnly verifies GetProject when with search only.
 func TestGetProject_WithSearchOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
@@ -579,7 +589,7 @@ func TestGetProject_WithSearchOnly(t *testing.T) {
 	}
 }
 
-// TestGetProject_ContextCancelled verifies the behavior of get project context cancelled.
+// TestGetProject_ContextCancelled verifies GetProject when context cancelled.
 func TestGetProject_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":0,"closed":0,"opened":0}}}`)
@@ -591,7 +601,7 @@ func TestGetProject_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetProject_APIError500 verifies the behavior of get project a p i error500.
+// TestGetProject_APIError500 verifies GetProject when API error 500.
 func TestGetProject_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -602,7 +612,7 @@ func TestGetProject_APIError500(t *testing.T) {
 	}
 }
 
-// TestGetProject_APIError401 verifies the behavior of get project a p i error401.
+// TestGetProject_APIError401 verifies GetProject when API error 401.
 func TestGetProject_APIError401(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"unauthorized"}`)
@@ -617,8 +627,10 @@ func TestGetProject_APIError401(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
+// covStatsJSON identifies the cov stats JSON constant used by this package.
 const covStatsJSON = `{"statistics":{"counts":{"all":100,"closed":40,"opened":60}}}`
 
+// newIssueStatsRouteSpecs constructs issue stats route specs test fixtures.
 func newIssueStatsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -638,6 +650,7 @@ func newIssueStatsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return issueStatsSpecsByTool(ActionSpecs(client))
 }
 
+// issueStatsSpecsByTool reports whether issue stats specs by tool.
 func issueStatsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {
@@ -646,6 +659,7 @@ func issueStatsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.Acti
 	return specByTool
 }
 
+// assertRouteCallSuccess checks route call success invariants for tests.
 func assertRouteCallSuccess(t *testing.T, specByTool map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 	spec, ok := specByTool[name]

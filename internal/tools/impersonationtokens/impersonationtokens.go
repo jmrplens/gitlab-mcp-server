@@ -281,8 +281,7 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Impersonation Tokens (%d)\n\n", len(out.Tokens))
-	sb.WriteString("| ID | Name | Active | Scopes | Expires At |\n")
-	sb.WriteString("|---|---|---|---|---|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Scopes", "Expires At"))
 	for _, t := range out.Tokens {
 		expires := "-"
 		if t.ExpiresAt != "" {

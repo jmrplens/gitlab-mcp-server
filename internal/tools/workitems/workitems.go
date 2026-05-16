@@ -64,7 +64,7 @@ func mapStatusToID(s string) gl.WorkItemStatusID {
 	}
 }
 
-// workItemToItem is an internal helper for the workitems package.
+// workItemToItem maps work item to item between API and evaluator models.
 func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 	item := WorkItemItem{
 		ID:           wi.ID,

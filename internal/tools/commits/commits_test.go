@@ -814,7 +814,7 @@ func TestGetGPGSignature_EmptyProjectID(t *testing.T) {
 // Canceled Context Tests
 // ---------------------------------------------------------------------------.
 
-// TestCommitCreate_CancelledContext verifies the behavior of commit create cancelled context.
+// TestCommitCreate_CancelledContext verifies CommitCreate when cancelled context.
 func TestCommitCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -826,7 +826,7 @@ func TestCommitCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommitGet_CancelledContext verifies the behavior of commit get cancelled context.
+// TestCommitGet_CancelledContext verifies CommitGet when cancelled context.
 func TestCommitGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -838,7 +838,7 @@ func TestCommitGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_CancelledContext verifies the behavior of commit diff cancelled context.
+// TestCommitDiff_CancelledContext verifies CommitDiff when cancelled context.
 func TestCommitDiff_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -850,7 +850,7 @@ func TestCommitDiff_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRefs_CancelledContext verifies the behavior of get refs cancelled context.
+// TestGetRefs_CancelledContext verifies GetRefs when cancelled context.
 func TestGetRefs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -862,7 +862,7 @@ func TestGetRefs_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetComments_CancelledContext verifies the behavior of get comments cancelled context.
+// TestGetComments_CancelledContext verifies GetComments when cancelled context.
 func TestGetComments_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -874,7 +874,7 @@ func TestGetComments_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestPostComment_CancelledContext verifies the behavior of post comment cancelled context.
+// TestPostComment_CancelledContext verifies PostComment when cancelled context.
 func TestPostComment_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -886,7 +886,7 @@ func TestPostComment_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_CancelledContext verifies the behavior of get statuses cancelled context.
+// TestGetStatuses_CancelledContext verifies GetStatuses when cancelled context.
 func TestGetStatuses_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -898,7 +898,7 @@ func TestGetStatuses_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSetStatus_CancelledContext verifies the behavior of set status cancelled context.
+// TestSetStatus_CancelledContext verifies SetStatus when cancelled context.
 func TestSetStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -910,7 +910,7 @@ func TestSetStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListMRsByCommit_CancelledContext verifies the behavior of list m rs by commit cancelled context.
+// TestListMRsByCommit_CancelledContext verifies ListMRsByCommit when cancelled context.
 func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -922,7 +922,7 @@ func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCherryPick_CancelledContext verifies the behavior of cherry pick cancelled context.
+// TestCherryPick_CancelledContext verifies CherryPick when cancelled context.
 func TestCherryPick_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -934,7 +934,7 @@ func TestCherryPick_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRevert_CancelledContext verifies the behavior of revert cancelled context.
+// TestRevert_CancelledContext verifies Revert when cancelled context.
 func TestRevert_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -946,7 +946,7 @@ func TestRevert_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetGPGSignature_CancelledContext verifies the behavior of get g p g signature cancelled context.
+// TestGetGPGSignature_CancelledContext verifies GetGPGSignature when cancelled context.
 func TestGetGPGSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -962,7 +962,7 @@ func TestGetGPGSignature_CancelledContext(t *testing.T) {
 // API Error Tests
 // ---------------------------------------------------------------------------.
 
-// TestCommitGet_APIError verifies the behavior of commit get a p i error.
+// TestCommitGet_APIError verifies CommitGet when API error.
 func TestCommitGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
@@ -973,7 +973,7 @@ func TestCommitGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_APIError verifies the behavior of commit diff a p i error.
+// TestCommitDiff_APIError verifies CommitDiff when API error.
 func TestCommitDiff_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -984,7 +984,7 @@ func TestCommitDiff_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRefs_APIError verifies the behavior of get refs a p i error.
+// TestGetRefs_APIError verifies GetRefs when API error.
 func TestGetRefs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -995,7 +995,7 @@ func TestGetRefs_APIError(t *testing.T) {
 	}
 }
 
-// TestGetComments_APIError verifies the behavior of get comments a p i error.
+// TestGetComments_APIError verifies GetComments when API error.
 func TestGetComments_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500 Error"}`)
@@ -1006,7 +1006,7 @@ func TestGetComments_APIError(t *testing.T) {
 	}
 }
 
-// TestPostComment_APIError verifies the behavior of post comment a p i error.
+// TestPostComment_APIError verifies PostComment when API error.
 func TestPostComment_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -1017,7 +1017,7 @@ func TestPostComment_APIError(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_APIError verifies the behavior of get statuses a p i error.
+// TestGetStatuses_APIError verifies GetStatuses when API error.
 func TestGetStatuses_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1028,7 +1028,7 @@ func TestGetStatuses_APIError(t *testing.T) {
 	}
 }
 
-// TestSetStatus_APIError verifies the behavior of set status a p i error.
+// TestSetStatus_APIError verifies SetStatus when API error.
 func TestSetStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -1039,7 +1039,7 @@ func TestSetStatus_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRsByCommit_APIError verifies the behavior of list m rs by commit a p i error.
+// TestListMRsByCommit_APIError verifies ListMRsByCommit when API error.
 func TestListMRsByCommit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1050,7 +1050,7 @@ func TestListMRsByCommit_APIError(t *testing.T) {
 	}
 }
 
-// TestCherryPick_APIError verifies the behavior of cherry pick a p i error.
+// TestCherryPick_APIError verifies CherryPick when API error.
 func TestCherryPick_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -1061,7 +1061,7 @@ func TestCherryPick_APIError(t *testing.T) {
 	}
 }
 
-// TestRevert_APIError verifies the behavior of revert a p i error.
+// TestRevert_APIError verifies Revert when API error.
 func TestRevert_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -1072,7 +1072,7 @@ func TestRevert_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGPGSignature_APIError verifies the behavior of get g p g signature a p i error.
+// TestGetGPGSignature_APIError verifies GetGPGSignature when API error.
 func TestGetGPGSignature_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1087,7 +1087,7 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 // Handler Edge Cases (optional fields, filters)
 // ---------------------------------------------------------------------------.
 
-// TestCommitCreate_WithAllOptions verifies the behavior of commit create with all options.
+// TestCommitCreate_WithAllOptions verifies CommitCreate when with all options.
 func TestCommitCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1128,7 +1128,7 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCommitCreate_EmptyProjectID verifies the behavior of commit create empty project i d.
+// TestCommitCreate_EmptyProjectID verifies CommitCreate when empty project ID.
 func TestCommitCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -1139,7 +1139,7 @@ func TestCommitCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// commitListAllOptionsHandler is an internal helper for the commits package.
+// commitListAllOptionsHandler supports commit list all options handler assertions in commits tests.
 func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1158,7 +1158,7 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 	}
 }
 
-// TestCommitList_WithAllOptions verifies the behavior of commit list with all options.
+// TestCommitList_WithAllOptions verifies CommitList when with all options.
 func TestCommitList_WithAllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, commitListAllOptionsHandler(t))
 
@@ -1183,7 +1183,7 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_WithUnidiff verifies the behavior of commit diff with unidiff.
+// TestCommitDiff_WithUnidiff verifies CommitDiff when with unidiff.
 func TestCommitDiff_WithUnidiff(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/diff" {
@@ -1203,7 +1203,7 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 	}
 }
 
-// TestGetRefs_WithType verifies the behavior of get refs with type.
+// TestGetRefs_WithType verifies GetRefs when with type.
 func TestGetRefs_WithType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/refs" {
@@ -1226,7 +1226,7 @@ func TestGetRefs_WithType(t *testing.T) {
 	}
 }
 
-// TestPostComment_Inline verifies the behavior of post comment inline.
+// TestPostComment_Inline verifies PostComment when inline.
 func TestPostComment_Inline(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/comments" {
@@ -1255,7 +1255,7 @@ func TestPostComment_Inline(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_WithFilters verifies the behavior of get statuses with filters.
+// TestGetStatuses_WithFilters verifies GetStatuses when with filters.
 func TestGetStatuses_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/statuses" {
@@ -1292,7 +1292,7 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 	}
 }
 
-// TestSetStatus_WithAllOptions verifies the behavior of set status with all options.
+// TestSetStatus_WithAllOptions verifies SetStatus when with all options.
 func TestSetStatus_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1345,7 +1345,7 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCherryPick_WithOptions verifies the behavior of cherry pick with options.
+// TestCherryPick_WithOptions verifies CherryPick when with options.
 func TestCherryPick_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/cherry_pick" {
@@ -1370,7 +1370,7 @@ func TestCherryPick_WithOptions(t *testing.T) {
 	}
 }
 
-// TestGetComments_EmptyProjectID verifies the behavior of get comments empty project i d.
+// TestGetComments_EmptyProjectID verifies GetComments when empty project ID.
 func TestGetComments_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1381,7 +1381,7 @@ func TestGetComments_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_EmptyProjectID verifies the behavior of get statuses empty project i d.
+// TestGetStatuses_EmptyProjectID verifies GetStatuses when empty project ID.
 func TestGetStatuses_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1392,7 +1392,7 @@ func TestGetStatuses_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetRefs_EmptySHA verifies the behavior of get refs empty s h a.
+// TestGetRefs_EmptySHA verifies GetRefs when empty SHA.
 func TestGetRefs_EmptySHA(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1403,7 +1403,7 @@ func TestGetRefs_EmptySHA(t *testing.T) {
 	}
 }
 
-// TestCherryPick_EmptyBranch verifies the behavior of cherry pick empty branch.
+// TestCherryPick_EmptyBranch verifies CherryPick when empty branch.
 func TestCherryPick_EmptyBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1414,7 +1414,7 @@ func TestCherryPick_EmptyBranch(t *testing.T) {
 	}
 }
 
-// TestRevert_EmptyBranch verifies the behavior of revert empty branch.
+// TestRevert_EmptyBranch verifies Revert when empty branch.
 func TestRevert_EmptyBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1429,7 +1429,7 @@ func TestRevert_EmptyBranch(t *testing.T) {
 // Format*Markdown Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the behavior of format output markdown.
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	c := Output{ShortID: "abc12", Title: "feat: init", AuthorName: "Alice", AuthorEmail: "a@t.com", CommittedDate: "2026-01-01", WebURL: "https://example.com"}
 	md := FormatOutputMarkdown(c)
@@ -1444,7 +1444,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the behavior of format list markdown.
+// TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Commits:    []Output{{ShortID: "a1", Title: "feat: x", AuthorName: "A", CommittedDate: "2026-01-01"}},
@@ -1459,7 +1459,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Commits: nil, Pagination: toolutil.PaginationOutput{}}
 	md := FormatListMarkdown(out)
@@ -1485,7 +1485,7 @@ func TestFormatListMarkdown_ClickableCommitLinks(t *testing.T) {
 	}
 }
 
-// TestFormatDetailMarkdown verifies the behavior of format detail markdown.
+// TestFormatDetailMarkdown verifies FormatDetailMarkdown.
 func TestFormatDetailMarkdown(t *testing.T) {
 	c := DetailOutput{
 		ShortID:     "abc",
@@ -1512,7 +1512,7 @@ func TestFormatDetailMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatDetailMarkdown_Minimal verifies the behavior of format detail markdown minimal.
+// TestFormatDetailMarkdown_Minimal verifies FormatDetailMarkdown when minimal.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	c := DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "u"}
 	md := FormatDetailMarkdown(c)
@@ -1527,7 +1527,7 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatDiffMarkdown verifies the behavior of format diff markdown.
+// TestFormatDiffMarkdown verifies FormatDiffMarkdown.
 func TestFormatDiffMarkdown(t *testing.T) {
 	out := DiffOutput{
 		Diffs: []toolutil.DiffOutput{
@@ -1555,7 +1555,7 @@ func TestFormatDiffMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatDiffMarkdown_Empty verifies the behavior of format diff markdown empty.
+// TestFormatDiffMarkdown_Empty verifies FormatDiffMarkdown when empty.
 func TestFormatDiffMarkdown_Empty(t *testing.T) {
 	out := DiffOutput{Diffs: nil}
 	md := FormatDiffMarkdown(out)
@@ -1564,7 +1564,7 @@ func TestFormatDiffMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRefsMarkdown verifies the behavior of format refs markdown.
+// TestFormatRefsMarkdown verifies FormatRefsMarkdown.
 func TestFormatRefsMarkdown(t *testing.T) {
 	out := RefsOutput{
 		Refs: []RefOutput{
@@ -1584,7 +1584,7 @@ func TestFormatRefsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatRefsMarkdown_Empty verifies the behavior of format refs markdown empty.
+// TestFormatRefsMarkdown_Empty verifies FormatRefsMarkdown when empty.
 func TestFormatRefsMarkdown_Empty(t *testing.T) {
 	out := RefsOutput{Refs: nil}
 	md := FormatRefsMarkdown(out)
@@ -1593,7 +1593,7 @@ func TestFormatRefsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommentsMarkdown verifies the behavior of format comments markdown.
+// TestFormatCommentsMarkdown verifies FormatCommentsMarkdown.
 func TestFormatCommentsMarkdown(t *testing.T) {
 	out := CommentsOutput{
 		Comments: []CommentOutput{
@@ -1616,7 +1616,7 @@ func TestFormatCommentsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommentsMarkdown_Empty verifies the behavior of format comments markdown empty.
+// TestFormatCommentsMarkdown_Empty verifies FormatCommentsMarkdown when empty.
 func TestFormatCommentsMarkdown_Empty(t *testing.T) {
 	out := CommentsOutput{Comments: nil}
 	md := FormatCommentsMarkdown(out)
@@ -1625,7 +1625,7 @@ func TestFormatCommentsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommentMarkdown verifies the behavior of format comment markdown.
+// TestFormatCommentMarkdown verifies FormatCommentMarkdown.
 func TestFormatCommentMarkdown(t *testing.T) {
 	c := CommentOutput{Author: "dev", Note: "Nice!", Path: testFileMainGo, Line: 5}
 	md := FormatCommentMarkdown(c)
@@ -1640,7 +1640,7 @@ func TestFormatCommentMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommentMarkdown_NoPath verifies the behavior of format comment markdown no path.
+// TestFormatCommentMarkdown_NoPath verifies FormatCommentMarkdown when no path.
 func TestFormatCommentMarkdown_NoPath(t *testing.T) {
 	c := CommentOutput{Author: "dev", Note: "OK"}
 	md := FormatCommentMarkdown(c)
@@ -1649,7 +1649,7 @@ func TestFormatCommentMarkdown_NoPath(t *testing.T) {
 	}
 }
 
-// TestFormatStatusesMarkdown verifies the behavior of format statuses markdown.
+// TestFormatStatusesMarkdown verifies FormatStatusesMarkdown.
 func TestFormatStatusesMarkdown(t *testing.T) {
 	out := StatusesOutput{
 		Statuses: []StatusOutput{
@@ -1665,7 +1665,7 @@ func TestFormatStatusesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatStatusesMarkdown_Empty verifies the behavior of format statuses markdown empty.
+// TestFormatStatusesMarkdown_Empty verifies FormatStatusesMarkdown when empty.
 func TestFormatStatusesMarkdown_Empty(t *testing.T) {
 	out := StatusesOutput{Statuses: nil}
 	md := FormatStatusesMarkdown(out)
@@ -1674,7 +1674,7 @@ func TestFormatStatusesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown verifies the behavior of format status markdown.
+// TestFormatStatusMarkdown verifies FormatStatusMarkdown.
 func TestFormatStatusMarkdown(t *testing.T) {
 	s := StatusOutput{ID: 1, Status: "success", Name: "build", Ref: "main", Description: "Passed", TargetURL: testCIURL}
 	md := FormatStatusMarkdown(s)
@@ -1689,7 +1689,7 @@ func TestFormatStatusMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown_Minimal verifies the behavior of format status markdown minimal.
+// TestFormatStatusMarkdown_Minimal verifies FormatStatusMarkdown when minimal.
 func TestFormatStatusMarkdown_Minimal(t *testing.T) {
 	s := StatusOutput{ID: 2, Status: "pending", Name: "test", Ref: "dev"}
 	md := FormatStatusMarkdown(s)
@@ -1701,7 +1701,7 @@ func TestFormatStatusMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatMRsByCommitMarkdown verifies the behavior of format m rs by commit markdown.
+// TestFormatMRsByCommitMarkdown verifies FormatMRsByCommitMarkdown.
 func TestFormatMRsByCommitMarkdown(t *testing.T) {
 	out := MRsByCommitOutput{
 		MergeRequests: []BasicMROutput{
@@ -1720,7 +1720,7 @@ func TestFormatMRsByCommitMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMRsByCommitMarkdown_Empty verifies the behavior of format m rs by commit markdown empty.
+// TestFormatMRsByCommitMarkdown_Empty verifies FormatMRsByCommitMarkdown when empty.
 func TestFormatMRsByCommitMarkdown_Empty(t *testing.T) {
 	out := MRsByCommitOutput{MergeRequests: nil}
 	md := FormatMRsByCommitMarkdown(out)
@@ -1729,7 +1729,7 @@ func TestFormatMRsByCommitMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatGPGSignatureMarkdown verifies the behavior of format g p g signature markdown.
+// TestFormatGPGSignatureMarkdown verifies FormatGPGSignatureMarkdown.
 func TestFormatGPGSignatureMarkdown(t *testing.T) {
 	sig := GPGSignatureOutput{
 		KeyID:              1,
@@ -1902,6 +1902,7 @@ func TestRevert_409Conflict(t *testing.T) {
 	}
 }
 
+// newCommitSpecsByTool constructs commit specs by tool test fixtures.
 func newCommitSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1931,6 +1932,7 @@ func newCommitSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return commitSpecsByTool(t, ActionSpecs(client))
 }
 
+// assertCommitRouteSuccess checks commit route success invariants for tests.
 func assertCommitRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()
 	result, err := specs[name].Route.Handler(t.Context(), args)
@@ -1998,6 +2000,7 @@ func TestActionSpecs_CommitGetRoute(t *testing.T) {
 	}
 }
 
+// commitSpecsByTool supports commit specs by tool assertions in commits tests.
 func commitSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

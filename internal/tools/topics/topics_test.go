@@ -15,27 +15,37 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
+// errNoReachAPI identifies the err no reach API constant used by this package.
 const errNoReachAPI = "should not reach API"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// topicJSON identifies the topic JSON constant used by this package.
 const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"avatar_url":"https://example.com/go.png"}`
 
+// pathTopics identifies the path topics constant used by this package.
 const pathTopics = "/api/v4/topics"
 
+// pathTopicOne identifies the path topic one constant used by this package.
 const pathTopicOne = "/api/v4/topics/1"
 
+// errExpErrZeroTopicID identifies the err exp err zero topic ID constant used by this package.
 const errExpErrZeroTopicID = "expected error for zero topic_id"
 
+// errExpErrNegTopicID identifies the err exp err neg topic ID constant used by this package.
 const errExpErrNegTopicID = "expected error for negative topic_id"
 
+// testTopicID identifies the test topic ID constant used by this package.
 const testTopicID = "topic_id"
 
+// fmtExpErrMentionTopicID identifies the fmt exp err mention topic ID constant used by this package.
 const fmtExpErrMentionTopicID = "expected error to mention topic_id, got %q"
 
-// TestList_Success verifies the behavior of list success.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.Method == http.MethodGet {
@@ -60,7 +70,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithSearch verifies the behavior of list with search.
+// TestList_WithSearch verifies List when with search.
 func TestList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.URL.Query().Get("search") == "go" {
@@ -79,7 +89,7 @@ func TestList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -91,7 +101,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopicOne && r.Method == http.MethodGet {
@@ -113,7 +123,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies the behavior of create success.
+// TestCreate_Success verifies Create when success.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.Method == http.MethodPost {
@@ -132,7 +142,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopicOne && r.Method == http.MethodPut {
@@ -151,7 +161,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopicOne && r.Method == http.MethodDelete {
@@ -167,7 +177,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -179,7 +189,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidTopicID verifies the behavior of get invalid topic i d.
+// TestGet_InvalidTopicID verifies Get when invalid topic ID.
 func TestGet_InvalidTopicID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -197,7 +207,7 @@ func TestGet_InvalidTopicID(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidTopicID verifies the behavior of update invalid topic i d.
+// TestUpdate_InvalidTopicID verifies Update when invalid topic ID.
 func TestUpdate_InvalidTopicID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -215,7 +225,7 @@ func TestUpdate_InvalidTopicID(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidTopicID verifies the behavior of delete invalid topic i d.
+// TestDelete_InvalidTopicID verifies Delete when invalid topic ID.
 func TestDelete_InvalidTopicID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -233,7 +243,7 @@ func TestDelete_InvalidTopicID(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -245,7 +255,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
+// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Topics: []TopicItem{
@@ -258,7 +268,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatTopicMarkdown verifies the behavior of format topic markdown.
+// TestFormatTopicMarkdown verifies FormatTopicMarkdown.
 func TestFormatTopicMarkdown(t *testing.T) {
 	result := FormatTopicMarkdown(TopicItem{
 		ID: 1, Name: "go", Title: "Go", Description: "The Go language",
@@ -275,13 +285,14 @@ func TestFormatTopicMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
 // ---------------------------------------------------------------------------
 // List — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies the behavior of list a p i error400.
+// TestList_APIError400 verifies List when API error 400.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -296,7 +307,7 @@ func TestList_APIError400(t *testing.T) {
 // Get — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError400 verifies the behavior of get a p i error400.
+// TestGet_APIError400 verifies Get when API error 400.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -311,7 +322,7 @@ func TestGet_APIError400(t *testing.T) {
 // Create — API error (400), with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError400 verifies the behavior of create a p i error400.
+// TestCreate_APIError400 verifies Create when API error 400.
 func TestCreate_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -322,7 +333,7 @@ func TestCreate_APIError400(t *testing.T) {
 	}
 }
 
-// TestCreate_WithAllOptionalFields verifies the behavior of create with all optional fields.
+// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +368,7 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // Update — API error (400), with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError400 verifies the behavior of update a p i error400.
+// TestUpdate_APIError400 verifies Update when API error 400.
 func TestUpdate_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -368,7 +379,7 @@ func TestUpdate_APIError400(t *testing.T) {
 	}
 }
 
-// TestUpdate_WithAllOptionalFields verifies the behavior of update with all optional fields.
+// TestUpdate_WithAllOptionalFields verifies Update when with all optional fields.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -403,7 +414,7 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 // Delete — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError400 verifies the behavior of delete a p i error400.
+// TestDelete_APIError400 verifies Delete when API error 400.
 func TestDelete_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -418,7 +429,7 @@ func TestDelete_APIError400(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatTopicMarkdown_MinimalFields verifies the behavior of format topic markdown minimal fields.
+// TestFormatTopicMarkdown_MinimalFields verifies FormatTopicMarkdown when minimal fields.
 func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
 	result := FormatTopicMarkdown(TopicItem{ID: 1, Name: "test"})
 	if result == nil {

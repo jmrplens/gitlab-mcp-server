@@ -16,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestRegisterIndividualCatalogTools_GoldenSnapshotParity verifies RegisterIndividualCatalogTools when golden snapshot parity.
 func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 	goldenPath := filepath.Join("testdata", "tools_individual.json")
 	goldenData, err := os.ReadFile(goldenPath)
@@ -48,6 +49,7 @@ func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 	compareSnapshotSlices(t, goldenPath, wantSnapshots, gotSnapshots)
 }
 
+// TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames covers RegisterAll with table-driven subtests for catalog backed matches catalog projection tool names.
 func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -79,6 +81,7 @@ func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T
 	}
 }
 
+// TestRegisterIndividualCatalogTools_ExecutesCatalogHandler verifies RegisterIndividualCatalogTools when executes catalog handler.
 func TestRegisterIndividualCatalogTools_ExecutesCatalogHandler(t *testing.T) {
 	type echoInput struct {
 		Value string `json:"value" jsonschema:"Value to echo,required"`
@@ -129,6 +132,7 @@ func TestRegisterIndividualCatalogTools_ExecutesCatalogHandler(t *testing.T) {
 	}
 }
 
+// TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies verifies RegisterIndividualCatalogTools when read only and safe mode policies.
 func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T) {
 	type input struct {
 		Value string `json:"value" jsonschema:"Value,required"`
@@ -190,6 +194,7 @@ func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T
 	}
 }
 
+// TestRegisterIndividualCatalogTools_EditionFilters covers RegisterIndividualCatalogTools with table-driven subtests for edition filters.
 func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	newSpec := func(name string, opts toolutil.ActionSpecOptions) toolutil.ActionSpec {
 		opts.ReadOnly = true
@@ -231,6 +236,7 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	}
 }
 
+// testIndividualCatalog supports test individual catalog assertions in tools tests.
 func testIndividualCatalog(t *testing.T, specs ...toolutil.ActionSpec) *actioncatalog.Catalog {
 	t.Helper()
 	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
@@ -250,6 +256,7 @@ func testIndividualCatalog(t *testing.T, specs ...toolutil.ActionSpec) *actionca
 	return catalog
 }
 
+// listToolsFromServer supports list tools from server assertions in tools tests.
 func listToolsFromServer(t *testing.T, server *mcp.Server) []*mcp.Tool {
 	t.Helper()
 	session := connectServerForTools(t, server)
@@ -260,6 +267,7 @@ func listToolsFromServer(t *testing.T, server *mcp.Server) []*mcp.Tool {
 	return result.Tools
 }
 
+// connectServerForTools supports connect server for tools assertions in tools tests.
 func connectServerForTools(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
@@ -277,6 +285,7 @@ func connectServerForTools(t *testing.T, server *mcp.Server) *mcp.ClientSession 
 	return session
 }
 
+// diffStringSlices supports diff string slices assertions in tools tests.
 func diffStringSlices(want, got []string) ([]string, []string) {
 	wantSet := make(map[string]struct{}, len(want))
 	for _, name := range want {

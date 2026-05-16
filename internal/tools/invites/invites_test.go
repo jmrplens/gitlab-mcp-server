@@ -17,7 +17,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// TestListPendingProjectInvitations_Success verifies that ListPendingProjectInvitations handles the success scenario correctly.
+// TestListPendingProjectInvitations_Success verifies ListPendingProjectInvitations when success.
 func TestListPendingProjectInvitations_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -45,7 +45,7 @@ func TestListPendingProjectInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_WithQuery verifies that ListPendingProjectInvitations handles the with query scenario correctly.
+// TestListPendingProjectInvitations_WithQuery verifies ListPendingProjectInvitations when with query.
 func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "alice" {
@@ -65,7 +65,7 @@ func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_ValidationError verifies that ListPendingProjectInvitations handles the validation error scenario correctly.
+// TestListPendingProjectInvitations_ValidationError verifies ListPendingProjectInvitations when validation error.
 func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -77,7 +77,7 @@ func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_Success verifies that ListPendingGroupInvitations handles the success scenario correctly.
+// TestListPendingGroupInvitations_Success verifies ListPendingGroupInvitations when success.
 func TestListPendingGroupInvitations_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -101,7 +101,7 @@ func TestListPendingGroupInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_ValidationError verifies that ListPendingGroupInvitations handles the validation error scenario correctly.
+// TestListPendingGroupInvitations_ValidationError verifies ListPendingGroupInvitations when validation error.
 func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -113,7 +113,7 @@ func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_Success verifies that ProjectInvites handles the success scenario correctly.
+// TestProjectInvites_Success verifies ProjectInvites when success.
 func TestProjectInvites_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/invitations" || r.Method != http.MethodPost {
@@ -132,7 +132,7 @@ func TestProjectInvites_Success(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoProject verifies that ProjectInvites handles the validation error_ no project scenario correctly.
+// TestProjectInvites_ValidationError_NoProject verifies ProjectInvites when validation error no project.
 func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -144,7 +144,7 @@ func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoEmailOrUser verifies that ProjectInvites handles the validation error_ no email or user scenario correctly.
+// TestProjectInvites_ValidationError_NoEmailOrUser verifies ProjectInvites when validation error no email or user.
 func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -156,7 +156,7 @@ func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_Success verifies that GroupInvites handles the success scenario correctly.
+// TestGroupInvites_Success verifies GroupInvites when success.
 func TestGroupInvites_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/10/invitations" || r.Method != http.MethodPost {
@@ -175,7 +175,7 @@ func TestGroupInvites_Success(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_ValidationError_NoGroup verifies that GroupInvites handles the validation error_ no group scenario correctly.
+// TestGroupInvites_ValidationError_NoGroup verifies GroupInvites when validation error no group.
 func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -187,7 +187,7 @@ func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_APIError verifies that GroupInvites handles the a p i error scenario correctly.
+// TestGroupInvites_APIError verifies GroupInvites when API error.
 func TestGroupInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -199,7 +199,7 @@ func TestGroupInvites_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_WithInvitations verifies that FormatListPendingMarkdownString handles the with invitations scenario correctly.
+// TestFormatListPendingMarkdownString_WithInvitations verifies FormatListPendingMarkdownString when with invitations.
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -219,7 +219,7 @@ func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_Empty verifies that FormatListPendingMarkdownString handles the empty scenario correctly.
+// TestFormatListPendingMarkdownString_Empty verifies FormatListPendingMarkdownString when empty.
 func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	out := ListPendingInvitationsOutput{Invitations: []PendingInviteOutput{}}
 	md := FormatListPendingMarkdownString(out)
@@ -228,7 +228,7 @@ func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatInviteResultMarkdownString verifies the behavior of format invite result markdown string.
+// TestFormatInviteResultMarkdownString verifies FormatInviteResultMarkdownString.
 func TestFormatInviteResultMarkdownString(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{"alice@example.com": "Invite sent"}}
 	md := FormatInviteResultMarkdownString(out)
@@ -240,7 +240,7 @@ func TestFormatInviteResultMarkdownString(t *testing.T) {
 	}
 }
 
-// containsStr is an internal helper for the invites package.
+// containsStr reports whether contains str.
 func containsStr(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {
@@ -252,15 +252,17 @@ func containsStr(s, sub string) bool {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ListPendingProjectInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingProjectInvitations_APIError verifies the behavior of list pending project invitations a p i error.
+// TestListPendingProjectInvitations_APIError verifies ListPendingProjectInvitations when API error.
 func TestListPendingProjectInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -275,7 +277,7 @@ func TestListPendingProjectInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_APIError verifies the behavior of list pending group invitations a p i error.
+// TestListPendingGroupInvitations_APIError verifies ListPendingGroupInvitations when API error.
 func TestListPendingGroupInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -290,7 +292,7 @@ func TestListPendingGroupInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — with query filter
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_WithQuery verifies the behavior of list pending group invitations with query.
+// TestListPendingGroupInvitations_WithQuery verifies ListPendingGroupInvitations when with query.
 func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "team" {
@@ -313,7 +315,7 @@ func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 // ProjectInvites — API error (403)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_APIError verifies the behavior of project invites a p i error.
+// TestProjectInvites_APIError verifies ProjectInvites when API error.
 func TestProjectInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -328,7 +330,7 @@ func TestProjectInvites_APIError(t *testing.T) {
 // GroupInvites — validation: missing email AND user_id
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_ValidationErrorNoEmailOrUser verifies the behavior of group invites validation error no email or user.
+// TestGroupInvites_ValidationErrorNoEmailOrUser verifies GroupInvites when validation error no email or user.
 func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -346,7 +348,7 @@ func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 // ProjectInvites — with user_id (exercises opts.UserID path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithUserID verifies the behavior of project invites with user i d.
+// TestProjectInvites_WithUserID verifies ProjectInvites when with user ID.
 func TestProjectInvites_WithUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -372,7 +374,7 @@ func TestProjectInvites_WithUserID(t *testing.T) {
 // ProjectInvites — with expires_at (exercises date parsing path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithExpiresAt verifies the behavior of project invites with expires at.
+// TestProjectInvites_WithExpiresAt verifies ProjectInvites when with expires at.
 func TestProjectInvites_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -399,7 +401,7 @@ func TestProjectInvites_WithExpiresAt(t *testing.T) {
 // GroupInvites — with email AND expires_at
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_WithEmailAndExpiresAt verifies the behavior of group invites with email and expires at.
+// TestGroupInvites_WithEmailAndExpiresAt verifies GroupInvites when with email and expires at.
 func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -426,7 +428,7 @@ func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 // toPendingInviteOutput — with dates populated
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_WithDates verifies the behavior of to pending invite output with dates.
+// TestToPendingInviteOutput_WithDates verifies ToPendingInviteOutput when with dates.
 func TestToPendingInviteOutput_WithDates(t *testing.T) {
 	created := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -461,7 +463,7 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 // toPendingInviteOutput — with nil dates
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_NilDates verifies the behavior of to pending invite output nil dates.
+// TestToPendingInviteOutput_NilDates verifies ToPendingInviteOutput when nil dates.
 func TestToPendingInviteOutput_NilDates(t *testing.T) {
 	inv := &gl.PendingInvite{
 		ID:          20,
@@ -484,7 +486,7 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 // toInviteResultOutput — direct coverage with message map
 // ---------------------------------------------------------------------------.
 
-// TestToInviteResultOutput_WithMessages verifies the behavior of to invite result output with messages.
+// TestToInviteResultOutput_WithMessages verifies ToInviteResultOutput when with messages.
 func TestToInviteResultOutput_WithMessages(t *testing.T) {
 	r := &gl.InvitesResult{
 		Status: "error",
@@ -509,7 +511,7 @@ func TestToInviteResultOutput_WithMessages(t *testing.T) {
 // FormatInviteResultMarkdownString — empty message map
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdownString_EmptyMessages verifies the behavior of format invite result markdown string empty messages.
+// TestFormatInviteResultMarkdownString_EmptyMessages verifies FormatInviteResultMarkdownString when empty messages.
 func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{}}
 	md := FormatInviteResultMarkdownString(out)
@@ -525,7 +527,7 @@ func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 // FormatListPendingMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies the behavior of format list pending markdown returns call tool result.
+// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies FormatListPendingMarkdown returns call tool result.
 func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -552,7 +554,7 @@ func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 // FormatInviteResultMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies the behavior of format invite result markdown returns call tool result.
+// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies FormatInviteResultMarkdown returns call tool result.
 func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := InviteResultOutput{Status: "success"}
 	result := FormatInviteResultMarkdown(out)
@@ -628,6 +630,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// invitesRouteHandler supports invites route handler assertions in invites tests.
 func invitesRouteHandler() http.Handler {
 	invitationJSON := `{"id":1,"invite_email":"test@example.com","access_level":30,"created_by_name":"Admin"}`
 	resultJSON := `{"status":"success"}`

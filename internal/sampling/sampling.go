@@ -83,7 +83,7 @@ type AnalysisResult struct {
 // Option configures an Analyze call.
 type Option func(*analyzeConfig)
 
-// analyzeConfig holds data for sampling operations.
+// analyzeConfig holds analyze config data for the sampling package.
 type analyzeConfig struct {
 	maxTokens            int
 	modelHints           []string

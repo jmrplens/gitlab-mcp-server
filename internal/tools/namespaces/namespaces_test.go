@@ -15,11 +15,13 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestList_Success verifies that List handles the success scenario correctly.
+// TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/namespaces" {
@@ -47,7 +49,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithSearch verifies that List handles the with search scenario correctly.
+// TestList_WithSearch verifies List when with search.
 func TestList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("search") != "test" {
@@ -67,7 +69,7 @@ func TestList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies that List handles the error scenario correctly.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -79,7 +81,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get handles the success scenario correctly.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/namespaces/42" {
@@ -104,7 +106,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies that Get handles the error scenario correctly.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -116,7 +118,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestExists_Available verifies that Exists handles the available scenario correctly.
+// TestExists_Available verifies Exists when available.
 func TestExists_Available(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/namespaces/new-path/exists" {
@@ -138,7 +140,7 @@ func TestExists_Available(t *testing.T) {
 	}
 }
 
-// TestExists_Taken verifies that Exists handles the taken scenario correctly.
+// TestExists_Taken verifies Exists when taken.
 func TestExists_Taken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/namespaces/taken-path/exists" {
@@ -157,7 +159,7 @@ func TestExists_Taken(t *testing.T) {
 	}
 }
 
-// TestExists_WithParentID verifies that Exists handles the with parent i d scenario correctly.
+// TestExists_WithParentID verifies Exists when with parent ID.
 func TestExists_WithParentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("parent_id") != "5" {
@@ -175,7 +177,7 @@ func TestExists_WithParentID(t *testing.T) {
 	}
 }
 
-// TestExists_Error verifies that Exists handles the error scenario correctly.
+// TestExists_Error verifies Exists when error.
 func TestExists_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -187,7 +189,7 @@ func TestExists_Error(t *testing.T) {
 	}
 }
 
-// TestSearch_Success verifies that Search handles the success scenario correctly.
+// TestSearch_Success verifies Search when success.
 func TestSearch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -207,7 +209,7 @@ func TestSearch_Success(t *testing.T) {
 	}
 }
 
-// TestSearch_Error verifies that Search handles the error scenario correctly.
+// TestSearch_Error verifies Search when error.
 func TestSearch_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -219,7 +221,7 @@ func TestSearch_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies that FormatListMarkdownString handles the empty scenario correctly.
+// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{})
 	if s != "No namespaces found.\n" {
@@ -227,7 +229,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies the behavior of format markdown string.
+// TestFormatMarkdownString verifies FormatMarkdownString.
 func TestFormatMarkdownString(t *testing.T) {
 	s := FormatMarkdownString(Output{
 		ID: 1, Name: "test", Path: "test", FullPath: "test", Kind: "user",
@@ -237,7 +239,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatExistsMarkdownString verifies the behavior of format exists markdown string.
+// TestFormatExistsMarkdownString verifies FormatExistsMarkdownString.
 func TestFormatExistsMarkdownString(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"a", "b"}})
 	if s == "" {
@@ -248,8 +250,10 @@ func TestFormatExistsMarkdownString(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
+	// errExpNonNilResult identifies the err exp non nil result constant used by this package.
 	errExpNonNilResult = "expected non-nil result"
-	errExpNonNil       = "expected non-nil"
+	// errExpNonNil identifies the err exp non nil constant used by this package.
+	errExpNonNil = "expected non-nil"
 )
 
 // Pre-built fixtures for toOutput tests.
@@ -263,7 +267,7 @@ var (
 // List with OwnedOnly and TopLevelOnly
 // ---------------------------------------------------------------------------.
 
-// TestList_OwnedAndTopLevel verifies the behavior of list owned and top level.
+// TestList_OwnedAndTopLevel verifies List when owned and top level.
 func TestList_OwnedAndTopLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -290,7 +294,7 @@ func TestList_OwnedAndTopLevel(t *testing.T) {
 // toOutput with AvatarURL
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithAvatarURL verifies the behavior of to output with avatar u r l.
+// TestToOutput_WithAvatarURL verifies ToOutput when with avatar URL.
 func TestToOutput_WithAvatarURL(t *testing.T) {
 	ns := &nsWithAvatar
 	o := toOutput(ns)
@@ -299,7 +303,7 @@ func TestToOutput_WithAvatarURL(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilAvatarURL verifies the behavior of to output nil avatar u r l.
+// TestToOutput_NilAvatarURL verifies ToOutput when nil avatar URL.
 func TestToOutput_NilAvatarURL(t *testing.T) {
 	ns := &nsNoAvatar
 	o := toOutput(ns)
@@ -312,7 +316,7 @@ func TestToOutput_NilAvatarURL(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithItems verifies the behavior of format list markdown string with items.
+// TestFormatListMarkdownString_WithItems verifies FormatListMarkdownString when with items.
 func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Namespaces: []Output{
@@ -331,7 +335,7 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NonNil verifies the behavior of format list markdown non nil.
+// TestFormatListMarkdown_NonNil verifies FormatListMarkdown when non nil.
 func TestFormatListMarkdown_NonNil(t *testing.T) {
 	r := FormatListMarkdown(ListOutput{})
 	if r == nil {
@@ -339,7 +343,7 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_AllFields verifies the behavior of format markdown string all fields.
+// TestFormatMarkdownString_AllFields verifies FormatMarkdownString when all fields.
 func TestFormatMarkdownString_AllFields(t *testing.T) {
 	s := FormatMarkdownString(Output{
 		ID: 1, Name: "test", Path: "test", FullPath: "grp/test", Kind: "group",
@@ -356,7 +360,7 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_Minimal verifies the behavior of format markdown string minimal.
+// TestFormatMarkdownString_Minimal verifies FormatMarkdownString when minimal.
 func TestFormatMarkdownString_Minimal(t *testing.T) {
 	s := FormatMarkdownString(Output{ID: 1, Name: "n", Path: "n", Kind: "user"})
 	if strings.Contains(s, "Parent ID") {
@@ -367,7 +371,7 @@ func TestFormatMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_NonNil verifies the behavior of format markdown non nil.
+// TestFormatMarkdown_NonNil verifies FormatMarkdown when non nil.
 func TestFormatMarkdown_NonNil(t *testing.T) {
 	r := FormatMarkdown(Output{ID: 1, Name: "n"})
 	if r == nil {
@@ -375,7 +379,7 @@ func TestFormatMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatExistsMarkdownString_NotExists verifies the behavior of format exists markdown string not exists.
+// TestFormatExistsMarkdownString_NotExists verifies FormatExistsMarkdownString when not exists.
 func TestFormatExistsMarkdownString_NotExists(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: false})
 	if !strings.Contains(s, "does not exist") {
@@ -383,7 +387,7 @@ func TestFormatExistsMarkdownString_NotExists(t *testing.T) {
 	}
 }
 
-// TestFormatExistsMarkdownString_ExistsWithSuggestions verifies the behavior of format exists markdown string exists with suggestions.
+// TestFormatExistsMarkdownString_ExistsWithSuggestions verifies FormatExistsMarkdownString when exists with suggestions.
 func TestFormatExistsMarkdownString_ExistsWithSuggestions(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"alt1", "alt2"}})
 	if !strings.Contains(s, "exists") {
@@ -394,7 +398,7 @@ func TestFormatExistsMarkdownString_ExistsWithSuggestions(t *testing.T) {
 	}
 }
 
-// TestFormatExistsMarkdown_NonNil verifies the behavior of format exists markdown non nil.
+// TestFormatExistsMarkdown_NonNil verifies FormatExistsMarkdown when non nil.
 func TestFormatExistsMarkdown_NonNil(t *testing.T) {
 	r := FormatExistsMarkdown(ExistsOutput{})
 	if r == nil {

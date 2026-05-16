@@ -74,7 +74,7 @@ type FileContentOutput struct {
 	Content   string `json:"content"`
 }
 
-// convertSnippet is an internal helper for the snippets package.
+// convertSnippet implements the convert snippet helper used by snippets.
 func convertSnippet(s *gl.Snippet) Output {
 	out := Output{
 		ID:          s.ID,
@@ -119,6 +119,7 @@ type UpdateFileInput struct {
 	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Previous file path (for move)"`
 }
 
+// snippetVisibility implements the snippet visibility helper used by snippets.
 func snippetVisibility(value string) *gl.VisibilityValue {
 	if value == "" {
 		value = "private"
@@ -127,6 +128,7 @@ func snippetVisibility(value string) *gl.VisibilityValue {
 	return &visibility
 }
 
+// createSnippetFiles creates snippet files for the snippets package.
 func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions {
 	if len(files) == 0 {
 		return nil
@@ -187,7 +189,7 @@ func extractProjectPath(webURL string) string {
 	return strings.TrimPrefix(u.Path[:idx], "/")
 }
 
-// snippetsHaveProject is an internal helper for the snippets package.
+// snippetsHaveProject implements the snippets have project helper used by snippets.
 func snippetsHaveProject(snippets []Output) bool {
 	for _, s := range snippets {
 		if s.ProjectID != 0 {
@@ -197,7 +199,7 @@ func snippetsHaveProject(snippets []Output) bool {
 	return false
 }
 
-// writeProjectSnippetTable is an internal helper for the snippets package.
+// writeProjectSnippetTable writes project snippet table to disk.
 func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString("| ID | Title | Project | Visibility | Author | Files |\n")
 	b.WriteString("|---|---|---|---|---|---|\n")
@@ -208,7 +210,7 @@ func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
 	}
 }
 
-// resolveProjectLabel is an internal helper for the snippets package.
+// resolveProjectLabel resolves project label for the snippets package.
 func resolveProjectLabel(s Output) string {
 	if s.ProjectID == 0 {
 		return ""
@@ -219,7 +221,7 @@ func resolveProjectLabel(s Output) string {
 	return strconv.FormatInt(s.ProjectID, 10)
 }
 
-// writeSimpleSnippetTable is an internal helper for the snippets package.
+// writeSimpleSnippetTable writes simple snippet table to disk.
 func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString("| ID | Title | Visibility | Author | Files |\n")
 	b.WriteString("|---|---|---|---|---|\n")

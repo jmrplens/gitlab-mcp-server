@@ -9,6 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestCatalogGroupSpec_ValidateAndClone verifies CatalogGroupSpec when validate and clone.
 func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
 	capabilities := []string{"sampling", "sampling"}
@@ -60,6 +61,7 @@ func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	}
 }
 
+// TestCatalogGroupSpec_RejectsInvalidMetadata covers CatalogGroupSpec with table-driven subtests for rejects invalid metadata.
 func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 	validAction := toolutil.NewActionSpec("get", testRoute(false), toolutil.ActionSpecOptions{ReadOnly: true, OwnerPackage: "projects"})
 	testCases := []struct {
@@ -144,6 +146,7 @@ func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 	}
 }
 
+// TestGroupOptions_BaseDomainControlsActionID verifies GroupOptions when base domain controls action ID.
 func TestGroupOptions_BaseDomainControlsActionID(t *testing.T) {
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project_alias", BaseDomain: "alias"})
 	group.SetAction(Action{Name: "get", Route: testRoute(false)})

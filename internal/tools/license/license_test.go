@@ -15,8 +15,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// licenseJSON identifies the license JSON constant used by this package.
 const licenseJSON = `{
 	"id": 1,
 	"plan": "premium",
@@ -33,7 +35,7 @@ const licenseJSON = `{
 	"add_ons": {"GitLab_Auditor_User":1,"GitLab_DeployBoard":0,"GitLab_FileLocks":1,"GitLab_Geo":0,"GitLab_ServiceDesk":1}
 }`
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/license" {
@@ -60,7 +62,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies the behavior of get error.
+// TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -72,7 +74,7 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestAdd_Success verifies the behavior of add success.
+// TestAdd_Success verifies Add when success.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -90,7 +92,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -108,7 +110,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidID verifies the behavior of delete invalid i d.
+// TestDelete_InvalidID verifies Delete when invalid ID.
 func TestDelete_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -122,7 +124,7 @@ func TestDelete_InvalidID(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies the behavior of delete error.
+// TestDelete_Error verifies Delete when error.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -134,7 +136,7 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatLicenseMarkdown verifies the behavior of format license markdown.
+// TestFormatLicenseMarkdown verifies FormatLicenseMarkdown.
 func TestFormatLicenseMarkdown(t *testing.T) {
 	result := FormatLicenseMarkdown(Item{
 		ID:          1,
@@ -159,7 +161,7 @@ func TestFormatLicenseMarkdown(t *testing.T) {
 // Add — API error
 // ---------------------------------------------------------------------------.
 
-// TestAdd_Error verifies the behavior of add error.
+// TestAdd_Error verifies Add when error.
 func TestAdd_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid license"}`)
@@ -174,7 +176,7 @@ func TestAdd_Error(t *testing.T) {
 // FormatLicenseMarkdown — with dates
 // ---------------------------------------------------------------------------.
 
-// TestFormatLicenseMarkdown_WithDates verifies the behavior of format license markdown with dates.
+// TestFormatLicenseMarkdown_WithDates verifies FormatLicenseMarkdown when with dates.
 func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	item := Item{
 		ID:               2,
@@ -203,7 +205,7 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 // FormatGetMarkdown / FormatAddMarkdown — wrappers
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Coverage verifies the behavior of format get markdown coverage.
+// TestFormatGetMarkdown_Coverage verifies FormatGetMarkdown when coverage.
 func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	out := GetOutput{License: Item{ID: 1, Plan: "premium", Licensee: LicenseeItem{Name: "A", Company: "B", Email: "c@d.com"}}}
 	result := FormatGetMarkdown(out)
@@ -213,7 +215,7 @@ func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatAddMarkdown_Coverage verifies the behavior of format add markdown coverage.
+// TestFormatAddMarkdown_Coverage verifies FormatAddMarkdown when coverage.
 func TestFormatAddMarkdown_Coverage(t *testing.T) {
 	out := AddOutput{License: Item{ID: 3, Plan: "gold", Licensee: LicenseeItem{Name: "X", Company: "Y", Email: "x@y.com"}}}
 	result := FormatAddMarkdown(out)

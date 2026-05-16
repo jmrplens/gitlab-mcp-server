@@ -16,7 +16,9 @@ import (
 )
 
 const (
+	// mdSummaryHeading identifies the md summary heading constant used by this package.
 	mdSummaryHeading = "## Summary\n\n"
+	// tblCategoryCount identifies the tbl category count constant used by this package.
 	tblCategoryCount = "| Category | Count |\n|----------|-------|\n"
 )
 
@@ -44,7 +46,7 @@ func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.C
 	})
 }
 
-// handleUserActivityReport performs the handle user activity report operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleUserActivityReport handles handle user activity report and returns [*mcp.GetPromptResult].
 func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	username := req.Params.Arguments[argUsername]
 	if username == "" {
@@ -172,7 +174,7 @@ func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client)
 	})
 }
 
-// handleTeamOverview performs the handle team overview operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleTeamOverview handles handle team overview and returns [*mcp.GetPromptResult].
 func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
@@ -293,7 +295,7 @@ func registerTeamMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Clie
 	})
 }
 
-// handleTeamMRDashboard performs the handle team m r dashboard operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleTeamMRDashboard handles handle team MR dashboard and returns [*mcp.GetPromptResult].
 func handleTeamMRDashboard(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
@@ -372,7 +374,7 @@ func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Cli
 	})
 }
 
-// handleReviewerWorkload performs the handle reviewer workload operation using the GitLab API and returns [*mcp.GetPromptResult].
+// handleReviewerWorkload handles handle reviewer workload and returns [*mcp.GetPromptResult].
 func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {

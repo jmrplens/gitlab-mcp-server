@@ -12,7 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestMark verifies the behavior of mark.
+// TestMark verifies Mark.
 func TestMark(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/admin/migrations/20240115100000/mark" {
@@ -39,7 +39,7 @@ func TestMark(t *testing.T) {
 	}
 }
 
-// TestMark_Error verifies the behavior of mark error.
+// TestMark_Error verifies Mark when error.
 func TestMark_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -51,7 +51,7 @@ func TestMark_Error(t *testing.T) {
 	}
 }
 
-// TestMark_VersionValidation validates mark version validation across multiple scenarios using table-driven subtests.
+// TestMark_VersionValidation covers Mark with table-driven subtests for version validation.
 func TestMark_VersionValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when version is invalid")
@@ -79,7 +79,7 @@ func TestMark_VersionValidation(t *testing.T) {
 	}
 }
 
-// TestFormatMarkMarkdown verifies the behavior of format mark markdown.
+// TestFormatMarkMarkdown verifies FormatMarkMarkdown.
 func TestFormatMarkMarkdown(t *testing.T) {
 	md := FormatMarkMarkdown(MarkOutput{Status: "marked", Version: 20240115100000})
 	if !strings.Contains(md, "marked") {

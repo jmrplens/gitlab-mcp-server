@@ -295,7 +295,7 @@ func TrackEvents(ctx context.Context, client *gitlabclient.Client, input TrackEv
 // helpers
 // ---------------------------------------------------------------------------.
 
-// sortedKeys is an internal helper for the usagedata package.
+// sortedKeys sorts keys deterministically.
 func sortedKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -305,7 +305,7 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// sortedKeysInt64 is an internal helper for the usagedata package.
+// sortedKeysInt64 sorts keys int 64 deterministically.
 func sortedKeysInt64(m map[string]int64) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

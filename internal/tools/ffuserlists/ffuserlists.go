@@ -207,6 +207,7 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 	return nil
 }
 
+// deleteUserListOutput deletes user list output and returns [toolutil.DeleteOutput].
 func deleteUserListOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := DeleteUserList(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -218,7 +219,7 @@ func deleteUserListOutput(ctx context.Context, client *gitlabclient.Client, inpu
 // Converter
 // ──────────────────────────────────────────────.
 
-// convertUserList is an internal helper for the ffuserlists package.
+// convertUserList implements the convert user list helper used by ffuserlists.
 func convertUserList(l *gl.FeatureFlagUserList) Output {
 	out := Output{
 		ID:        l.ID,

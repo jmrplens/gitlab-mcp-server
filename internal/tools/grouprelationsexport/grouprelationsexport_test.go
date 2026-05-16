@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestScheduleExport verifies the behavior of schedule export.
+// TestScheduleExport verifies ScheduleExport.
 func TestScheduleExport(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/api/v4/groups/") {
@@ -26,7 +26,7 @@ func TestScheduleExport(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_Error verifies that ScheduleExport handles the error scenario correctly.
+// TestScheduleExport_Error verifies ScheduleExport when error.
 func TestScheduleExport_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -37,7 +37,7 @@ func TestScheduleExport_Error(t *testing.T) {
 	}
 }
 
-// TestListExportStatus verifies the behavior of list export status.
+// TestListExportStatus verifies ListExportStatus.
 func TestListExportStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -58,7 +58,7 @@ func TestListExportStatus(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_Error verifies that ListExportStatus handles the error scenario correctly.
+// TestListExportStatus_Error verifies ListExportStatus when error.
 func TestListExportStatus_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -69,7 +69,7 @@ func TestListExportStatus_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus verifies the behavior of format list export status.
+// TestFormatListExportStatus verifies FormatListExportStatus.
 func TestFormatListExportStatus(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -82,7 +82,7 @@ func TestFormatListExportStatus(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_Empty verifies that FormatListExportStatus handles the empty scenario correctly.
+// TestFormatListExportStatus_Empty verifies FormatListExportStatus when empty.
 func TestFormatListExportStatus_Empty(t *testing.T) {
 	out := &ListExportStatusOutput{Statuses: []ExportStatusItem{}}
 	md := FormatListExportStatus(out)
@@ -93,13 +93,14 @@ func TestFormatListExportStatus_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ScheduleExport — canceled context, with batched option
 // ---------------------------------------------------------------------------.
 
-// TestScheduleExport_CancelledContext verifies the behavior of schedule export cancelled context.
+// TestScheduleExport_CancelledContext verifies ScheduleExport when cancelled context.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -109,7 +110,7 @@ func TestScheduleExport_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_WithBatched verifies the behavior of schedule export with batched.
+// TestScheduleExport_WithBatched verifies ScheduleExport when with batched.
 func TestScheduleExport_WithBatched(t *testing.T) {
 	batched := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +126,7 @@ func TestScheduleExport_WithBatched(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_EmptyGroupID verifies the behavior of schedule export empty group i d.
+// TestScheduleExport_EmptyGroupID verifies ScheduleExport when empty group ID.
 func TestScheduleExport_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -140,7 +141,7 @@ func TestScheduleExport_EmptyGroupID(t *testing.T) {
 // ListExportStatus — canceled context, with relation filter, empty group_id, pagination
 // ---------------------------------------------------------------------------.
 
-// TestListExportStatus_CancelledContext verifies the behavior of list export status cancelled context.
+// TestListExportStatus_CancelledContext verifies ListExportStatus when cancelled context.
 func TestListExportStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -150,7 +151,7 @@ func TestListExportStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyGroupID verifies the behavior of list export status empty group i d.
+// TestListExportStatus_EmptyGroupID verifies ListExportStatus when empty group ID.
 func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -161,7 +162,7 @@ func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithRelationFilter verifies the behavior of list export status with relation filter.
+// TestListExportStatus_WithRelationFilter verifies ListExportStatus when with relation filter.
 func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -191,7 +192,7 @@ func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithPagination verifies the behavior of list export status with pagination.
+// TestListExportStatus_WithPagination verifies ListExportStatus when with pagination.
 func TestListExportStatus_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -228,7 +229,7 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyResponse verifies the behavior of list export status empty response.
+// TestListExportStatus_EmptyResponse verifies ListExportStatus when empty response.
 func TestListExportStatus_EmptyResponse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -242,7 +243,7 @@ func TestListExportStatus_EmptyResponse(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithErrorField verifies the behavior of list export status with error field.
+// TestListExportStatus_WithErrorField verifies ListExportStatus when with error field.
 func TestListExportStatus_WithErrorField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":-1,"error":"export failed","batched":false,"batches_count":0,"updated_at":"2026-06-15T10:00:00Z"}]`)
@@ -260,7 +261,7 @@ func TestListExportStatus_WithErrorField(t *testing.T) {
 // FormatScheduleExport
 // ---------------------------------------------------------------------------.
 
-// TestFormatScheduleExport_Message verifies the behavior of format schedule export message.
+// TestFormatScheduleExport_Message verifies FormatScheduleExport when message.
 func TestFormatScheduleExport_Message(t *testing.T) {
 	md := FormatScheduleExport()
 	if !strings.Contains(md, "scheduled successfully") {
@@ -272,7 +273,7 @@ func TestFormatScheduleExport_Message(t *testing.T) {
 // FormatListExportStatus — multiple items, with error field, markdown escaping
 // ---------------------------------------------------------------------------.
 
-// TestFormatListExportStatus_MultipleItems verifies the behavior of format list export status multiple items.
+// TestFormatListExportStatus_MultipleItems verifies FormatListExportStatus when multiple items.
 func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -296,7 +297,7 @@ func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_WithPipeInRelation verifies the behavior of format list export status with pipe in relation.
+// TestFormatListExportStatus_WithPipeInRelation verifies FormatListExportStatus when with pipe in relation.
 func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{

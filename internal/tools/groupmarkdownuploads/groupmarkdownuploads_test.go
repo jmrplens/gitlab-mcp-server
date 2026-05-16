@@ -13,10 +13,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
+
+// testFilename identifies the test filename constant used by this package.
 const testFilename = "image.png"
 
-// TestList verifies the behavior of list.
+// TestList verifies List.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -37,7 +40,7 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies the behavior of list error.
+// TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -48,7 +51,7 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID verifies the behavior of delete by i d.
+// TestDeleteByID verifies DeleteByID.
 func TestDeleteByID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/groups/5/uploads/1" {
@@ -63,7 +66,7 @@ func TestDeleteByID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_Error verifies the behavior of delete by i d error.
+// TestDeleteByID_Error verifies DeleteByID when error.
 func TestDeleteByID_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -74,7 +77,7 @@ func TestDeleteByID_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_ValidationUploadID verifies the behavior of delete by i d validation upload i d.
+// TestDeleteByID_ValidationUploadID verifies DeleteByID when validation upload ID.
 func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when upload_id is invalid")
@@ -90,7 +93,7 @@ func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename verifies the behavior of delete by secret and filename.
+// TestDeleteBySecretAndFilename verifies DeleteBySecretAndFilename.
 func TestDeleteBySecretAndFilename(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -109,7 +112,7 @@ func TestDeleteBySecretAndFilename(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_Error verifies the behavior of delete by secret and filename error.
+// TestDeleteBySecretAndFilename_Error verifies DeleteBySecretAndFilename when error.
 func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -124,7 +127,7 @@ func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	}
 }
 
-// TestFormatList verifies the behavior of format list.
+// TestFormatList verifies FormatList.
 func TestFormatList(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -137,7 +140,7 @@ func TestFormatList(t *testing.T) {
 	}
 }
 
-// TestFormatList_Empty verifies the behavior of format list empty.
+// TestFormatList_Empty verifies FormatList when empty.
 func TestFormatList_Empty(t *testing.T) {
 	out := &ListOutput{Uploads: []UploadItem{}}
 	md := FormatList(out)
@@ -148,17 +151,20 @@ func TestFormatList_Empty(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // List — canceled context, pagination, empty result, multiple uploads
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the behavior of list cancelled context.
+// TestList_CancelledContext verifies List when cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -168,7 +174,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_EmptyGroupID verifies the behavior of list empty group i d.
+// TestList_EmptyGroupID verifies List when empty group ID.
 func TestList_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -179,7 +185,7 @@ func TestList_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the behavior of list empty result.
+// TestList_EmptyResult verifies List when empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -197,7 +203,7 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestList_MultipleUploads verifies the behavior of list multiple uploads.
+// TestList_MultipleUploads verifies List when multiple uploads.
 func TestList_MultipleUploads(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -228,7 +234,7 @@ func TestList_MultipleUploads(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies the behavior of list with pagination.
+// TestList_WithPagination verifies List when with pagination.
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -256,7 +262,7 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_APIErrorInternalServer verifies the behavior of list a p i error internal server.
+// TestList_APIErrorInternalServer verifies List when API error internal server.
 func TestList_APIErrorInternalServer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -271,7 +277,7 @@ func TestList_APIErrorInternalServer(t *testing.T) {
 // DeleteByID — canceled context, empty group_id
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByID_CancelledContext verifies the behavior of delete by i d cancelled context.
+// TestDeleteByID_CancelledContext verifies DeleteByID when cancelled context.
 func TestDeleteByID_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -281,7 +287,7 @@ func TestDeleteByID_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_EmptyGroupID verifies the behavior of delete by i d empty group i d.
+// TestDeleteByID_EmptyGroupID verifies DeleteByID when empty group ID.
 func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -292,7 +298,7 @@ func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_InternalServerError verifies the behavior of delete by i d internal server error.
+// TestDeleteByID_InternalServerError verifies DeleteByID when internal server error.
 func TestDeleteByID_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -307,7 +313,7 @@ func TestDeleteByID_InternalServerError(t *testing.T) {
 // DeleteBySecretAndFilename — canceled context, empty fields
 // ---------------------------------------------------------------------------.
 
-// TestDeleteBySecretAndFilename_CancelledContext verifies the behavior of delete by secret and filename cancelled context.
+// TestDeleteBySecretAndFilename_CancelledContext verifies DeleteBySecretAndFilename when cancelled context.
 func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -319,7 +325,7 @@ func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_EmptyGroupID verifies the behavior of delete by secret and filename empty group i d.
+// TestDeleteBySecretAndFilename_EmptyGroupID verifies DeleteBySecretAndFilename when empty group ID.
 func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -332,7 +338,7 @@ func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_InternalServerError verifies the behavior of delete by secret and filename internal server error.
+// TestDeleteBySecretAndFilename_InternalServerError verifies DeleteBySecretAndFilename when internal server error.
 func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -349,7 +355,7 @@ func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 // FormatList — with pagination, special characters, nil created_at
 // ---------------------------------------------------------------------------.
 
-// TestFormatList_WithPagination verifies the behavior of format list with pagination.
+// TestFormatList_WithPagination verifies FormatList when with pagination.
 func TestFormatList_WithPagination(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -371,7 +377,7 @@ func TestFormatList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestFormatList_SpecialCharacters verifies the behavior of format list special characters.
+// TestFormatList_SpecialCharacters verifies FormatList when special characters.
 func TestFormatList_SpecialCharacters(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -385,7 +391,7 @@ func TestFormatList_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatList_NilCreatedAt verifies the behavior of format list nil created at.
+// TestFormatList_NilCreatedAt verifies FormatList when nil created at.
 func TestFormatList_NilCreatedAt(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -401,7 +407,7 @@ func TestFormatList_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatList_MultipleRows verifies the behavior of format list multiple rows.
+// TestFormatList_MultipleRows verifies FormatList when multiple rows.
 func TestFormatList_MultipleRows(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{

@@ -27,7 +27,7 @@ type BadgeItem struct {
 	Kind             string `json:"kind,omitempty"`
 }
 
-// projectBadgeToItem is an internal helper for the badges package.
+// projectBadgeToItem maps project badge to item between API and evaluator models.
 func projectBadgeToItem(b *gl.ProjectBadge) BadgeItem {
 	return BadgeItem{
 		ID:               b.ID,
@@ -40,7 +40,7 @@ func projectBadgeToItem(b *gl.ProjectBadge) BadgeItem {
 	}
 }
 
-// groupBadgeToItem is an internal helper for the badges package.
+// groupBadgeToItem maps group badge to item between API and evaluator models.
 func groupBadgeToItem(b *gl.GroupBadge) BadgeItem {
 	return BadgeItem{
 		ID:               b.ID,

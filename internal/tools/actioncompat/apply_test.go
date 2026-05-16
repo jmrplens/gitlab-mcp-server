@@ -7,6 +7,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{
 		Handler: func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
@@ -30,6 +31,7 @@ func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	}
 }
 
+// TestApplyToActionSpecs_PreservesUnsearchableActionAlias verifies ApplyToActionSpecs preserves unsearchable action alias.
 func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	specs := ApplyToActionSpecs("gitlab_repository", "repository", []toolutil.ActionSpec{
 		toolutil.NewActionSpec("tree", toolutil.ActionRoute{}, toolutil.ActionSpecOptions{}),
@@ -48,6 +50,7 @@ func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	}
 }
 
+// TestNormalizeActionAlias_UsesCompatibilityPolicy verifies NormalizeActionAlias uses compatibility policy.
 func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	canonical, ok := NormalizeActionAlias(" FEATURE_FLAG_USER_LIST.CREATE ")
 	if !ok || canonical != "feature_flags.ff_user_list_create" {
@@ -59,6 +62,7 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy verifies NormalizeParamsWithExplanation applies action scoped policy.
 func TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{"project_id": map[string]any{}, "ref": map[string]any{}}}
 	normalized, explanations := NormalizeParamsWithExplanation("repository.file_get", map[string]any{"project_id": 1, "branch": "main"}, schema)

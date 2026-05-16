@@ -14,14 +14,19 @@ import (
 )
 
 const (
-	pathVersion       = "/api/v4/version"
-	pathCurrentUser   = "/api/v4/user"
+	// pathVersion identifies the path version constant used by this package.
+	pathVersion = "/api/v4/version"
+	// pathCurrentUser identifies the path current user constant used by this package.
+	pathCurrentUser = "/api/v4/user"
+	// fmtStatusCheckErr identifies the fmt status check err constant used by this package.
 	fmtStatusCheckErr = "Check() unexpected error: %v"
-	fmtStatusWant     = "Status = %q, want %q"
+	// fmtStatusWant identifies the fmt status want constant used by this package.
+	fmtStatusWant = "Status = %q, want %q"
+	// testGitLabVersion identifies the test GitLab version constant used by this package.
 	testGitLabVersion = "17.5.0"
 )
 
-// TestCheck_Healthy verifies the behavior of check healthy.
+// TestCheck_Healthy verifies Check when healthy.
 func TestCheck_Healthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -151,7 +156,7 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 	}
 }
 
-// TestCheck_UnhealthyVersionFails verifies the behavior of check unhealthy version fails.
+// TestCheck_UnhealthyVersionFails verifies Check when unhealthy version fails.
 func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -177,7 +182,7 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	}
 }
 
-// TestCheck_DegradedUserFails verifies the behavior of check degraded user fails.
+// TestCheck_DegradedUserFails verifies Check when degraded user fails.
 func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -208,7 +213,7 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	}
 }
 
-// TestCheck_CancelledContext verifies the behavior of check cancelled context.
+// TestCheck_CancelledContext verifies Check when cancelled context.
 func TestCheck_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -228,7 +233,7 @@ func TestCheck_CancelledContext(t *testing.T) {
 // FormatMarkdownString — healthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Healthy validates cov format markdown string healthy across multiple scenarios using table-driven subtests.
+// TestFormatMarkdownString_Healthy covers FormatMarkdownString with table-driven subtests for healthy.
 func TestFormatMarkdownString_Healthy(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -323,7 +328,7 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 // FormatMarkdownString — unhealthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Unhealthy verifies the behavior of cov format markdown string unhealthy.
+// TestFormatMarkdownString_Unhealthy verifies FormatMarkdownString when unhealthy.
 func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 	out := Output{
 		Status:         "unhealthy",
@@ -353,7 +358,7 @@ func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 // FormatMarkdownString — degraded
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Degraded verifies the behavior of cov format markdown string degraded.
+// TestFormatMarkdownString_Degraded verifies FormatMarkdownString when degraded.
 func TestFormatMarkdownString_Degraded(t *testing.T) {
 	out := Output{
 		Status:         "degraded",
@@ -380,7 +385,7 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 // FormatMarkdownString — no username (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoUsername verifies the behavior of cov format markdown string no username.
+// TestFormatMarkdownString_NoUsername verifies FormatMarkdownString when no username.
 func TestFormatMarkdownString_NoUsername(t *testing.T) {
 	out := Output{
 		Status:    "healthy",
@@ -396,7 +401,7 @@ func TestFormatMarkdownString_NoUsername(t *testing.T) {
 // FormatMarkdownString — no version (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoVersion verifies the behavior of cov format markdown string no version.
+// TestFormatMarkdownString_NoVersion verifies FormatMarkdownString when no version.
 func TestFormatMarkdownString_NoVersion(t *testing.T) {
 	out := Output{
 		Status:    "unhealthy",
@@ -413,7 +418,7 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 // FormatMarkdown wrapper
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Wrapper verifies the behavior of cov format markdown wrapper.
+// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	out := Output{Status: "healthy", GitLabURL: "https://gitlab.example.com"}
 	result := FormatMarkdown(out)
@@ -492,6 +497,7 @@ func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	}
 }
 
+// healthSpecByTool supports health spec by tool assertions in health tests.
 func healthSpecByTool(t *testing.T, specs []toolutil.ActionSpec, tool string) toolutil.ActionSpec {
 	t.Helper()
 	for _, spec := range specs {

@@ -18,7 +18,7 @@ import (
 // ListProject
 // ---------------------------------------------------------------------------.
 
-// TestListProject_Success verifies the behavior of list project success.
+// TestListProject_Success verifies ListProject when success.
 func TestListProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys", func(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies the behavior of list project missing project i d.
+// TestListProject_MissingProjectID verifies ListProject when missing project ID.
 func TestListProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
@@ -58,7 +58,7 @@ func TestListProject_MissingProjectID(t *testing.T) {
 // Get
 // ---------------------------------------------------------------------------.
 
-// TestGet_Success verifies the behavior of get success.
+// TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys/1", func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingDeployKeyID verifies the behavior of get missing deploy key i d.
+// TestGet_MissingDeployKeyID verifies Get when missing deploy key ID.
 func TestGet_MissingDeployKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Get(context.Background(), client, GetInput{ProjectID: toolutil.StringOrInt("123")})
@@ -91,7 +91,7 @@ func TestGet_MissingDeployKeyID(t *testing.T) {
 // Add
 // ---------------------------------------------------------------------------.
 
-// TestAdd_Success verifies the behavior of add success.
+// TestAdd_Success verifies Add when success.
 func TestAdd_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys", func(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +125,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestAdd_MissingTitle verifies the behavior of add missing title.
+// TestAdd_MissingTitle verifies Add when missing title.
 func TestAdd_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Add(context.Background(), client, AddInput{
@@ -137,7 +137,7 @@ func TestAdd_MissingTitle(t *testing.T) {
 	}
 }
 
-// TestAdd_MissingKey verifies the behavior of add missing key.
+// TestAdd_MissingKey verifies Add when missing key.
 func TestAdd_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Add(context.Background(), client, AddInput{
@@ -153,7 +153,7 @@ func TestAdd_MissingKey(t *testing.T) {
 // Update
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_Success verifies the behavior of update success.
+// TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys/1", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +179,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingDeployKeyID verifies the behavior of update missing deploy key i d.
+// TestUpdate_MissingDeployKeyID verifies Update when missing deploy key ID.
 func TestUpdate_MissingDeployKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: toolutil.StringOrInt("123")})
@@ -192,7 +192,7 @@ func TestUpdate_MissingDeployKeyID(t *testing.T) {
 // Delete
 // ---------------------------------------------------------------------------.
 
-// TestDelete_Success verifies the behavior of delete success.
+// TestDelete_Success verifies Delete when success.
 func TestDelete_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys/1", func(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +212,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies the behavior of delete missing project i d.
+// TestDelete_MissingProjectID verifies Delete when missing project ID.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := Delete(context.Background(), client, DeleteInput{DeployKeyID: 1})
@@ -225,7 +225,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 // Enable
 // ---------------------------------------------------------------------------.
 
-// TestEnable_Success verifies the behavior of enable success.
+// TestEnable_Success verifies Enable when success.
 func TestEnable_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/123/deploy_keys/5/enable", func(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +248,7 @@ func TestEnable_Success(t *testing.T) {
 	}
 }
 
-// TestEnable_MissingDeployKeyID verifies the behavior of enable missing deploy key i d.
+// TestEnable_MissingDeployKeyID verifies Enable when missing deploy key ID.
 func TestEnable_MissingDeployKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Enable(context.Background(), client, EnableInput{ProjectID: toolutil.StringOrInt("123")})
@@ -261,7 +261,7 @@ func TestEnable_MissingDeployKeyID(t *testing.T) {
 // ListAll (instance level)
 // ---------------------------------------------------------------------------.
 
-// TestListAll_Success verifies the behavior of list all success.
+// TestListAll_Success verifies ListAll when success.
 func TestListAll_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/deploy_keys", func(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +290,7 @@ func TestListAll_Success(t *testing.T) {
 // AddInstance
 // ---------------------------------------------------------------------------.
 
-// TestAddInstance_Success verifies the behavior of add instance success.
+// TestAddInstance_Success verifies AddInstance when success.
 func TestAddInstance_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/deploy_keys", func(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +313,7 @@ func TestAddInstance_Success(t *testing.T) {
 	}
 }
 
-// TestAddInstance_MissingTitle verifies the behavior of add instance missing title.
+// TestAddInstance_MissingTitle verifies AddInstance when missing title.
 func TestAddInstance_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddInstance(context.Background(), client, AddInstanceInput{Key: "ssh-rsa AAAA"})
@@ -322,7 +322,7 @@ func TestAddInstance_MissingTitle(t *testing.T) {
 	}
 }
 
-// TestAddInstance_MissingKey verifies the behavior of add instance missing key.
+// TestAddInstance_MissingKey verifies AddInstance when missing key.
 func TestAddInstance_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddInstance(context.Background(), client, AddInstanceInput{Title: "test"})
@@ -335,7 +335,7 @@ func TestAddInstance_MissingKey(t *testing.T) {
 // ListUserProject
 // ---------------------------------------------------------------------------.
 
-// TestListUserProject_Success verifies the behavior of list user project success.
+// TestListUserProject_Success verifies ListUserProject when success.
 func TestListUserProject_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/users/42/project_deploy_keys", func(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +362,7 @@ func TestListUserProject_Success(t *testing.T) {
 	}
 }
 
-// TestListUserProject_MissingUserID verifies the behavior of list user project missing user i d.
+// TestListUserProject_MissingUserID verifies ListUserProject when missing user ID.
 func TestListUserProject_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListUserProject(context.Background(), client, ListUserProjectInput{})
@@ -373,17 +373,20 @@ func TestListUserProject_MissingUserID(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
+// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
+// errExpectedAPI identifies the err expected API constant used by this package.
 const errExpectedAPI = "expected API error, got nil"
 
+// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
 // ListProject — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies the behavior of list project a p i error.
+// TestListProject_APIError verifies ListProject when API error.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -394,7 +397,7 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_CancelledContext verifies the behavior of list project cancelled context.
+// TestListProject_CancelledContext verifies ListProject when cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -408,7 +411,7 @@ func TestListProject_CancelledContext(t *testing.T) {
 // Get — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies the behavior of get a p i error.
+// TestGet_APIError verifies Get when API error.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -419,7 +422,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies the behavior of get missing project i d.
+// TestGet_MissingProjectID verifies Get when missing project ID.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Get(context.Background(), client, GetInput{DeployKeyID: 1})
@@ -428,7 +431,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies the behavior of get cancelled context.
+// TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -442,7 +445,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // Add — API error, missing project_id, expires_at valid/invalid, canceled ctx
 // ---------------------------------------------------------------------------.
 
-// TestAdd_APIError verifies the behavior of add a p i error.
+// TestAdd_APIError verifies Add when API error.
 func TestAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -455,7 +458,7 @@ func TestAdd_APIError(t *testing.T) {
 	}
 }
 
-// TestAdd_MissingProjectID verifies the behavior of add missing project i d.
+// TestAdd_MissingProjectID verifies Add when missing project ID.
 func TestAdd_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Add(context.Background(), client, AddInput{Title: "k", Key: "ssh-rsa AAAA"})
@@ -464,7 +467,7 @@ func TestAdd_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestAdd_WithValidExpiresAt verifies the behavior of add with valid expires at.
+// TestAdd_WithValidExpiresAt verifies Add when with valid expires at.
 func TestAdd_WithValidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/deploy_keys" {
@@ -486,7 +489,7 @@ func TestAdd_WithValidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestAdd_WithInvalidExpiresAt verifies the behavior of add with invalid expires at.
+// TestAdd_WithInvalidExpiresAt verifies Add when with invalid expires at.
 func TestAdd_WithInvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Add(context.Background(), client, AddInput{
@@ -497,7 +500,7 @@ func TestAdd_WithInvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestAdd_CancelledContext verifies the behavior of add cancelled context.
+// TestAdd_CancelledContext verifies Add when cancelled context.
 func TestAdd_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -511,7 +514,7 @@ func TestAdd_CancelledContext(t *testing.T) {
 // Update — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies the behavior of update a p i error.
+// TestUpdate_APIError verifies Update when API error.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -522,7 +525,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies the behavior of update missing project i d.
+// TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Update(context.Background(), client, UpdateInput{DeployKeyID: 1})
@@ -531,7 +534,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies the behavior of update cancelled context.
+// TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -541,7 +544,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_TitleOnly verifies the behavior of update title only.
+// TestUpdate_TitleOnly verifies Update when title only.
 func TestUpdate_TitleOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/deploy_keys/1" {
@@ -565,7 +568,7 @@ func TestUpdate_TitleOnly(t *testing.T) {
 // Delete — API error, missing deploy_key_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies the behavior of delete a p i error.
+// TestDelete_APIError verifies Delete when API error.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -576,7 +579,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingDeployKeyID verifies the behavior of delete missing deploy key i d.
+// TestDelete_MissingDeployKeyID verifies Delete when missing deploy key ID.
 func TestDelete_MissingDeployKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1"})
@@ -585,7 +588,7 @@ func TestDelete_MissingDeployKeyID(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies the behavior of delete cancelled context.
+// TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -599,7 +602,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 // Enable — API error, missing project_id, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestEnable_APIError verifies the behavior of enable a p i error.
+// TestEnable_APIError verifies Enable when API error.
 func TestEnable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -610,7 +613,7 @@ func TestEnable_APIError(t *testing.T) {
 	}
 }
 
-// TestEnable_MissingProjectID verifies the behavior of enable missing project i d.
+// TestEnable_MissingProjectID verifies Enable when missing project ID.
 func TestEnable_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Enable(context.Background(), client, EnableInput{DeployKeyID: 1})
@@ -619,7 +622,7 @@ func TestEnable_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnable_CancelledContext verifies the behavior of enable cancelled context.
+// TestEnable_CancelledContext verifies Enable when cancelled context.
 func TestEnable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -633,7 +636,7 @@ func TestEnable_CancelledContext(t *testing.T) {
 // ListAll — API error, with public filter, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListAll_APIError verifies the behavior of list all a p i error.
+// TestListAll_APIError verifies ListAll when API error.
 func TestListAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -644,7 +647,7 @@ func TestListAll_APIError(t *testing.T) {
 	}
 }
 
-// TestListAll_WithPublicFilter verifies the behavior of list all with public filter.
+// TestListAll_WithPublicFilter verifies ListAll when with public filter.
 func TestListAll_WithPublicFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/deploy_keys" {
@@ -669,7 +672,7 @@ func TestListAll_WithPublicFilter(t *testing.T) {
 	}
 }
 
-// TestListAll_CancelledContext verifies the behavior of list all cancelled context.
+// TestListAll_CancelledContext verifies ListAll when cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -683,7 +686,7 @@ func TestListAll_CancelledContext(t *testing.T) {
 // AddInstance — API error, with expires_at valid/invalid, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestAddInstance_APIError verifies the behavior of add instance a p i error.
+// TestAddInstance_APIError verifies AddInstance when API error.
 func TestAddInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -694,7 +697,7 @@ func TestAddInstance_APIError(t *testing.T) {
 	}
 }
 
-// TestAddInstance_WithValidExpiresAt verifies the behavior of add instance with valid expires at.
+// TestAddInstance_WithValidExpiresAt verifies AddInstance when with valid expires at.
 func TestAddInstance_WithValidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/deploy_keys" {
@@ -715,7 +718,7 @@ func TestAddInstance_WithValidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestAddInstance_WithInvalidExpiresAt verifies the behavior of add instance with invalid expires at.
+// TestAddInstance_WithInvalidExpiresAt verifies AddInstance when with invalid expires at.
 func TestAddInstance_WithInvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddInstance(context.Background(), client, AddInstanceInput{
@@ -726,7 +729,7 @@ func TestAddInstance_WithInvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestAddInstance_CancelledContext verifies the behavior of add instance cancelled context.
+// TestAddInstance_CancelledContext verifies AddInstance when cancelled context.
 func TestAddInstance_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -740,7 +743,7 @@ func TestAddInstance_CancelledContext(t *testing.T) {
 // ListUserProject — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListUserProject_APIError verifies the behavior of list user project a p i error.
+// TestListUserProject_APIError verifies ListUserProject when API error.
 func TestListUserProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -751,7 +754,7 @@ func TestListUserProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListUserProject_CancelledContext verifies the behavior of list user project cancelled context.
+// TestListUserProject_CancelledContext verifies ListUserProject when cancelled context.
 func TestListUserProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -765,7 +768,7 @@ func TestListUserProject_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the behavior of format output markdown all fields.
+// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                1,
@@ -794,7 +797,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the behavior of format output markdown minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:    2,
@@ -815,7 +818,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithKeys verifies the behavior of format list markdown with keys.
+// TestFormatListMarkdown_WithKeys verifies FormatListMarkdown when with keys.
 func TestFormatListMarkdown_WithKeys(t *testing.T) {
 	out := ListOutput{
 		DeployKeys: []Output{
@@ -840,7 +843,7 @@ func TestFormatListMarkdown_WithKeys(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No deploy keys found") {
@@ -855,7 +858,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatInstanceOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatInstanceOutputMarkdown_AllFields verifies the behavior of format instance output markdown all fields.
+// TestFormatInstanceOutputMarkdown_AllFields verifies FormatInstanceOutputMarkdown when all fields.
 func TestFormatInstanceOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatInstanceOutputMarkdown(InstanceOutput{
 		ID:                10,
@@ -892,7 +895,7 @@ func TestFormatInstanceOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatInstanceOutputMarkdown_MinimalFields verifies the behavior of format instance output markdown minimal fields.
+// TestFormatInstanceOutputMarkdown_MinimalFields verifies FormatInstanceOutputMarkdown when minimal fields.
 func TestFormatInstanceOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatInstanceOutputMarkdown(InstanceOutput{
 		ID:    11,
@@ -913,7 +916,7 @@ func TestFormatInstanceOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatInstanceListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatInstanceListMarkdown_WithKeys verifies the behavior of format instance list markdown with keys.
+// TestFormatInstanceListMarkdown_WithKeys verifies FormatInstanceListMarkdown when with keys.
 func TestFormatInstanceListMarkdown_WithKeys(t *testing.T) {
 	out := InstanceListOutput{
 		DeployKeys: []InstanceOutput{
@@ -938,7 +941,7 @@ func TestFormatInstanceListMarkdown_WithKeys(t *testing.T) {
 	}
 }
 
-// TestFormatInstanceListMarkdown_Empty verifies the behavior of format instance list markdown empty.
+// TestFormatInstanceListMarkdown_Empty verifies FormatInstanceListMarkdown when empty.
 func TestFormatInstanceListMarkdown_Empty(t *testing.T) {
 	md := FormatInstanceListMarkdown(InstanceListOutput{})
 	if !strings.Contains(md, "No instance deploy keys found") {
@@ -1018,7 +1021,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // toOutput — converter with all fields populated via API response
 // ---------------------------------------------------------------------------.
 
-// TestListProject_SuccessWithAllFields verifies the behavior of list project success with all fields.
+// TestListProject_SuccessWithAllFields verifies ListProject when success with all fields.
 func TestListProject_SuccessWithAllFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/deploy_keys" {
@@ -1053,7 +1056,7 @@ func TestListProject_SuccessWithAllFields(t *testing.T) {
 // toInstanceOutput — with projects
 // ---------------------------------------------------------------------------.
 
-// TestListAll_WithProjectAssociations verifies the behavior of list all with project associations.
+// TestListAll_WithProjectAssociations verifies ListAll when with project associations.
 func TestListAll_WithProjectAssociations(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/deploy_keys" {
@@ -1093,7 +1096,7 @@ func TestListAll_WithProjectAssociations(t *testing.T) {
 // ListProject — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestListProject_WithPagination verifies the behavior of list project with pagination.
+// TestListProject_WithPagination verifies ListProject when with pagination.
 func TestListProject_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/deploy_keys" {
@@ -1126,7 +1129,7 @@ func TestListProject_WithPagination(t *testing.T) {
 // ListUserProject — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestListUserProject_WithPagination verifies the behavior of list user project with pagination.
+// TestListUserProject_WithPagination verifies ListUserProject when with pagination.
 func TestListUserProject_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/project_deploy_keys" {
@@ -1153,6 +1156,7 @@ func TestListUserProject_WithPagination(t *testing.T) {
 // Helper: ActionSpec route factory
 // ---------------------------------------------------------------------------.
 
+// newDeployKeySpecsByTool constructs deploy key specs by tool test fixtures.
 func newDeployKeySpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	t.Helper()
 
@@ -1236,6 +1240,7 @@ func TestActionSpecs_DeployKeyGetRoute(t *testing.T) {
 	}
 }
 
+// deployKeySpecsByTool supports deploy key specs by tool assertions in deploykeys tests.
 func deployKeySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
