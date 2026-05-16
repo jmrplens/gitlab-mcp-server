@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,867 |
-| Unit test functions | 9,618 |
+| Total test functions | 9,874 |
+| Unit test functions | 9,625 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,868 | 89.9% |
-| `TestFunc` (no underscore) | 718 | 7.3% |
+| `TestFunc_Scenario` (2-part) | 8,874 | 89.9% |
+| `TestFunc` (no underscore) | 719 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,210 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,217 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,867** | **567** |  |
+| **Total** | **9,874** | **567** |  |
 
 ### Core Packages
 
@@ -99,8 +99,8 @@
 | branches | 83 | 100.0% | 10 |
 | files | 78 | 100.0% | 8 |
 | tags | 77 | 100.0% | 9 |
+| snippets | 76 | 99.2% | 15 |
 | containerregistry | 74 | 100.0% | 12 |
-| snippets | 73 | 97.8% | 15 |
 | repository | 66 | 100.0% | 9 |
 | workitems | 66 | 100.0% | 5 |
 
@@ -116,7 +116,7 @@
 | actioncatalog | 26 | 4 | 98.6% | 0 |
 | actioncompat | 13 | 2 | 100.0% | 0 |
 | adminspecs | 2 | 1 | 100.0% | 88 |
-| alertmanagement | 27 | 2 | 97.9% | 4 |
+| alertmanagement | 28 | 2 | 98.9% | 4 |
 | appearance | 10 | 1 | 100.0% | 2 |
 | applications | 15 | 1 | 100.0% | 3 |
 | appstatistics | 9 | 1 | 97.1% | 1 |
@@ -177,7 +177,7 @@
 | grouplabels | 48 | 2 | 100.0% | 7 |
 | groupldap | 10 | 2 | 100.0% | 4 |
 | groupmarkdownuploads | 31 | 2 | 100.0% | 3 |
-| groupmembers | 57 | 2 | 98.0% | 7 |
+| groupmembers | 59 | 2 | 100.0% | 7 |
 | groupmilestones | 87 | 2 | 100.0% | 8 |
 | groupprotectedbranches | 16 | 2 | 100.0% | 5 |
 | groupprotectedenvs | 12 | 2 | 100.0% | 5 |
@@ -227,7 +227,7 @@
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
 | packages | 103 | 5 | 97.1% | 8 |
-| pages | 53 | 2 | 97.9% | 9 |
+| pages | 54 | 2 | 100.0% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 85 | 2 | 100.0% | 11 |
 | pipelinetriggers | 48 | 2 | 99.3% | 6 |
@@ -263,7 +263,7 @@
 | sidekiq | 18 | 2 | 100.0% | 4 |
 | snippetdiscussions | 29 | 2 | 100.0% | 6 |
 | snippetnotes | 42 | 2 | 100.0% | 5 |
-| snippets | 73 | 2 | 97.8% | 15 |
+| snippets | 76 | 2 | 99.2% | 15 |
 | snippetstoragemoves | 38 | 3 | 100.0% | 6 |
 | surfaces | 10 | 1 | 100.0% | 0 |
 | systemhooks | 23 | 2 | 99.2% | 5 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,210** | **337** |  | **1,106** |
+| **Total** | **7,217** | **337** |  | **1,106** |
 
 </details>
 
@@ -339,7 +339,7 @@
 | actioncatalog | 98.6% |
 | actioncompat | 100.0% |
 | adminspecs | 100.0% |
-| alertmanagement | 97.9% |
+| alertmanagement | 98.9% |
 | appearance | 100.0% |
 | applications | 100.0% |
 | appstatistics | 97.1% |
@@ -400,7 +400,7 @@
 | grouplabels | 100.0% |
 | groupldap | 100.0% |
 | groupmarkdownuploads | 100.0% |
-| groupmembers | 98.0% |
+| groupmembers | 100.0% |
 | groupmilestones | 100.0% |
 | groupprotectedbranches | 100.0% |
 | groupprotectedenvs | 100.0% |
@@ -450,7 +450,7 @@
 | notifications | 100.0% |
 | orbit | 99.7% |
 | packages | 97.1% |
-| pages | 97.9% |
+| pages | 100.0% |
 | pipelines | 97.9% |
 | pipelineschedules | 100.0% |
 | pipelinetriggers | 99.3% |
@@ -486,7 +486,7 @@
 | sidekiq | 100.0% |
 | snippetdiscussions | 100.0% |
 | snippetnotes | 100.0% |
-| snippets | 97.8% |
+| snippets | 99.2% |
 | snippetstoragemoves | 100.0% |
 | surfaces | 100.0% |
 | systemhooks | 99.2% |

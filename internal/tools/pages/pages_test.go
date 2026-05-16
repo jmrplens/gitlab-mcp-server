@@ -8,9 +8,12 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // TestGetPages_Success verifies GetPages when success.
@@ -800,6 +803,36 @@ func TestFormatAllDomainsMarkdown_WithProjectPath(t *testing.T) {
 	}
 	if strings.Contains(md, "#10") {
 		t.Error("should not contain numeric ID when path is set")
+	}
+}
+
+// TestConverters_EdgeCases verifies Pages converter nil and optional date branches.
+func TestConverters_EdgeCases(t *testing.T) {
+	if out := toPagesOutput(nil); out.URL != "" || len(out.Deployments) != 0 {
+		t.Fatalf("toPagesOutput(nil) = %+v, want zero output", out)
+	}
+
+	if out := toDomainOutput(nil); out.Domain != "" || out.ProjectID != 0 {
+		t.Fatalf("toDomainOutput(nil) = %+v, want zero output", out)
+	}
+
+	enabledUntil := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	expiration := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
+	out := toDomainOutput(&gl.PagesDomain{
+		Domain:       testDomain,
+		URL:          testExampleURL,
+		ProjectID:    42,
+		EnabledUntil: &enabledUntil,
+		Certificate: gl.PagesDomainCertificate{
+			Subject:    testDomain,
+			Expiration: &expiration,
+		},
+	})
+	if out.EnabledUntil == "" {
+		t.Fatal("expected EnabledUntil to be formatted")
+	}
+	if out.Certificate.Expiration == "" {
+		t.Fatal("expected certificate expiration to be formatted")
 	}
 }
 
