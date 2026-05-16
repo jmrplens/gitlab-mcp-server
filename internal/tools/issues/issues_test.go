@@ -15,7 +15,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -2869,92 +2868,6 @@ func TestListMRsRelated_WithPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RegisterTools MCP integration test
-// ---------------------------------------------------------------------------.
-
-// newIssueMCPSession is an internal helper for the issues package.
-func newIssueMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
-}
-
-// callToolAndVerify is an internal helper for the issues package.
-func callToolAndVerify(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any) {
-	t.Helper()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	if err != nil {
-		t.Fatalf("CallTool(%s) error: %v", name, err)
-	}
-	if result.IsError {
-		for _, c := range result.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				t.Fatalf("CallTool(%s) returned error: %s", name, tc.Text)
-			}
-		}
-		t.Fatalf("CallTool(%s) returned IsError=true", name)
-	}
-}
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newIssueMCPSession(t)
-	ctx := context.Background()
-	pid := testProjectID
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_create", map[string]any{"project_id": pid, "title": "Test"}},
-		{"gitlab_issue_get", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_list", map[string]any{"project_id": pid}},
-		{"gitlab_issue_update", map[string]any{"project_id": pid, "issue_iid": 10, "title": "Updated"}},
-		{"gitlab_issue_delete", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_list_group", map[string]any{"group_id": "99"}},
-		{"gitlab_issue_list_all", map[string]any{}},
-		{"gitlab_issue_get_by_id", map[string]any{"issue_id": 10}},
-		{"gitlab_issue_reorder", map[string]any{"project_id": pid, "issue_iid": 10, "move_after_id": 5}},
-		{"gitlab_issue_move", map[string]any{"project_id": pid, "issue_iid": 10, "to_project_id": 99}},
-		{"gitlab_issue_subscribe", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_unsubscribe", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_create_todo", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_time_estimate_set", map[string]any{"project_id": pid, "issue_iid": 10, "duration": "3h"}},
-		{"gitlab_issue_time_estimate_reset", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_spent_time_add", map[string]any{"project_id": pid, "issue_iid": 10, "duration": "1h"}},
-		{"gitlab_issue_spent_time_reset", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_time_stats_get", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_participants", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_mrs_closing", map[string]any{"project_id": pid, "issue_iid": 10}},
-		{"gitlab_issue_mrs_related", map[string]any{"project_id": pid, "issue_iid": 10}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			callToolAndVerify(t, session, ctx, tt.name, tt.args)
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Confidential workflow edge cases
 // ---------------------------------------------------------------------------.
 
@@ -3080,77 +2993,6 @@ func TestList_ConfidentialFilter(t *testing.T) {
 	if !out.Issues[0].Confidential {
 		t.Error(msgConfidentialWant)
 	}
-}
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// TestIssueGet_EmbedsCanonicalResource verifies that gitlab_issue_get attaches an
-// EmbeddedResource content block with the canonical gitlab:// URI when the embed
-// toggle is enabled (default), and omits it when disabled.
-func TestIssueGet_EmbedsCanonicalResource(t *testing.T) {
-	session := newIssueMCPSession(t)
-	ctx := context.Background()
-
-	t.Run("enabled by default", func(t *testing.T) {
-		toolutil.EnableEmbeddedResources(true)
-		t.Cleanup(func() { toolutil.EnableEmbeddedResources(true) })
-
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_issue_get",
-			Arguments: map[string]any{"project_id": testProjectID, "issue_iid": 10},
-		})
-		if err != nil {
-			t.Fatalf("CallTool: %v", err)
-		}
-		var found *mcp.EmbeddedResource
-		for _, c := range result.Content {
-			if er, ok := c.(*mcp.EmbeddedResource); ok {
-				found = er
-				break
-			}
-		}
-		if found == nil {
-			t.Fatalf("expected EmbeddedResource content block, got %d blocks", len(result.Content))
-		}
-		if found.Resource == nil {
-			t.Fatalf("EmbeddedResource.Resource is nil")
-		}
-		const wantURI = "gitlab://project/42/issue/10"
-		if found.Resource.URI != wantURI {
-			t.Errorf("URI = %q, want %q", found.Resource.URI, wantURI)
-		}
-		if found.Resource.MIMEType != "application/json" {
-			t.Errorf("MIMEType = %q, want application/json", found.Resource.MIMEType)
-		}
-		if found.Resource.Text == "" {
-			t.Errorf("Text is empty, want JSON payload")
-		}
-	})
-
-	t.Run("disabled produces no embed", func(t *testing.T) {
-		toolutil.EnableEmbeddedResources(false)
-		t.Cleanup(func() { toolutil.EnableEmbeddedResources(true) })
-
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "gitlab_issue_get",
-			Arguments: map[string]any{"project_id": testProjectID, "issue_iid": 10},
-		})
-		if err != nil {
-			t.Fatalf("CallTool: %v", err)
-		}
-		for _, c := range result.Content {
-			if _, ok := c.(*mcp.EmbeddedResource); ok {
-				t.Fatalf("expected no EmbeddedResource when disabled")
-			}
-		}
-	})
 }
 
 // TestCreate_AssigneeIDSingular verifies that assignee_id (singular) is sent

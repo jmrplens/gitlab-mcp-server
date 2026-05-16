@@ -18,11 +18,11 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,724 |
-| Unit test functions | 9,477 |
+| Total test functions | 9,725 |
+| Unit test functions | 9,478 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 431 |
+| Test files (internal/) | 432 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,735 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,736 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,114 | 333 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,115 | 334 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,724** | **557** |  |
+| **Total** | **9,725** | **558** |  |
 
 ### Core Packages
 
@@ -80,7 +80,7 @@
 | --- | ---: | ---: | ---: |
 | projects | 328 | 95.3% | 54 |
 | mergerequests | 212 | 96.1% | 30 |
-| issues | 198 | 96.7% | 21 |
+| issues | 199 | 97.1% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
 | groups | 123 | 99.6% | 18 |
@@ -199,7 +199,7 @@
 | issuediscussions | 41 | 2 | 100.0% | 6 |
 | issuelinks | 43 | 2 | 99.0% | 4 |
 | issuenotes | 38 | 2 | 100.0% | 5 |
-| issues | 198 | 1 | 96.7% | 21 |
+| issues | 199 | 2 | 97.1% | 21 |
 | issuestatistics | 40 | 1 | 100.0% | 3 |
 | jobs | 118 | 3 | 96.5% | 17 |
 | jobtokenscope | 48 | 2 | 100.0% | 8 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,114** | **333** |  | **1,018** |
+| **Total** | **7,115** | **334** |  | **1,018** |
 
 </details>
 
@@ -416,7 +416,7 @@
 | issuediscussions | 100.0% |
 | issuelinks | 99.0% |
 | issuenotes | 100.0% |
-| issues | 96.7% |
+| issues | 97.1% |
 | issuestatistics | 100.0% |
 | jobs | 96.5% |
 | jobtokenscope | 100.0% |
