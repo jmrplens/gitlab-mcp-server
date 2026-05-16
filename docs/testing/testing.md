@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,908 |
-| Unit test functions | 9,659 |
+| Total test functions | 9,911 |
+| Unit test functions | 9,662 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,15 +28,15 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.8% |
-| Overall coverage (`go test ./internal/...`) | 97.9% |
-| Average package coverage | 94.9% |
+| Overall coverage (`go test ./internal/...`) | 98.0% |
+| Average package coverage | 95.0% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,897 | 89.8% |
-| `TestFunc` (no underscore) | 730 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,899 | 89.8% |
+| `TestFunc` (no underscore) | 731 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,251 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,254 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,908** | **567** |  |
+| **Total** | **9,911** | **567** |  |
 
 ### Core Packages
 
@@ -87,14 +87,14 @@
 | dynamic | 120 | 98.9% | 4 |
 | jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
-| awardemoji | 106 | 96.7% | 24 |
+| awardemoji | 108 | 100.0% | 24 |
 | packages | 103 | 97.3% | 8 |
 | runners | 102 | 98.2% | 19 |
 | pipelines | 101 | 99.2% | 12 |
 | resourceevents | 98 | 100.0% | 15 |
 | commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
-| accesstokens | 85 | 98.6% | 18 |
+| accesstokens | 86 | 100.0% | 18 |
 | pipelineschedules | 85 | 100.0% | 11 |
 | branches | 83 | 100.0% | 10 |
 | files | 78 | 100.0% | 8 |
@@ -112,7 +112,7 @@
 | Sub-package | Tests | Test Files | Coverage | Tools |
 | --- | ---: | ---: | ---: | ---: |
 | accessrequests | 41 | 2 | 100.0% | 8 |
-| accesstokens | 85 | 2 | 98.6% | 18 |
+| accesstokens | 86 | 2 | 100.0% | 18 |
 | actioncatalog | 26 | 4 | 98.6% | 0 |
 | actioncompat | 13 | 2 | 100.0% | 0 |
 | adminspecs | 2 | 1 | 100.0% | 88 |
@@ -123,7 +123,7 @@
 | attestations | 17 | 2 | 100.0% | 2 |
 | auditevents | 42 | 3 | 100.0% | 6 |
 | avatar | 9 | 1 | 100.0% | 1 |
-| awardemoji | 106 | 1 | 96.7% | 24 |
+| awardemoji | 108 | 1 | 100.0% | 24 |
 | badges | 51 | 1 | 100.0% | 12 |
 | boards | 64 | 2 | 100.0% | 10 |
 | branches | 83 | 1 | 100.0% | 10 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,251** | **337** |  | **1,106** |
+| **Total** | **7,254** | **337** |  | **1,106** |
 
 </details>
 
@@ -335,7 +335,7 @@
 | --- | ---: |
 | tools (orch.) | 91.5% |
 | accessrequests | 100.0% |
-| accesstokens | 98.6% |
+| accesstokens | 100.0% |
 | actioncatalog | 98.6% |
 | actioncompat | 100.0% |
 | adminspecs | 100.0% |
@@ -346,7 +346,7 @@
 | attestations | 100.0% |
 | auditevents | 100.0% |
 | avatar | 100.0% |
-| awardemoji | 96.7% |
+| awardemoji | 100.0% |
 | badges | 100.0% |
 | boards | 100.0% |
 | branches | 100.0% |

@@ -1012,6 +1012,52 @@ func TestPersonalRevoke_APIError(t *testing.T) {
 	}
 }
 
+// TestAccessTokenInputValidationAPIErrors covers GitLab 400 validation hints for token mutations.
+func TestAccessTokenInputValidationAPIErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid expires_at"}`)
+	}))
+
+	tests := []struct {
+		name string
+		call func(context.Context) error
+		want string
+	}{
+		{name: "ProjectCreate", want: "validate scopes", call: func(ctx context.Context) error {
+			_, err := ProjectCreate(ctx, client, ProjectCreateInput{ProjectID: "1", Name: "token", Scopes: []string{"api"}})
+			return err
+		}},
+		{name: "ProjectRotate", want: "token may already be revoked", call: func(ctx context.Context) error {
+			_, err := ProjectRotate(ctx, client, ProjectRotateInput{ProjectID: "1", TokenID: 1})
+			return err
+		}},
+		{name: "GroupCreate", want: "validate scopes", call: func(ctx context.Context) error {
+			_, err := GroupCreate(ctx, client, GroupCreateInput{GroupID: "1", Name: "token", Scopes: []string{"api"}})
+			return err
+		}},
+		{name: "GroupRotate", want: "token may already be revoked", call: func(ctx context.Context) error {
+			_, err := GroupRotate(ctx, client, GroupRotateInput{GroupID: "1", TokenID: 1})
+			return err
+		}},
+		{name: "PersonalRotate", want: "token may already be revoked", call: func(ctx context.Context) error {
+			_, err := PersonalRotate(ctx, client, PersonalRotateInput{TokenID: 1})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call(t.Context())
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want hint containing %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Validation tests -- missing coverage
 // ---------------------------------------------------------------------------.
