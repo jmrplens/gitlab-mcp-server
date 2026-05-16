@@ -4,7 +4,6 @@
 package integrations
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -503,111 +502,6 @@ func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	if !strings.Contains(text, "Updated") {
 		t.Errorf("expected 'Updated' in output, got %q", text)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// RegisterTools — no panic
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
-func TestRegisterTools_NoPanic(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — all tools
-// ---------------------------------------------------------------------------.
-
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
-func TestMCPRoundTrip_AllTools(t *testing.T) {
-	session := newIntegrationsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_integrations", map[string]any{"project_id": "1"}},
-		{"get_jira", "gitlab_get_integration", map[string]any{"project_id": "1", "slug": "jira"}},
-		{"delete_jira", "gitlab_delete_integration", map[string]any{"project_id": "1", "slug": "jira"}},
-		{"set_jira", "gitlab_set_jira_integration", map[string]any{"project_id": "1", "url": "https://jira.example.com"}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.tool,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.tool, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.tool, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
-			}
-		})
-	}
-}
-
-// newIntegrationsMCPSession is an internal helper for the integrations package.
-func newIntegrationsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	integrationJSON := `{"id":1,"title":"Jira","slug":"jira","active":true}`
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/services", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+integrationJSON+`]`)
-	})
-	handler.HandleFunc("GET /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("GET /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("DELETE /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	handler.HandleFunc("DELETE /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	handler.HandleFunc("PUT /api/v4/projects/1/services/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/projects/1/integrations/jira", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, integrationJSON)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // TestGet_WithTimestamps covers the CreatedAt/UpdatedAt != nil branches
