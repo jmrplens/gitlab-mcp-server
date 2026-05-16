@@ -486,6 +486,20 @@ func TestCIVariableCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCIVariableCreate_BadRequest verifies invalid key and masking hints.
+func TestCIVariableCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", Key: "K", Value: "V"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "masked vars require") {
+		t.Fatalf("error = %v, want masked variable hint", err)
+	}
+}
+
 // TestCIVariableCreate_AllOptionalFields verifies CIVariableCreate when all optional fields.
 func TestCIVariableCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -548,6 +562,20 @@ func TestCIVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestCIVariableUpdate_NotFound verifies missing variable hints.
+func TestCIVariableUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_ci_variable_list") {
+		t.Fatalf("error = %v, want list hint", err)
+	}
+}
+
 // TestCIVariableUpdate_AllOptionalFields verifies CIVariableUpdate when all optional fields.
 func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -597,6 +625,20 @@ func TestCIVariableDelete_APIError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", Key: "K"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestCIVariableDelete_NotFound verifies already-deleted variable hints.
+func TestCIVariableDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "may already be deleted") {
+		t.Fatalf("error = %v, want deletion hint", err)
 	}
 }
 

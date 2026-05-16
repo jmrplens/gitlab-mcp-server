@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,874 |
-| Unit test functions | 9,625 |
+| Total test functions | 9,882 |
+| Unit test functions | 9,633 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,15 +27,15 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.6% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.7% |
 | Overall coverage (`go test ./internal/...`) | 97.8% |
-| Average package coverage | 94.8% |
+| Average package coverage | 94.9% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,874 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,882 | 89.9% |
 | `TestFunc` (no underscore) | 719 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,217 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,225 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,874** | **567** |  |
+| **Total** | **9,882** | **567** |  |
 
 ### Core Packages
 
@@ -132,7 +132,7 @@
 | bulkimports | 34 | 2 | 99.4% | 7 |
 | cicatalog | 19 | 1 | 100.0% | 2 |
 | cilint | 26 | 1 | 100.0% | 2 |
-| civariables | 39 | 2 | 98.1% | 5 |
+| civariables | 42 | 2 | 100.0% | 5 |
 | ciyamltemplates | 21 | 1 | 100.0% | 2 |
 | clusteragents | 38 | 1 | 100.0% | 8 |
 | commitdiscussions | 32 | 2 | 100.0% | 6 |
@@ -165,7 +165,7 @@
 | features | 21 | 2 | 96.9% | 4 |
 | ffuserlists | 29 | 2 | 100.0% | 5 |
 | files | 78 | 3 | 100.0% | 8 |
-| freezeperiods | 32 | 2 | 98.1% | 5 |
+| freezeperiods | 34 | 2 | 100.0% | 5 |
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
 | groupanalytics | 8 | 2 | 100.0% | 3 |
@@ -189,7 +189,7 @@
 | groupserviceaccounts | 19 | 2 | 100.0% | 7 |
 | groupsshcerts | 24 | 3 | 100.0% | 3 |
 | groupstoragemoves | 34 | 2 | 100.0% | 6 |
-| groupvariables | 47 | 2 | 98.0% | 5 |
+| groupvariables | 50 | 2 | 100.0% | 5 |
 | groupwikis | 32 | 3 | 100.0% | 5 |
 | health | 17 | 1 | 100.0% | 2 |
 | impersonationtokens | 38 | 3 | 100.0% | 5 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,217** | **337** |  | **1,106** |
+| **Total** | **7,225** | **337** |  | **1,106** |
 
 </details>
 
@@ -355,7 +355,7 @@
 | bulkimports | 99.4% |
 | cicatalog | 100.0% |
 | cilint | 100.0% |
-| civariables | 98.1% |
+| civariables | 100.0% |
 | ciyamltemplates | 100.0% |
 | clusteragents | 100.0% |
 | commitdiscussions | 100.0% |
@@ -388,7 +388,7 @@
 | features | 96.9% |
 | ffuserlists | 100.0% |
 | files | 100.0% |
-| freezeperiods | 98.1% |
+| freezeperiods | 100.0% |
 | geo | 100.0% |
 | gitignoretemplates | 100.0% |
 | groupanalytics | 100.0% |
@@ -412,7 +412,7 @@
 | groupserviceaccounts | 100.0% |
 | groupsshcerts | 100.0% |
 | groupstoragemoves | 100.0% |
-| groupvariables | 98.0% |
+| groupvariables | 100.0% |
 | groupwikis | 100.0% |
 | health | 100.0% |
 | impersonationtokens | 100.0% |

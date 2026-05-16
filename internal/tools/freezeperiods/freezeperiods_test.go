@@ -240,6 +240,26 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_Forbidden verifies create permission hints.
+func TestCreate_Forbidden(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Create(t.Context(), client, CreateInput{
+		ProjectID:   "1",
+		FreezeStart: testCronFreezeStart,
+		FreezeEnd:   "0 7 * * 1",
+	})
+	if err == nil {
+		t.Fatal("expected error for forbidden response")
+	}
+	if !containsStr(err.Error(), "Maintainer or Owner") {
+		t.Fatalf("error = %v, want permission hint", err)
+	}
+}
+
 // TestCreate_WithTimezone verifies Create sends the optional CronTimezone.
 func TestCreate_WithTimezone(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +310,26 @@ func TestUpdate_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for API failure")
+	}
+}
+
+// TestUpdate_Forbidden verifies update permission hints.
+func TestUpdate_Forbidden(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		ProjectID:      "1",
+		FreezePeriodID: 5,
+		FreezeStart:    testCronUpdatedStart,
+	})
+	if err == nil {
+		t.Fatal("expected error for forbidden response")
+	}
+	if !containsStr(err.Error(), "Maintainer or Owner") {
+		t.Fatalf("error = %v, want permission hint", err)
 	}
 }
 
