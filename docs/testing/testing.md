@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,976 |
-| Unit test functions | 9,727 |
+| Total test functions | 9,981 |
+| Unit test functions | 9,732 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -29,14 +29,14 @@
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 88.1% |
 | Overall coverage (`go test ./internal/...`) | 98.4% |
-| Average package coverage | 95.1% |
+| Average package coverage | 95.2% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,954 | 89.8% |
-| `TestFunc` (no underscore) | 741 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,958 | 89.8% |
+| `TestFunc` (no underscore) | 742 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,646 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,651 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (168) | 7,313 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,976** | **567** |  |
+| **Total** | **9,981** | **567** |  |
 
 ### Core Packages
 
@@ -58,7 +58,7 @@
 | --- | ---: | ---: | --- |
 | autoupdate | 113 | 90.7% | Package autoupdate provides self-update capability for the gitlab-mcp-server MCP server. |
 | completions | 96 | 100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters. |
-| config | 63 | 94.8% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server. |
+| config | 68 | 100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server. |
 | elicitation | 78 | 92.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol. |
 | gitlab | 41 | 100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client. |
 | logging | 16 | 100.0% | Package logging provides MCP protocol-level logging via ServerSession. |
@@ -68,11 +68,11 @@
 | resources | 156 | 98.7% | Package resources registers read-only MCP resources for GitLab and server metadata. |
 | roots | 21 | 98.5% | Package roots provides client workspace discovery via the MCP Roots capability. |
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
-| serverpool | 47 | 99.1% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
+| serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 25 | 91.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 407 | 92.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 246 | 90.3% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,646** |  |  |
+| **Subtotal** | **1,651** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -314,7 +314,7 @@
 | --- | ---: |
 | autoupdate | 90.7% |
 | completions | 100.0% |
-| config | 94.8% |
+| config | 100.0% |
 | elicitation | 92.0% |
 | gitlab | 100.0% |
 | logging | 100.0% |
@@ -324,7 +324,7 @@
 | resources | 98.7% |
 | roots | 98.5% |
 | sampling | 99.5% |
-| serverpool | 99.1% |
+| serverpool | 99.6% |
 | testutil | 91.9% |
 | toolutil | 92.7% |
 | wizard | 90.3% |

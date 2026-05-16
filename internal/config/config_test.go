@@ -1218,6 +1218,109 @@ func TestLoad_InvalidSafeMode(t *testing.T) {
 	}
 }
 
+// TestLoad_InvalidEmbeddedResources verifies invalid EMBEDDED_RESOURCES values
+// are rejected during environment loading.
+func TestLoad_InvalidEmbeddedResources(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("EMBEDDED_RESOURCES", "notabool")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid EMBEDDED_RESOURCES")
+	}
+}
+
+// TestValidate_DirectErrorBranches verifies validation-only branches that are
+// normally guarded earlier by environment parsers.
+func TestValidate_DirectErrorBranches(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+	}{
+		{name: "empty gitlab url", cfg: Config{GitLabToken: "test-token", MaxHTTPClients: 1}},
+		{name: "invalid tool surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, ToolSurface: "unknown"}},
+		{name: "invalid capability surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, CapabilitySurface: "compact"}},
+		{name: "negative rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitRPS: -1}},
+		{name: "missing burst for positive rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitRPS: 1, RateLimitBurst: 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.cfg.validate(); err == nil {
+				t.Fatal("validate() expected error, got nil")
+			}
+		})
+	}
+}
+
+// TestEffectiveToolSurface verifies explicit and legacy tool-surface resolution.
+func TestEffectiveToolSurface(t *testing.T) {
+	tests := []struct {
+		name        string
+		metaTools   bool
+		toolSurface string
+		want        string
+	}{
+		{name: "explicit dynamic", metaTools: false, toolSurface: ToolSurfaceDynamic, want: ToolSurfaceDynamic},
+		{name: "legacy meta", metaTools: true, want: ToolSurfaceMeta},
+		{name: "legacy individual", metaTools: false, want: ToolSurfaceIndividual},
+		{name: "unknown falls back to meta", metaTools: true, toolSurface: "unknown", want: ToolSurfaceMeta},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EffectiveToolSurface(tt.metaTools, tt.toolSurface); got != tt.want {
+				t.Errorf("EffectiveToolSurface() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseCapabilitySurface_Aliases verifies capability surface aliases and errors.
+func TestParseCapabilitySurface_Aliases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty uses default", input: "", want: CapabilitySurfaceMinimal},
+		{name: "default alias", input: "default", want: CapabilitySurfaceFull},
+		{name: "low token alias", input: "low-token", want: CapabilitySurfaceMinimal},
+		{name: "invalid", input: "compact", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseCapabilitySurface(tt.input, CapabilitySurfaceMinimal)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("parseCapabilitySurface() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseCapabilitySurface() unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("parseCapabilitySurface() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseFloatNonNegative_NonFinite verifies NaN and Infinity are rejected.
+func TestParseFloatNonNegative_NonFinite(t *testing.T) {
+	for _, input := range []string{"NaN", "+Inf"} {
+		t.Run(input, func(t *testing.T) {
+			if _, err := parseFloatNonNegative(input, 0); err == nil {
+				t.Fatal("parseFloatNonNegative() expected error, got nil")
+			}
+		})
+	}
+}
+
 // TestLoad_InvalidIgnoreScopes verifies that Load returns an error when
 // GITLAB_IGNORE_SCOPES has an invalid boolean value.
 func TestLoad_InvalidIgnoreScopes(t *testing.T) {
