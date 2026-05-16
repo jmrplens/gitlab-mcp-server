@@ -72,10 +72,16 @@ Get full details of a single vulnerability by its GID. Returns complete vulnerab
 
 State transitions follow the GitLab vulnerability lifecycle:
 
-```text
-DETECTED → CONFIRMED → RESOLVED
-    ↓                     ↓
- DISMISSED ←──────── (revert) ← any state
+```mermaid
+stateDiagram-v2
+    [*] --> DETECTED
+    DETECTED --> CONFIRMED: confirm
+    DETECTED --> RESOLVED: resolve
+    CONFIRMED --> RESOLVED: resolve
+    DETECTED --> DISMISSED: dismiss
+    CONFIRMED --> DISMISSED: dismiss
+    RESOLVED --> DETECTED: revert
+    DISMISSED --> DETECTED: revert
 ```
 
 ### `gitlab_dismiss_vulnerability`

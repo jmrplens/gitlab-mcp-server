@@ -14,24 +14,21 @@ Successful tool responses contain **two representations** of the same data:
 1. **Markdown content** — human-readable text with tables, clickable links, and next-step hints. Targeted at the LLM (`audience: assistant`) so it can reason over the data and present it to you.
 2. **Structured JSON** (`structuredContent`) — machine-readable data for programmatic clients. IDEs like VS Code read this to extract fields, and it also includes a `next_steps` array with actionable hints.
 
-```text
-┌──────────────────── Tool Response ────────────────────┐
-│                                                        │
-│  Content (Markdown)          structuredContent (JSON)   │
-│  ┌──────────────────┐       ┌──────────────────────┐   │
-│  │ ## Branches (5)   │       │ {                    │   │
-│  │                   │       │   "branches": [...], │   │
-│  │ | Branch | ...    │       │   "pagination": {},  │   │
-│  │ | [main](url)     │       │   "next_steps": [    │   │
-│  │                   │       │     "Get details...",│   │
-│  │ 💡 Next steps:    │       │     "Create branch"  │   │
-│  │ - Get details...  │       │   ]                  │   │
-│  │ - Create branch   │       │ }                    │   │
-│  └──────────────────┘       └──────────────────────┘   │
-│                                                        │
-│  audience: ["assistant"]     Read by IDEs like VS Code  │
-│  Read by the LLM             and JetBrains              │
-└────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  response[Tool response]
+
+  response --> content[Markdown content]
+  response --> structured[structuredContent JSON]
+
+  content --> markdownExample["## Branches (5)<br/>Markdown table with links<br/>Next-step hints"]
+  content --> annotation["Content annotation<br/>audience: assistant"]
+  annotation --> llm[Read by the LLM]
+
+  structured --> jsonExample["branches<br/>pagination<br/>next_steps"]
+  jsonExample --> ide[Read by IDEs and programmatic clients]
+
+  markdownExample -.->|same hints| jsonExample
 ```
 
 ## What You See as a User

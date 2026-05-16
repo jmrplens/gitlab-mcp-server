@@ -44,7 +44,7 @@ gitlab-mcp-server/
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
-│   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
+│   │   ├── markdown.go          # markdownForResult delegator to toolutil.MarkdownForResult
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
@@ -59,7 +59,7 @@ gitlab-mcp-server/
 └── .env                         # Local secrets (gitignored)
 ```
 
-Meta-tool counts are additive: 32 core/domain meta-tools, plus 15 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
+Meta-tool counts are additive: 33 base tools, 14 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
 
 ## Architecture
 
@@ -68,7 +68,20 @@ graph TD
     MAIN[cmd/server/main.go] -->|loads| CFG[config.Load]
     MAIN -->|creates| GL[gitlab.NewClient]
     MAIN -->|creates| SRV[mcp.NewServer]
-    MAIN -->|registers| TOOLS[tools.RegisterAll / RegisterAllMeta]
+    MAIN -->|selects surface| SURFACE{TOOL_SURFACE}
+    SPECS[CollectActionSpecs<br/>domain ActionSpecs] --> CATALOG[BuildActionCatalog]
+    MAIN -->|builds| CATALOG
+    CATALOG --> IND[individual projection<br/>tools.RegisterAll]
+    CATALOG --> META[meta projection<br/>tools.RegisterAllMeta]
+    CATALOG --> DYN[dynamic projection<br/>dynamic.RegisterCatalogTools]
+    STANDALONE[StandaloneSurfaceToolSpecs<br/>project discovery + interactive flows] -.->|dynamic route injection| DYN
+    SURFACE -->|individual| IND
+    SURFACE -->|meta| META
+    SURFACE -->|dynamic / dynamic-3| DYN
+    IND --> PROJECTION[Catalog-backed ActionRoute handlers]
+    META --> PROJECTION
+    DYN --> PROJECTION
+    MAIN -->|registers standalone| STANDALONE
     MAIN -->|registers| RES[resources.Register]
     MAIN -->|registers| PROMPTS[prompts.Register]
     MAIN -->|setup| LOG[logging]
@@ -76,18 +89,19 @@ graph TD
     MAIN -->|setup| ROOTS[roots]
     SRV -->|runs| STDIO[StdioTransport]
     SRV -->|runs| HTTP[StreamableHTTPHandler]
-    TOOLS --> GL
-    TOOLS --> PROG[progress]
-    TOOLS --> SAMP[sampling]
-    TOOLS --> ELIC[elicitation]
+    PROJECTION --> GL
+    PROJECTION --> PROG[progress]
+    PROJECTION --> SAMP[sampling]
+    STANDALONE --> ELIC[elicitation]
+    ELIC --> GL
     RES --> GL
     PROMPTS --> GL
 ```
 
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
-3. **Tools** register handlers via `mcp.AddTool()` with typed input/output structs
-4. **Meta-tools** optionally group individual tools into 33 domain meta-tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
+3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
+4. **Meta-tools** group catalog actions into 33 base tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation
@@ -291,15 +305,16 @@ make fmt     # gofmt -s -w .
 
 All error wrapping functions live in `internal/toolutil/errors.go`. Choose the right function based on this decision tree:
 
-```text
-Is the operation read-only (list, get, search)?
-  └─ YES → WrapErr(op, err)
-  └─ NO (mutating: create, update, delete) →
-       Do you know a specific corrective action for a likely status code?
-         └─ YES → Does the hint apply to a single HTTP status code?
-              └─ YES → WrapErrWithStatusHint(op, err, code, hint)
-              └─ NO  → Check status with IsHTTPStatus(), then WrapErrWithHint(op, err, hint)
-         └─ NO  → WrapErrWithMessage(op, err)
+```mermaid
+flowchart TD
+    start{Is the operation read-only?}
+    start -->|list / get / search| wrapErr[WrapErr]
+    start -->|create / update / delete| hasHint{Known corrective action?}
+    hasHint -->|No| wrapMsg[WrapErrWithMessage]
+    hasHint -->|Yes| statusHint{Hint applies to one HTTP status?}
+    statusHint -->|Yes| wrapStatus[WrapErrWithStatusHint]
+    statusHint -->|No| checkStatus[Check IsHTTPStatus]
+    checkStatus --> wrapHint[WrapErrWithHint]
 ```
 
 ### Quick reference

@@ -58,7 +58,7 @@ gitlab-mcp-server/
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic search/describe/execute surface over catalog routes
-│   │   ├── markdown.go          # Thin delegator to type-based markdown registry (toolutil.MarkdownForResult)
+│   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
 │   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
 │   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
 │   │   ├── logging.go           # logToolCall helper

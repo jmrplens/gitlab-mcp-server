@@ -31,13 +31,16 @@ Cada meta-herramienta define un enum `action` que lista todas las operaciones di
 
 ```mermaid
 flowchart LR
-    A[LLM llama a gitlab_issue] --> B{parámetro action}
-    B -->|list| C[Handler de listar issues]
-    B -->|get| D[Handler de obtener issue]
-    B -->|create| E[Handler de crear issue]
-    B -->|update| F[Handler de actualizar issue]
-    B -->|delete| G[Handler de eliminar issue]
-    B -->|close| H[Handler de cerrar issue]
+	A[LLM llama a gitlab_issue] --> B{parámetro action}
+	B --> C[Mapa de acciones del catálogo]
+	C -->|list| D[ActionRoute issue.list]
+	C -->|get| E[ActionRoute issue.get]
+	C -->|create| F[ActionRoute issue.create]
+	C -->|update/delete/etc.| G[Otras rutas de issue]
+	D --> H[Handlers tipados de issue]
+	E --> H
+	F --> H
+	G --> H
 ```
 
 El parámetro action siempre es requerido y debe ser uno de los valores enumerados. Los parámetros adicionales dependen de la acción elegida.
@@ -274,11 +277,11 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                                                                                                           |
-| -------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                                                |
-| `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                                                    |
-| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene solo `gitlab://workspace/roots` y omite recursos opcionales, meta-schema, guías y prompts.                         |
-| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema requieren `CAPABILITY_SURFACE=full`.                                  |
-| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                                                |
-| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                                             |
+| Variable             | Predeterminado | Descripción                                                                                                                                                                  |
+| -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                       |
+| `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                          |
+| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene solo `gitlab://workspace/roots` y omite recursos opcionales, meta-schema, guías y prompts. |
+| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema requieren `CAPABILITY_SURFACE=full`.          |
+| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                       |
+| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                    |

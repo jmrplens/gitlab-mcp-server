@@ -57,7 +57,7 @@ graph LR
     MCP -->|HTTPS| GQL
 ```
 
-AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab API calls (REST for ~155 domains, GraphQL for 7 domains) and returns structured responses. See [GraphQL Integration](graphql.md) for details on which domains use GraphQL and why.
+AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab API calls (primarily REST v4, with GraphQL for domains where REST is deprecated, unavailable, or less efficient) and returns structured responses. See [GraphQL Integration](graphql.md) for details on which domains use GraphQL and why.
 
 ## Container View
 
@@ -67,12 +67,14 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        TOOLS[tools<br/>1006 self-managed / 1011 GitLab.com Enterprise handlers<br/>in 163 domain sub-packages]
+        SPECS[domain ActionSpecs<br/>163 domain sub-packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
-        META[metatool<br/>33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise meta-tools]
-        DYN[dynamic<br/>3 visible tools over canonical action catalog]
-        SAMP[sampling_tools<br/>11 LLM-assisted tools]
-        ELIC[elicitation_tools<br/>4 interactive tools]
+        STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
+        IND[individual projection<br/>1006 self-managed / 1011 GitLab.com Enterprise tools]
+        META[meta projection<br/>33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise tools]
+        DYN[dynamic projection<br/>3 visible search / describe / execute tools]
+        SAMP[sampling support<br/>11 LLM-assisted actions]
+        ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>46 resource handlers]
         PROMPTS[prompts<br/>38 prompt handlers]
         LOG[logging<br/>Session logging]
@@ -94,24 +96,30 @@ graph TD
     SRV --> STDIO
     HTTP --> POOL
     POOL -->|one server per token+URL| SRV
-    TOOLS --> GL
-    META --> CATALOG
-    DYN --> CATALOG
-    CATALOG --> TOOLS
+    SPECS --> CATALOG
+    CATALOG --> IND
+    CATALOG --> META
+    CATALOG --> DYN
+    CATALOG --> SAMP
+    STANDALONE --> ELIC
+    STANDALONE -.->|dynamic route injection| DYN
+    IND --> GL
+    META --> GL
+    DYN --> GL
     SAMP --> GL
+    ELIC --> GL
     SAMP --> SAMPLING
     ELIC --> ELICIT
-    ELIC --> GL
     RES --> GL
     PROMPTS --> GL
-    MAIN -->|register| TOOLS
-    MAIN -->|register| META
-    MAIN -->|register| DYN
-    MAIN -->|register| SAMP
-    MAIN -->|register| ELIC
+    MAIN -->|builds| CATALOG
+    MAIN -->|selects| IND
+    MAIN -->|selects| META
+    MAIN -->|selects| DYN
+    MAIN -->|registers standalone| STANDALONE
     MAIN -->|register| RES
     MAIN -->|register| PROMPTS
-    TOOLS -.->|icons| ICN
+    CATALOG -.->|icons| ICN
     RES -.->|icons| ICN
     PROMPTS -.->|icons| ICN
     MAIN -->|setup| LOG
@@ -184,7 +192,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `meta_catalog.go`  | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog |
 | `actioncatalog/`  | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
-| `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
+| `markdown.go`      | Thin `markdownForResult` delegator to the type-based Markdown registry |
 | `pagination.go`    | Shared pagination type aliases                                |
 | `errors.go`        | Error helpers (`wrapErr`, `handleGitLabError`)                |
 | `logging.go`       | `logToolCall` helper                                          |
@@ -279,7 +287,7 @@ sequenceDiagram
     TOOL->>GL: GET /api/v4/projects?owned=true
     GL-->>TOOL: JSON response
     TOOL-->>META: ListOutput
-    META->>META: markdownForResult(ListOutput)
+    META->>META: toolutil.MarkdownForResult(ListOutput)
     META-->>MCP: CallToolResult (Markdown + structured JSON)
     MCP-->>LLM: JSON-RPC response
 ```
@@ -465,7 +473,7 @@ graph TD
     ROUTE --> WRAP["RouteAction[I, O]<br/>(generic adapter)"]
     WRAP --> UNMARSHAL["JSON unmarshal<br/>params → InputStruct"]
     UNMARSHAL --> HANDLER["Typed handler<br/>func(ctx, client, input)"]
-    HANDLER --> MARKDOWN["markdownForResult<br/>(format output)"]
+    HANDLER --> MARKDOWN["toolutil.MarkdownForResult<br/>(registered formatter)"]
 ```
 
 ### Pattern 3: Destructive Action Confirmation
