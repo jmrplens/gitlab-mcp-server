@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,917 |
-| Unit test functions | 9,668 |
+| Total test functions | 9,919 |
+| Unit test functions | 9,670 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,15 +28,15 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.8% |
-| Overall coverage (`go test ./internal/...`) | 98.0% |
+| Overall coverage (`go test ./internal/...`) | 98.1% |
 | Average package coverage | 95.0% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,902 | 89.8% |
-| `TestFunc` (no underscore) | 734 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,903 | 89.8% |
+| `TestFunc` (no underscore) | 735 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,260 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,262 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,917** | **567** |  |
+| **Total** | **9,919** | **567** |  |
 
 ### Core Packages
 
@@ -101,7 +101,7 @@
 | snippets | 78 | 99.5% | 15 |
 | tags | 77 | 100.0% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
-| milestones | 67 | 97.8% | 7 |
+| milestones | 69 | 100.0% | 7 |
 | repository | 66 | 100.0% | 9 |
 
 ### Complete Tool Sub-Package Test Counts
@@ -214,7 +214,7 @@
 | mergerequests | 214 | 1 | 96.7% | 30 |
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
-| milestones | 67 | 1 | 97.8% | 7 |
+| milestones | 69 | 1 | 100.0% | 7 |
 | modelregistry | 5 | 3 | 100.0% | 1 |
 | mrapprovals | 60 | 3 | 100.0% | 7 |
 | mrapprovalsettings | 9 | 2 | 100.0% | 4 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,260** | **337** |  | **1,106** |
+| **Total** | **7,262** | **337** |  | **1,106** |
 
 </details>
 
@@ -437,7 +437,7 @@
 | mergerequests | 96.7% |
 | mergetrains | 100.0% |
 | metadata | 100.0% |
-| milestones | 97.8% |
+| milestones | 100.0% |
 | modelregistry | 100.0% |
 | mrapprovals | 100.0% |
 | mrapprovalsettings | 100.0% |
