@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,961 |
-| Unit test functions | 9,712 |
+| Total test functions | 9,969 |
+| Unit test functions | 9,720 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,944 | 89.8% |
-| `TestFunc` (no underscore) | 736 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 8,948 | 89.8% |
+| `TestFunc` (no underscore) | 740 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,304 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,312 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,961** | **567** |  |
+| **Total** | **9,969** | **567** |  |
 
 ### Core Packages
 
@@ -79,7 +79,7 @@
 | Sub-package | Tests | Coverage | Tools |
 | --- | ---: | ---: | ---: |
 | projects | 328 | 95.3% | 54 |
-| mergerequests | 214 | 96.7% | 30 |
+| mergerequests | 222 | 99.9% | 30 |
 | issues | 206 | 100.0% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
@@ -211,7 +211,7 @@
 | markdown | 8 | 1 | 100.0% | 1 |
 | memberroles | 40 | 3 | 100.0% | 6 |
 | members | 59 | 2 | 100.0% | 6 |
-| mergerequests | 214 | 1 | 96.7% | 30 |
+| mergerequests | 222 | 1 | 99.9% | 30 |
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
 | milestones | 69 | 1 | 100.0% | 7 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,304** | **337** |  | **1,106** |
+| **Total** | **7,312** | **337** |  | **1,106** |
 
 </details>
 
@@ -434,7 +434,7 @@
 | markdown | 100.0% |
 | memberroles | 100.0% |
 | members | 100.0% |
-| mergerequests | 96.7% |
+| mergerequests | 99.9% |
 | mergetrains | 100.0% |
 | metadata | 100.0% |
 | milestones | 100.0% |
