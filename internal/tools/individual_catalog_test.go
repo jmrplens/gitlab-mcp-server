@@ -236,6 +236,199 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	}
 }
 
+func TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools(t *testing.T) {
+	newSpec := func(actionName, toolName string) toolutil.ActionSpec {
+		return toolutil.NewActionSpec(actionName, toolutil.RouteAction(nil,
+			func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			}), toolutil.ActionSpecOptions{
+			ReadOnly:       true,
+			Idempotent:     true,
+			OpenWorld:      true,
+			OwnerPackage:   "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: toolName, Title: toolutil.TitleFromName(toolName), Description: "Test tool."},
+		})
+	}
+
+	catalog := testIndividualCatalog(t,
+		newSpec("keep", "gitlab_test_keep"),
+		newSpec("skip", "gitlab_test_skip"),
+		newSpec("excluded", "gitlab_test_excluded"),
+		newSpec("duplicate_a", "gitlab_test_duplicate"),
+		newSpec("duplicate_b", "gitlab_test_duplicate"),
+	)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
+		AllowedToolNames: []string{"gitlab_test_keep", "gitlab_test_excluded", "gitlab_test_duplicate"},
+		ExcludeToolNames: []string{"gitlab_test_excluded"},
+	})
+
+	names := toolNamesFromServer(t, server)
+	if strings.Join(names, ",") != "gitlab_test_duplicate,gitlab_test_keep" {
+		t.Fatalf("registered tools = %v, want duplicate once and keep", names)
+	}
+}
+
+func TestRegisterIndividualCatalogTools_SkipsIneligibleGroup(t *testing.T) {
+	spec := toolutil.NewActionSpec("runtime", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		ReadOnly:       true,
+		Idempotent:     true,
+		OpenWorld:      true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_runtime", Title: "Runtime", Description: "Runtime utility."},
+	})
+	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
+		ToolName:     "gitlab_test_runtime",
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindRuntimeUtility,
+	}, []toolutil.ActionSpec{spec})
+	if err != nil {
+		t.Fatalf("GroupFromSpecs() error = %v", err)
+	}
+	catalog := actioncatalog.NewCatalog()
+	if err = catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+	if names := toolNamesFromServer(t, server); len(names) != 0 {
+		t.Fatalf("registered tools = %v, want none", names)
+	}
+}
+
+func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testing.T) {
+	called := false
+	spec := toolutil.NewActionSpec("delete", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			called = true
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		Destructive:    true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_delete", Title: "Delete", Description: "Delete test."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		_ = serverSession.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Close()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_test_delete", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if called {
+		t.Fatal("destructive handler executed after declined confirmation")
+	}
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "Operation canceled") {
+		t.Fatalf("result = %#v, want cancellation", result.Content)
+	}
+}
+
+func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) {
+	newAction := func(name, usage string) actioncatalog.Action {
+		return actioncatalog.Action{
+			Name: name,
+			Route: toolutil.ActionRoute{
+				Handler:      func(context.Context, map[string]any) (any, error) { return nil, nil },
+				InputSchema:  map[string]any{"type": "object"},
+				OutputSchema: map[string]any{"type": "object"},
+			},
+			Usage:        usage,
+			OwnerPackage: "tools",
+			IndividualTool: toolutil.IndividualToolSpec{
+				Name:  "gitlab_test_" + name,
+				Title: toolutil.TitleFromName("gitlab_test_" + name),
+			},
+		}
+	}
+
+	tests := []struct {
+		name string
+		actioncatalog.Action
+		opts IndividualCatalogRegisterOptions
+		want string
+	}{
+		{
+			name:   "custom description callback",
+			Action: newAction("custom", ""),
+			opts: IndividualCatalogRegisterOptions{DescriptionForTool: func(actioncatalog.Action) string {
+				return "Generated description."
+			}},
+			want: "Generated description.",
+		},
+		{
+			name:   "usage fallback",
+			Action: newAction("usage", "Use this catalog action."),
+			want:   "Use this catalog action.",
+		},
+		{
+			name:   "title fallback",
+			Action: newAction("title", ""),
+			want:   "Test Title.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := mustIndividualToolFromCatalogAction(tt.Action, nil, tt.opts)
+			if tool.Description != tt.want {
+				t.Fatalf("Description = %q, want %q", tool.Description, tt.want)
+			}
+		})
+	}
+}
+
+func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
+	action := actioncatalog.Action{
+		Name: "broken",
+		Route: toolutil.ActionRoute{
+			Handler:     func(context.Context, map[string]any) (any, error) { return nil, nil },
+			InputSchema: map[string]any{"type": "object"},
+		},
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_broken", Title: "Broken"},
+	}
+	assertPanics(t, func() { _ = mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{}) })
+}
+
+func TestIndividualCatalogActionReadOnly_AnnotationOverride(t *testing.T) {
+	readOnly := true
+	action := actioncatalog.Action{
+		ReadOnly: false,
+		IndividualTool: toolutil.IndividualToolSpec{AnnotationOverrides: toolutil.IndividualToolAnnotationOverrides{
+			ReadOnly: &readOnly,
+		}},
+	}
+	if !individualCatalogActionReadOnly(action) {
+		t.Fatal("individualCatalogActionReadOnly() = false, want override true")
+	}
+}
+
 // TestRegisterIndividualCatalogTools_NilInputs verifies nil server or catalog
 // inputs are ignored without panicking.
 func TestRegisterIndividualCatalogTools_NilInputs(t *testing.T) {

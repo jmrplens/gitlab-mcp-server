@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -34,7 +36,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (

@@ -135,6 +135,19 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	})
 }
 
+func TestFilterScopeFilteredCatalog_NilCatalog(t *testing.T) {
+	filtered, err := FilterScopeFilteredCatalog(nil, []string{"read_api"})
+	if err != nil {
+		t.Fatalf("FilterScopeFilteredCatalog(nil) error = %v", err)
+	}
+	if filtered == nil {
+		t.Fatal("FilterScopeFilteredCatalog(nil) returned nil catalog")
+	}
+	if filtered.CountGroups() != 0 || filtered.CountActions() != 0 {
+		t.Fatalf("filtered counts = groups %d actions %d, want empty catalog", filtered.CountGroups(), filtered.CountActions())
+	}
+}
+
 // TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.
 func TestAllScopesPresent_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {
