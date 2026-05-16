@@ -1,15 +1,15 @@
-// Command eval_meta_tools runs the meta-tool description evaluation fixture
-// against model tool calling. By default it uses a mock GitLab client for
-// catalog generation; --backend=gitlab points the in-memory MCP server at a
-// real GitLab instance such as the Docker E2E environment.
+// Command eval_mcp_surfaces evaluates model behavior across MCP tool surfaces.
+// By default it uses a mock GitLab client for catalog generation;
+// --backend=gitlab points the in-memory MCP server at a real GitLab instance
+// such as the Docker E2E environment.
 //
 // Usage:
 //
-//	go run ./cmd/eval_meta_tools/
-//	go run ./cmd/eval_meta_tools/ --max-tasks=5
-//	go run ./cmd/eval_meta_tools/ --dry-run
-//	go run ./cmd/eval_meta_tools/ --tools-file /tmp/tools_meta.json
-//	go run ./cmd/eval_meta_tools/ --publish-docs --publish-from dist/evaluation/meta-tools/docker-read.md
+//	go run ./cmd/eval_mcp_surfaces/
+//	go run ./cmd/eval_mcp_surfaces/ --max-tasks=5
+//	go run ./cmd/eval_mcp_surfaces/ --dry-run
+//	go run ./cmd/eval_mcp_surfaces/ --tools-file /tmp/tools_mcp_surfaces.json
+//	go run ./cmd/eval_mcp_surfaces/ --publish-docs --publish-from dist/evaluation/mcp-surfaces/docker-read.md
 package main
 
 import (
@@ -51,11 +51,11 @@ import (
 
 const (
 	// defaultTasksPath identifies the default tasks path constant used by this package.
-	defaultTasksPath = "cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md"
+	defaultTasksPath = "cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md"
 	// defaultEvalDir identifies the default eval dir constant used by this package.
-	defaultEvalDir = "dist/evaluation/meta-tools"
+	defaultEvalDir = "dist/evaluation/mcp-surfaces"
 	// defaultFixtures identifies the default fixtures constant used by this package.
-	defaultFixtures = "dist/evaluation/meta-tools/e2e-fixtures.json"
+	defaultFixtures = "dist/evaluation/mcp-surfaces/e2e-fixtures.json"
 	// defaultModel identifies the default model constant used by this package.
 	defaultModel = "anthropic:claude-haiku-4-5-20251001"
 	// backendMock identifies the backend mock constant used by this package.
@@ -541,7 +541,7 @@ type simulationResult struct {
 // main starts the command-line workflow.
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "eval_meta_tools: %v\n", err)
+		fmt.Fprintf(os.Stderr, "eval_mcp_surfaces: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -805,7 +805,7 @@ func run() (runErr error) {
 func parseFlags() options {
 	var opts options
 	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
-	flag.StringVar(&opts.Output, "out", "", "Markdown report path; defaults under dist/evaluation/meta-tools")
+	flag.StringVar(&opts.Output, "out", "", "Markdown report path; defaults under dist/evaluation/mcp-surfaces")
 	flag.StringVar(&opts.TraceDir, "trace-dir", "", "Directory for per-task model trace artifacts; defaults to <report>.traces in model-backed mode")
 	flag.StringVar(&opts.Model, "model", "", "Single provider:model or legacy Anthropic model; overrides --models and EVAL_MODELS")
 	flag.StringVar(&opts.Models, "models", "", "Comma-separated provider:model list for local multi-model evaluation; defaults to EVAL_MODELS when --model is not set")
@@ -2092,7 +2092,7 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	}
 	cmd.Env = env
 	transport := &mcp.CommandTransport{Command: cmd, TerminateDuration: 5 * time.Second}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-external-client", Version: "0.0.1"}, &mcp.ClientOptions{
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-external-client", Version: "0.0.1"}, &mcp.ClientOptions{
 		CreateMessageHandler: evalCreateMessageHandler,
 		ElicitationHandler:   evalElicitationHandler,
 	})
@@ -3009,8 +3009,8 @@ func createLiveTerraformStateLock(ctx context.Context, projectID, stateName stri
 	lockBody, err := json.Marshal(map[string]string{
 		"ID":        fmt.Sprintf("eval-lock-%s", liveUniqueSuffix()),
 		"Operation": "OperationTypeApply",
-		"Info":      "eval_meta_tools terraform unlock fixture",
-		"Who":       "eval_meta_tools",
+		"Info":      "eval_mcp_surfaces terraform unlock fixture",
+		"Who":       "eval_mcp_surfaces",
 		"Version":   "1.6.0",
 		"Created":   time.Now().UTC().Format(time.RFC3339Nano),
 		"Path":      stateName,
@@ -4108,7 +4108,7 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.Cl
 
 // buildCatalogSession constructs the request parameters from the input.
 func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "eval-meta-tools", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	switch toolSurface {
 	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
@@ -4150,7 +4150,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	if _, serverErr := server.Connect(ctx, st, nil); serverErr != nil {
 		return nil, nil, nil, nil, fmt.Errorf("server connect: %w", serverErr)
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-client", Version: "0.0.1"}, &mcp.ClientOptions{
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-client", Version: "0.0.1"}, &mcp.ClientOptions{
 		CreateMessageHandler: evalCreateMessageHandler,
 		ElicitationHandler:   evalElicitationHandler,
 	})
@@ -4186,8 +4186,8 @@ func dynamicActionID(toolName, action string) string {
 // evalCreateMessageHandler handles eval create message handler and returns [*mcp.CreateMessageResult].
 func evalCreateMessageHandler(_ context.Context, _ *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 	return &mcp.CreateMessageResult{
-		Content: &mcp.TextContent{Text: "## Mock Analysis\n\nThis analysis was generated by the eval_meta_tools sampling handler."},
-		Model:   "eval-meta-tools-sampling-mock",
+		Content: &mcp.TextContent{Text: "## Mock Analysis\n\nThis analysis was generated by the eval_mcp_surfaces sampling handler."},
+		Model:   "eval-mcp-surfaces-sampling-mock",
 		Role:    "assistant",
 	}, nil
 }
@@ -4286,7 +4286,7 @@ func evalElicitationTextValue(fieldName string) string {
 	case "title":
 		return "Evaluation elicitation test"
 	case "description":
-		return "Created by eval_meta_tools elicitation handler"
+		return "Created by eval_mcp_surfaces elicitation handler"
 	case "name":
 		return fmt.Sprintf("eval-elicit-resource-%s", liveUniqueSuffix())
 	case "source_branch":
@@ -7388,7 +7388,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 // buildComparisonReport constructs the request parameters from the input.
 func buildComparisonReport(inputs []comparisonInput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Meta-Tool Evaluation Comparison\n\n")
+	fmt.Fprintf(&b, "# MCP Surface Evaluation Comparison\n\n")
 	fmt.Fprintf(&b, "Date: %s\n\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "## Inputs\n\n")
 	fmt.Fprintf(&b, "| Label | Kind | Source | Mode | Surface | Backend | Tasks | Catalog tools |\n")
@@ -7404,8 +7404,8 @@ func buildComparisonReport(inputs []comparisonInput) string {
 	writeCoverageComparison(&b, inputs)
 	fmt.Fprintf(&b, "\n## Notes\n\n")
 	fmt.Fprintf(&b, "- Compare reports generated with the same task set, partition, model, and repeat count for release decisions.\n")
-	fmt.Fprintf(&b, "- Token rows come from `cmd/audit_tokens --tools-file`; evaluation rows come from `cmd/eval_meta_tools`.\n")
-	fmt.Fprintf(&b, "- Raw traces and snapshot JSON remain local artifacts under ignored `dist/evaluation/meta-tools/`.\n")
+	fmt.Fprintf(&b, "- Token rows come from `cmd/audit_tokens --tools-file`; evaluation rows come from `cmd/eval_mcp_surfaces`.\n")
+	fmt.Fprintf(&b, "- Raw traces and snapshot JSON remain local artifacts under ignored `dist/evaluation/mcp-surfaces/`.\n")
 	return b.String()
 }
 
@@ -8067,7 +8067,7 @@ func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies b
 
 	var index strings.Builder
 	var jsonl strings.Builder
-	fmt.Fprintf(&index, "# Meta-Tool Evaluation Traces\n\n")
+	fmt.Fprintf(&index, "# MCP Surface Evaluation Traces\n\n")
 	providerTraceDescription := "provider HTTP exchange metadata"
 	if traceProviderBodies {
 		providerTraceDescription = "provider HTTP request/response bodies"

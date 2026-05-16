@@ -380,7 +380,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/toolutil/action_spec.go` | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance |
 | `internal/toolutil/metatool.go` | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers |
 | `cmd/server/main.go` | Selects `TOOL_SURFACE` and registers meta, individual, dynamic, or comparison surfaces |
-| `cmd/eval_meta_tools` | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks |
+| `cmd/eval_mcp_surfaces` | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks |
 | `test/e2e/suite/dynamic_test.go` | E2E coverage for the default dynamic three-tool surface |
 
 ### Registering New Actions
@@ -407,10 +407,10 @@ E2E_MODE=docker go test -v -tags e2e -timeout 600s \
   -run '^TestDynamicToolSurface_' ./test/e2e/suite/
 ```
 
-Model-facing evaluations can compare surfaces with `cmd/eval_meta_tools`:
+Model-facing evaluations can compare surfaces with `cmd/eval_mcp_surfaces`:
 
 ```bash
-go run ./cmd/eval_meta_tools --tool-surface=dynamic --dry-run --partition base-read
+go run ./cmd/eval_mcp_surfaces --tool-surface=dynamic --dry-run --partition base-read
 ```
 
 Use `dynamic-3` when you need to pin the explicit three-tool selector. Use `dynamic` for production-like configuration.

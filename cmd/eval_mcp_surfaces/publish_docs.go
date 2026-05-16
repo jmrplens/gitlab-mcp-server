@@ -337,7 +337,7 @@ func readPublishReport(path string) (publishReport, error) {
 		return publishReport{}, err
 	}
 	if input.Kind != "evaluation" {
-		return publishReport{}, fmt.Errorf("publish input %s must be an eval_meta_tools evaluation report", path)
+		return publishReport{}, fmt.Errorf("publish input %s must be an eval_mcp_surfaces evaluation report", path)
 	}
 	data, err := os.ReadFile(path) // #nosec G304 -- explicit developer-provided report path.
 	if err != nil {
@@ -906,7 +906,7 @@ func buildModelResultsBlock(label string, reports []publishReport) string {
 	}
 	fmt.Fprintf(&b, "| **Aggregate** | **all selected** | - | **%d** | **%d** | **%d** | **%d** | **%s** | **%s** | **%s** | **%s** | **%s** | **%s** | - | - |\n",
 		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ModelRequests, aggregate.ToolCalls, formatMetric(aggregate.ToolSelection), formatMetric(aggregate.ActionSelection), formatMetric(aggregate.FirstPass), formatRepairMetric(aggregate), formatMetric(aggregate.DestructiveSafety), formatMetric(aggregate.FinalSuccess))
-	fmt.Fprintf(&b, "\nPublished with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.\n")
+	fmt.Fprintf(&b, "\nPublished with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.\n")
 	return strings.TrimSpace(b.String()) + "\n"
 }
 

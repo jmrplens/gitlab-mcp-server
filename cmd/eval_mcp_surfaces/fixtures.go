@@ -1684,7 +1684,7 @@ func fixtureRemoteURL(baseURL, projectPath string) string {
 
 // fixtureReadme returns readme fixture content.
 func fixtureReadme() string {
-	return "# GitLab MCP Server Evaluation Fixture\n\nThis repository is seeded by cmd/eval_meta_tools for live MCP evaluation.\n\nfunc RegisterMCPMeta() {}\n\nTODO: keep evaluation coverage representative.\n"
+	return "# GitLab MCP Server Evaluation Fixture\n\nThis repository is seeded by cmd/eval_mcp_surfaces for live MCP evaluation.\n\nfunc RegisterMCPMeta() {}\n\nTODO: keep evaluation coverage representative.\n"
 }
 
 // fixtureCI returns CI fixture content.

@@ -1,6 +1,6 @@
-# Automated Meta-Tool Evaluation Cases
+# Automated MCP Surface Evaluation Cases
 
-This document is both a human-readable reference and the default fixture parsed by `cmd/eval_meta_tools`.
+This document is both a human-readable reference and the default fixture parsed by `cmd/eval_mcp_surfaces`.
 
 The rows beginning with `MT-*`, `MS-*`, and `MF-*` are executable fixture rows. The harness reads this file, extracts those rows, sends the `Prompt` text to the model with a fixed wrapper, and validates the model's tool calls against the expected route, required parameters, step order, and destructive confirmation rules.
 
@@ -12,7 +12,7 @@ By default, the evaluation tests the model-facing MCP catalog without executing 
 | --- | --- |
 | Tool catalog | The model receives the generated MCP `tools/list` catalog converted to provider-specific tool/function definitions. |
 | Route selection | The model must choose the expected MCP tool and action for each prompt. |
-| Parameter shape | Action-based meta-tools must use `{ "action": "...", "params": { ... } }`; standalone tools must use top-level input fields. |
+| Parameter shape | Action-based dispatcher tools must use `{ "action": "...", "params": { ... } }`; standalone tools must use top-level input fields. |
 | Required parameters | The expected required parameter names must be present in the emitted tool call. |
 | Schema discovery | The model may call `gitlab_server` / `schema_index` or `schema_get`; the harness returns the real derived action schema. |
 | Repair behavior | If the first final call fails validation, the harness returns an error `tool_result` and allows one repair attempt. |
@@ -39,7 +39,7 @@ The harness does not start an external MCP process. It always uses in-memory MCP
 
 Use the existing Docker E2E GitLab environment when validating real execution. The setup scripts write `test/e2e/.env.docker`, including `E2E_MODE=docker`; `--execute-tools` requires this guard unless `--allow-live-mutations` is set explicitly.
 
-The live catalog follows the MCP server configuration loaded from the environment. Keep `GITLAB_ENTERPRISE=false` for Docker CE runs so Enterprise/Premium-only meta-tool routes are not advertised against an instance that cannot execute them.
+The live catalog follows the MCP server configuration loaded from the environment. Keep `GITLAB_ENTERPRISE=false` for Docker CE runs so Enterprise/Premium-only routes are not advertised against an instance that cannot execute them.
 
 ```bash
 docker compose -f test/e2e/docker-compose.yml up -d
@@ -51,32 +51,32 @@ docker compose -f test/e2e/docker-compose.yml up -d
 Run a read-only backend smoke test without calling a model provider:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-read \
     --use-fixtures=false \
     --mcp-smoke \
     --dry-run \
     --max-tasks=10 \
-    --out dist/evaluation/meta-tools/e2e-backend-dry-run.md
+    --out dist/evaluation/mcp-surfaces/e2e-backend-dry-run.md
 ```
 
 Prepare the live fixture resources used by placeholder-heavy cases before running broad real-execution sweeps. The fixture state is generated under `dist/` and is intentionally not committed:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-read \
     --prepare-fixtures \
     --fixtures-only \
-    --fixtures dist/evaluation/meta-tools/e2e-fixtures.json
+    --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json
 ```
 
 Use the generated IDs when validating or executing the default task file:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-read \
     --use-fixtures \
-    --fixtures dist/evaluation/meta-tools/e2e-fixtures.json \
+    --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
     --dry-run
 ```
 
@@ -85,20 +85,20 @@ For broad real-execution runs, use the partition flags as evaluation batching on
 Run read-like cases first so fixture-consuming actions do not invalidate later checks:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-read \
-    --fixtures dist/evaluation/meta-tools/e2e-fixtures.json \
-    --out dist/evaluation/meta-tools/live-docker-read.md
+    --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
+    --out dist/evaluation/mcp-surfaces/live-docker-read.md
 ```
 
 Regenerate fixtures before mutation or destructive sweeps, then run state-changing cases in small batches:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-destructive-safe \
-    --fixtures dist/evaluation/meta-tools/e2e-fixtures.json \
+    --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
     --task MS-014,MS-017,MS-020,MS-028,MS-032 \
-    --out dist/evaluation/meta-tools/live-docker-destructive-smoke.md
+    --out dist/evaluation/mcp-surfaces/live-docker-destructive-smoke.md
 ```
 
 `--skip-destructive` and `--only-destructive` remain available when the goal is only to split calls that require explicit `confirm:true` safety handling.
@@ -106,12 +106,12 @@ go run ./cmd/eval_meta_tools \
 Run one model-backed task with real MCP tool execution:
 
 ```bash
-go run ./cmd/eval_meta_tools \
+go run ./cmd/eval_mcp_surfaces \
     --preset docker-read \
     --mcp-smoke \
-    --fixtures dist/evaluation/meta-tools/e2e-fixtures.json \
+    --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
     --task MT-001 \
-    --out dist/evaluation/meta-tools/e2e-execute-MT-001.md
+    --out dist/evaluation/mcp-surfaces/e2e-execute-MT-001.md
 ```
 
 ## Evaluation Flow

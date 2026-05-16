@@ -24,8 +24,8 @@ correctly.
 | --- | --- | --- | --- |
 | Unit tests | `go test ./internal/... ./cmd/...` | Mock `httptest` servers | Handler logic, schema validation, formatting, routing, and error handling. |
 | E2E tests | `go test -tags e2e ./test/e2e/suite/` | Real GitLab, self-hosted or Docker | The MCP server can execute registered tools against GitLab APIs. |
-| Schema model evaluation | `cmd/eval_meta_tools --preset schema-enterprise` | Mock catalog | Models can select tools/actions and shape arguments from the MCP schema and descriptions. |
-| Docker model evaluation | `cmd/eval_meta_tools --preset docker-* --execute-tools` | Docker GitLab CE | Models can drive real MCP calls against a populated GitLab instance, including safe mutations. |
+| Schema model evaluation | `cmd/eval_mcp_surfaces --preset schema-enterprise` | Mock catalog | Models can select tools/actions and shape arguments from the MCP schema and descriptions. |
+| Docker model evaluation | `cmd/eval_mcp_surfaces --preset docker-* --execute-tools` | Docker GitLab CE | Models can drive real MCP calls against a populated GitLab instance, including safe mutations. |
 
 ## When To Use Each Layer
 
@@ -39,9 +39,9 @@ a real GitLab API.
 ## Result Policy
 
 Generated model reports and traces are written under
-`dist/evaluation/meta-tools/` and are intentionally ignored by Git. Publish only
+`dist/evaluation/mcp-surfaces/` and are intentionally ignored by Git. Publish only
 curated summaries in [AI Model Evaluation Results](model-results.md). Use
-`cmd/eval_meta_tools --publish-docs --publish-from <report>` after the selected
+`cmd/eval_mcp_surfaces --publish-docs --publish-from <report>` after the selected
 reports have been reviewed; use `--check-docs` to verify the managed blocks
 without writing. A curated summary should include the model ID, evaluation mode,
 preset or task set, number of expected operations, emitted model/tool calls,

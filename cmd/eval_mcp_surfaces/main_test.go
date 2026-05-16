@@ -4265,7 +4265,7 @@ func TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CallTool() error = %v", err)
 	}
-	if got := toolResultContent(result); !strings.Contains(got, "eval-meta-tools-sampling-mock") {
+	if got := toolResultContent(result); !strings.Contains(got, "eval-mcp-surfaces-sampling-mock") {
 		t.Fatalf("sampling result = %q, want evaluator sampling model", got)
 	}
 }
@@ -4381,7 +4381,7 @@ Mode: static route/schema validation
 Model: ` + "`claude-sonnet-4-6`" + `
 Backend: ` + "`mock`" + `
 Tool execution: ` + "`none`" + `
-Tools file: ` + "`dist/evaluation/meta-tools/snapshots/current-abc123/tools.json`" + `
+Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.json`" + `
 Partition: ` + "`base-read`" + `
 Catalog tools: 7
 Runs: 1
@@ -4433,7 +4433,7 @@ Task attempts: 3
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
 
-Tools file: ` + "`dist/evaluation/meta-tools/snapshots/current-abc123/tools.json`" + `
+Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.json`" + `
 
 | Metric | Value |
 | --- | ---: |
@@ -4912,8 +4912,8 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 
 // TestDefaultTraceDir_ReplacesReportExtension verifies DefaultTraceDir when replaces report extension.
 func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
-	got := defaultTraceDir("dist/evaluation/meta-tools/report.md")
-	if got != "dist/evaluation/meta-tools/report.traces" {
+	got := defaultTraceDir("dist/evaluation/mcp-surfaces/report.md")
+	if got != "dist/evaluation/mcp-surfaces/report.traces" {
 		t.Fatalf("defaultTraceDir() = %q, want report.traces", got)
 	}
 }
@@ -4921,7 +4921,7 @@ func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
 // TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
 func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
 	got := defaultOutputPath("claude/sonnet:4 6")
-	if !strings.HasPrefix(got, "dist/evaluation/meta-tools/model-") {
+	if !strings.HasPrefix(got, "dist/evaluation/mcp-surfaces/model-") {
 		t.Fatalf("defaultOutputPath() = %q, want dist evaluation path", got)
 	}
 	if !strings.HasSuffix(got, "-claude-sonnet-4-6.md") {
