@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,838 |
-| Unit test functions | 9,589 |
+| Total test functions | 9,845 |
+| Unit test functions | 9,596 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,840 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,847 | 89.9% |
 | `TestFunc` (no underscore) | 718 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,181 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,188 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,838** | **567** |  |
+| **Total** | **9,845** | **567** |  |
 
 ### Core Packages
 
@@ -172,7 +172,7 @@
 | groupboards | 54 | 2 | 98.7% | 10 |
 | groupcredentials | 33 | 3 | 97.4% | 4 |
 | groupepicboards | 8 | 2 | 100.0% | 2 |
-| groupimportexport | 25 | 1 | 96.5% | 3 |
+| groupimportexport | 27 | 1 | 100.0% | 3 |
 | groupiterations | 19 | 1 | 100.0% | 1 |
 | grouplabels | 48 | 2 | 100.0% | 7 |
 | groupldap | 10 | 2 | 100.0% | 4 |
@@ -215,7 +215,7 @@
 | mergetrains | 10 | 2 | 100.0% | 4 |
 | metadata | 8 | 1 | 100.0% | 1 |
 | milestones | 65 | 1 | 96.6% | 7 |
-| modelregistry | 4 | 3 | 96.7% | 1 |
+| modelregistry | 5 | 3 | 100.0% | 1 |
 | mrapprovals | 60 | 3 | 100.0% | 7 |
 | mrapprovalsettings | 9 | 2 | 100.0% | 4 |
 | mrchanges | 32 | 1 | 100.0% | 4 |
@@ -251,7 +251,7 @@
 | resourcegroups | 16 | 1 | 100.0% | 4 |
 | runnercontrollers | 29 | 2 | 97.6% | 5 |
 | runnercontrollerscopes | 30 | 2 | 97.1% | 5 |
-| runnercontrollertokens | 33 | 2 | 96.6% | 5 |
+| runnercontrollertokens | 37 | 2 | 100.0% | 5 |
 | runners | 101 | 2 | 96.9% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,181** | **337** |  | **1,106** |
+| **Total** | **7,188** | **337** |  | **1,106** |
 
 </details>
 
@@ -395,7 +395,7 @@
 | groupboards | 98.7% |
 | groupcredentials | 97.4% |
 | groupepicboards | 100.0% |
-| groupimportexport | 96.5% |
+| groupimportexport | 100.0% |
 | groupiterations | 100.0% |
 | grouplabels | 100.0% |
 | groupldap | 100.0% |
@@ -438,7 +438,7 @@
 | mergetrains | 100.0% |
 | metadata | 100.0% |
 | milestones | 96.6% |
-| modelregistry | 96.7% |
+| modelregistry | 100.0% |
 | mrapprovals | 100.0% |
 | mrapprovalsettings | 100.0% |
 | mrchanges | 100.0% |
@@ -474,7 +474,7 @@
 | resourcegroups | 100.0% |
 | runnercontrollers | 97.6% |
 | runnercontrollerscopes | 97.1% |
-| runnercontrollertokens | 96.6% |
+| runnercontrollertokens | 100.0% |
 | runners | 96.9% |
 | samplingtools | 100.0% |
 | search | 100.0% |

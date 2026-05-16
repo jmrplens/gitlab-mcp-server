@@ -57,6 +57,10 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download ml model package", err, http.StatusNotFound, "verify project_id, model_version_id, path, and filename")
 	}
 
+	return downloadOutput(in, reader)
+}
+
+func downloadOutput(in DownloadInput, reader io.Reader) (DownloadOutput, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return DownloadOutput{}, toolutil.WrapErrWithMessage("read ml model package content", err)

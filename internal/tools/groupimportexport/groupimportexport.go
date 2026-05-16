@@ -61,6 +61,10 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("download_group_export", err, http.StatusNotFound, "export must be scheduled first with gitlab_schedule_group_export")
 	}
 
+	return exportDownloadOutput(reader)
+}
+
+func exportDownloadOutput(reader io.Reader) (ExportDownloadOutput, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return ExportDownloadOutput{}, toolutil.WrapErrWithMessage("download_group_export", fmt.Errorf("reading export data: %w", err))
