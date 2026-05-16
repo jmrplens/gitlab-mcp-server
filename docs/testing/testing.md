@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,893 |
-| Unit test functions | 9,644 |
+| Total test functions | 9,899 |
+| Unit test functions | 9,650 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,889 | 89.9% |
-| `TestFunc` (no underscore) | 723 | 7.3% |
+| `TestFunc_Scenario` (2-part) | 8,893 | 89.8% |
+| `TestFunc` (no underscore) | 725 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,236 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,242 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,893** | **567** |  |
+| **Total** | **9,899** | **567** |  |
 
 ### Core Packages
 
@@ -81,9 +81,9 @@
 | projects | 328 | 95.3% | 54 |
 | mergerequests | 212 | 96.1% | 30 |
 | issues | 200 | 97.1% | 21 |
-| users | 184 | 99.9% | 36 |
+| users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
-| groups | 123 | 99.6% | 18 |
+| groups | 125 | 100.0% | 18 |
 | dynamic | 120 | 98.9% | 4 |
 | jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
@@ -183,7 +183,7 @@
 | groupprotectedenvs | 12 | 2 | 100.0% | 5 |
 | grouprelationsexport | 25 | 2 | 100.0% | 2 |
 | groupreleases | 14 | 3 | 100.0% | 1 |
-| groups | 123 | 3 | 99.6% | 18 |
+| groups | 125 | 3 | 100.0% | 18 |
 | groupsaml | 23 | 4 | 100.0% | 4 |
 | groupscim | 27 | 3 | 100.0% | 4 |
 | groupserviceaccounts | 19 | 2 | 100.0% | 7 |
@@ -221,7 +221,7 @@
 | mrchanges | 32 | 1 | 100.0% | 4 |
 | mrcontextcommits | 22 | 1 | 100.0% | 3 |
 | mrdiscussions | 46 | 1 | 98.9% | 7 |
-| mrdraftnotes | 61 | 2 | 98.5% | 7 |
+| mrdraftnotes | 64 | 2 | 100.0% | 7 |
 | mrnotes | 37 | 2 | 100.0% | 5 |
 | namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
@@ -275,11 +275,11 @@
 | usagedata | 27 | 1 | 100.0% | 6 |
 | useremails | 24 | 2 | 100.0% | 6 |
 | usergpgkeys | 44 | 2 | 100.0% | 8 |
-| users | 184 | 12 | 99.9% | 36 |
+| users | 185 | 12 | 100.0% | 36 |
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,236** | **337** |  | **1,106** |
+| **Total** | **7,242** | **337** |  | **1,106** |
 
 </details>
 
@@ -406,7 +406,7 @@
 | groupprotectedenvs | 100.0% |
 | grouprelationsexport | 100.0% |
 | groupreleases | 100.0% |
-| groups | 99.6% |
+| groups | 100.0% |
 | groupsaml | 100.0% |
 | groupscim | 100.0% |
 | groupserviceaccounts | 100.0% |
@@ -444,7 +444,7 @@
 | mrchanges | 100.0% |
 | mrcontextcommits | 100.0% |
 | mrdiscussions | 98.9% |
-| mrdraftnotes | 98.5% |
+| mrdraftnotes | 100.0% |
 | mrnotes | 100.0% |
 | namespaces | 98.9% |
 | notifications | 100.0% |
@@ -498,7 +498,7 @@
 | usagedata | 100.0% |
 | useremails | 100.0% |
 | usergpgkeys | 100.0% |
-| users | 99.9% |
+| users | 100.0% |
 | vulnerabilities | 98.4% |
 | wikis | 98.7% |
 | workitems | 100.0% |

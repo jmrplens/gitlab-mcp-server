@@ -4,6 +4,7 @@ package groups
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,21 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 	if _, ok := result.(groupNotFoundOutput); !ok {
 		t.Fatalf("result type = %T, want groupNotFoundOutput", result)
+	}
+}
+
+// TestFormatGroupNotFound verifies not-found result formatting for group lookups.
+func TestFormatGroupNotFound(t *testing.T) {
+	result := formatGroupNotFound(groupNotFoundOutput{Identifier: "my%2Fgroup"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatGroupNotFound() = %+v, want error result", result)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(content.Text, "Group") || !strings.Contains(content.Text, "my%2Fgroup") {
+		t.Fatalf("content = %q, want group identifier", content.Text)
 	}
 }
 
