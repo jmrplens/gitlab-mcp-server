@@ -1,4 +1,3 @@
-// Package impersonationtokens register_test exercises canonical ActionSpecs routes.
 package impersonationtokens
 
 import (

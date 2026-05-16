@@ -1,7 +1,3 @@
-// Package commits implements GitLab commit operations including listing,
-// getting, creating commits, retrieving diffs, refs, comments, statuses,
-// merge requests by commit, cherry-pick, revert, and GPG signatures.
-// It exposes typed input/output structs and handler functions registered as MCP tools.
 package commits
 
 import (

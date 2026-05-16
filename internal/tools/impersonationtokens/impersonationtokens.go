@@ -1,5 +1,3 @@
-// Package impersonationtokens implements GitLab impersonation token
-// and personal access token management operations.
 package impersonationtokens
 
 import (

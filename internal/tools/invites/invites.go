@@ -1,5 +1,3 @@
-// Package invites implements MCP tools for GitLab invitation operations
-// including listing pending invitations and inviting users to projects/groups.
 package invites
 
 import (

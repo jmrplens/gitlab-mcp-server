@@ -1,6 +1,3 @@
-// Package externalstatuschecks implements MCP tool handlers for GitLab
-// external status check operations. It wraps the ExternalStatusChecks
-// service from client-go v2, covering both deprecated and current endpoints.
 package externalstatuschecks
 
 import (

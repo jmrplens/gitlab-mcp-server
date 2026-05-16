@@ -1,7 +1,3 @@
-// Package runners implements GitLab Runners API operations as MCP tools.
-// It supports listing, getting, updating, removing runners, managing project/group
-// runner assignments, listing runner jobs, registering/verifying runners,
-// and resetting runner authentication tokens.
 package runners
 
 import (

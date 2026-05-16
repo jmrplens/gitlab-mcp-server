@@ -1627,7 +1627,7 @@ func TriggerTestHook(ctx context.Context, client *gitlabclient.Client, input Tri
 	return TriggerTestHookOutput{Message: fmt.Sprintf("Test event '%s' triggered for hook %d", input.Event, input.HookID)}, nil
 }
 
-// boolIcon implements the bool icon helper used by projects.
+// boolIcon formats project boolean settings consistently in Markdown output.
 func boolIcon(v bool) string {
 	return toolutil.BoolEmoji(v)
 }

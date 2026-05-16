@@ -1,6 +1,3 @@
-// Package mrdraftnotes implements MCP tool handlers for GitLab merge request
-// draft notes (pending review comments). It supports list, get, create, update,
-// delete, publish, and publish-all operations via the MR DraftNotes API.
 package mrdraftnotes
 
 import (

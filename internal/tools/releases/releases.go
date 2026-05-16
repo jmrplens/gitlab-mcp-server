@@ -1,6 +1,3 @@
-// Package releases implements MCP tool handlers for GitLab release operations
-// including create, update, delete, get, and list.
-// It wraps the Releases service from client-go v2.
 package releases
 
 import (

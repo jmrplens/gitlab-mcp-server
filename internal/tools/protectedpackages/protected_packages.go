@@ -1,6 +1,3 @@
-// Package protectedpackages implements GitLab package protection rule operations
-// including list, create, update, and delete. Package protection rules restrict
-// who can push or delete specific package patterns.
 package protectedpackages
 
 import (

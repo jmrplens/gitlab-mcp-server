@@ -1,8 +1,3 @@
-// Package mergerequests implements GitLab merge request CRUD operations including
-// create, get, list (project/global/group), update, merge, approve, unapprove,
-// commits, pipelines, delete, rebase, participants, reviewers, create-pipeline,
-// issues-closed-on-merge, and cancel-auto-merge. It exposes typed input/output
-// structs and handler functions registered as MCP tools.
 package mergerequests
 
 import (

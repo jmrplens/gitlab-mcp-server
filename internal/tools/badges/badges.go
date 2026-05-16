@@ -1,6 +1,3 @@
-// Package badges implements MCP tool handlers for GitLab project and group
-// badges. It wraps the ProjectBadgesService and GroupBadgesService from
-// client-go v2.
 package badges
 
 import (

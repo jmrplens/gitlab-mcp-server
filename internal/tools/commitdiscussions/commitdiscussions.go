@@ -1,4 +1,3 @@
-// Package commitdiscussions implements MCP tools for GitLab commit discussion operations.
 package commitdiscussions
 
 import (

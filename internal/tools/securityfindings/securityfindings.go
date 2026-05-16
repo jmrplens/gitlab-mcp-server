@@ -1,6 +1,3 @@
-// Package securityfindings implements MCP tool handlers for GitLab pipeline
-// security report findings using the GraphQL API. This replaces the deprecated
-// REST vulnerability_findings endpoint with the GraphQL Pipeline.securityReportFindings query.
 package securityfindings
 
 import (

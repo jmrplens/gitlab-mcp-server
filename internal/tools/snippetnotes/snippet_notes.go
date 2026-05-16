@@ -1,6 +1,3 @@
-// Package snippetnotes implements GitLab snippet note (comment) operations including
-// list, get, create, update, and delete. Notes are comments attached to project
-// snippets and may be system-generated or user-created.
 package snippetnotes
 
 import (

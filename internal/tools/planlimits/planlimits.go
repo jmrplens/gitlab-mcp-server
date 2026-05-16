@@ -1,4 +1,3 @@
-// Package planlimits implements MCP tools for GitLab Plan Limits API.
 package planlimits
 
 import (
@@ -104,7 +103,7 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// convertPlanLimit implements the convert plan limit helper used by planlimits.
+// convertPlanLimit maps GitLab plan limit settings into MCP output.
 func convertPlanLimit(l *gl.PlanLimit) PlanLimitItem {
 	return PlanLimitItem{
 		ConanMaxFileSize:           l.ConanMaxFileSize,

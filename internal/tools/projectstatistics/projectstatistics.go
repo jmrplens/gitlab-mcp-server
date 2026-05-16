@@ -1,4 +1,3 @@
-// Package projectstatistics implements MCP tools for GitLab project statistics.
 package projectstatistics
 
 import (

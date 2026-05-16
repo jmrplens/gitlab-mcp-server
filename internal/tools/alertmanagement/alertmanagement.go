@@ -1,4 +1,3 @@
-// Package alertmanagement implements MCP tools for GitLab Alert Management metric images.
 package alertmanagement
 
 import (

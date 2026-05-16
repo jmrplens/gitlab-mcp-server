@@ -1,4 +1,3 @@
-// Package license implements MCP tools for GitLab License API.
 package license
 
 import (
@@ -56,7 +55,7 @@ type GetOutput struct {
 	License Item `json:"license"`
 }
 
-// AddInput represents the input for adding a license.
+// AddInput carries the Base64-encoded GitLab license payload to install.
 type AddInput struct {
 	License string `json:"license" jsonschema:"The license string (Base64-encoded),required"`
 }
@@ -67,7 +66,7 @@ type AddOutput struct {
 	License Item `json:"license"`
 }
 
-// DeleteInput represents the input for deleting a license.
+// DeleteInput identifies the installed GitLab license to remove.
 type DeleteInput struct {
 	ID int64 `json:"id" jsonschema:"License ID to delete,required"`
 }

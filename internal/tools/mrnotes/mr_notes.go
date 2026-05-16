@@ -1,7 +1,3 @@
-// Package mrnotes implements GitLab merge request note MCP tools.
-//
-// It supports creating, listing, updating, and deleting merge request notes and
-// registers those handlers as MCP tools.
 package mrnotes
 
 import (

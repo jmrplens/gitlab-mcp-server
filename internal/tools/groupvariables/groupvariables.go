@@ -1,5 +1,3 @@
-// Package groupvariables implements GitLab group-level CI/CD variable operations
-// including list, get, create, update, and delete.
 package groupvariables
 
 import (

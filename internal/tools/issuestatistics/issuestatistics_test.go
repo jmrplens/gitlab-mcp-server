@@ -650,7 +650,7 @@ func newIssueStatsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return issueStatsSpecsByTool(ActionSpecs(client))
 }
 
-// issueStatsSpecsByTool reports whether issue stats specs by tool.
+// issueStatsSpecsByTool indexes action specs by individual tool name for route assertions.
 func issueStatsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {

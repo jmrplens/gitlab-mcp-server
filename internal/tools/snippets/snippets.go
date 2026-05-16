@@ -74,7 +74,7 @@ type FileContentOutput struct {
 	Content   string `json:"content"`
 }
 
-// convertSnippet implements the convert snippet helper used by snippets.
+// convertSnippet maps a GitLab snippet into the MCP output shape.
 func convertSnippet(s *gl.Snippet) Output {
 	out := Output{
 		ID:          s.ID,
@@ -119,7 +119,7 @@ type UpdateFileInput struct {
 	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Previous file path (for move)"`
 }
 
-// snippetVisibility implements the snippet visibility helper used by snippets.
+// snippetVisibility returns a GitLab visibility value, defaulting snippets to private.
 func snippetVisibility(value string) *gl.VisibilityValue {
 	if value == "" {
 		value = "private"
@@ -189,7 +189,7 @@ func extractProjectPath(webURL string) string {
 	return strings.TrimPrefix(u.Path[:idx], "/")
 }
 
-// snippetsHaveProject implements the snippets have project helper used by snippets.
+// snippetsHaveProject reports whether any snippet output belongs to a project.
 func snippetsHaveProject(snippets []Output) bool {
 	for _, s := range snippets {
 		if s.ProjectID != 0 {
@@ -235,7 +235,7 @@ func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
 // Personal Snippet Handlers (SnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ListInput represents the input for listing current user's snippets.
+// ListInput carries pagination for the authenticated user's snippets.
 type ListInput struct {
 	toolutil.PaginationInput
 }
@@ -260,7 +260,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return out, nil
 }
 
-// ListAllInput represents the input for listing all snippets (admin).
+// ListAllInput carries admin-only snippet listing filters and pagination.
 type ListAllInput struct {
 	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Filter snippets created after (ISO 8601)"`
 	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Filter snippets created before (ISO 8601)"`
@@ -301,7 +301,7 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	return out, nil
 }
 
-// GetInput represents the input for getting a single snippet.
+// GetInput identifies a personal snippet by global snippet ID.
 type GetInput struct {
 	SnippetID int64 `json:"snippet_id" jsonschema:"Snippet ID,required"`
 }
@@ -319,7 +319,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return convertSnippet(snippet), nil
 }
 
-// ContentInput represents the input for getting snippet content.
+// ContentInput identifies the single-file snippet content to retrieve.
 type ContentInput struct {
 	SnippetID int64 `json:"snippet_id" jsonschema:"Snippet ID,required"`
 }
@@ -337,7 +337,7 @@ func Content(ctx context.Context, client *gitlabclient.Client, input ContentInpu
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
 
-// FileContentInput represents the input for getting a specific snippet file.
+// FileContentInput identifies a file inside a multi-file snippet at a Git ref.
 type FileContentInput struct {
 	SnippetID int64  `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	Ref       string `json:"ref" jsonschema:"Git ref (branch, tag, or commit SHA),required"`
@@ -368,7 +368,7 @@ func FileContent(ctx context.Context, client *gitlabclient.Client, input FileCon
 	}, nil
 }
 
-// CreateInput represents the input for creating a personal snippet.
+// CreateInput describes a personal snippet and its initial file content.
 type CreateInput struct {
 	Title       string            `json:"title" jsonschema:"Snippet title,required"`
 	FileName    string            `json:"file_name,omitempty" jsonschema:"File name (single-file snippet, deprecated in favor of files)"`
@@ -410,7 +410,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return convertSnippet(snippet), nil
 }
 
-// UpdateInput represents the input for updating a personal snippet.
+// UpdateInput identifies a personal snippet and the metadata or file operations to apply.
 type UpdateInput struct {
 	SnippetID   int64             `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	Title       string            `json:"title,omitempty" jsonschema:"New title"`
@@ -478,7 +478,7 @@ func buildUpdateFileOpts(files []UpdateFileInput) *[]*gl.UpdateSnippetFileOption
 	return &out
 }
 
-// DeleteInput represents the input for deleting a personal snippet.
+// DeleteInput identifies the personal snippet to delete.
 type DeleteInput struct {
 	SnippetID int64 `json:"snippet_id" jsonschema:"Snippet ID,required"`
 }
@@ -496,7 +496,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
-// ExploreInput represents the input for exploring public snippets.
+// ExploreInput carries pagination for public snippet discovery.
 type ExploreInput struct {
 	toolutil.PaginationInput
 }

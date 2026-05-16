@@ -16,7 +16,6 @@ type ActionSpec struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
-	Docs                   []DocumentationReference
 	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
 	ReadOnly               bool
@@ -33,13 +32,6 @@ type ActionSpec struct {
 	RichResultPolicy       string
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
-}
-
-// DocumentationReference points to external documentation for an action,
-// usually the official GitLab REST or GraphQL API page used by the handler.
-type DocumentationReference struct {
-	Title string `json:"title" jsonschema:"Human-readable documentation title."`
-	URL   string `json:"url" jsonschema:"Absolute URL for the external documentation."`
 }
 
 // ActionAliasSpec describes a compatibility alias that resolves to a canonical
@@ -116,7 +108,6 @@ type ActionSpecOptions struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
-	Docs                   []DocumentationReference
 	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
 	ReadOnly               bool
@@ -148,7 +139,6 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		Tags:                   mergeActionSpecStrings(route.Tags, opts.Tags),
 		Usage:                  firstNonEmptyString(opts.Usage, route.Usage),
 		RelatedActions:         mergeActionSpecStrings(route.RelatedActions, opts.RelatedActions),
-		Docs:                   CloneDocumentationReferences(opts.Docs),
 		Compatibility:          CloneCompatibilityPolicy(opts.Compatibility),
 		ParameterGuidance:      cloneParameterGuidanceMap(opts.ParameterGuidance),
 		ReadOnly:               opts.ReadOnly,
@@ -166,30 +156,6 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		SchemaValidationNotes:  normalizeActionSpecNotes(opts.SchemaValidationNotes),
 		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
 	}
-}
-
-// CloneDocumentationReferences returns a normalized defensive copy of external
-// documentation references attached to an action spec.
-func CloneDocumentationReferences(docs []DocumentationReference) []DocumentationReference {
-	if len(docs) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(docs))
-	out := make([]DocumentationReference, 0, len(docs))
-	for _, doc := range docs {
-		doc.Title = strings.TrimSpace(doc.Title)
-		doc.URL = strings.TrimSpace(doc.URL)
-		if doc.Title == "" || doc.URL == "" {
-			continue
-		}
-		key := strings.ToLower(doc.Title) + "\x00" + doc.URL
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, doc)
-	}
-	return out
 }
 
 // CloneCompatibilityPolicy returns a defensive copy of compatibility metadata.

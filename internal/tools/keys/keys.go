@@ -1,4 +1,3 @@
-// Package keys implements MCP tools for GitLab SSH key lookup operations.
 package keys
 
 import (
@@ -94,7 +93,7 @@ func toOutput(k *gl.Key) Output {
 
 // Formatters.
 
-// truncateKey implements the truncate key helper used by keys.
+// truncateKey shortens long public keys for readable Markdown tables.
 func truncateKey(key string) string {
 	if len(key) > 60 {
 		return key[:57] + "..."

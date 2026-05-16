@@ -1,4 +1,3 @@
-// Package issuediscussions implements MCP tools for GitLab issue discussion operations.
 package issuediscussions
 
 import (

@@ -617,7 +617,7 @@ func (p *liveFixturePreparer) deleteEvaluationProjectHooks(ctx context.Context) 
 	}
 }
 
-// isEvaluationProjectHook reports whether is evaluation project hook.
+// isEvaluationProjectHook reports whether a hook belongs to evaluator fixture cleanup.
 func isEvaluationProjectHook(hook *gl.ProjectHook) bool {
 	if hook == nil {
 		return false
@@ -1715,7 +1715,7 @@ manual_deploy:
 `
 }
 
-// pathBase implements the path base helper used by main.
+// pathBase returns the final path element without importing filepath for URL-style paths.
 func pathBase(path string) string {
 	idx := strings.LastIndex(path, "/")
 	if idx < 0 {
@@ -1724,7 +1724,7 @@ func pathBase(path string) string {
 	return path[idx+1:]
 }
 
-// isEmptyCommitError reports whether is empty commit error.
+// isEmptyCommitError reports whether GitLab rejected a no-op file commit.
 func isEmptyCommitError(err error) bool {
 	return toolutil.ContainsAny(err, "commit was empty", "You are trying to update the file with the same content")
 }

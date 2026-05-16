@@ -1,6 +1,3 @@
-// Package auditevents implements MCP tool handlers for GitLab audit event
-// operations including list and get at instance, group, and project levels.
-// It wraps the AuditEvents service from client-go v2.
 package auditevents
 
 import (

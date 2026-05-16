@@ -1,4 +1,3 @@
-// Package pipelinetriggers provides MCP tool handlers for GitLab pipeline trigger operations.
 package pipelinetriggers
 
 import (
@@ -259,7 +258,7 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertTrigger implements the convert trigger helper used by pipelinetriggers.
+// convertTrigger maps a GitLab pipeline trigger into the MCP output shape.
 func convertTrigger(t *gl.PipelineTrigger) Output {
 	out := Output{
 		ID:          t.ID,
@@ -282,7 +281,7 @@ func convertTrigger(t *gl.PipelineTrigger) Output {
 	return out
 }
 
-// convertPipeline implements the convert pipeline helper used by pipelinetriggers.
+// convertPipeline maps a triggered GitLab pipeline into the run output shape.
 func convertPipeline(p *gl.Pipeline) RunOutput {
 	out := RunOutput{
 		PipelineID: p.ID,

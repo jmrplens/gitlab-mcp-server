@@ -1,6 +1,3 @@
-// Package dependencies implements MCP tool handlers for GitLab dependency
-// listing and dependency list export (SBOM) operations. It wraps the
-// Dependencies and DependencyListExport services from client-go v2.
 package dependencies
 
 import (

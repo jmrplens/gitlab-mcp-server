@@ -1,4 +1,3 @@
-// Package freezeperiods implements MCP tools for GitLab deploy freeze period operations.
 package freezeperiods
 
 import (

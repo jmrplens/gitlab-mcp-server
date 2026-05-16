@@ -1,4 +1,3 @@
-// Package appstatistics implements MCP tools for GitLab Application Statistics API.
 package appstatistics
 
 import (

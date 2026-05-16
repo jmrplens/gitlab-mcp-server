@@ -1,6 +1,3 @@
-// Package cicatalog implements MCP tool handlers for GitLab CI/CD Catalog
-// resource discovery and retrieval using the GraphQL API. The CI/CD Catalog
-// is a GraphQL-only feature with no REST equivalent.
 package cicatalog
 
 import (

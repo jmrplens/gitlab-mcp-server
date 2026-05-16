@@ -595,7 +595,6 @@ func cloneActionSpecs(specs []toolutil.ActionSpec) []toolutil.ActionSpec {
 			Tags:                   spec.Tags,
 			Usage:                  spec.Usage,
 			RelatedActions:         spec.RelatedActions,
-			Docs:                   spec.Docs,
 			Compatibility:          spec.Compatibility,
 			ParameterGuidance:      spec.ParameterGuidance,
 			ReadOnly:               spec.ReadOnly,

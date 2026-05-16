@@ -1,6 +1,3 @@
-// Package customemoji implements MCP tool handlers for GitLab Custom Emoji
-// management using the GraphQL API. Custom emoji are group-level assets with
-// custom images, distinct from award emoji (reactions on issues/MRs).
 package customemoji
 
 import (

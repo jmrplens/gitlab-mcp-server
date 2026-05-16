@@ -1,4 +1,3 @@
-// Package clusteragents implements MCP tools for GitLab Kubernetes cluster agents.
 package clusteragents
 
 import (

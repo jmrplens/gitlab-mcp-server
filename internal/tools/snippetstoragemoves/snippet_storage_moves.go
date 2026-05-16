@@ -1,5 +1,3 @@
-// Package snippetstoragemoves implements MCP tools for GitLab snippet
-// repository storage move operations (admin only).
 package snippetstoragemoves
 
 import (

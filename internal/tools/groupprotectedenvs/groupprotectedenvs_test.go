@@ -1,6 +1,3 @@
-// Package groupprotectedenvs tests cover the five CRUD handlers (List, Get,
-// Protect, Update, Unprotect), their input validation, context cancellation,
-// API error propagation, option converter functions, and markdown formatters.
 package groupprotectedenvs
 
 import (

@@ -1,4 +1,3 @@
-// Package resourcegroups implements MCP tools for GitLab resource groups.
 package resourcegroups
 
 import (

@@ -1,8 +1,3 @@
-// Package snippetstoragemoves — additional tests for snippet repository storage
-// move handlers and markdown formatters. Covers context cancellation for all
-// handlers, API error responses, toOutput edge cases (nil CreatedAt, nil Snippet),
-// pagination parameter passthrough, and all three markdown formatters with
-// various inputs (empty lists, populated lists, with/without snippet info).
 package snippetstoragemoves
 
 import (

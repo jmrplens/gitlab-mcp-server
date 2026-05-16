@@ -1,4 +1,3 @@
-// Package groupmarkdownuploads implements MCP tools for GitLab group markdown upload operations.
 package groupmarkdownuploads
 
 import (

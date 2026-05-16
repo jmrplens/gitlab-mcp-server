@@ -1,6 +1,3 @@
-// Package mrcontextcommits implements MCP tool handlers for managing
-// merge request context commits in GitLab. It wraps the
-// MergeRequestContextCommitsService from client-go v2.
 package mrcontextcommits
 
 import (

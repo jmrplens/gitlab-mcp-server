@@ -1,4 +1,3 @@
-// Package errortracking implements MCP tools for GitLab Error Tracking operations.
 package errortracking
 
 import (

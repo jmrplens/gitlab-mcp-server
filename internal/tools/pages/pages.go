@@ -1,6 +1,3 @@
-// Package pages implements MCP tool handlers for GitLab Pages and Pages Domains
-// management. Covers PagesService (get, update, unpublish) and PagesDomainsService
-// (list all, list project, get, create, update, delete).
 package pages
 
 import (

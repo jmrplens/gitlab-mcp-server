@@ -1,5 +1,3 @@
-// Package projectmirrors implements GitLab project remote mirror (push mirror) operations
-// including list, get, get public key, add, edit, delete, and force push update.
 package projectmirrors
 
 import (

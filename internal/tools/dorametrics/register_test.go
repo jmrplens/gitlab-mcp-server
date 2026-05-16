@@ -1,5 +1,3 @@
-// Package dorametrics register_test exercises canonical routes and the init()
-// markdown registry formatter via MarkdownForResult.
 package dorametrics
 
 import (

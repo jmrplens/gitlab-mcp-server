@@ -1,5 +1,3 @@
-// Package accessrequests implements MCP tools for GitLab project and group
-// access request operations using the AccessRequestsService API.
 package accessrequests
 
 import (
@@ -36,7 +34,7 @@ type ListOutput struct {
 	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertAccessRequest implements the convert access request helper used by accessrequests.
+// convertAccessRequest maps a GitLab access request into the MCP output shape.
 func convertAccessRequest(ar *gl.AccessRequest) Output {
 	o := Output{
 		ID:          ar.ID,
@@ -62,7 +60,7 @@ func convertAccessRequest(ar *gl.AccessRequest) Output {
 // ListProjectAccessRequests
 // ---------------------------------------------------------------------------.
 
-// ListProjectInput represents the input for listing project access requests.
+// ListProjectInput selects a project and pagination window for pending access requests.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Page      int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
@@ -97,7 +95,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 // ListGroupAccessRequests
 // ---------------------------------------------------------------------------.
 
-// ListGroupInput represents the input for listing group access requests.
+// ListGroupInput selects a group and pagination window for pending access requests.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	Page    int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
@@ -132,7 +130,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 // RequestProjectAccess
 // ---------------------------------------------------------------------------.
 
-// RequestProjectInput represents the input for requesting access to a project.
+// RequestProjectInput identifies the project the authenticated user wants to join.
 type RequestProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 }
@@ -155,7 +153,7 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 // RequestGroupAccess
 // ---------------------------------------------------------------------------.
 
-// RequestGroupInput represents the input for requesting access to a group.
+// RequestGroupInput identifies the group the authenticated user wants to join.
 type RequestGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 }
@@ -178,7 +176,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 // ApproveProjectAccessRequest
 // ---------------------------------------------------------------------------.
 
-// ApproveProjectInput represents the input for approving a project access request.
+// ApproveProjectInput identifies the project access request to approve and the optional granted role.
 type ApproveProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
@@ -211,7 +209,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 // ApproveGroupAccessRequest
 // ---------------------------------------------------------------------------.
 
-// ApproveGroupInput represents the input for approving a group access request.
+// ApproveGroupInput identifies the group access request to approve and the optional granted role.
 type ApproveGroupInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
@@ -244,7 +242,7 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 // DenyProjectAccessRequest
 // ---------------------------------------------------------------------------.
 
-// DenyProjectInput represents the input for denying a project access request.
+// DenyProjectInput identifies the pending project access request to reject.
 type DenyProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	UserID    int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
@@ -271,7 +269,7 @@ func DenyProject(ctx context.Context, client *gitlabclient.Client, input DenyPro
 // DenyGroupAccessRequest
 // ---------------------------------------------------------------------------.
 
-// DenyGroupInput represents the input for denying a group access request.
+// DenyGroupInput identifies the pending group access request to reject.
 type DenyGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	UserID  int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`

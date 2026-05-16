@@ -1,7 +1,3 @@
-// Package mrapprovalsettings tests validate the MCP tool handlers for GitLab
-// merge request approval settings at project and group level.
-// Covers success, input validation (missing IDs), API errors, and context
-// cancellation for all four handlers, plus markdown formatting.
 package mrapprovalsettings
 
 import (

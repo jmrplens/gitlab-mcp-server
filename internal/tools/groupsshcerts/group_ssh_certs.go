@@ -1,5 +1,3 @@
-// Package groupsshcerts implements GitLab SSH certificate operations for groups
-// including list, create, and delete.
 package groupsshcerts
 
 import (

@@ -1,4 +1,3 @@
-// Package dbmigrations implements MCP tools for GitLab Database Migrations API.
 package dbmigrations
 
 import (

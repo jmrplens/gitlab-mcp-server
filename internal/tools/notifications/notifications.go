@@ -1,4 +1,3 @@
-// Package notifications implements MCP tools for GitLab notification settings.
 package notifications
 
 import (
@@ -256,7 +255,7 @@ func toOutput(s *gl.NotificationSettings) Output {
 
 // Formatters.
 
-// eventLine implements the event line helper used by notifications.
+// eventLine formats one notification event flag for Markdown output.
 func eventLine(name string, enabled bool) string {
 	return fmt.Sprintf("- %s %s\n", toolutil.BoolEmoji(enabled), name)
 }

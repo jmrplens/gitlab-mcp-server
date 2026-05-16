@@ -1,7 +1,3 @@
-// Package deploykeys implements GitLab Deploy Keys API operations as MCP tools.
-// It supports listing, getting, creating, updating, deleting, and enabling
-// project deploy keys, as well as listing and creating instance-level deploy keys
-// and listing deploy keys by user.
 package deploykeys
 
 import (
@@ -73,7 +69,7 @@ type InstanceListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// timeStr implements the time str helper used by deploykeys.
+// timeStr formats optional deploy-key timestamps as RFC3339 strings.
 func timeStr(t *time.Time) string {
 	if t == nil {
 		return ""

@@ -1,8 +1,3 @@
-// Package epicnotes tests validate all epic note MCP tool handlers:
-// List, Get, Create, Update, and Delete using the Work Items GraphQL API.
-// Tests cover success paths, input validation (missing full_path, iid,
-// note_id, body), API error responses, cancelled contexts, pagination,
-// empty results, and markdown formatting for both single and list output.
 package epicnotes
 
 import (

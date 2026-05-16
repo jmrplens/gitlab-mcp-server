@@ -1,4 +1,3 @@
-// Package bulkimports implements MCP tools for GitLab Bulk Imports API.
 package bulkimports
 
 import (

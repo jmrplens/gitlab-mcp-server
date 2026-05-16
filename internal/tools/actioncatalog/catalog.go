@@ -32,7 +32,6 @@ type Action struct {
 	Tags                   []string
 	Usage                  string
 	RelatedActions         []string
-	Docs                   []toolutil.DocumentationReference
 	Compatibility          toolutil.CompatibilityPolicy
 	ReadOnly               bool
 	Edition                string
@@ -645,7 +644,6 @@ func cloneAction(action Action) Action {
 	action.Aliases = cloneStrings(action.Aliases)
 	action.Tags = cloneStrings(action.Tags)
 	action.RelatedActions = cloneStrings(action.RelatedActions)
-	action.Docs = toolutil.CloneDocumentationReferences(action.Docs)
 	action.SchemaValidationNotes = cloneStrings(action.SchemaValidationNotes)
 	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
 	return action

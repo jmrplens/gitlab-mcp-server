@@ -1,6 +1,3 @@
-// Package dorametrics implements MCP tool handlers for GitLab DORA metrics
-// retrieval at project and group levels. It wraps the DORAMetrics service
-// from client-go v2.
 package dorametrics
 
 import (

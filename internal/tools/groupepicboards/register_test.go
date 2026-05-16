@@ -1,5 +1,3 @@
-// Package groupepicboards register_test exercises canonical ActionSpecs routes
-// and covers the nil label/list branches in toOutput.
 package groupepicboards
 
 import (

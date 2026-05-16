@@ -1,6 +1,3 @@
-// Package labels implements MCP tool handlers for GitLab label operations
-// including get, create, update, delete, subscribe, unsubscribe, promote,
-// and list. It wraps the Labels service from client-go v2.
 package labels
 
 import (

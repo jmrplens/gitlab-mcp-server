@@ -1,5 +1,3 @@
-// Package instancevariables implements GitLab instance-level CI/CD variable
-// operations including list, get, create, update, and delete.
 package instancevariables
 
 import (

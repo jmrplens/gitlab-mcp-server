@@ -1,4 +1,3 @@
-// Package licensetemplates implements MCP tools for GitLab License Templates API.
 package licensetemplates
 
 import (

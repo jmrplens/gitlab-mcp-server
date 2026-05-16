@@ -14,7 +14,7 @@ import (
 // Project Snippet Handlers (ProjectSnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ProjectListInput represents the input for listing project snippets.
+// ProjectListInput selects a project snippet page.
 type ProjectListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	toolutil.PaginationInput
@@ -44,7 +44,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	return out, nil
 }
 
-// ProjectGetInput represents the input for getting a project snippet.
+// ProjectGetInput identifies a snippet within its owning project.
 type ProjectGetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	SnippetID int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
@@ -67,7 +67,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	return convertSnippet(snippet), nil
 }
 
-// ProjectContentInput represents the input for getting project snippet content.
+// ProjectContentInput identifies the raw content for a project snippet.
 type ProjectContentInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	SnippetID int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
@@ -90,7 +90,7 @@ func ProjectContent(ctx context.Context, client *gitlabclient.Client, input Proj
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
 
-// ProjectCreateInput represents the input for creating a project snippet.
+// ProjectCreateInput describes a project snippet and its initial file content.
 type ProjectCreateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Title       string               `json:"title" jsonschema:"Snippet title,required"`
@@ -141,7 +141,7 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	return convertSnippet(snippet), nil
 }
 
-// ProjectUpdateInput represents the input for updating a project snippet.
+// ProjectUpdateInput identifies a project snippet and the metadata or file operations to apply.
 type ProjectUpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	SnippetID   int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
@@ -171,7 +171,7 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 	return convertSnippet(snippet), nil
 }
 
-// ProjectDeleteInput represents the input for deleting a project snippet.
+// ProjectDeleteInput identifies the project snippet to delete.
 type ProjectDeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	SnippetID int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`

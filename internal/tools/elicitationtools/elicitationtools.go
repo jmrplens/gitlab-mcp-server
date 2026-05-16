@@ -1,7 +1,3 @@
-// Package elicitationtools implements interactive MCP tool handlers powered by
-// the elicitation capability. These tools guide users through step-by-step
-// prompts to create GitLab issues, merge requests, releases, and projects with
-// confirmation before execution.
 package elicitationtools
 
 import (
@@ -258,7 +254,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	})
 }
 
-// collectMROptions implements the collect MR options helper used by elicitationtools.
+// collectMROptions asks for optional merge request labels and merge behavior.
 func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _, _ *bool, _ error) {
 	labelsStr, err := ec.PromptText(ctx, "Enter comma-separated labels (or leave empty)", "labels")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {

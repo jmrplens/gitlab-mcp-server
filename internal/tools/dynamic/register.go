@@ -91,7 +91,6 @@ type ActionDescription struct {
 	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
-	Docs           []toolutil.DocumentationReference     `json:"docs,omitempty" jsonschema:"Official GitLab API documentation references for this action."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
 	InputSchema    map[string]any                        `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
 	OutputSchema   map[string]any                        `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
@@ -122,7 +121,6 @@ type FindResult struct {
 	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
-	Docs           []toolutil.DocumentationReference     `json:"docs,omitempty" jsonschema:"Official GitLab API documentation references for this action."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
 	Score          int                                   `json:"score" jsonschema:"Lexical relevance score for the query."`
 	Explanation    *ScoringExplanation                   `json:"explanation,omitempty" jsonschema:"Optional scoring explanation returned only when explain is true."`
@@ -164,7 +162,6 @@ type actionEntry struct {
 	Tags           []string
 	Usage          string
 	RelatedActions []string
-	Docs           []toolutil.DocumentationReference
 	SchemaURI      string
 	Destructive    bool
 	RequiredParams []string
@@ -306,7 +303,6 @@ func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlia
 				Tags:           tags,
 				Usage:          action.Usage,
 				RelatedActions: append([]string(nil), action.RelatedActions...),
-				Docs:           toolutil.CloneDocumentationReferences(action.Docs),
 				SchemaURI:      schemaURI,
 				Destructive:    route.Destructive,
 				RequiredParams: requiredParams(route.InputSchema),
@@ -424,7 +420,6 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 			RequiredParams: append([]string(nil), description.RequiredParams...),
 			Usage:          description.Usage,
 			RelatedActions: append([]string(nil), description.RelatedActions...),
-			Docs:           toolutil.CloneDocumentationReferences(description.Docs),
 			ParamGuidance:  cloneParameterGuidance(description.ParamGuidance),
 			Score:          match.score,
 			LowConfidence:  match.lowConfidence,
@@ -1535,7 +1530,6 @@ func describeEntry(entry actionEntry) ActionDescription {
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
 		Usage:          usageHintForEntry(entry),
 		RelatedActions: relatedActionsForEntry(entry),
-		Docs:           toolutil.CloneDocumentationReferences(entry.Docs),
 		ParamGuidance:  cloneParameterGuidance(entry.Route.ParameterGuidance),
 		InputSchema:    inputSchema,
 		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
@@ -2662,9 +2656,6 @@ func formatDescribeOutput(output DescribeOutput) string {
 		if len(action.RelatedActions) > 0 {
 			fmt.Fprintf(&b, "- **Related actions**: `%s`\n", strings.Join(action.RelatedActions, "`, `"))
 		}
-		if len(action.Docs) > 0 {
-			fmt.Fprintf(&b, "- **Docs**: %s\n", formatDocumentationReferences(action.Docs))
-		}
 		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n", action.SchemaURI)
 		if schemaJSON := compactSchemaJSON(action.InputSchema); schemaJSON != "" {
 			b.WriteString("- **Input schema**:\n\n")
@@ -2675,20 +2666,6 @@ func formatDescribeOutput(output DescribeOutput) string {
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-func formatDocumentationReferences(docs []toolutil.DocumentationReference) string {
-	links := make([]string, 0, len(docs))
-	for _, doc := range docs {
-		if doc.Title == "" || doc.URL == "" {
-			continue
-		}
-		links = append(links, fmt.Sprintf("[%s](%s)", doc.Title, doc.URL))
-	}
-	if len(links) == 0 {
-		return "-"
-	}
-	return strings.Join(links, ", ")
 }
 
 func compactSchemaJSON(schema map[string]any) string {

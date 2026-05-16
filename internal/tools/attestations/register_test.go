@@ -1,4 +1,3 @@
-// Package attestations register_test exercises canonical ActionSpecs routes.
 package attestations
 
 import (

@@ -1,8 +1,3 @@
-// Package mrdiscussions implements GitLab merge request discussion MCP tools.
-//
-// It supports creating general and inline discussions, resolving and
-// unresolving discussions, replying to discussion threads, and listing merge
-// request discussions.
 package mrdiscussions
 
 import (

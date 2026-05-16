@@ -1,5 +1,3 @@
-// Package groupanalytics implements MCP tools for GitLab group activity analytics,
-// providing counts of recently created issues, merge requests, and new members.
 package groupanalytics
 
 import (

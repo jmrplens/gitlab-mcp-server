@@ -861,7 +861,7 @@ func emptyDash(s string) string {
 	return s
 }
 
-// accessLevelIcon implements the access level icon helper used by prompts.
+// accessLevelIcon renders whether an access-control setting is enabled.
 func accessLevelIcon(v gl.AccessControlValue) string {
 	if v != "" && v != gl.DisabledAccessControl {
 		return toolutil.EmojiSuccess

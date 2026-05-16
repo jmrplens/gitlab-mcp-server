@@ -1,8 +1,3 @@
-// Package tags implements GitLab tag and protected tag operations including
-// create, delete, get, list, signature, protect, and unprotect.
-//
-// The package also registers MCP tools and renders Markdown summaries for tag
-// responses.
 package tags
 
 import (

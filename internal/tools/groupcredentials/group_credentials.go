@@ -1,5 +1,3 @@
-// Package groupcredentials implements GitLab group credential operations including
-// listing and revoking personal access tokens and SSH keys for groups.
 package groupcredentials
 
 import (

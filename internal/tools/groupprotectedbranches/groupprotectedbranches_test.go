@@ -1,8 +1,3 @@
-// Package groupprotectedbranches tests validate the MCP tool handlers for
-// GitLab group-level protected branch operations. Tests cover List, Get,
-// Protect, Update, and Unprotect handlers including success paths, input
-// validation, API errors, context cancellation, access level options,
-// branch permissions, pagination, and Markdown formatters.
 package groupprotectedbranches
 
 import (

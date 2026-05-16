@@ -1,6 +1,3 @@
-// Package milestones implements MCP tool handlers for GitLab milestone
-// operations including list, get, create, update, and delete.
-// It wraps the Milestones service from client-go v2.
 package milestones
 
 import (

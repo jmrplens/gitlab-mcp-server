@@ -1,4 +1,3 @@
-// Package featureflags provides MCP tool handlers for GitLab project feature flag operations.
 package featureflags
 
 import (
@@ -296,7 +295,7 @@ func DeleteFeatureFlag(ctx context.Context, client *gitlabclient.Client, input D
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertFeatureFlag implements the convert feature flag helper used by featureflags.
+// convertFeatureFlag maps a GitLab feature flag into the MCP output shape.
 func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	out := Output{
 		Name:        f.Name,
@@ -316,7 +315,7 @@ func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	return out
 }
 
-// convertStrategy implements the convert strategy helper used by featureflags.
+// convertStrategy maps a GitLab feature flag strategy into MCP output.
 func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 	out := StrategyOutput{
 		ID:   s.ID,

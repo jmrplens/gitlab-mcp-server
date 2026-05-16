@@ -1,5 +1,3 @@
-// Package enterpriseusers implements GitLab enterprise user operations for groups
-// including list, get, disable 2FA, and delete.
 package enterpriseusers
 
 import (

@@ -1,5 +1,3 @@
-// Package projectstoragemoves implements MCP tools for GitLab project
-// repository storage move operations (admin only).
 package projectstoragemoves
 
 import (

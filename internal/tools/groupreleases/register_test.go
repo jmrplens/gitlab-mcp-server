@@ -1,4 +1,3 @@
-// Package groupreleases register_test exercises canonical ActionSpecs routes.
 package groupreleases
 
 import (

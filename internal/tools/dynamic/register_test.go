@@ -715,12 +715,6 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 
 	projectList := actionDescriptionByID(t, output, "project.list")
 	assertSchemaHasProperties(t, projectList.InputSchema, "search", "owned", "per_page")
-	if len(projectList.Docs) == 0 || projectList.Docs[0].URL != "https://docs.gitlab.com/api/projects/" {
-		t.Fatalf("project.list Docs = %+v, want Projects API reference", projectList.Docs)
-	}
-	if !strings.Contains(markdown, "[Projects API](https://docs.gitlab.com/api/projects/)") {
-		t.Fatalf("Describe() markdown missing Projects API docs link: %s", markdown)
-	}
 	if projectList.OutputSchema == nil {
 		t.Fatal("project.list OutputSchema is nil")
 	}

@@ -1,7 +1,3 @@
-// Package compliancepolicy tests validate the Get, Update, FormatOutputMarkdown,
-// and ActionSpecs routes for the admin compliance policy settings MCP tools.
-// Tests cover success paths, API error responses (403, 400, 500), context
-// cancellation, nil/non-nil CSPNamespaceID, markdown formatting, and route wiring.
 package compliancepolicy
 
 import (

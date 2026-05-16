@@ -1,4 +1,3 @@
-// Package sidekiq implements MCP tools for GitLab Sidekiq metrics API.
 package sidekiq
 
 import (
@@ -153,7 +152,7 @@ func GetCompoundMetrics(ctx context.Context, client *gitlabclient.Client, _ GetC
 // Conversion helpers
 // ---------------------------------------------------------------------------.
 
-// convertQueues implements the convert queues helper used by sidekiq.
+// convertQueues flattens Sidekiq queue metrics into deterministic MCP items.
 func convertQueues(queues map[string]gl.QueueMetricsQueue) []QueueItem {
 	items := make([]QueueItem, 0, len(queues))
 	for name, q := range queues {
@@ -166,7 +165,7 @@ func convertQueues(queues map[string]gl.QueueMetricsQueue) []QueueItem {
 	return items
 }
 
-// convertProcesses implements the convert processes helper used by sidekiq.
+// convertProcesses maps Sidekiq process metrics into MCP output items.
 func convertProcesses(procs []gl.ProcessMetricsProcess) []ProcessItem {
 	items := make([]ProcessItem, 0, len(procs))
 	for _, p := range procs {

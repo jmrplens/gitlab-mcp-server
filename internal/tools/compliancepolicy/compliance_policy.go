@@ -1,5 +1,3 @@
-// Package compliancepolicy implements MCP tools for GitLab admin-level
-// compliance policy settings management.
 package compliancepolicy
 
 import (

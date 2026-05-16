@@ -1,4 +1,3 @@
-// Package projectiterations implements MCP tool handlers for GitLab project iterations.
 package projectiterations
 
 import (

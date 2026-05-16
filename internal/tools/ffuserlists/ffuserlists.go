@@ -1,4 +1,3 @@
-// Package ffuserlists provides MCP tool handlers for GitLab feature flag user list operations.
 package ffuserlists
 
 import (
@@ -219,7 +218,7 @@ func deleteUserListOutput(ctx context.Context, client *gitlabclient.Client, inpu
 // Converter
 // ──────────────────────────────────────────────.
 
-// convertUserList implements the convert user list helper used by ffuserlists.
+// convertUserList maps a GitLab feature flag user list into MCP output.
 func convertUserList(l *gl.FeatureFlagUserList) Output {
 	out := Output{
 		ID:        l.ID,

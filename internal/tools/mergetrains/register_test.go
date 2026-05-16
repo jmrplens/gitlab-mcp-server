@@ -1,4 +1,3 @@
-// Package mergetrains register_test exercises canonical ActionSpecs routes.
 package mergetrains
 
 import (

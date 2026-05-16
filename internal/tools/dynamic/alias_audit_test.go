@@ -1,6 +1,3 @@
-// Package dynamic contains tests for dynamic alias governance auditing,
-// including duplicate mappings, ambiguous compatibility aliases, and
-// catalog-target validation behavior.
 package dynamic
 
 import (

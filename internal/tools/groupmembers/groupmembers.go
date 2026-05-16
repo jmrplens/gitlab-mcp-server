@@ -1,4 +1,3 @@
-// Package groupmembers provides MCP tool handlers for GitLab group member operations.
 package groupmembers
 
 import (
@@ -328,7 +327,7 @@ var groupAccessLevelNames = map[gl.AccessLevelValue]string{
 	gl.OwnerPermissions:         "Owner",
 }
 
-// accessLevelDescription implements the access level description helper used by groupmembers.
+// accessLevelDescription returns the GitLab role label for an access level.
 func accessLevelDescription(level gl.AccessLevelValue) string {
 	if name, ok := groupAccessLevelNames[level]; ok {
 		return name
@@ -336,7 +335,7 @@ func accessLevelDescription(level gl.AccessLevelValue) string {
 	return "Unknown"
 }
 
-// convertMember implements the convert member helper used by groupmembers.
+// convertMember maps a GitLab group member into the MCP output shape.
 func convertMember(m *gl.GroupMember) Output {
 	out := Output{
 		ID:                     m.ID,

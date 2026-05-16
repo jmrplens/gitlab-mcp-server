@@ -2416,7 +2416,7 @@ type issueMockResp struct {
 	pgHdr  *testutil.PaginationHeaders
 }
 
-// issueMockHandler reports whether issue mock handler.
+// issueMockHandler serves the shared coverage routes for issue handler tests.
 func issueMockHandler(w http.ResponseWriter, r *http.Request) {
 	pgDefault := &testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"}
 	issue10 := "/api/v4/projects/42/issues/10"

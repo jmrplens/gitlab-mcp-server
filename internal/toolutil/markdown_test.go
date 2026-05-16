@@ -95,37 +95,42 @@ func TestWritePagination(t *testing.T) {
 
 // TestMarkdownTableHeader verifies dynamic table header generation.
 func TestMarkdownTableHeader(t *testing.T) {
-	got := MarkdownTableHeader("ID", "Name", "Status")
+	header := MarkdownTableHeader("ID", "Name", "Status")
 	want := "| ID | Name | Status |\n| --- | --- | --- |\n"
-	if got != want {
-		t.Errorf("MarkdownTableHeader() = %q, want %q", got, want)
+	if header != want {
+		t.Errorf("MarkdownTableHeader() = %q, want %q", header, want)
 	}
 
-	if got := MarkdownTableHeader(); got != "" {
-		t.Errorf("MarkdownTableHeader() with no columns = %q, want empty", got)
+	emptyHeader := MarkdownTableHeader()
+	if emptyHeader != "" {
+		t.Errorf("MarkdownTableHeader() with no columns = %q, want empty", emptyHeader)
 	}
 }
 
 // TestMarkdownTableSeparator verifies separator generation for arbitrary widths.
 func TestMarkdownTableSeparator(t *testing.T) {
-	if got, want := MarkdownTableSeparator(4), "| --- | --- | --- | --- |\n"; got != want {
-		t.Errorf("MarkdownTableSeparator(4) = %q, want %q", got, want)
+	separator := MarkdownTableSeparator(4)
+	want := "| --- | --- | --- | --- |\n"
+	if separator != want {
+		t.Errorf("MarkdownTableSeparator(4) = %q, want %q", separator, want)
 	}
-	if got := MarkdownTableSeparator(0); got != "" {
-		t.Errorf("MarkdownTableSeparator(0) = %q, want empty", got)
+	emptySeparator := MarkdownTableSeparator(0)
+	if emptySeparator != "" {
+		t.Errorf("MarkdownTableSeparator(0) = %q, want empty", emptySeparator)
 	}
 }
 
 // TestMarkdownTableRow verifies dynamic table row generation.
 func TestMarkdownTableRow(t *testing.T) {
-	got := MarkdownTableRow("1", "alice", "active")
+	row := MarkdownTableRow("1", "alice", "active")
 	want := "| 1 | alice | active |\n"
-	if got != want {
-		t.Errorf("MarkdownTableRow() = %q, want %q", got, want)
+	if row != want {
+		t.Errorf("MarkdownTableRow() = %q, want %q", row, want)
 	}
 
-	if got := MarkdownTableRow(); got != "" {
-		t.Errorf("MarkdownTableRow() with no cells = %q, want empty", got)
+	emptyRow := MarkdownTableRow()
+	if emptyRow != "" {
+		t.Errorf("MarkdownTableRow() with no cells = %q, want empty", emptyRow)
 	}
 }
 

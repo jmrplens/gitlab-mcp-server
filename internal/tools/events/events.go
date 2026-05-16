@@ -1,5 +1,3 @@
-// Package events implements MCP tools for GitLab event operations
-// including listing project visible events and user contribution events.
 package events
 
 import (

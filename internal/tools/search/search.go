@@ -1,7 +1,3 @@
-// Package search implements GitLab search operations across multiple scopes:
-// code (blobs), merge requests, issues, commits, milestones, notes, projects,
-// snippet titles, users, and wiki blobs. Each handler supports global, group,
-// and/or project-scoped search as available in the GitLab Search API.
 package search
 
 import (

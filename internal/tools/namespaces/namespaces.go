@@ -1,5 +1,3 @@
-// Package namespaces implements MCP tools for GitLab namespace operations
-// including listing, getting, checking existence, and searching namespaces.
 package namespaces
 
 import (

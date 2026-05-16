@@ -1,6 +1,3 @@
-// Package civariables implements MCP tool handlers for GitLab project-level
-// CI/CD variables. It supports list, get, create, update, and delete operations
-// via the ProjectVariables API.
 package civariables
 
 import (

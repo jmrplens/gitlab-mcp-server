@@ -1,10 +1,3 @@
-// Package epicnotes implements GitLab epic note (comment) operations using
-// the Work Items GraphQL API. Notes are comments attached to group epics
-// and may be system-generated or user-created.
-//
-// This package was migrated from the deprecated Epics REST API (deprecated
-// GitLab 17.0, removal planned 19.0) to the Work Items GraphQL API per
-// ADR-0009 (progressive GraphQL migration).
 package epicnotes
 
 import (

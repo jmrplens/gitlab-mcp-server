@@ -34,7 +34,6 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			Tags:                   append([]string(nil), spec.Tags...),
 			Usage:                  spec.Usage,
 			RelatedActions:         append([]string(nil), spec.RelatedActions...),
-			Docs:                   toolutil.CloneDocumentationReferences(spec.Docs),
 			Compatibility:          toolutil.CloneCompatibilityPolicy(spec.Compatibility),
 			ReadOnly:               spec.ReadOnly,
 			Edition:                spec.Edition,

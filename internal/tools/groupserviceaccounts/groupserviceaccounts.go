@@ -1,4 +1,3 @@
-// Package groupserviceaccounts implements MCP tool handlers for GitLab group service account operations.
 package groupserviceaccounts
 
 import (

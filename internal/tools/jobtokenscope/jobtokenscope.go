@@ -1,6 +1,3 @@
-// Package jobtokenscope implements MCP tool handlers for managing GitLab
-// project CI/CD job token scope settings. It wraps the JobTokenScopeService
-// from client-go v2.
 package jobtokenscope
 
 import (

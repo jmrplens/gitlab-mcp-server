@@ -1,7 +1,3 @@
-// Package groupldap tests validate all MCP tool handlers for GitLab group
-// LDAP link operations: List, Add, DeleteWithCNOrFilter, DeleteForProvider.
-// Tests cover success paths, input validation, API errors, optional field
-// branches, and markdown formatting for both single and list outputs.
 package groupldap
 
 import (

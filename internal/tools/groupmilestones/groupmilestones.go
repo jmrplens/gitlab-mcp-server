@@ -1,6 +1,3 @@
-// Package groupmilestones implements GitLab group milestone operations including
-// list, get, create, update, delete, and related resource retrieval (issues,
-// merge requests, burndown chart events).
 package groupmilestones
 
 import (

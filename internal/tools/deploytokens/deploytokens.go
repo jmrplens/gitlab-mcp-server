@@ -1,6 +1,3 @@
-// Package deploytokens implements GitLab Deploy Tokens API operations as MCP tools.
-// It supports listing, getting, creating, and deleting deploy tokens at
-// project, group, and instance levels.
 package deploytokens
 
 import (
@@ -43,7 +40,7 @@ type ListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// timeStr implements the time str helper used by deploytokens.
+// timeStr formats optional deploy-token timestamps as RFC3339 strings.
 func timeStr(t *time.Time) string {
 	if t == nil {
 		return ""

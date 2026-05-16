@@ -1,4 +1,3 @@
-// Package systemhooks implements MCP tools for GitLab System Hooks API.
 package systemhooks
 
 import (

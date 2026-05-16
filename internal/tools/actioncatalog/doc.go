@@ -17,4 +17,11 @@
 // are still registered directly by internal/tools.RegisterAll for compatibility.
 // Meta-tools and dynamic tools consume this catalog through adapters such as
 // internal/tools.RegisterMetaCatalog and internal/tools/dynamic.NewRegistryFromCatalog.
+//
+// # Invariants
+//
+// Catalog construction must be deterministic. Groups preserve explicit action
+// order for user-facing descriptions, cloning avoids mutable alias/schema
+// sharing between surfaces, and validation rejects duplicate action IDs or
+// ambiguous aliases before tools are registered.
 package actioncatalog

@@ -1,5 +1,3 @@
-// Package awardemoji implements MCP tools for GitLab award emoji operations
-// on issues, merge requests, snippets, and their notes.
 package awardemoji
 
 import (

@@ -1,20 +1,10 @@
 //go:build e2e
 
-// setup_test.go is the main E2E test infrastructure file. It provides
-// [TestMain] for initializing the test environment, six in-process MCP
-// server/client pairs (individual, meta, dynamic, sampling, elicitation,
-// safe mode),
-// snapshot guardrails for self-hosted mode, and shared helper functions used
-// across all domain test files.
-
-// Package suite contains end-to-end integration tests that exercise the
-// MCP server tools against a real GitLab instance via in-process MCP
-// client-server transport.
-//
-// Run with:
-//
-//	go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 package suite
+
+// setup_test.go contains the main E2E test infrastructure: [TestMain], six
+// in-process MCP server/client pairs, snapshot guardrails for self-hosted mode,
+// and shared helpers used across all domain test files.
 
 import (
 	"context"

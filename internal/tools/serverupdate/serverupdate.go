@@ -1,5 +1,3 @@
-// Package serverupdate implements MCP tools for on-demand server update
-// checks and manual update application.
 package serverupdate
 
 import (

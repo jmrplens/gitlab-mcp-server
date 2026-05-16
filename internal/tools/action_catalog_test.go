@@ -231,9 +231,6 @@ func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 	if !slices.Contains(action.Aliases, "group.search") || !slices.Contains(action.Tags, "group") || !slices.Contains(action.RelatedActions, "group.get") {
 		t.Fatalf("action search metadata = aliases %+v tags %+v related %+v", action.Aliases, action.Tags, action.RelatedActions)
 	}
-	if len(action.Docs) == 0 || action.Docs[0].URL != "https://docs.gitlab.com/api/groups/" {
-		t.Fatalf("action Docs = %+v, want default group API documentation", action.Docs)
-	}
 	if action.Route.ParameterGuidance["search"].SemanticRole != "group_search_query" {
 		t.Fatalf("route guidance = %+v, want spec guidance", action.Route.ParameterGuidance)
 	}

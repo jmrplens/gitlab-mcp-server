@@ -30,6 +30,14 @@
 // and list/detail outputs commonly embed [HintableOutput] so meta-tools can add
 // next-step guidance.
 //
+// # Markdown and Structured Output
+//
+// Domain packages register Markdown renderers with [RegisterMarkdown] and
+// [RegisterMarkdownResult]. The registry lets handlers return typed structured
+// output for MCP clients while still producing compact human-readable Markdown.
+// Shared helpers such as [MarkdownTableHeader], [MarkdownTableSeparator], and
+// [MarkdownTableRow] keep table formatting consistent across domains.
+//
 // # Dependency Direction
 //
 // The package dependency shape is intentionally one-way:

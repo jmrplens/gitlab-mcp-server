@@ -26,4 +26,8 @@
 // [RegisterAllMeta] preserves the meta registration entry point by building and
 // registering that catalog. [SafeModePreview] describes the preview payload
 // returned when safe mode intercepts mutating calls.
+//
+// Domain packages document the official GitLab API pages they wrap. Keeping
+// those references in package documentation preserves pkgsite discoverability
+// without adding fields to MCP tool schemas or dynamic discovery responses.
 package tools

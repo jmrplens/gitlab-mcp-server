@@ -1,6 +1,12 @@
 // Package logging provides MCP protocol-level logging via ServerSession.
 // It sends structured log messages to connected clients for server monitoring,
 // complementing the stderr-based slog logging already in place.
+//
+// # Secret Handling
+//
+// Values sent through this package are visible to the MCP client. Callers must
+// avoid passing tokens, passwords, authorization headers, or structs that may
+// contain credentials.
 package logging
 
 import (

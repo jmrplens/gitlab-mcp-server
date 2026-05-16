@@ -1,10 +1,3 @@
-// Package epicissues implements GitLab epic-issue hierarchy operations using
-// the Work Items GraphQL API. Child issues are managed through the hierarchy
-// widget, supporting listing, assigning, removing, and reordering.
-//
-// This package was migrated from the deprecated Epics REST API (deprecated
-// GitLab 17.0, removal planned 19.0) to the Work Items GraphQL API per
-// ADR-0009 (progressive GraphQL migration).
 package epicissues
 
 import (

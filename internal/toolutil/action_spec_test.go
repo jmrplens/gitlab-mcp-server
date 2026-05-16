@@ -23,7 +23,6 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases := []string{" Project.Delete ", "project.delete"}
 	tags := []string{" Admin ", "ADMIN"}
 	relatedActions := []string{"Project.Get"}
-	docs := []DocumentationReference{{Title: "Projects API", URL: "https://docs.gitlab.com/api/projects/"}}
 	compatibility := CompatibilityPolicy{
 		ActionAliases:    []ActionAliasSpec{{Alias: " Project.Remove ", Target: " Delete ", Source: "dynamic", Searchable: true, Reason: "Historical dynamic alias."}},
 		ParameterAliases: []ParameterAliasSpec{{Alias: " Project ", Target: "project_id", Source: "dynamic", Reason: "Historical dynamic parameter alias."}},
@@ -35,7 +34,6 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 		Aliases:                aliases,
 		Tags:                   tags,
 		RelatedActions:         relatedActions,
-		Docs:                   docs,
 		Compatibility:          compatibility,
 		ParameterGuidance:      map[string]ParameterGuidance{"project_id": specGuidance},
 		ReadOnly:               false,
@@ -55,7 +53,6 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	aliases[0] = "changed"
 	tags[0] = "changed"
 	relatedActions[0] = "changed"
-	docs[0].Title = "changed"
 	compatibility.ActionAliases[0].Alias = "changed"
 	compatibility.ParameterAliases[0].Alias = "changed"
 	schemaNotes[0] = "changed"
@@ -82,9 +79,6 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	}
 	if spec.RelatedActions[0] != "project.get" || spec.SchemaValidationNotes[0] != "Schema cannot express file source exclusivity." || spec.RuntimeValidationNotes[0] != "Validate project ownership." {
 		t.Fatalf("related/actions notes = %+v / %+v / %+v, want cloned normalized values", spec.RelatedActions, spec.SchemaValidationNotes, spec.RuntimeValidationNotes)
-	}
-	if len(spec.Docs) != 1 || spec.Docs[0].Title != "Projects API" || spec.Docs[0].URL != "https://docs.gitlab.com/api/projects/" {
-		t.Fatalf("Docs = %+v, want cloned documentation reference", spec.Docs)
 	}
 	if spec.Compatibility.ActionAliases[0].Alias != "project.remove" || spec.Compatibility.ActionAliases[0].Target != "delete" {
 		t.Fatalf("action compatibility aliases = %+v, want cloned normalized action alias", spec.Compatibility.ActionAliases)

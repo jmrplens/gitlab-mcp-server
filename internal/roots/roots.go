@@ -1,8 +1,15 @@
 // Package roots provides client workspace discovery via the MCP Roots capability.
 //
-// Roots is a client-side capability — the client declares workspace directories/files
-// and the server can query them via ServerSession.ListRoots(). The Manager caches current
-// roots per session and provides helpers for workspace-aware operations.
+// Roots is a client-side capability: the client declares workspace directories
+// or files and the server can query them with ServerSession.ListRoots. The
+// Manager caches current roots per session and provides workspace-aware lookup
+// helpers for tools that need to reason about local paths.
+//
+// # Degraded Clients
+//
+// Clients are not required to advertise roots. The package treats missing roots
+// support as an empty root set so tools can degrade gracefully without issuing a
+// JSON-RPC request that is guaranteed to fail.
 package roots
 
 import (

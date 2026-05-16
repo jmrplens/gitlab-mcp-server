@@ -1,7 +1,3 @@
-// Package issuenotes contains unit tests for GitLab issue note (comment)
-// operations (create and list). Tests use httptest to mock the GitLab API
-// and verify success paths, internal notes, system notes, pagination, and
-// error handling.
 package issuenotes
 
 import (

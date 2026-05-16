@@ -1,4 +1,3 @@
-// Package projecttemplates implements MCP tools for GitLab project template operations.
 package projecttemplates
 
 import (

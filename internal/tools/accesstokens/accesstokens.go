@@ -1,6 +1,3 @@
-// Package accesstokens implements GitLab Access Token operations as MCP tools.
-// It supports project access tokens, group access tokens, and personal access tokens,
-// including listing, getting, creating, rotating, and revoking tokens.
 package accesstokens
 
 import (

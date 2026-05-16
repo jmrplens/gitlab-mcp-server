@@ -1,6 +1,3 @@
-// Package deploymentmergerequests implements an MCP tool handler for listing
-// merge requests associated with a GitLab deployment. It wraps the
-// DeploymentMergeRequestsService from client-go v2.
 package deploymentmergerequests
 
 import (

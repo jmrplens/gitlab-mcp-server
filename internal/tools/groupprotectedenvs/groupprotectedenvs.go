@@ -1,5 +1,3 @@
-// Package groupprotectedenvs implements MCP tool handlers for GitLab
-// group-level protected environment operations.
 package groupprotectedenvs
 
 import (

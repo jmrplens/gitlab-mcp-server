@@ -1,6 +1,3 @@
-// Package settings implements MCP tool handlers for GitLab application settings.
-// It wraps the SettingsService from client-go v2.
-// These are admin-only endpoints requiring administrator access.
 package settings
 
 import (

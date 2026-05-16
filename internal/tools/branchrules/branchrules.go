@@ -1,7 +1,3 @@
-// Package branchrules implements MCP tool handlers for GitLab Branch Rules
-// retrieval using the GraphQL API. Branch Rules provide an aggregated read-only
-// view of branch protections, approval rules, and external status checks.
-// Individual protected branch management continues to use REST via existing packages.
 package branchrules
 
 import (
