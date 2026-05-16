@@ -39,6 +39,19 @@ func (m *mockSource) DownloadReleaseAsset(_ context.Context, _ *selfupdate.Relea
 	return nil, errors.New("mock: download not implemented")
 }
 
+// panicSource implements selfupdate.Source by panicking during release lookup.
+type panicSource struct{}
+
+// ListReleases panics to exercise panic recovery around update checks.
+func (panicSource) ListReleases(context.Context, selfupdate.Repository) ([]selfupdate.SourceRelease, error) {
+	panic("simulated source panic")
+}
+
+// DownloadReleaseAsset panics because panicSource never reaches downloads.
+func (panicSource) DownloadReleaseAsset(context.Context, *selfupdate.Release, int64) (io.ReadCloser, error) {
+	panic("unexpected download")
+}
+
 // mockRelease implements selfupdate.SourceRelease.
 type mockRelease struct {
 	tag    string
@@ -250,6 +263,27 @@ func TestNewUpdater_Defaults(t *testing.T) {
 	}
 }
 
+// TestNewUpdater_GitHubSourceError verifies errors from the default source
+// factory are wrapped and returned to the caller.
+func TestNewUpdater_GitHubSourceError(t *testing.T) {
+	orig := newGitHubSource
+	newGitHubSource = func() (selfupdate.Source, error) {
+		return nil, errors.New("source unavailable")
+	}
+	t.Cleanup(func() { newGitHubSource = orig })
+
+	_, err := NewUpdater(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if err == nil {
+		t.Fatal("expected source creation error")
+	}
+	if !strings.Contains(err.Error(), "creating GitHub source") {
+		t.Errorf("error = %q, want GitHub source context", err.Error())
+	}
+}
+
 // TestIsEnabled verifies mode-to-enabled mapping.
 func TestIsEnabled(t *testing.T) {
 	tests := []struct {
@@ -323,6 +357,25 @@ func TestStartPeriodicCheck_ContextCancellation(t *testing.T) {
 
 	// Allow the goroutine to exit gracefully.
 	time.Sleep(200 * time.Millisecond)
+}
+
+// TestStartPeriodicCheck_InvalidIntervalRecovered verifies the periodic
+// goroutine recovers if ticker creation panics due to invalid internal state.
+func TestStartPeriodicCheck_InvalidIntervalRecovered(t *testing.T) {
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "a/b",
+		CurrentVersion: "1.0.0",
+		Interval:       time.Millisecond,
+	}, nil)
+	u.cfg.Interval = 0
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	u.StartPeriodicCheck(ctx)
+
+	// Let the goroutine start, panic in time.NewTicker, recover, and exit.
+	time.Sleep(20 * time.Millisecond)
 }
 
 // NewUpdater branch coverage.
@@ -993,6 +1046,36 @@ func TestDownloadAndReplace_InvalidBinaryContent(t *testing.T) {
 	}
 }
 
+// TestDownloadAndReplace_ReplaceErrorRemovesStaging verifies that a staged
+// binary is cleaned up when the final executable replacement fails.
+func TestDownloadAndReplace_ReplaceErrorRemovesStaging(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	_, err := u.DownloadAndReplace(context.Background())
+	if err == nil {
+		t.Fatal("expected replacement error")
+	}
+	if !strings.Contains(err.Error(), "renaming current binary") {
+		t.Errorf("error = %q, want renaming context", err.Error())
+	}
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after replace failure, statErr=%v", statErr)
+	}
+}
+
 // restoreTestBinary stubs the executable path to a temp directory and
 // registers cleanup that restores any .old backup. This prevents tests
 // from modifying the production binary.
@@ -1424,11 +1507,8 @@ func TestSafePeriodicCheckOnce_PanicRecovery(t *testing.T) {
 		Mode:           ModeAuto,
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
-	}, nil)
+	}, panicSource{})
 
-	// safePeriodicCheckOnce will call periodicCheckOnce which will call
-	// CheckForUpdate with nil source — this may panic. The recovery should
-	// catch it.
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("safePeriodicCheckOnce should have recovered from panic, got: %v", r)
