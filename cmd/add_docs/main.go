@@ -461,14 +461,14 @@ func generateMethodDoc(d *ast.FuncDecl) string {
 			return fmt.Sprintf("%s reports whether the %s satisfies the %s condition.", name, recvType, camelToWords(name))
 		}
 	}
-	if strings.HasPrefix(name, "Get") {
-		return fmt.Sprintf("%s returns the %s value from %s.", name, camelToWords(strings.TrimPrefix(name, "Get")), subject)
+	if suffix, ok := strings.CutPrefix(name, "Get"); ok {
+		return fmt.Sprintf("%s returns the %s value from %s.", name, camelToWords(suffix), subject)
 	}
-	if strings.HasPrefix(name, "Set") {
-		return fmt.Sprintf("%s updates the %s value on %s.", name, camelToWords(strings.TrimPrefix(name, "Set")), subject)
+	if suffix, ok := strings.CutPrefix(name, "Set"); ok {
+		return fmt.Sprintf("%s updates the %s value on %s.", name, camelToWords(suffix), subject)
 	}
-	if strings.HasPrefix(name, "ensure") {
-		return fmt.Sprintf("%s ensures %s exists for %s.", name, camelToWords(strings.TrimPrefix(name, "ensure")), subject)
+	if suffix, ok := strings.CutPrefix(name, "ensure"); ok {
+		return fmt.Sprintf("%s ensures %s exists for %s.", name, camelToWords(suffix), subject)
 	}
 	if strings.HasPrefix(name, "cleanup") || strings.HasPrefix(name, "delete") {
 		return fmt.Sprintf("%s removes %s fixture resources for %s when present.", name, camelToWords(name), subject)
@@ -647,11 +647,11 @@ func generateTypeDoc(ts *ast.TypeSpec, pkgName string) string {
 	if _, ok := ts.Type.(*ast.InterfaceType); ok {
 		return fmt.Sprintf("%s defines the contract for %s operations.", name, camelToWords(name))
 	}
-	if strings.HasSuffix(name, "Case") {
-		return fmt.Sprintf("%s describes one %s table-driven test case.", name, camelToWords(strings.TrimSuffix(name, "Case")))
+	if prefix, ok := strings.CutSuffix(name, "Case"); ok {
+		return fmt.Sprintf("%s describes one %s table-driven test case.", name, camelToWords(prefix))
 	}
-	if strings.HasSuffix(name, "Alias") {
-		return fmt.Sprintf("%s describes one %s alias mapping used by tests.", name, camelToWords(strings.TrimSuffix(name, "Alias")))
+	if prefix, ok := strings.CutSuffix(name, "Alias"); ok {
+		return fmt.Sprintf("%s describes one %s alias mapping used by tests.", name, camelToWords(prefix))
 	}
 	words := camelToWords(name)
 	lower := strings.ToLower(name)
