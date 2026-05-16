@@ -55,10 +55,10 @@ Before moving, catalog ALL symbols in the source file:
 
 | Symbol | Type | Visibility | Used By |
 |--------|------|-----------|---------|
-| `BranchCreateInput` | struct | exported | register.go, branches_test.go |
-| `BranchOutput` | struct | exported | register.go, branches_test.go, markdown.go |
-| `branchCreate` | func | unexported | register.go |
-| `branchList` | func | unexported | register.go |
+| `BranchCreateInput` | struct | exported | action_specs.go, branches_test.go |
+| `BranchOutput` | struct | exported | action_specs.go, branches_test.go, markdown.go |
+| `branchCreate` | func | unexported | action_specs.go |
+| `branchList` | func | unexported | action_specs.go |
 
 Use `grep` and `go doc` to find all references:
 

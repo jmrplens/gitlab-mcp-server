@@ -82,7 +82,7 @@ gitlab-mcp-server/
 
 - Each GitLab operation is defined once as a typed `ActionSpec` and projected into meta, dynamic, schema, and individual surfaces
 - Use `jsonschema` struct tags for tool input documentation
-- Register runtime surfaces from the canonical action catalog; ordinary GitLab actions should not add new package-level meta registration paths
+- Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
 - Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. Keep `dynamic-2` experimental unless explicitly requested.

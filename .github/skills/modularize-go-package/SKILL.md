@@ -229,7 +229,7 @@ mr_approvals.go        → mergerequests/approvals.go
 mr_draft_notes.go      → mergerequests/draft_notes.go
 ```
 
-Each file keeps its handler functions; the `register.go` consolidates all MR tool registrations.
+Each file keeps its handler functions; `action_specs.go` consolidates all MR action metadata and catalog routes.
 
 ### Packages (4 files → 1 sub-package)
 

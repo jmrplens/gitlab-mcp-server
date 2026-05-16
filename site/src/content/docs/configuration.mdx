@@ -33,7 +33,7 @@ This must be set for the server to start in stdio mode:
 | `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                             |
 | `TOOL_SURFACE`           | `meta`               | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`                                                                                                      |
 | `META_TOOLS`             | legacy               | Deprecated compatibility selector. `true` maps to `meta`, `false` maps to `individual`, and dynamic values map to the matching `TOOL_SURFACE` value when `TOOL_SURFACE` is absent                   |
-| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, guides, and prompts |
+| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, prompts, workflow guides, and meta-schema resources |
 | `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (6.5x opaque size), or `full` (11.9x opaque size). Applies to meta-tool `tools/list` schemas only                                    |
 | `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                                           |
 | `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                 |
@@ -49,7 +49,7 @@ Use `TOOL_SURFACE=dynamic` for the current lowest-token catalog: only `gitlab_se
 
 See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for the search, describe, execute workflow.
 
-For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery and omits optional resources, meta-schema resources, workflow guides, and prompts. With `CAPABILITY_SURFACE=minimal`, use `gitlab_describe_tools` to retrieve dynamic action schemas inline. The default remains `full`; no schemas-only capability mode is exposed today.
+For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery and omits optional resources, prompts, workflow guides, and meta-schema resources. This does not remove action schemas from dynamic discovery: use `gitlab_describe_tools` to retrieve exact schemas inline before calling `gitlab_execute_tool`. The default remains `full`; no schemas-only capability mode is exposed today.
 :::
 
 ## Auto-update

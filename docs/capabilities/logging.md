@@ -87,7 +87,7 @@ logger := logging.NewSessionLogger(session)
 | `Alert(ctx, message, data)` | `alert` | Action must be taken immediately |
 | `Emergency(ctx, message, data)` | `emergency` | System is unusable |
 
-The server exposes the full set of [RFC 5424 syslog severity levels](https://datatracker.ietf.org/doc/html/rfc5424) required by the MCP 2025-11-25 spec. Tool registration handlers currently emit at `info` (success) and `error` (failure); the higher-severity helpers are available for callers that need them and for clients to filter via `logging/setLevel`.
+The server exposes the full set of [RFC 5424 syslog severity levels](https://datatracker.ietf.org/doc/html/rfc5424) required by the MCP 2025-11-25 spec. Catalog-backed tool handlers currently emit at `info` (success) and `error` (failure); the higher-severity helpers are available for callers that need them and for clients to filter via `logging/setLevel`.
 
 ### Structured Tool Logging
 

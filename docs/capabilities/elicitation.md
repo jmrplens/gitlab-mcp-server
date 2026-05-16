@@ -288,7 +288,7 @@ Support varies by client. As of 2025, VS Code Copilot Chat does not yet support 
 
 ### Can I add a new interactive tool?
 
-Yes. Create a handler in the `elicitationtools` package that uses the `elicitation.Client` methods. Follow the pattern of existing tools: capability check → sequential prompts → confirmation → API call. Register the tool in the sub-package's `register.go`.
+Yes. Create a handler in the `elicitationtools` package that uses the `elicitation.Client` methods. Follow the pattern of existing tools: capability check → sequential prompts → confirmation → API call. Expose the handler through the package's `ActionSpecs` and the catalog-backed standalone surface path rather than adding package-local registration.
 
 ## References
 

@@ -43,14 +43,14 @@ Continue with a single `internal/tools/` package but enforce strict naming conve
 
 ### Option B: Domain sub-packages (selected)
 
-Split `internal/tools/` into domain sub-packages: `internal/tools/branches/`, `internal/tools/issues/`, etc. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
+Split `internal/tools/` into domain sub-packages: `internal/tools/branches/`, `internal/tools/issues/`, etc. Each sub-package owns its types, handlers, Markdown formatters, and canonical action specs.
 
 - **POS-001**: Package namespace eliminates domain prefixes (`branches.Output` vs `BranchOutput`)
 - **POS-002**: Independent compilation and testing per domain
 - **POS-003**: Clear ownership and discoverability
 - **POS-004**: Zero import cycles — sub-packages import `toolutil/`, never each other
 - **NEG-001**: More directories and files to navigate
-- **NEG-002**: Orchestration layer needed (`register.go`) to wire all sub-packages
+- **NEG-002**: Orchestration layer needed to wire all sub-packages into runtime tool surfaces
 
 ### Option C: Separate Go modules per domain
 
@@ -72,7 +72,6 @@ internal/tools/{domain}/
 ├── {domain}.go          # Types (Input/Output structs) and handler functions
 ├── {domain}_test.go     # Table-driven tests with httptest mocks
 ├── action_specs.go      # ActionSpecs(client) — canonical route metadata
-├── register.go          # Existing individual compatibility registration, where retained
 ├── markdown.go          # Markdown formatters with content annotations
 ```
 
@@ -81,6 +80,8 @@ The current orchestration layer in `internal/tools/` builds surfaces from catalo
 - `register.go` → projects individual tools from the canonical action catalog
 - `register_meta.go` → registers catalog-backed meta groups and standalone surface tools
 - `markdown.go` → delegates to the type-based Markdown registry
+
+Package-local `RegisterTools` functions have since been removed for ordinary GitLab API domains. See [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) for the catalog-first runtime that supersedes the original registration mechanics.
 
 ### Conventions
 

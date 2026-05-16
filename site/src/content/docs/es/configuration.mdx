@@ -33,7 +33,7 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 | `GITLAB_SKIP_TLS_VERIFY` | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                             |
 | `TOOL_SURFACE`           | `meta`               | Selector canónico del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                                                                                                                         |
 | `META_TOOLS`             | heredado             | Selector de compatibilidad deprecado. `true` mapea a `meta`, `false` mapea a `individual`, y los valores dynamic mapean al `TOOL_SURFACE` equivalente cuando `TOOL_SURFACE` no está definido                      |
-| `CAPABILITY_SURFACE`     | `full`               | Selector del catálogo de recursos y prompts: `full` conserva el catálogo completo; `minimal` mantiene solo `gitlab://workspace/roots` y desactiva recursos opcionales, meta-schema, guías y prompts                |
+| `CAPABILITY_SURFACE`     | `full`               | Selector del catálogo de recursos y prompts: `full` conserva el catálogo completo; `minimal` mantiene solo `gitlab://workspace/roots` y desactiva recursos opcionales, prompts, guías de flujo y meta-schema       |
 | `META_PARAM_SCHEMA`      | `opaque`             | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (6.5x el tamaño opaque) o `full` (11.9x). Solo afecta schemas de meta-herramientas en `tools/list`                     |
 | `GITLAB_ENTERPRISE`      | `false`              | Habilitar herramientas Enterprise/Premium en modo stdio. En modo HTTP, `--enterprise` puede forzar el catálogo; si se omite, la edición se autodetecta por entrada token+URL                                       |
 | `GITLAB_READ_ONLY`       | `false`              | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                       |
@@ -49,7 +49,7 @@ Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo buscar, describir y ejecutar.
 
-Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, recursos de meta-schema, guías de flujo y prompts. Con `CAPABILITY_SURFACE=minimal`, usa `gitlab_describe_tools` para recuperar los schemas de acciones dinámicas en línea. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
+Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Esto no elimina los schemas del descubrimiento dinámico: usa `gitlab_describe_tools` para recuperar schemas exactos antes de llamar a `gitlab_execute_tool`. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
 :::
 
 ## Autoactualización

@@ -23,7 +23,7 @@ superseded_by: "ADR-0014 for meta registration mechanics"
 
 ## Context
 
-ADR-0004 established modular domain sub-packages (now 117), each optionally exposing its own `RegisterMeta()` function. Over time the meta-tool count grew organically:
+ADR-0004 established modular domain sub-packages and each package could originally expose its own `RegisterMeta()` function. Over time the meta-tool count grew organically:
 
 | Metric                          | Count |
 | ------------------------------- | ----- |

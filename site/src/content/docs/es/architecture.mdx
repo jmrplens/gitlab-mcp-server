@@ -104,6 +104,16 @@ Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) par
 
 ## Arquitectura de herramientas
 
+### Catálogo de acciones canónico
+
+Cada operación ordinaria de GitLab se define una sola vez en el catálogo de acciones canónico. Las superficies visibles de herramientas son proyecciones de ese catálogo:
+
+- **Meta-herramientas** agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
+- **Herramientas individuales** proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
+- **Herramientas dinámicas** buscan, describen y ejecutan las mismas entradas del catálogo con una lista visible mucho más pequeña.
+
+Como todas las superficies comparten la misma entrada del catálogo, los schemas, el filtrado de solo lectura, las confirmaciones de acciones destructivas, las previsualizaciones de safe mode, el filtrado por scopes, el formato Markdown y la salida JSON se mantienen consistentes entre modos.
+
 ### Modo meta-herramientas (predeterminado)
 
 Con `TOOL_SURFACE=meta` (predeterminado), el servidor expone una base de **33 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 14 herramientas Enterprise/Premium para un total de 47, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 48. Cada meta-herramienta agrupa operaciones relacionadas:

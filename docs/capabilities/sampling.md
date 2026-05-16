@@ -60,7 +60,7 @@
     - [Step 1: Define Input and Output](#step-1-define-input-and-output)
     - [Step 2: Write the Prompt](#step-2-write-the-prompt)
     - [Step 3: Implement the Handler](#step-3-implement-the-handler)
-    - [Step 4: Register the Tool](#step-4-register-the-tool)
+    - [Step 4: Add the ActionSpec](#step-4-add-the-actionspec)
   - [Frequently Asked Questions](#frequently-asked-questions)
     - [Does sampling use my API key or tokens?](#does-sampling-use-my-api-key-or-tokens)
     - [Can I control which AI model is used?](#can-i-control-which-ai-model-is-used)
@@ -541,10 +541,7 @@ You:  "Review the code in MR !15 of gitlab-mcp-server for bugs and improvements.
 1. The AI calls `gitlab_analyze_mr_changes` with `project_id=1835, merge_request_iid=15`
 2. The server fetches the MR metadata and all file diffs
 3. The server formats this as a Markdown document with diff blocks for each file
-4. The AI analyzes the diffs and returns findings like:
-   - **Summary**: "15 files changed, adds sampling tools modularization..."
-   - **Issues**: "Missing error check in line 42 of register.go..."
-   - **Suggestions**: "Consider extracting the formatting logic to reduce function length..."
+4. The AI analyzes the diffs and returns a summary, issues such as "Missing error check in line 42 of the merge request handler...", and suggestions such as "Consider extracting the formatting logic to reduce function length..."
 
 ### Scenario 2: Pipeline Failure Diagnosis
 
@@ -613,7 +610,7 @@ Not all MCP clients support sampling. When a client lacks this capability, every
 1. `sampling.FromRequest(req)` returns an inactive `Client`
 2. `client.IsSupported()` returns `false` — no GitLab API calls are wasted
 3. Tool returns `sampling.ErrSamplingNotSupported`
-4. Registration handler catches the error and returns an informational `CallToolResult` with `IsError: true`
+4. The catalog route wrapper converts the error into an informational `CallToolResult` with `IsError: true`
 5. The error message explains the tool requires sampling capability
 6. The AI assistant can then fall back to non-sampling tools (e.g., `gitlab_mr_review` for viewing diffs directly)
 
@@ -697,25 +694,20 @@ func MyAnalysis(ctx context.Context, req *mcp.CallToolRequest,
 }
 ```
 
-### Step 4: Register the Tool
+### Step 4: Add the ActionSpec
 
-Add the tool in `register.go` with the `ErrSamplingNotSupported` error handling:
+Add the tool to `ActionSpecs` with the sampling route wrapper so the same action is available through individual, meta, and dynamic surfaces:
 
 ```go
-mcp.AddTool(server, &mcp.Tool{
-    Name:        "gitlab_my_analysis",
-    Description: "Description requiring sampling capability...",
-    Annotations: toolutil.ReadAnnotations,
-}, func(ctx context.Context, req *mcp.CallToolRequest,
-    input MyAnalysisInput) (*mcp.CallToolResult, MyAnalysisOutput, error) {
-
-    out, err := MyAnalysis(ctx, req, client, input)
-    if errors.Is(err, sampling.ErrSamplingNotSupported) {
-        return SamplingUnsupportedResult("gitlab_my_analysis"), MyAnalysisOutput{}, nil
-    }
-    return toolutil.ToolResultWithMarkdown(FormatMyAnalysisMarkdown(out)), out, err
-})
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+  return []toolutil.ActionSpec{
+    samplingSpec("my_analysis", client, MyAnalysis, "gitlab_my_analysis",
+      "Analyze project data using LLM-assisted MCP sampling. "+samplingRequirement),
+  }
+}
 ```
+
+The `samplingRoute` helper preserves typed schemas and converts `sampling.ErrSamplingNotSupported` into the standard unsupported-capability result. Add the output formatter to `MetaMarkdownForResult` or the package Markdown registry so every runtime surface returns the same Markdown.
 
 ## Frequently Asked Questions
 

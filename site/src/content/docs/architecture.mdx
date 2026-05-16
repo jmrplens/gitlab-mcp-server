@@ -104,6 +104,16 @@ See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for detailed 
 
 ## Tool architecture
 
+### Canonical action catalog
+
+Every ordinary GitLab operation is defined once in the canonical action catalog. The visible tool surfaces are projections of that catalog:
+
+- **Meta-tools** group related actions behind domain tools such as `gitlab_issue`.
+- **Individual tools** project one visible MCP tool per action for compatibility and testing.
+- **Dynamic tools** search, describe, and execute the same catalog entries with a much smaller visible tool list.
+
+Because all surfaces share the same catalog entry, schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, Markdown formatting, and JSON output stay consistent across modes.
+
 ### Meta-tool mode (default)
 
 With `TOOL_SURFACE=meta` (default), the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 14 Enterprise/Premium tools for 47 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 48 total. Each meta-tool groups related operations:

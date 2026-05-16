@@ -781,9 +781,9 @@ This project has specific patterns to recognize when documenting:
 
 - **MCP tool input structs** have `jsonschema` tags — document the tool parameters they define
 - **Handler functions** follow `func name(ctx, client, input) (output, error)` — document the GitLab API operation
-- **Registration functions** use `mcp.AddTool()` — document which MCP tools are registered and their annotations
+- **ActionSpecs functions** define canonical action metadata — document the GitLab operations, route behavior, and projected tool surfaces
 - **Tests use `httptest`** — always mention the API endpoint being mocked
 - **`testutil.NewTestClient()`** and **`testutil.RespondJSON()`** — reference these helpers by name in test docs
-- **Sub-packages under `internal/tools/`** — each has its own `register.go`, types need no domain prefix
+- **Sub-packages under `internal/tools/`** — each owns `ActionSpecs`, typed handlers, tests, and Markdown formatters; types need no domain prefix
 - **Markdown formatters** — document the conversion from GitLab types to markdown format
 - **`[gitlabclient.Client]`** — use doc links to reference the client wrapper

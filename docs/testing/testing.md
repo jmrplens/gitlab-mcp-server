@@ -804,24 +804,26 @@ Each tool sub-package follows this structure:
 internal/tools/{domain}/
 ├── {domain}.go          # Tool handlers
 ├── {domain}_test.go     # Unit tests
-├── register.go          # Tool registration
+├── action_specs.go      # Canonical ActionSpec route metadata
 ├── markdown.go          # Markdown formatters (if any)
 └── markdown_test.go     # Formatter tests (if any)
 ```
 
-**Exception — `samplingtools/`** uses per-tool file organization (11 tools, 13 source files + 12 test files):
+**Exception — `samplingtools/`** uses per-tool file organization (11 tools, shared routes, and per-tool tests):
 
 ```text
 internal/tools/samplingtools/
 ├── common.go                          # Shared helpers
 ├── common_test.go                     # Shared test helpers and constants
-├── register.go                        # Tool registration (11 tools)
+├── action_specs.go                    # Canonical ActionSpecs for sampling tools
+├── routes.go                          # Sampling-aware ActionRoute wrappers
+├── markdown.go                        # Shared Markdown dispatch
 ├── analyze_mr_changes.go              # Per-tool handler
 ├── analyze_mr_changes_test.go         # Per-tool tests
 ├── summarize_issue.go
 ├── summarize_issue_test.go
 ├── ...                                # 9 more tool/test pairs
-└── samplingtools.go                   # Shared types (Input/Output structs)
+└── doc.go                             # Package documentation
 ```
 
 ### E2E Test Structure

@@ -46,7 +46,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 
 ### Key Project Patterns
 
-- **Tool sub-packages**: `internal/tools/{domain}/` — each has `register.go`, typed I/O structs, handler functions, `_test.go` files
+- **Tool sub-packages**: `internal/tools/{domain}/` — each has `action_specs.go`, typed I/O structs, handler functions, `_test.go` files, and optional Markdown formatters
 - **Tool naming**: `gitlab_{action}_{resource}` in snake_case
 - **Test naming**: `TestToolName_Scenario_ExpectedResult` with table-driven subtests
 - **Error wrapping**: `fmt.Errorf("context: %w", err)` with `toolutil.WrapErr`

@@ -449,7 +449,7 @@ ADRs document key decisions in `docs/adr/`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package is split into 163 domain sub-packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs; package-local `register.go` files remain as compatibility/context artifacts for existing domains, not the final root registration path for new ordinary GitLab actions. This provides:
+The `internal/tools/` package is split into 163 domain sub-packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
@@ -471,7 +471,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 `TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` register only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. `dynamic-2` is an experimental two-tool surface (`gitlab_find_action` + `gitlab_execute_tool`) and should not be promoted unless explicitly requested.
 
-Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds search/describe/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add duplicate dynamic-only action definitions or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
+Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds search/describe/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
 Search combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should search, describe exact schemas, then execute the canonical action ID returned by search or describe. See `docs/dynamic-tools.md` and ADR-0011.
 

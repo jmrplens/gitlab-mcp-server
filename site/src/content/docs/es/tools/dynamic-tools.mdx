@@ -73,12 +73,12 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` mantiene las raíces del workspace y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Dynamic conserva el descubrimiento de schemas porque `gitlab_describe_tools` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
+`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Dynamic conserva el descubrimiento de schemas porque `gitlab_describe_tools` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
-:::tip[Nombres actuales]
-`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la misma superficie actual de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites fijar explícitamente la variante de tres herramientas.
+:::caution[Variantes dynamic]
+`TOOL_SURFACE=dynamic` y `TOOL_SURFACE=dynamic-3` seleccionan la superficie estable de tres herramientas. Usa `dynamic` para configuración normal y `dynamic-3` solo cuando necesites fijar explícitamente la variante de tres herramientas.
 
-`TOOL_SURFACE=dynamic-2` es una variante experimental de dos herramientas con `gitlab_find_action` más `gitlab_execute_tool`.
+`TOOL_SURFACE=dynamic-2` es una variante experimental de dos herramientas con `gitlab_find_action` más `gitlab_execute_tool`. No la uses en despliegues nuevos salvo que estés probando intencionadamente ese experimento.
 :::
 
 ## Flujo del modelo

@@ -21,7 +21,6 @@ Create a new sub-package under `internal/tools/{domain}/`:
 {domain}/
 ├── {domain}.go         # Input/Output structs + handler logic
 ├── action_specs.go     # Canonical ActionSpec route metadata
-├── register.go         # Existing individual compatibility registration, if the domain already uses it
 ├── markdown.go         # Markdown formatters + init() registry
 └── {domain}_test.go    # Table-driven tests with httptest
 ```
@@ -224,7 +223,7 @@ Rules:
 
 For a new domain, add its `ActionSpecs(client)` builder to the audited catalog aggregation path used by `BuildActionCatalog`.
 
-Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions, and do not add root `RegisterTools` calls as the final runtime path. Root individual registration is catalog-backed through `RegisterIndividualCatalogTools`.
+Do not add package-local `RegisterTools` functions or package-level `RegisterMeta` calls for ordinary GitLab API actions. Root individual registration is catalog-backed through `RegisterIndividualCatalogTools`.
 
 Expected checks:
 
