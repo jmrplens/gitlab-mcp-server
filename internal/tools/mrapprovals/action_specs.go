@@ -1,6 +1,8 @@
 package mrapprovals
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -14,8 +16,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		approvalResetSpec(client),
 		approvalCreateSpec("approval_rule_create", toolutil.RouteAction(client, CreateRule), "gitlab_mr_approval_rule_create"),
 		approvalUpdateSpec("approval_rule_update", toolutil.RouteAction(client, UpdateRule), "gitlab_mr_approval_rule_update"),
-		approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveVoidAction(client, DeleteRule), "gitlab_mr_approval_rule_delete"),
+		approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveAction(client, deleteRuleOutput), "gitlab_mr_approval_rule_delete"),
 	}
+}
+
+func resetOutput(ctx context.Context, client *gitlabclient.Client, input ResetInput) (toolutil.DeleteOutput, error) {
+	if err := Reset(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("MR approvals")
+	return out, nil
+}
+
+func deleteRuleOutput(ctx context.Context, client *gitlabclient.Client, input DeleteRuleInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteRule(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("approval rule")
+	return out, nil
 }
 
 func approvalReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -48,7 +66,7 @@ func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Destructive = true
 	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("approval_reset", toolutil.DestructiveVoidAction(client, Reset), options)
+	return toolutil.NewActionSpec("approval_reset", toolutil.DestructiveAction(client, resetOutput), options)
 }
 
 func approvalOptions(individualTool string) toolutil.ActionSpecOptions {

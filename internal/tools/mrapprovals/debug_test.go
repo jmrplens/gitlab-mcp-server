@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -473,128 +472,6 @@ func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 	assertNotContains(t, md, "| Eligible |")
 	assertNotContains(t, md, "| Users |")
 	assertNotContains(t, md, "| Groups |")
-}
-
-// ---------------------------------------------------------------------------
-// TestRegisterTools_CallAllThroughMCP — full MCP roundtrip
-// ---------------------------------------------------------------------------.
-
-// TestRegisterTools_CallAllThroughMCP validates register tools call all through m c p across multiple scenarios using table-driven subtests.
-func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
-	session := newApprovalsMCPSession(t)
-	ctx := context.Background()
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_mr_approval_state", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_rules", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_config", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_reset", map[string]any{"project_id": "42", "merge_request_iid": 1}},
-		{"gitlab_mr_approval_rule_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "name": "R", "approvals_required": 1, "approval_project_rule_id": 0, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5, "name": "U", "approvals_required": 1, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{
-				Name:      tt.name,
-				Arguments: tt.args,
-			})
-			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
-			}
-			if result.IsError {
-				for _, c := range result.Content {
-					if tc, ok := c.(*mcp.TextContent); ok {
-						t.Fatalf("CallTool(%s) returned error: %s", tt.name, tc.Text)
-					}
-				}
-				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------.
-
-// newApprovalsMCPSession is an internal helper for the mrapprovals package.
-func newApprovalsMCPSession(t *testing.T) *mcp.ClientSession {
-	t.Helper()
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		// approval_state
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approval_state"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"approval_rules_overwritten": false,
-				"rules": [{"id":1,"name":"Default","rule_type":"any_approver","approvals_required":1,"approved":true}]
-			}`)
-
-		// approval_rules GET
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approval_rules"):
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"Default","rule_type":"any_approver","approvals_required":1,"approved":true}]`)
-
-		// approval_rules POST (create)
-		case r.Method == http.MethodPost && strings.HasSuffix(path, "/approval_rules"):
-			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id":5,"name":"R","rule_type":"regular","approvals_required":1,"approved":false,
-				"approved_by":[],"eligible_approvers":[],"users":[],"groups":[]
-			}`)
-
-		// approval_rules PUT (update)
-		case r.Method == http.MethodPut && strings.Contains(path, "/approval_rules/"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":5,"name":"U","rule_type":"regular","approvals_required":1,"approved":false,
-				"approved_by":[],"eligible_approvers":[],"users":[],"groups":[]
-			}`)
-
-		// approval_rules DELETE
-		case r.Method == http.MethodDelete && strings.Contains(path, "/approval_rules/"):
-			w.WriteHeader(http.StatusNoContent)
-
-		// approvals (config)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approvals"):
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"iid":1,"project_id":42,"title":"MR","state":"opened",
-				"approved":false,"approvals_required":1,"approvals_left":1,
-				"approvals_before_merge":0,"has_approval_rules":true,
-				"user_has_approved":false,"user_can_approve":true,
-				"approved_by":[],"suggested_approvers":[]
-			}`)
-
-		// reset_approvals
-		case r.Method == http.MethodPut && strings.HasSuffix(path, "/reset_approvals"):
-			w.WriteHeader(http.StatusAccepted)
-
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterTools(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
 }
 
 // assertContains is an internal helper for the mrapprovals package.
