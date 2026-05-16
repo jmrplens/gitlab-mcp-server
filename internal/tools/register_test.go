@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,8 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
@@ -34,6 +34,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -5170,4 +5171,32 @@ func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
 	if out.Message != "SCIM identity updated successfully." {
 		t.Fatalf("Message = %q, want SCIM identity updated successfully.", out.Message)
 	}
+}
+
+// newTestClient creates a GitLab client pointed at a test HTTP server.
+func newTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{
+		GitLabURL:     srv.URL,
+		GitLabToken:   "test-token",
+		SkipTLSVerify: false,
+	}
+
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("failed to create test gitlab client: %v", err)
+	}
+
+	return client
+}
+
+// respondJSON writes a JSON response with the given status code and body.
+func respondJSON(w http.ResponseWriter, status int, body string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
 }

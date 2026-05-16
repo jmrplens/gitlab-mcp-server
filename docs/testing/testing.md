@@ -22,7 +22,7 @@
 | Unit test functions | 9,771 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
-| Test files (internal/) | 436 |
+| Test files (internal/) | 410 |
 | Test files (cmd/) | 22 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,680 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 271 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,313 | 337 | domain-specific GitLab tool handlers |
+| Core packages | 1,680 | 75 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration | 271 | 10 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tool sub-packages (168) | 7,313 | 325 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,020** | **567** |  |
+| **Total** | **10,020** | **541** |  |
 
 ### Core Packages
 
@@ -121,7 +121,7 @@
 | applications | 15 | 1 | 100.0% | 3 |
 | appstatistics | 9 | 1 | 97.1% | 1 |
 | attestations | 17 | 2 | 100.0% | 2 |
-| auditevents | 42 | 3 | 100.0% | 6 |
+| auditevents | 42 | 2 | 100.0% | 6 |
 | avatar | 9 | 1 | 100.0% | 1 |
 | awardemoji | 108 | 1 | 100.0% | 24 |
 | badges | 51 | 1 | 100.0% | 12 |
@@ -164,7 +164,7 @@
 | featureflags | 39 | 2 | 100.0% | 5 |
 | features | 21 | 2 | 96.9% | 4 |
 | ffuserlists | 29 | 2 | 100.0% | 5 |
-| files | 78 | 3 | 100.0% | 8 |
+| files | 78 | 2 | 100.0% | 8 |
 | freezeperiods | 34 | 2 | 100.0% | 5 |
 | geo | 47 | 2 | 100.0% | 8 |
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
@@ -184,7 +184,7 @@
 | grouprelationsexport | 25 | 2 | 100.0% | 2 |
 | groupreleases | 14 | 3 | 100.0% | 1 |
 | groups | 125 | 3 | 100.0% | 18 |
-| groupsaml | 23 | 4 | 100.0% | 4 |
+| groupsaml | 23 | 3 | 100.0% | 4 |
 | groupscim | 27 | 3 | 100.0% | 4 |
 | groupserviceaccounts | 19 | 2 | 100.0% | 7 |
 | groupsshcerts | 24 | 3 | 100.0% | 3 |
@@ -192,7 +192,7 @@
 | groupvariables | 50 | 2 | 100.0% | 5 |
 | groupwikis | 32 | 3 | 100.0% | 5 |
 | health | 17 | 1 | 100.0% | 2 |
-| impersonationtokens | 38 | 3 | 100.0% | 5 |
+| impersonationtokens | 38 | 2 | 100.0% | 5 |
 | importservice | 26 | 1 | 100.0% | 5 |
 | instancevariables | 40 | 2 | 100.0% | 5 |
 | integrations | 31 | 2 | 100.0% | 4 |
@@ -216,7 +216,7 @@
 | metadata | 8 | 1 | 100.0% | 1 |
 | milestones | 69 | 1 | 100.0% | 7 |
 | modelregistry | 5 | 3 | 100.0% | 1 |
-| mrapprovals | 60 | 3 | 100.0% | 7 |
+| mrapprovals | 60 | 2 | 100.0% | 7 |
 | mrapprovalsettings | 9 | 2 | 100.0% | 4 |
 | mrchanges | 32 | 1 | 100.0% | 4 |
 | mrcontextcommits | 22 | 1 | 100.0% | 3 |
@@ -247,7 +247,7 @@
 | releases | 61 | 1 | 100.0% | 6 |
 | repository | 66 | 1 | 100.0% | 9 |
 | repositorysubmodules | 48 | 3 | 100.0% | 3 |
-| resourceevents | 98 | 3 | 100.0% | 15 |
+| resourceevents | 98 | 2 | 100.0% | 15 |
 | resourcegroups | 16 | 1 | 100.0% | 4 |
 | runnercontrollers | 32 | 2 | 100.0% | 5 |
 | runnercontrollerscopes | 34 | 2 | 100.0% | 5 |
@@ -264,7 +264,7 @@
 | snippetdiscussions | 29 | 2 | 100.0% | 6 |
 | snippetnotes | 42 | 2 | 100.0% | 5 |
 | snippets | 78 | 2 | 99.5% | 15 |
-| snippetstoragemoves | 38 | 3 | 100.0% | 6 |
+| snippetstoragemoves | 38 | 2 | 100.0% | 6 |
 | surfaces | 10 | 1 | 100.0% | 0 |
 | systemhooks | 23 | 2 | 100.0% | 5 |
 | tags | 77 | 2 | 100.0% | 9 |
@@ -275,11 +275,11 @@
 | usagedata | 27 | 1 | 100.0% | 6 |
 | useremails | 24 | 2 | 100.0% | 6 |
 | usergpgkeys | 44 | 2 | 100.0% | 8 |
-| users | 185 | 12 | 100.0% | 36 |
+| users | 185 | 7 | 100.0% | 36 |
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,313** | **337** |  | **1,106** |
+| **Total** | **7,313** | **325** |  | **1,106** |
 
 </details>
 
