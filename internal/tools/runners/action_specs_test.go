@@ -109,6 +109,32 @@ func TestActionSpecs_VerifyOutput(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_ErrorOutputs verifies wrapper routes propagate backend failures.
+func TestActionSpecs_ErrorOutputs(t *testing.T) {
+	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+	}))))
+
+	tests := []struct {
+		tool string
+		args map[string]any
+	}{
+		{"gitlab_runner_remove", map[string]any{"runner_id": 10}},
+		{"gitlab_runner_disable_project", map[string]any{"project_id": "42", "runner_id": 5}},
+		{"gitlab_runner_delete_registered", map[string]any{"runner_id": 99}},
+		{"gitlab_runner_delete_by_token", map[string]any{"token": "del-token"}},
+		{"gitlab_runner_verify", map[string]any{"token": "valid-token"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("expected route error for %s", tt.tool)
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

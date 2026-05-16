@@ -119,6 +119,11 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected route error")
 	}
+
+	_, err = byTool["gitlab_package_file_delete"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "package_id": "10", "package_file_id": "20"})
+	if err == nil {
+		t.Fatal("expected file delete route error")
+	}
 }
 
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.

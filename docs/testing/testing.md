@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,899 |
-| Unit test functions | 9,650 |
+| Total test functions | 9,900 |
+| Unit test functions | 9,651 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,893 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,894 | 89.8% |
 | `TestFunc` (no underscore) | 725 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,242 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,243 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,899** | **567** |  |
+| **Total** | **9,900** | **567** |  |
 
 ### Core Packages
 
@@ -88,8 +88,8 @@
 | jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
 | awardemoji | 106 | 96.7% | 24 |
-| packages | 103 | 97.1% | 8 |
-| runners | 101 | 96.9% | 19 |
+| packages | 103 | 97.3% | 8 |
+| runners | 102 | 98.2% | 19 |
 | pipelines | 99 | 97.9% | 12 |
 | resourceevents | 98 | 100.0% | 15 |
 | commits | 97 | 96.0% | 13 |
@@ -139,7 +139,7 @@
 | commits | 97 | 1 | 96.0% | 13 |
 | compliancepolicy | 5 | 1 | 100.0% | 2 |
 | containerregistry | 74 | 3 | 100.0% | 12 |
-| customattributes | 32 | 1 | 98.9% | 4 |
+| customattributes | 32 | 1 | 100.0% | 4 |
 | customemoji | 26 | 2 | 100.0% | 3 |
 | dbmigrations | 7 | 1 | 100.0% | 1 |
 | dependencies | 14 | 2 | 100.0% | 4 |
@@ -226,7 +226,7 @@
 | namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
-| packages | 103 | 5 | 97.1% | 8 |
+| packages | 103 | 5 | 97.3% | 8 |
 | pages | 54 | 2 | 100.0% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 85 | 2 | 100.0% | 11 |
@@ -252,7 +252,7 @@
 | runnercontrollers | 32 | 2 | 100.0% | 5 |
 | runnercontrollerscopes | 34 | 2 | 100.0% | 5 |
 | runnercontrollertokens | 37 | 2 | 100.0% | 5 |
-| runners | 101 | 2 | 96.9% | 19 |
+| runners | 102 | 2 | 98.2% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
 | securefiles | 24 | 2 | 98.8% | 4 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,242** | **337** |  | **1,106** |
+| **Total** | **7,243** | **337** |  | **1,106** |
 
 </details>
 
@@ -362,7 +362,7 @@
 | commits | 96.0% |
 | compliancepolicy | 100.0% |
 | containerregistry | 100.0% |
-| customattributes | 98.9% |
+| customattributes | 100.0% |
 | customemoji | 100.0% |
 | dbmigrations | 100.0% |
 | dependencies | 100.0% |
@@ -449,7 +449,7 @@
 | namespaces | 98.9% |
 | notifications | 100.0% |
 | orbit | 99.7% |
-| packages | 97.1% |
+| packages | 97.3% |
 | pages | 100.0% |
 | pipelines | 97.9% |
 | pipelineschedules | 100.0% |
@@ -475,7 +475,7 @@
 | runnercontrollers | 100.0% |
 | runnercontrollerscopes | 100.0% |
 | runnercontrollertokens | 100.0% |
-| runners | 96.9% |
+| runners | 98.2% |
 | samplingtools | 100.0% |
 | search | 100.0% |
 | securefiles | 98.8% |
