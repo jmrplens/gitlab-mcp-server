@@ -213,6 +213,20 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest verifies create validation hints.
+func TestCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{Description: "x"})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "experimental admin-only API") {
+		t.Fatalf("error = %v, want admin-only hint", err)
+	}
+}
+
 // TestCreate_ContextCancelled verifies that Create respects context cancellation.
 func TestCreate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -267,6 +281,20 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdate_NotFound verifies update not-found hints.
+func TestUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, msgNotFound)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+		t.Fatalf("error = %v, want list hint", err)
+	}
+}
+
 // TestUpdate_ContextCancelled verifies that Update respects context cancellation.
 func TestUpdate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -312,6 +340,20 @@ func TestDelete_APIError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{ControllerID: 1})
 	if err == nil {
 		t.Fatal(errExpAPIErr)
+	}
+}
+
+// TestDelete_NotFound verifies already-deleted controller hints.
+func TestDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, msgNotFound)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "already be deleted") {
+		t.Fatalf("error = %v, want deletion hint", err)
 	}
 }
 

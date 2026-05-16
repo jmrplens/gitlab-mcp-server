@@ -405,6 +405,20 @@ func TestInstanceVariableCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestInstanceVariableCreate_BadRequest verifies invalid key hints.
+func TestInstanceVariableCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{Key: "K", Value: "V"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "key must match") {
+		t.Fatalf("error = %v, want key hint", err)
+	}
+}
+
 // TestInstanceVariableCreate_AllOptionalFields verifies InstanceVariableCreate when all optional fields.
 func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -470,6 +484,20 @@ func TestInstanceVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestInstanceVariableUpdate_NotFound verifies missing variable hints.
+func TestInstanceVariableUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_instance_variable_list") {
+		t.Fatalf("error = %v, want list hint", err)
+	}
+}
+
 // TestInstanceVariableUpdate_AllOptionalFields verifies InstanceVariableUpdate when all optional fields.
 func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -526,6 +554,20 @@ func TestInstanceVariableDelete_APIError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{Key: "K"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestInstanceVariableDelete_NotFound verifies already-deleted hints.
+func TestInstanceVariableDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "may already be deleted") {
+		t.Fatalf("error = %v, want deletion hint", err)
 	}
 }
 

@@ -375,6 +375,20 @@ func TestListFeatureFlags_APIError(t *testing.T) {
 	}
 }
 
+// TestListFeatureFlags_Forbidden verifies Premium/role hints.
+func TestListFeatureFlags_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := ListFeatureFlags(context.Background(), client, ListInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "Premium/Ultimate") {
+		t.Fatalf("error = %v, want tier hint", err)
+	}
+}
+
 // TestListFeatureFlags_WithScope verifies ListFeatureFlags when with scope.
 func TestListFeatureFlags_WithScope(t *testing.T) {
 	handler := http.NewServeMux()
@@ -430,6 +444,33 @@ func TestCreateFeatureFlag_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateFeatureFlag_ErrorBranches verifies forbidden and generic error paths.
+func TestCreateFeatureFlag_ErrorBranches(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "forbidden", statusCode: http.StatusForbidden, wantText: "Developer+ role"},
+		{name: "generic", statusCode: http.StatusUnprocessableEntity, wantText: "feature_flag_create"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := CreateFeatureFlag(context.Background(), client, CreateInput{ProjectID: "1", Name: "x"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), testCase.wantText) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantText)
+			}
+		})
+	}
+}
+
 // TestCreateFeatureFlag_WithActive verifies CreateFeatureFlag when with active.
 func TestCreateFeatureFlag_WithActive(t *testing.T) {
 	handler := http.NewServeMux()
@@ -464,6 +505,20 @@ func TestUpdateFeatureFlag_APIError(t *testing.T) {
 	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{ProjectID: "1", Name: "x"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestUpdateFeatureFlag_Forbidden verifies role hints.
+func TestUpdateFeatureFlag_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{ProjectID: "1", Name: "x"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "Developer+ role") {
+		t.Fatalf("error = %v, want role hint", err)
 	}
 }
 

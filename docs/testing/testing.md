@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,857 |
-| Unit test functions | 9,608 |
+| Total test functions | 9,867 |
+| Unit test functions | 9,618 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -35,9 +35,9 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,859 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,868 | 89.9% |
 | `TestFunc` (no underscore) | 718 | 7.3% |
-| `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.8% |
+| `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,200 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,210 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,857** | **567** |  |
+| **Total** | **9,867** | **567** |  |
 
 ### Core Packages
 
@@ -161,7 +161,7 @@
 | errortracking | 23 | 2 | 100.0% | 5 |
 | events | 41 | 1 | 100.0% | 2 |
 | externalstatuschecks | 47 | 3 | 100.0% | 8 |
-| featureflags | 36 | 2 | 97.8% | 5 |
+| featureflags | 39 | 2 | 100.0% | 5 |
 | features | 21 | 2 | 96.9% | 4 |
 | ffuserlists | 29 | 2 | 100.0% | 5 |
 | files | 78 | 3 | 100.0% | 8 |
@@ -194,7 +194,7 @@
 | health | 17 | 1 | 100.0% | 2 |
 | impersonationtokens | 38 | 3 | 100.0% | 5 |
 | importservice | 26 | 1 | 100.0% | 5 |
-| instancevariables | 37 | 2 | 97.6% | 5 |
+| instancevariables | 40 | 2 | 100.0% | 5 |
 | integrations | 31 | 2 | 100.0% | 4 |
 | invites | 30 | 1 | 98.1% | 4 |
 | issuediscussions | 41 | 2 | 100.0% | 6 |
@@ -223,7 +223,7 @@
 | mrdiscussions | 46 | 1 | 98.9% | 7 |
 | mrdraftnotes | 61 | 2 | 98.5% | 7 |
 | mrnotes | 37 | 2 | 99.2% | 5 |
-| namespaces | 34 | 1 | 97.8% | 4 |
+| namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
 | packages | 103 | 5 | 97.1% | 8 |
@@ -249,7 +249,7 @@
 | repositorysubmodules | 48 | 3 | 100.0% | 3 |
 | resourceevents | 98 | 3 | 100.0% | 15 |
 | resourcegroups | 16 | 1 | 100.0% | 4 |
-| runnercontrollers | 29 | 2 | 97.6% | 5 |
+| runnercontrollers | 32 | 2 | 100.0% | 5 |
 | runnercontrollerscopes | 34 | 2 | 100.0% | 5 |
 | runnercontrollertokens | 37 | 2 | 100.0% | 5 |
 | runners | 101 | 2 | 96.9% | 19 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,200** | **337** |  | **1,106** |
+| **Total** | **7,210** | **337** |  | **1,106** |
 
 </details>
 
@@ -384,7 +384,7 @@
 | errortracking | 100.0% |
 | events | 100.0% |
 | externalstatuschecks | 100.0% |
-| featureflags | 97.8% |
+| featureflags | 100.0% |
 | features | 96.9% |
 | ffuserlists | 100.0% |
 | files | 100.0% |
@@ -417,7 +417,7 @@
 | health | 100.0% |
 | impersonationtokens | 100.0% |
 | importservice | 100.0% |
-| instancevariables | 97.6% |
+| instancevariables | 100.0% |
 | integrations | 100.0% |
 | invites | 98.1% |
 | issuediscussions | 100.0% |
@@ -446,7 +446,7 @@
 | mrdiscussions | 98.9% |
 | mrdraftnotes | 98.5% |
 | mrnotes | 99.2% |
-| namespaces | 97.8% |
+| namespaces | 98.9% |
 | notifications | 100.0% |
 | orbit | 99.7% |
 | packages | 97.1% |
@@ -472,7 +472,7 @@
 | repositorysubmodules | 100.0% |
 | resourceevents | 100.0% |
 | resourcegroups | 100.0% |
-| runnercontrollers | 97.6% |
+| runnercontrollers | 100.0% |
 | runnercontrollerscopes | 100.0% |
 | runnercontrollertokens | 100.0% |
 | runners | 96.9% |
