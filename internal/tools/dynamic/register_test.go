@@ -3804,6 +3804,19 @@ func TestSnippetParamNormalization_DefensiveBranches(t *testing.T) {
 // normalization, alias deduplication, dynamic description fallback behavior, and
 // compact schema rendering for nil or unmarshalable schemas.
 func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
+	if got := catalogActionAliases(nil); got != nil {
+		t.Fatalf("catalogActionAliases(nil) = %+v, want nil", got)
+	}
+	if got := sourceForCompatibilityAlias("", false); got != aliasSourceCompatibility {
+		t.Fatalf("sourceForCompatibilityAlias(empty) = %q, want compatibility", got)
+	}
+	if got := sourceForCompatibilityAlias(" provider_observed ", false); got != aliasSourceProviderObserved {
+		t.Fatalf("sourceForCompatibilityAlias(provider) = %q, want provider_observed", got)
+	}
+	if got := sourceForCompatibilityAlias("catalog", true); got != aliasSourceDeprecated {
+		t.Fatalf("sourceForCompatibilityAlias(deprecated) = %q, want deprecated", got)
+	}
+
 	if got, ok := NormalizeCompatibilityActionAlias(" FEATURE_FLAG_USER_LIST.CREATE "); !ok || got != "feature_flags.ff_user_list_create" {
 		t.Fatalf("NormalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
 	}

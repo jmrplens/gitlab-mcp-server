@@ -45,6 +45,32 @@ func TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface(t *testing.T) {
 	}
 }
 
+// TestControllerSurfaceSpecs_RouteHandlers verifies controller specs execute
+// through their wrapped dynamic registry routes.
+func TestControllerSurfaceSpecs_RouteHandlers(t *testing.T) {
+	specs := ControllerSurfaceSpecs(NewRegistry(testRoutes(t)), true)
+
+	search := findDynamicSurfaceSpec(t, specs, searchToolName)
+	if _, err := search.Route.Handler(t.Context(), map[string]any{"query": "project get", "limit": 1}); err != nil {
+		t.Fatalf("search route error = %v", err)
+	}
+
+	describe := findDynamicSurfaceSpec(t, specs, describeToolName)
+	if _, err := describe.Route.Handler(t.Context(), map[string]any{"action": "project.get"}); err != nil {
+		t.Fatalf("describe route error = %v", err)
+	}
+
+	find := findDynamicSurfaceSpec(t, specs, findToolName)
+	if _, err := find.Route.Handler(t.Context(), map[string]any{"query": "project get", "limit": 1}); err != nil {
+		t.Fatalf("find route error = %v", err)
+	}
+
+	execute := findDynamicSurfaceSpec(t, specs, executeToolName)
+	if _, err := execute.Route.Handler(t.Context(), map[string]any{"action": "missing.action", "params": map[string]any{}}); err != nil {
+		t.Fatalf("execute route error = %v", err)
+	}
+}
+
 // findDynamicSurfaceSpec locates dynamic surface spec fixture data for assertions.
 func findDynamicSurfaceSpec(t *testing.T, specs []actioncatalog.SurfaceToolSpec, name string) actioncatalog.SurfaceToolSpec {
 	t.Helper()
