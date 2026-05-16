@@ -18,24 +18,24 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,719 |
-| Unit test functions | 9,472 |
+| Total test functions | 9,721 |
+| Unit test functions | 9,474 |
 | E2E test functions | 247 |
 | cmd test functions | 479 |
-| Test files (internal/) | 428 |
+| Test files (internal/) | 429 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 167 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.2% |
-| Overall coverage (`go test ./internal/...`) | 96.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 86.1% |
+| Overall coverage (`go test ./internal/...`) | 96.3% |
 | Average package coverage | 94.1% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,730 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,732 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.9% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,626 | 86 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (167) | 7,109 | 330 | domain-specific GitLab tool handlers |
+| Tool sub-packages (167) | 7,111 | 331 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,719** | **554** |  |
+| **Total** | **9,721** | **555** |  |
 
 ### Core Packages
 
@@ -88,9 +88,9 @@
 | jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
 | awardemoji | 106 | 96.7% | 24 |
+| packages | 100 | 88.6% | 8 |
 | pipelines | 99 | 97.9% | 12 |
 | runners | 99 | 96.0% | 19 |
-| packages | 98 | 96.7% | 8 |
 | resourceevents | 98 | 100.0% | 15 |
 | commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
@@ -225,7 +225,7 @@
 | namespaces | 34 | 1 | 97.8% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 25 | 1 | 99.7% | 5 |
-| packages | 98 | 4 | 96.7% | 8 |
+| packages | 100 | 5 | 88.6% | 8 |
 | pages | 53 | 2 | 97.9% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
 | pipelineschedules | 80 | 2 | 97.5% | 11 |
@@ -278,7 +278,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,109** | **330** |  | **1,018** |
+| **Total** | **7,111** | **331** |  | **1,018** |
 
 </details>
 
@@ -442,7 +442,7 @@
 | namespaces | 97.8% |
 | notifications | 100.0% |
 | orbit | 99.7% |
-| packages | 96.7% |
+| packages | 88.6% |
 | pages | 97.9% |
 | pipelines | 97.9% |
 | pipelineschedules | 97.5% |
@@ -517,6 +517,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.
 - **wizard** (87.2%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
 - **tools** (88.4%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
+- **packages** (88.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 
 <!-- END TESTING STATS -->
 
