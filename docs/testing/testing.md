@@ -96,7 +96,7 @@
 | groupmilestones | 87 | 100.0% | 8 |
 | accesstokens | 85 | 98.6% | 18 |
 | branches | 80 | 97.7% | 10 |
-| pipelineschedules | 80 | 97.5% | 11 |
+| pipelineschedules | 80 | 97.0% | 11 |
 | files | 75 | 93.6% | 8 |
 | tags | 75 | 97.6% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
@@ -228,7 +228,7 @@
 | packages | 100 | 5 | 88.6% | 8 |
 | pages | 53 | 2 | 97.9% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
-| pipelineschedules | 80 | 2 | 97.5% | 11 |
+| pipelineschedules | 80 | 2 | 97.0% | 11 |
 | pipelinetriggers | 48 | 2 | 99.3% | 6 |
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
@@ -445,7 +445,7 @@
 | packages | 88.6% |
 | pages | 97.9% |
 | pipelines | 97.9% |
-| pipelineschedules | 97.5% |
+| pipelineschedules | 97.0% |
 | pipelinetriggers | 99.3% |
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
