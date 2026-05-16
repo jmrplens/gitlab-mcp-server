@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,948 |
-| Unit test functions | 9,699 |
+| Total test functions | 9,958 |
+| Unit test functions | 9,709 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.0% |
 | Overall coverage (`go test ./internal/...`) | 98.2% |
 | Average package coverage | 95.1% |
 
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,931 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,941 | 89.8% |
 | `TestFunc` (no underscore) | 736 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,291 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,301 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,948** | **567** |  |
+| **Total** | **9,958** | **567** |  |
 
 ### Core Packages
 
@@ -83,9 +83,9 @@
 | issues | 206 | 100.0% | 21 |
 | users | 185 | 100.0% | 36 |
 | samplingtools | 166 | 100.0% | 11 |
+| jobs | 128 | 99.8% | 17 |
 | groups | 125 | 100.0% | 18 |
 | dynamic | 120 | 98.9% | 4 |
-| jobs | 118 | 96.5% | 17 |
 | search | 115 | 100.0% | 10 |
 | awardemoji | 108 | 100.0% | 24 |
 | packages | 108 | 98.8% | 8 |
@@ -202,7 +202,7 @@
 | issuenotes | 38 | 2 | 100.0% | 5 |
 | issues | 206 | 2 | 100.0% | 21 |
 | issuestatistics | 40 | 1 | 100.0% | 3 |
-| jobs | 118 | 3 | 96.5% | 17 |
+| jobs | 128 | 3 | 99.8% | 17 |
 | jobtokenscope | 48 | 2 | 100.0% | 8 |
 | keys | 20 | 1 | 100.0% | 2 |
 | labels | 55 | 1 | 100.0% | 8 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,291** | **337** |  | **1,106** |
+| **Total** | **7,301** | **337** |  | **1,106** |
 
 </details>
 
@@ -425,7 +425,7 @@
 | issuenotes | 100.0% |
 | issues | 100.0% |
 | issuestatistics | 100.0% |
-| jobs | 96.5% |
+| jobs | 99.8% |
 | jobtokenscope | 100.0% |
 | keys | 100.0% |
 | labels | 100.0% |

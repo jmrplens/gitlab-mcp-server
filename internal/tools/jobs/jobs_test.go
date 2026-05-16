@@ -920,6 +920,15 @@ func TestJobCancel_APIError(t *testing.T) {
 	}
 }
 
+// TestJobCancel_NotFoundAPIError verifies JobCancel when GitLab returns not found.
+func TestJobCancel_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "gitlab_job_list")
+}
+
 // TestJobCancel_CancelledContext verifies JobCancel when cancelled context.
 func TestJobCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -945,6 +954,15 @@ func TestJobRetry_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+}
+
+// TestJobRetry_NotFoundAPIError verifies JobRetry when GitLab returns not found.
+func TestJobRetry_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	_, err := Retry(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "gitlab_job_list")
 }
 
 // TestJobRetry_CancelledContext verifies JobRetry when cancelled context.
@@ -1245,6 +1263,19 @@ func TestDownloadSingleArtifactByRef_MissingArtifactPath(t *testing.T) {
 	}
 }
 
+// TestDownloadSingleArtifactByRef_MissingJob verifies DownloadSingleArtifactByRef when missing job name.
+func TestDownloadSingleArtifactByRef_MissingJob(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
+		ProjectID: "42", RefName: "main", ArtifactPath: testReportFileName,
+	})
+	if err == nil {
+		t.Fatal("expected error for missing job, got nil")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Erase — API error, canceled context
 // ---------------------------------------------------------------------------.
@@ -1258,6 +1289,15 @@ func TestErase_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+}
+
+// TestErase_NotFoundAPIError verifies Erase when GitLab returns not found.
+func TestErase_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	_, err := Erase(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "gitlab_job_list")
 }
 
 // TestErase_CancelledContext verifies Erase when cancelled context.
@@ -1287,6 +1327,15 @@ func TestKeepArtifacts_APIError(t *testing.T) {
 	}
 }
 
+// TestKeepArtifacts_NotFoundAPIError verifies KeepArtifacts when GitLab returns not found.
+func TestKeepArtifacts_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	_, err := KeepArtifacts(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "artifacts")
+}
+
 // TestKeepArtifacts_CancelledContext verifies KeepArtifacts when cancelled context.
 func TestKeepArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1312,6 +1361,24 @@ func TestPlay_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+}
+
+// TestPlay_BadRequestAPIError verifies Play when the job is not playable.
+func TestPlay_BadRequestAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"job is not playable"}`)
+	}))
+	_, err := Play(context.Background(), client, PlayInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "manual jobs")
+}
+
+// TestPlay_NotFoundAPIError verifies Play when GitLab returns not found.
+func TestPlay_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	_, err := Play(context.Background(), client, PlayInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "gitlab_job_list")
 }
 
 // TestPlay_CancelledContext verifies Play when cancelled context.
@@ -1367,6 +1434,15 @@ func TestDeleteArtifacts_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteArtifacts_NotFoundAPIError verifies DeleteArtifacts when GitLab returns not found.
+func TestDeleteArtifacts_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
+	}))
+	err := DeleteArtifacts(context.Background(), client, DeleteArtifactsInput{ProjectID: "42", JobID: 100})
+	assertContains(t, err, "no artifacts")
+}
+
 // ---------------------------------------------------------------------------
 // DeleteProjectArtifacts — API error
 // ---------------------------------------------------------------------------.
@@ -1382,6 +1458,15 @@ func TestDeleteProjectArtifacts_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteProjectArtifacts_NotFoundAPIError verifies DeleteProjectArtifacts when GitLab returns not found.
+func TestDeleteProjectArtifacts_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
+	}))
+	err := DeleteProjectArtifacts(context.Background(), client, DeleteProjectArtifactsInput{ProjectID: "42"})
+	assertContains(t, err, "gitlab_project_get")
+}
+
 // ---------------------------------------------------------------------------
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
@@ -1393,31 +1478,56 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Name:           "build",
 		Stage:          "build",
 		Status:         "success",
+		PipelineID:     10,
 		Ref:            "main",
+		CommitSHA:      "abcdef1234567890",
+		AllowFailure:   true,
 		Duration:       45.5,
 		QueuedDuration: 2.1,
 		FailureReason:  "script_failure",
 		Coverage:       85.5,
 		UserUsername:   "testuser",
+		CreatedAt:      "2026-03-01T10:00:00Z",
 		WebURL:         "https://gitlab.example.com/-/jobs/100",
 	})
 
 	for _, want := range []string{
 		"Job #100",
 		"build",
+		"**Pipeline**: #10",
 		"**Stage**: build",
 		"**Status**: success",
+		"**Allow Failure**: yes",
 		"**Ref**: main",
+		"`abcdef123456`",
 		"**Duration**: 45.5s",
 		"**Queued**: 2.1s",
 		"**Failure Reason**: script_failure",
 		"**Coverage**: 85.5%",
 		"**User**: testuser",
+		"**Created**:",
 		"https://gitlab.example.com/-/jobs/100",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
+	}
+}
+
+// TestFormatWaitResult_TimedOutMarksError verifies timeout wait results are marked as tool errors.
+func TestFormatWaitResult_TimedOutMarksError(t *testing.T) {
+	result := formatWaitResult(WaitOutput{
+		Job:         Output{ID: 100, Name: "build", Status: "running", Stage: "build", Ref: "main"},
+		FinalStatus: "running",
+		TimedOut:    true,
+		WaitedFor:   "1s",
+		PollCount:   1,
+	})
+	if result == nil {
+		t.Fatal("formatWaitResult() returned nil")
+	}
+	if !result.IsError {
+		t.Fatal("formatWaitResult() IsError = false, want true")
 	}
 }
 
