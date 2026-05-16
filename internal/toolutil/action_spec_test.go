@@ -91,6 +91,26 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecStringAndNoteNormalization verifies internal slice helpers
+// trim, normalize, deduplicate, and preserve note casing as intended.
+func TestActionSpecStringAndNoteNormalization(t *testing.T) {
+	if got := normalizeActionSpecStrings(nil); got != nil {
+		t.Fatalf("normalizeActionSpecStrings(nil) = %#v, want nil", got)
+	}
+	stringsOut := normalizeActionSpecStrings([]string{" Project.List ", "", "project.list", "Group.Get"})
+	if len(stringsOut) != 2 || stringsOut[0] != "project.list" || stringsOut[1] != "group.get" {
+		t.Fatalf("normalizeActionSpecStrings() = %#v", stringsOut)
+	}
+
+	if got := mergeActionSpecNotes(nil, nil); got != nil {
+		t.Fatalf("mergeActionSpecNotes(nil, nil) = %#v, want nil", got)
+	}
+	notes := mergeActionSpecNotes([]string{" Preserve casing ", ""}, []string{"Preserve casing", "Second note"})
+	if len(notes) != 2 || notes[0] != "Preserve casing" || notes[1] != "Second note" {
+		t.Fatalf("mergeActionSpecNotes() = %#v", notes)
+	}
+}
+
 // TestCloneActionSpecs_DefensiveCopiesMetadata verifies CloneActionSpec and
 // CloneActionSpecs preserve normalized metadata without sharing mutable state.
 func TestCloneActionSpecs_DefensiveCopiesMetadata(t *testing.T) {
@@ -255,6 +275,11 @@ func TestActionSpecValidate_RejectsMalformedCompatibilityAliases(t *testing.T) {
 			name: "parameter alias missing reason",
 			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic"}}}},
 			want: "has no reason",
+		},
+		{
+			name: "deprecated parameter alias without removal version",
+			opts: ActionSpecOptions{Compatibility: CompatibilityPolicy{ParameterAliases: []ParameterAliasSpec{{Alias: "project", Target: "project_id", Source: "dynamic", Deprecated: true, Reason: "missing version"}}}},
+			want: "has no removal version",
 		},
 	}
 

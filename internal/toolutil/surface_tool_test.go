@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,15 @@ import (
 
 type surfaceToolTestInput struct {
 	ID int `json:"id" jsonschema:"ID to delete,required"`
+}
+
+type surfaceToolTextOnlyOutput struct{}
+
+func (surfaceToolTextOnlyOutput) SurfaceToolTextOnly() {}
+
+// TestRegisterSurfaceToolFromSpec_NilServer verifies nil servers are ignored.
+func TestRegisterSurfaceToolFromSpec_NilServer(t *testing.T) {
+	RegisterSurfaceToolFromSpec(nil, NewActionSpec("noop", ActionRoute{}, ActionSpecOptions{}), SurfaceToolRegisterOptions{})
 }
 
 // TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute verifies catalog-backed individual tools centralize destructive confirmation.
@@ -70,6 +80,45 @@ func TestRegisterSurfaceToolFromSpec_ExplicitConfirmBypassesPrompt(t *testing.T)
 	if result == nil {
 		t.Fatal("expected non-nil success result")
 	}
+}
+
+// TestSurfaceToolHandler_ErrorAndFormattedResults verifies direct handler
+// branches for route errors, formatter-produced tool errors, and text-only
+// outputs that should not be mirrored into structured content.
+func TestSurfaceToolHandler_ErrorAndFormattedResults(t *testing.T) {
+	t.Run("route error", func(t *testing.T) {
+		routeErr := errors.New("route failed")
+		handler := surfaceToolHandler("gitlab_test_error", ActionRoute{
+			Handler: func(context.Context, map[string]any) (any, error) { return nil, routeErr },
+		}, MarkdownForResult)
+
+		result, structured, err := handler(context.Background(), nil, map[string]any{})
+		if !errors.Is(err, routeErr) || result != nil || structured != nil {
+			t.Fatalf("handler() = result:%+v structured:%+v err:%v, want route error", result, structured, err)
+		}
+	})
+
+	t.Run("formatter error result", func(t *testing.T) {
+		handler := surfaceToolHandler("gitlab_test_formatter", ActionRoute{
+			Handler: func(context.Context, map[string]any) (any, error) { return testOutput{Result: "ignored"}, nil },
+		}, func(any) *mcp.CallToolResult { return ErrorResult("formatted error") })
+
+		result, structured, err := handler(context.Background(), nil, map[string]any{})
+		if err != nil || result == nil || !result.IsError || structured != nil {
+			t.Fatalf("handler() = result:%+v structured:%+v err:%v, want formatter error result", result, structured, err)
+		}
+	})
+
+	t.Run("text only result", func(t *testing.T) {
+		handler := surfaceToolHandler("gitlab_test_text_only", ActionRoute{
+			Handler: func(context.Context, map[string]any) (any, error) { return surfaceToolTextOnlyOutput{}, nil },
+		}, func(any) *mcp.CallToolResult { return SuccessResult("text only") })
+
+		result, structured, err := handler(context.Background(), nil, map[string]any{})
+		if err != nil || result == nil || structured != nil {
+			t.Fatalf("handler() = result:%+v structured:%+v err:%v, want text-only result", result, structured, err)
+		}
+	})
 }
 
 func newSurfaceToolSession(t *testing.T, server *mcp.Server, elicitation func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *mcp.ClientSession {

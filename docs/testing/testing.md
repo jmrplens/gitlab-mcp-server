@@ -18,26 +18,26 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,052 |
-| Unit test functions | 9,803 |
+| Total test functions | 10,064 |
+| Unit test functions | 9,815 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
-| Test files (internal/) | 413 |
+| Test files (internal/) | 416 |
 | Test files (cmd/) | 22 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.5% |
-| Overall coverage (`go test ./internal/...`) | 98.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.7% |
+| Overall coverage (`go test ./internal/...`) | 99.1% |
 | Average package coverage | 95.3% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 9,027 | 89.8% |
-| `TestFunc` (no underscore) | 744 | 7.4% |
-| `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
+| `TestFunc_Scenario` (2-part) | 9,037 | 89.8% |
+| `TestFunc` (no underscore) | 749 | 7.4% |
+| `TestFunc_Scenario_Expected` (3+ part) | 278 | 2.8% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,680 | 75 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,692 | 78 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 283 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (168) | 7,333 | 326 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **10,052** | **544** |  |
+| **Total** | **10,064** | **547** |  |
 
 ### Core Packages
 
@@ -70,9 +70,9 @@
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
 | serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 25 | 91.9% | Package testutil provides shared test utilities for MCP tool tests. |
-| toolutil | 421 | 94.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
-| wizard | 250 | 90.5% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,680** |  |  |
+| toolutil | 431 | 97.1% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
+| wizard | 252 | 93.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
+| **Subtotal** | **1,692** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -326,8 +326,8 @@
 | sampling | 99.5% |
 | serverpool | 99.6% |
 | testutil | 91.9% |
-| toolutil | 94.9% |
-| wizard | 90.5% |
+| toolutil | 97.1% |
+| wizard | 93.1% |
 
 ### Tool Sub-Packages
 

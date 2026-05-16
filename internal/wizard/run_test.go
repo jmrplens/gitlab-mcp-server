@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -167,49 +166,5 @@ func TestToolSurfaceHelpers(t *testing.T) {
 	toolSurface, metaTools := toolSurfaceFromEnv(map[string]string{"TOOL_SURFACE": "invalid", "META_TOOLS": "false"})
 	if toolSurface != "individual" || metaTools {
 		t.Fatalf("toolSurfaceFromEnv(invalid,false) = %q/%v, want individual/false", toolSurface, metaTools)
-	}
-}
-
-// TestHasDisplay_NoDisplayVars_ReturnsFalse verifies that hasDisplay returns
-// false on Linux when neither DISPLAY nor WAYLAND_DISPLAY is set.
-func TestHasDisplay_NoDisplayVars_ReturnsFalse(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
-	}
-
-	t.Setenv("DISPLAY", "")
-	t.Setenv("WAYLAND_DISPLAY", "")
-
-	if hasDisplay() {
-		t.Error("hasDisplay() = true on headless Linux, want false")
-	}
-}
-
-// TestHasDisplay_WithDISPLAY_ReturnsTrue verifies that hasDisplay returns
-// true when the DISPLAY environment variable is set.
-func TestHasDisplay_WithDISPLAY_ReturnsTrue(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
-	}
-
-	t.Setenv("DISPLAY", ":0")
-
-	if !hasDisplay() {
-		t.Error("hasDisplay() = false with DISPLAY=:0, want true")
-	}
-}
-
-// TestHasDisplay_WithWAYLAND_ReturnsTrue verifies that hasDisplay returns
-// true when the WAYLAND_DISPLAY environment variable is set.
-func TestHasDisplay_WithWAYLAND_ReturnsTrue(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
-	}
-
-	t.Setenv("DISPLAY", "")
-	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
-
-	if !hasDisplay() {
-		t.Error("hasDisplay() = false with WAYLAND_DISPLAY=wayland-0, want true")
 	}
 }

@@ -251,6 +251,126 @@ func TestUnmarshalParams_NormalizesActiveAndFilePathAliases(t *testing.T) {
 	}
 }
 
+// TestRouteFunc_HandlerPaths verifies RouteFunc executes typed handlers and
+// returns decode errors before invoking them when parameters are invalid.
+func TestRouteFunc_HandlerPaths(t *testing.T) {
+	type routeInput struct {
+		Name string `json:"name" jsonschema:"Name,required"`
+		ID   int    `json:"id"`
+	}
+	type routeOutput struct {
+		Message string `json:"message"`
+	}
+
+	called := false
+	route := RouteFunc(func(_ context.Context, input routeInput) (routeOutput, error) {
+		called = true
+		return routeOutput{Message: input.Name}, nil
+	})
+	if route.Destructive || route.InputSchema == nil || route.OutputSchema == nil {
+		t.Fatalf("route metadata = %+v, want non-destructive route with schemas", route)
+	}
+
+	result, err := route.Handler(context.Background(), map[string]any{"name": "project", "id": 7})
+	if err != nil {
+		t.Fatalf("RouteFunc handler error = %v", err)
+	}
+	if !called {
+		t.Fatal("RouteFunc handler did not invoke typed function")
+	}
+	out, ok := result.(routeOutput)
+	if !ok || out.Message != "project" {
+		t.Fatalf("RouteFunc result = %#v, want routeOutput message", result)
+	}
+
+	called = false
+	if _, err = route.Handler(context.Background(), map[string]any{"id": "not-a-number"}); err == nil {
+		t.Fatal("RouteFunc handler error = nil, want decode error")
+	}
+	if called {
+		t.Fatal("RouteFunc invoked typed function after decode error")
+	}
+}
+
+// TestJSONFieldReflectionHelpers verifies required-field and JSON field-name
+// reflection handles embedded structs, anonymous pointers, ignored fields, and
+// non-struct inputs.
+func TestJSONFieldReflectionHelpers(t *testing.T) {
+	type embeddedRequired struct {
+		EmbeddedName string `json:"embedded_name" jsonschema:"Embedded name,required"`
+	}
+	type namedInput struct {
+		*embeddedRequired
+		Plain      string `jsonschema:"Plain,required"`
+		Tagged     string `json:"tagged,omitempty" jsonschema:"Tagged, required"`
+		Ignored    string `json:"-" jsonschema:"Ignored,required"`
+		_          string
+		Anonymous  struct{ Value string }
+		StringList []string `json:"string_list,omitempty"`
+	}
+
+	required := requiredJSONFieldNames(reflect.TypeFor[namedInput]())
+	if !reflect.DeepEqual(required, []string{"Plain", "embedded_name", "tagged"}) {
+		t.Fatalf("requiredJSONFieldNames() = %#v", required)
+	}
+	if got := requiredJSONFieldNames(reflect.TypeFor[*namedInput]()); !reflect.DeepEqual(got, required) {
+		t.Fatalf("requiredJSONFieldNames(pointer) = %#v, want %#v", got, required)
+	}
+	if got := requiredJSONFieldNames(reflect.TypeFor[int]()); got != nil {
+		t.Fatalf("requiredJSONFieldNames(non-struct) = %#v, want nil", got)
+	}
+
+	fields := jsonFieldNames(reflect.TypeFor[namedInput]())
+	for _, want := range []string{"embedded_name", "Plain", "tagged", "Anonymous", "string_list"} {
+		if _, ok := fields[want]; !ok {
+			t.Fatalf("jsonFieldNames() missing %q in %#v", want, fields)
+		}
+	}
+	for _, unwanted := range []string{"-", "_"} {
+		if _, ok := fields[unwanted]; ok {
+			t.Fatalf("jsonFieldNames() contains %q in %#v", unwanted, fields)
+		}
+	}
+	if got := jsonFieldNames(reflect.TypeFor[string]()); got != nil {
+		t.Fatalf("jsonFieldNames(non-struct) = %#v, want nil", got)
+	}
+	if got := jsonFieldNames(nil); got != nil {
+		t.Fatalf("jsonFieldNames(nil) = %#v, want nil", got)
+	}
+
+	fieldTypes := jsonFieldTypes(reflect.TypeFor[*namedInput]())
+	if fieldTypes["embedded_name"].Kind() != reflect.String || fieldTypes["string_list"].Kind() != reflect.Slice {
+		t.Fatalf("jsonFieldTypes() = %#v, want embedded string and string slice", fieldTypes)
+	}
+	if _, ok := fieldTypes["_"]; ok {
+		t.Fatalf("jsonFieldTypes() contains blank field in %#v", fieldTypes)
+	}
+}
+
+// TestSplitPackageFilePath_EdgeCases verifies package file-path splitting for
+// root files, nested paths, and slash-only values.
+func TestSplitPackageFilePath_EdgeCases(t *testing.T) {
+	tests := []struct {
+		path     string
+		wantDir  string
+		wantFile string
+	}{
+		{path: "", wantDir: ".", wantFile: ""},
+		{path: "/", wantDir: ".", wantFile: ""},
+		{path: "package.tgz", wantDir: ".", wantFile: "package.tgz"},
+		{path: "/packages/npm/package.tgz/", wantDir: "packages/npm", wantFile: "package.tgz"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			dir, filename := splitPackageFilePath(tt.path)
+			if dir != tt.wantDir || filename != tt.wantFile {
+				t.Fatalf("splitPackageFilePath(%q) = %q/%q, want %q/%q", tt.path, dir, filename, tt.wantDir, tt.wantFile)
+			}
+		})
+	}
+}
+
 // TestUnmarshalParams_CoercesNumericPathAliasesToStrings verifies numeric IDs
 // remain usable after alias normalization rewrites them to path-style fields.
 func TestUnmarshalParams_CoercesNumericPathAliasesToStrings(t *testing.T) {
@@ -657,6 +777,18 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	if value, sliceChanged, sliceErr := coerceSliceValueForTargetType("names", []string{"a"}, reflect.TypeFor[string]()); sliceErr != nil || sliceChanged || !reflect.DeepEqual(value, []string{"a"}) {
 		t.Fatalf("coerceSliceValueForTargetType(non-numeric) = %#v/%v/%v", value, sliceChanged, sliceErr)
 	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("count", "8", reflect.TypeFor[uint]()); valueErr != nil || !valueChanged || value != uint64(8) {
+		t.Fatalf("coerceValueForTargetType(uint) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("weight", "4.25", reflect.TypeFor[*float64]()); valueErr != nil || !valueChanged || value != 4.25 {
+		t.Fatalf("coerceValueForTargetType(*float64) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("name", "project", reflect.TypeFor[string]()); valueErr != nil || valueChanged || value != "project" {
+		t.Fatalf("coerceValueForTargetType(string) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("ids", []any{int64(1)}, reflect.TypeFor[[]int64]()); valueErr != nil || valueChanged || !reflect.DeepEqual(value, []any{int64(1)}) {
+		t.Fatalf("coerceValueForTargetType([]int64 unchanged) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
 	if items, ok := sliceItems(42); ok || items != nil {
 		t.Fatalf("sliceItems(non-slice) = %#v/%v, want nil false", items, ok)
 	}
@@ -673,6 +805,9 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	}
 	if !schemaPropertyHasType(map[string]any{"type": []string{"integer", "string"}}, "string") {
 		t.Fatal("schemaPropertyHasType([]string) = false, want true")
+	}
+	if !schemaPropertyHasType(map[string]any{"type": []any{"integer", "string"}}, "integer") {
+		t.Fatal("schemaPropertyHasType([]any) = false, want true")
 	}
 	if schemaPropertyHasType("not-map", "string") {
 		t.Fatal("schemaPropertyHasType(non-map) = true, want false")

@@ -280,6 +280,24 @@ func TestCanonicalDirPath_RejectsInvalidDirectories(t *testing.T) {
 	}
 }
 
+// TestPathWithinBase verifies direct allowlist path containment checks for
+// the base directory itself, child paths, and sibling escapes.
+func TestPathWithinBase(t *testing.T) {
+	base := t.TempDir()
+	child := filepath.Join(base, "nested", "archive.tar.gz")
+	sibling := filepath.Join(filepath.Dir(base), filepath.Base(base)+"-sibling", "archive.tar.gz")
+
+	if !pathWithinBase(base, base) {
+		t.Fatal("pathWithinBase(base, base) = false, want true")
+	}
+	if !pathWithinBase(child, base) {
+		t.Fatal("pathWithinBase(child, base) = false, want true")
+	}
+	if pathWithinBase(sibling, base) {
+		t.Fatal("pathWithinBase(sibling, base) = true, want false")
+	}
+}
+
 // TestComputeSHA256_KnownHash verifies a known content produces the expected SHA-256.
 func TestComputeSHA256_KnownHash(t *testing.T) {
 	tmp := t.TempDir()
