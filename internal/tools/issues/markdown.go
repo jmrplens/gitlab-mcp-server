@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -173,6 +175,14 @@ func FormatMarkdown(i Output) string {
 	return b.String()
 }
 
+func formatGetMarkdownResult(out getOutput) *mcp.CallToolResult {
+	result := toolutil.ToolResultAnnotated(FormatMarkdown(out.Output), toolutil.ContentDetail)
+	if out.ProjectID > 0 && out.IID > 0 {
+		toolutil.EmbedResourceJSON(result, fmt.Sprintf("gitlab://project/%d/issue/%d", out.ProjectID, out.IID), out.Output)
+	}
+	return result
+}
+
 // FormatListMarkdown renders a list of issues as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
@@ -223,6 +233,7 @@ func FormatListGroupMarkdown(out ListGroupOutput) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatGetMarkdownResult)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatTodoMarkdown)

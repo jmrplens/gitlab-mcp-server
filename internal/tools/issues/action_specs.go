@@ -12,7 +12,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		issueCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_issue_create"),
-		issueReadSpec("get", toolutil.RouteAction(client, Get), "gitlab_issue_get"),
+		issueReadSpec("get", toolutil.RouteAction(client, getWithEmbeddedResource), "gitlab_issue_get"),
 		issueReadSpec("get_by_id", toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
 		issueReadSpec("list", toolutil.RouteAction(client, List), "gitlab_issue_list"),
 		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
@@ -33,6 +33,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueReadSpec("mrs_closing", toolutil.RouteAction(client, ListMRsClosing), "gitlab_issue_mrs_closing"),
 		issueReadSpec("mrs_related", toolutil.RouteAction(client, ListMRsRelated), "gitlab_issue_mrs_related"),
 	}
+}
+
+type getOutput struct {
+	Output
+}
+
+func getWithEmbeddedResource(ctx context.Context, client *gitlabclient.Client, input GetInput) (getOutput, error) {
+	out, err := Get(ctx, client, input)
+	return getOutput{Output: out}, err
 }
 
 func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {

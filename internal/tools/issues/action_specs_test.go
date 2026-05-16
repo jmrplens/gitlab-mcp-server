@@ -91,6 +91,44 @@ func TestActionSpecs_DeleteErrorPropagates(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetEmbedsCanonicalResource preserves the rich individual
+// result shape that gitlab_issue_get exposed before catalog projection.
+func TestActionSpecs_GetEmbedsCanonicalResource(t *testing.T) {
+	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+
+	raw, err := byTool["gitlab_issue_get"].Route.Handler(t.Context(), map[string]any{"project_id": testProjectID, "issue_iid": 10})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_issue_get) error: %v", err)
+	}
+	out, ok := raw.(getOutput)
+	if !ok {
+		t.Fatalf("Route.Handler(gitlab_issue_get) returned %T, want getOutput", raw)
+	}
+	result := toolutil.MarkdownForResult(out)
+	if result == nil {
+		t.Fatal("MarkdownForResult(getOutput) returned nil")
+	}
+	var found *mcp.EmbeddedResource
+	for _, content := range result.Content {
+		if embedded, isEmbedded := content.(*mcp.EmbeddedResource); isEmbedded {
+			found = embedded
+			break
+		}
+	}
+	if found == nil || found.Resource == nil {
+		t.Fatal("expected EmbeddedResource in gitlab_issue_get markdown result")
+	}
+	if found.Resource.URI != "gitlab://project/42/issue/10" {
+		t.Fatalf("embedded URI = %q, want gitlab://project/42/issue/10", found.Resource.URI)
+	}
+	if found.Resource.MIMEType != "application/json" {
+		t.Fatalf("embedded MIME = %q, want application/json", found.Resource.MIMEType)
+	}
+	if found.Resource.Text == "" {
+		t.Fatal("embedded Text payload empty")
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
