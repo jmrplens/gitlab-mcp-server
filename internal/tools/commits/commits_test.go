@@ -167,6 +167,27 @@ func TestCommitCreateServer_Error(t *testing.T) {
 	}
 }
 
+// TestCommitCreate_NonBadRequestAPIError verifies Create uses the generic
+// mutating error wrapper for non-400 API failures.
+func TestCommitCreate_NonBadRequestAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID:     "42",
+		Branch:        "main",
+		CommitMessage: "forbidden",
+		Actions:       []Action{{Action: actionCreate, FilePath: "new.go", Content: "package main\n"}},
+	})
+	if err == nil {
+		t.Fatal("Create() expected error for forbidden response, got nil")
+	}
+	if !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Fatalf("error = %q, want GitLab message", err.Error())
+	}
+}
+
 // TestCommitList_Success verifies that List returns commits with correct
 // metadata and pagination headers.
 func TestCommitList_Success(t *testing.T) {
@@ -449,6 +470,8 @@ func TestGetRefs_EmptyProjectID(t *testing.T) {
 func TestGetComments_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/comments" {
+			testutil.AssertQueryParam(t, r, "page", "2")
+			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 				{
 					"note":"Looks good!",
@@ -463,7 +486,14 @@ func TestGetComments_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetComments(context.Background(), client, CommentsInput{ProjectID: "42", SHA: testSHA})
+	out, err := GetComments(context.Background(), client, CommentsInput{
+		ProjectID: "42",
+		SHA:       testSHA,
+		PaginationInput: toolutil.PaginationInput{
+			Page:    2,
+			PerPage: 10,
+		},
+	})
 	if err != nil {
 		t.Fatalf("GetComments() unexpected error: %v", err)
 	}
@@ -1154,6 +1184,8 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 		testutil.AssertQueryParam(t, r, "author", "Alice")
 		testutil.AssertQueryParam(t, r, "with_stats", "true")
 		testutil.AssertQueryParam(t, r, "first_parent", "true")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "25")
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a","short_id":"a","title":"t","committed_date":"2026-01-01T00:00:00Z","web_url":"u","stats":{"additions":5,"deletions":2,"total":7}}]`)
 	}
 }
@@ -1171,6 +1203,10 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 		Author:      "Alice",
 		WithStats:   true,
 		FirstParent: true,
+		PaginationInput: toolutil.PaginationInput{
+			Page:    2,
+			PerPage: 25,
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtCommitListErr, err)
@@ -1191,13 +1227,23 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 			if q.Get("unidiff") != "true" {
 				t.Errorf("expected unidiff=true, got %q", q.Get("unidiff"))
 			}
+			testutil.AssertQueryParam(t, r, "page", "3")
+			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
-	_, err := Diff(context.Background(), client, DiffInput{ProjectID: "42", SHA: "abc", Unidiff: true})
+	_, err := Diff(context.Background(), client, DiffInput{
+		ProjectID: "42",
+		SHA:       "abc",
+		Unidiff:   true,
+		PaginationInput: toolutil.PaginationInput{
+			Page:    3,
+			PerPage: 10,
+		},
+	})
 	if err != nil {
 		t.Fatalf("Diff() unexpected error: %v", err)
 	}
@@ -1211,13 +1257,23 @@ func TestGetRefs_WithType(t *testing.T) {
 			if q.Get("type") != "tag" {
 				t.Errorf("expected type=tag, got %q", q.Get("type"))
 			}
+			testutil.AssertQueryParam(t, r, "page", "2")
+			testutil.AssertQueryParam(t, r, "per_page", "5")
 			testutil.RespondJSON(w, http.StatusOK, `[{"type":"tag","name":"v1.0"}]`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetRefs(context.Background(), client, RefsInput{ProjectID: "42", SHA: "abc", Type: "tag"})
+	out, err := GetRefs(context.Background(), client, RefsInput{
+		ProjectID: "42",
+		SHA:       "abc",
+		Type:      "tag",
+		PaginationInput: toolutil.PaginationInput{
+			Page:    2,
+			PerPage: 5,
+		},
+	})
 	if err != nil {
 		t.Fatalf("GetRefs() unexpected error: %v", err)
 	}
@@ -1255,6 +1311,22 @@ func TestPostComment_Inline(t *testing.T) {
 	}
 }
 
+// TestPostComment_NotFoundAPIError verifies PostComment uses the SHA lookup
+// hint for non-400 API failures such as 404.
+func TestPostComment_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
+	}))
+
+	_, err := PostComment(context.Background(), client, PostCommentInput{ProjectID: "42", SHA: "abc", Note: "test"})
+	if err == nil {
+		t.Fatal("expected error for missing commit")
+	}
+	if !strings.Contains(err.Error(), "gitlab_commit_get") {
+		t.Fatalf("error = %q, want commit get hint", err.Error())
+	}
+}
+
 // TestGetStatuses_WithFilters verifies GetStatuses when with filters.
 func TestGetStatuses_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1269,6 +1341,8 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 			if q.Get("all") != "true" {
 				t.Errorf("expected all=true, got %q", q.Get("all"))
 			}
+			testutil.AssertQueryParam(t, r, "page", "4")
+			testutil.AssertQueryParam(t, r, "per_page", "15")
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"sha":"abc","ref":"main","status":"success","name":"lint"}]`)
 			return
 		}
@@ -1283,6 +1357,10 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 		Name:       "lint",
 		PipelineID: 100,
 		All:        true,
+		PaginationInput: toolutil.PaginationInput{
+			Page:    4,
+			PerPage: 15,
+		},
 	})
 	if err != nil {
 		t.Fatalf("GetStatuses() unexpected error: %v", err)
@@ -1342,6 +1420,38 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing field %q", want)
 		}
+	}
+}
+
+// TestSetStatus_ForbiddenAPIError verifies SetStatus returns the permission
+// hint when GitLab rejects status updates with 403.
+func TestSetStatus_ForbiddenAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := SetStatus(context.Background(), client, SetStatusInput{ProjectID: "42", SHA: "abc", State: "success"})
+	if err == nil {
+		t.Fatal("expected error for forbidden status update")
+	}
+	if !strings.Contains(err.Error(), "Developer+") {
+		t.Fatalf("error = %q, want permission hint", err.Error())
+	}
+}
+
+// TestSetStatus_NotFoundAPIError verifies SetStatus uses the commit lookup hint
+// for non-400/403 API failures such as 404.
+func TestSetStatus_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
+	}))
+
+	_, err := SetStatus(context.Background(), client, SetStatusInput{ProjectID: "42", SHA: "abc", State: "success"})
+	if err == nil {
+		t.Fatal("expected error for missing commit")
+	}
+	if !strings.Contains(err.Error(), "gitlab_commit_get") {
+		t.Fatalf("error = %q, want commit get hint", err.Error())
 	}
 }
 
@@ -1845,6 +1955,30 @@ func TestToOutput_DateFields(t *testing.T) {
 	}
 }
 
+// TestDetailToOutput_StatusAndStats covers optional status and stats fields in
+// detailed commit responses.
+func TestDetailToOutput_StatusAndStats(t *testing.T) {
+	now := time.Now()
+	status := gl.BuildStateValue("success")
+	out := detailToOutput(&gl.Commit{
+		ID:            "abc123",
+		ShortID:       "abc",
+		CommittedDate: &now,
+		Status:        &status,
+		Stats:         &gl.CommitStats{Additions: 3, Deletions: 1, Total: 4},
+	})
+
+	if out.CommittedDate == "" {
+		t.Error("expected non-empty CommittedDate")
+	}
+	if out.Status != "success" {
+		t.Errorf("Status = %q, want success", out.Status)
+	}
+	if out.Stats == nil || out.Stats.Total != 4 {
+		t.Fatalf("Stats = %+v, want total 4", out.Stats)
+	}
+}
+
 // TestCommentToOutput_AuthorNameFallback covers the fallback to Author.Name
 // when Author.Username is empty.
 func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
@@ -1880,6 +2014,20 @@ func TestCherryPick_409Conflict(t *testing.T) {
 	}
 }
 
+// TestCherryPick_GenericAPIError covers non-400/409 mutating API failures.
+func TestCherryPick_GenericAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := CherryPick(context.Background(), client, CherryPickInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	if !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Fatalf("error = %q, want GitLab message", err.Error())
+	}
+}
+
 // TestRevert_400Error covers the 400 BadRequest error branch.
 func TestRevert_400Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1899,6 +2047,20 @@ func TestRevert_409Conflict(t *testing.T) {
 	_, err := Revert(context.Background(), client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
 	if err == nil {
 		t.Fatal("expected error for 409")
+	}
+}
+
+// TestRevert_GenericAPIError covers non-400/409 mutating API failures.
+func TestRevert_GenericAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Revert(context.Background(), client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	if !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Fatalf("error = %q, want GitLab message", err.Error())
 	}
 }
 

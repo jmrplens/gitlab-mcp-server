@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,941 |
-| Unit test functions | 9,692 |
+| Total test functions | 9,948 |
+| Unit test functions | 9,699 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,14 +28,14 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.9% |
-| Overall coverage (`go test ./internal/...`) | 98.1% |
-| Average package coverage | 95.0% |
+| Overall coverage (`go test ./internal/...`) | 98.2% |
+| Average package coverage | 95.1% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,924 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,931 | 89.8% |
 | `TestFunc` (no underscore) | 736 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,284 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,291 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,941** | **567** |  |
+| **Total** | **9,948** | **567** |  |
 
 ### Core Packages
 
@@ -90,9 +90,9 @@
 | awardemoji | 108 | 100.0% | 24 |
 | packages | 108 | 98.8% | 8 |
 | runners | 105 | 100.0% | 19 |
+| commits | 104 | 100.0% | 13 |
 | pipelines | 104 | 100.0% | 12 |
 | resourceevents | 98 | 100.0% | 15 |
-| commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
 | accesstokens | 86 | 100.0% | 18 |
 | pipelineschedules | 85 | 100.0% | 11 |
@@ -136,7 +136,7 @@
 | ciyamltemplates | 21 | 1 | 100.0% | 2 |
 | clusteragents | 38 | 1 | 100.0% | 8 |
 | commitdiscussions | 32 | 2 | 100.0% | 6 |
-| commits | 97 | 1 | 96.0% | 13 |
+| commits | 104 | 1 | 100.0% | 13 |
 | compliancepolicy | 5 | 1 | 100.0% | 2 |
 | containerregistry | 74 | 3 | 100.0% | 12 |
 | customattributes | 32 | 1 | 100.0% | 4 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,284** | **337** |  | **1,106** |
+| **Total** | **7,291** | **337** |  | **1,106** |
 
 </details>
 
@@ -359,7 +359,7 @@
 | ciyamltemplates | 100.0% |
 | clusteragents | 100.0% |
 | commitdiscussions | 100.0% |
-| commits | 96.0% |
+| commits | 100.0% |
 | compliancepolicy | 100.0% |
 | containerregistry | 100.0% |
 | customattributes | 100.0% |
