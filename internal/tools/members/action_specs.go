@@ -1,6 +1,8 @@
 package members
 
 import (
+	"context"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -13,8 +15,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		memberReadSpec("member_inherited", toolutil.RouteAction(client, GetInherited), "gitlab_project_member_get_inherited"),
 		memberCreateSpec("member_add", toolutil.RouteAction(client, Add), "gitlab_project_member_add"),
 		memberUpdateSpec("member_edit", toolutil.RouteAction(client, Edit), "gitlab_project_member_edit"),
-		memberDeleteSpec("member_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_project_member_delete"),
+		memberDeleteSpec("member_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_project_member_delete"),
 	}
+}
+
+func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("project member")
+	return out, nil
 }
 
 func memberReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
