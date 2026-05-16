@@ -95,6 +95,36 @@ func TestMilestoneResource_APIError(t *testing.T) {
 	}
 }
 
+// TestIssueResource_APIError verifies that the singleton issue resource
+// propagates GitLab API failures.
+func TestIssueResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/issue/7"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestFileBlobResource_APIError verifies that the file_blob resource returns
+// ResourceNotFoundError when the file lookup fails.
+func TestFileBlobResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/README.md"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestMergeRequestNotesResource_APIError verifies MR note listing failures are
+// wrapped and returned.
+func TestMergeRequestNotesResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/notes"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
 // TestDeploymentResource_APIError verifies that the deployment resource
 // returns an error when the GitLab API responds with 404.
 func TestDeploymentResource_APIError(t *testing.T) {
@@ -482,6 +512,16 @@ func TestMergeRequestNotesResource_EmptyProjectID(t *testing.T) {
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//mr/7/notes"})
 	if err == nil {
 		t.Fatal("expected error for empty project_id in MR notes URI")
+	}
+}
+
+// TestMergeRequestResource_EmptyProjectID verifies the singleton merge request
+// resource rejects an empty project_id before calling GitLab.
+func TestMergeRequestResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//mr/7"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in MR URI")
 	}
 }
 

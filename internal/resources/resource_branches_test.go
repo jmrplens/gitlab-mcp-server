@@ -44,6 +44,54 @@ func TestMilestonesResource_WithDueDate(t *testing.T) {
 	}
 }
 
+// TestMilestoneResource_WithDueDate exercises DueDate on a single project milestone.
+func TestMilestoneResource_WithDueDate(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":3,"iid":3,"title":"v3.0","description":"Third","state":"active","web_url":"https://x.com/m/3","due_date":"2026-07-31"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var milestone MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &milestone); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if milestone.DueDate == "" {
+		t.Error("expected DueDate to be set")
+	}
+}
+
+// TestGroupMilestoneResource_WithDueDate exercises DueDate on a single group milestone.
+func TestGroupMilestoneResource_WithDueDate(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/10/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":3,"iid":3,"title":"v3.0","description":"Third","state":"active","due_date":"2026-07-31"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var milestone MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &milestone); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if milestone.DueDate == "" {
+		t.Error("expected DueDate to be set")
+	}
+}
+
 // TestMergeRequestResource_NilAuthor exercises the nil author branch.
 func TestMergeRequestResource_NilAuthor(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,5 +118,29 @@ func TestMergeRequestResource_NilAuthor(t *testing.T) {
 	}
 	if mr.Title != "No Author MR" {
 		t.Errorf("title = %q, want %q", mr.Title, "No Author MR")
+	}
+}
+
+// TestMergeRequestDiscussionsResource_NilNote skips nil notes returned by GitLab.
+func TestMergeRequestDiscussionsResource_NilNote(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/discussions" {
+			respondJSON(w, http.StatusOK, `[{"id":"disc-1","individual_note":false,"notes":[null,{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var discussions []MRDiscussionResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &discussions); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(discussions) != 1 || len(discussions[0].Notes) != 1 {
+		t.Fatalf("notes = %#v, want one non-nil note", discussions)
 	}
 }
