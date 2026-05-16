@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,882 |
-| Unit test functions | 9,633 |
+| Total test functions | 9,890 |
+| Unit test functions | 9,641 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,15 +28,15 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.7% |
-| Overall coverage (`go test ./internal/...`) | 97.8% |
+| Overall coverage (`go test ./internal/...`) | 97.9% |
 | Average package coverage | 94.9% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,882 | 89.9% |
-| `TestFunc` (no underscore) | 719 | 7.3% |
+| `TestFunc_Scenario` (2-part) | 8,888 | 89.9% |
+| `TestFunc` (no underscore) | 721 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,225 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,233 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,882** | **567** |  |
+| **Total** | **9,890** | **567** |  |
 
 ### Core Packages
 
@@ -125,11 +125,11 @@
 | avatar | 9 | 1 | 100.0% | 1 |
 | awardemoji | 106 | 1 | 96.7% | 24 |
 | badges | 51 | 1 | 100.0% | 12 |
-| boards | 63 | 2 | 99.6% | 10 |
+| boards | 64 | 2 | 100.0% | 10 |
 | branches | 83 | 1 | 100.0% | 10 |
 | branchrules | 15 | 1 | 100.0% | 1 |
 | broadcastmessages | 28 | 2 | 100.0% | 5 |
-| bulkimports | 34 | 2 | 99.4% | 7 |
+| bulkimports | 35 | 2 | 100.0% | 7 |
 | cicatalog | 19 | 1 | 100.0% | 2 |
 | cilint | 26 | 1 | 100.0% | 2 |
 | civariables | 42 | 2 | 100.0% | 5 |
@@ -153,7 +153,7 @@
 | dynamic | 120 | 8 | 98.9% | 4 |
 | elicitationtools | 57 | 2 | 96.7% | 4 |
 | enterpriseusers | 32 | 3 | 100.0% | 4 |
-| environments | 47 | 2 | 99.4% | 6 |
+| environments | 48 | 2 | 100.0% | 6 |
 | epicdiscussions | 14 | 2 | 100.0% | 6 |
 | epicissues | 14 | 2 | 96.3% | 4 |
 | epicnotes | 11 | 2 | 100.0% | 5 |
@@ -196,9 +196,9 @@
 | importservice | 26 | 1 | 100.0% | 5 |
 | instancevariables | 40 | 2 | 100.0% | 5 |
 | integrations | 31 | 2 | 100.0% | 4 |
-| invites | 30 | 1 | 98.1% | 4 |
+| invites | 32 | 1 | 100.0% | 4 |
 | issuediscussions | 41 | 2 | 100.0% | 6 |
-| issuelinks | 43 | 2 | 99.0% | 4 |
+| issuelinks | 43 | 2 | 100.0% | 4 |
 | issuenotes | 38 | 2 | 100.0% | 5 |
 | issues | 200 | 2 | 97.1% | 21 |
 | issuestatistics | 40 | 1 | 100.0% | 3 |
@@ -241,10 +241,10 @@
 | projectstatistics | 8 | 2 | 100.0% | 1 |
 | projectstoragemoves | 17 | 2 | 100.0% | 6 |
 | projecttemplates | 18 | 1 | 100.0% | 2 |
-| protectedenvs | 36 | 2 | 99.0% | 5 |
+| protectedenvs | 38 | 2 | 100.0% | 5 |
 | protectedpackages | 32 | 2 | 100.0% | 4 |
 | releaselinks | 53 | 2 | 100.0% | 6 |
-| releases | 60 | 1 | 99.5% | 6 |
+| releases | 61 | 1 | 100.0% | 6 |
 | repository | 66 | 1 | 100.0% | 9 |
 | repositorysubmodules | 48 | 3 | 100.0% | 3 |
 | resourceevents | 98 | 3 | 100.0% | 15 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,225** | **337** |  | **1,106** |
+| **Total** | **7,233** | **337** |  | **1,106** |
 
 </details>
 
@@ -348,11 +348,11 @@
 | avatar | 100.0% |
 | awardemoji | 96.7% |
 | badges | 100.0% |
-| boards | 99.6% |
+| boards | 100.0% |
 | branches | 100.0% |
 | branchrules | 100.0% |
 | broadcastmessages | 100.0% |
-| bulkimports | 99.4% |
+| bulkimports | 100.0% |
 | cicatalog | 100.0% |
 | cilint | 100.0% |
 | civariables | 100.0% |
@@ -376,7 +376,7 @@
 | dynamic | 98.9% |
 | elicitationtools | 96.7% |
 | enterpriseusers | 100.0% |
-| environments | 99.4% |
+| environments | 100.0% |
 | epicdiscussions | 100.0% |
 | epicissues | 96.3% |
 | epicnotes | 100.0% |
@@ -419,9 +419,9 @@
 | importservice | 100.0% |
 | instancevariables | 100.0% |
 | integrations | 100.0% |
-| invites | 98.1% |
+| invites | 100.0% |
 | issuediscussions | 100.0% |
-| issuelinks | 99.0% |
+| issuelinks | 100.0% |
 | issuenotes | 100.0% |
 | issues | 97.1% |
 | issuestatistics | 100.0% |
@@ -464,10 +464,10 @@
 | projectstatistics | 100.0% |
 | projectstoragemoves | 100.0% |
 | projecttemplates | 100.0% |
-| protectedenvs | 99.0% |
+| protectedenvs | 100.0% |
 | protectedpackages | 100.0% |
 | releaselinks | 100.0% |
-| releases | 99.5% |
+| releases | 100.0% |
 | repository | 100.0% |
 | repositorysubmodules | 100.0% |
 | resourceevents | 100.0% |

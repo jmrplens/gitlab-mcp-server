@@ -52,6 +52,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_issue_link_list", map[string]any{"project_id": "1", "issue_iid": 1}},
 		{"gitlab_issue_link_get", map[string]any{"project_id": "1", "issue_iid": 1, "issue_link_id": 1}},
 		{"gitlab_issue_link_create", map[string]any{"project_id": "1", "issue_iid": 1, "target_project_id": "2", "target_issue_iid": 3}},
+		{"gitlab_issue_link_delete", map[string]any{"project_id": "1", "issue_iid": 1, "issue_link_id": 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {

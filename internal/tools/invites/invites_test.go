@@ -199,6 +199,21 @@ func TestGroupInvites_APIError(t *testing.T) {
 	}
 }
 
+// TestGroupInvites_BadRequest verifies invalid group invitation input hints.
+func TestGroupInvites_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
+	}))
+
+	_, err := GroupInvites(context.Background(), client, GroupInvitesInput{GroupID: "10", Email: "a@b.com", AccessLevel: 30})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "valid access_level") {
+		t.Fatalf("error = %v, want access level hint", err)
+	}
+}
+
 // TestFormatListPendingMarkdownString_WithInvitations verifies FormatListPendingMarkdownString when with invitations.
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
@@ -323,6 +338,20 @@ func TestProjectInvites_APIError(t *testing.T) {
 	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{ProjectID: "42", Email: "a@b.com", AccessLevel: 30})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestProjectInvites_BadRequest verifies invalid invitation input hints.
+func TestProjectInvites_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
+	}))
+	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{ProjectID: "42", Email: "a@b.com", AccessLevel: 30})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "valid access_level") {
+		t.Fatalf("error = %v, want access level hint", err)
 	}
 }
 

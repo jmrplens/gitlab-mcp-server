@@ -416,6 +416,26 @@ func TestListEntityFailures_OK(t *testing.T) {
 	}
 }
 
+// TestListEntityFailures_SkipsNilEntries validates defensive handling of null failure records.
+func TestListEntityFailures_SkipsNilEntries(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/bulk_imports/4/entities/88/failures", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			null,
+			{"relation":"label","exception_class":"StandardError","exception_message":"boom"}
+		]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{BulkImportID: 4, EntityID: 88})
+	if err != nil {
+		t.Fatalf("ListEntityFailures: %v", err)
+	}
+	if len(out.Failures) != 1 {
+		t.Fatalf("len(Failures) = %d, want 1", len(out.Failures))
+	}
+}
+
 // TestFormatters_Smoke renders each formatter to ensure non-empty markdown.
 func TestFormatters_Smoke(t *testing.T) {
 	listOut := ListOutput{Migrations: []MigrationSummary{{ID: 1, Status: "started", SourceType: "gitlab", SourceURL: "https://src"}}}

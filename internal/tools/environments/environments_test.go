@@ -745,6 +745,17 @@ func TestFormatOutputMarkdown_EmptyName(t *testing.T) {
 	}
 }
 
+// TestFormatEnvironmentNotFound verifies the special not-found formatter emits content.
+func TestFormatEnvironmentNotFound(t *testing.T) {
+	result := formatEnvironmentNotFound(environmentNotFoundOutput{Identifier: "ID 99 in project 42"})
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content in not-found result")
+	}
+}
+
 // TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
