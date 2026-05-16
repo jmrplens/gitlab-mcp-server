@@ -645,6 +645,7 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 		{"milestones", func() error { _, _, err := searchMilestones(ctx, client, "42", "x"); return err }},
 		{"jobs", func() error { _, err := searchJobs(ctx, client, "42", 10, "x"); return err }},
 		{"milestone titles", func() error { _, _, err := searchMilestoneTitles(ctx, client, "42", "x"); return err }},
+		{"group milestone titles", func() error { _, _, err := searchGroupMilestoneTitles(ctx, client, "99", "x"); return err }},
 	}
 
 	for _, tt := range tests {
@@ -728,5 +729,74 @@ func TestSearchMilestoneTitles_APIError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "search milestone titles") {
 		t.Errorf("expected error to be wrapped with 'search milestone titles', got: %v", err)
+	}
+}
+
+// TestSearchGroupMilestoneTitles verifies group milestone title search with
+// and without a query filter.
+func TestSearchGroupMilestoneTitles(t *testing.T) {
+	t.Run("search with query", func(t *testing.T) {
+		var gotSearch string
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v4/groups/99/milestones" {
+				http.NotFound(w, r)
+				return
+			}
+			gotSearch = r.URL.Query().Get("search")
+			respondJSON(w, http.StatusOK, `[
+				{"id":1,"title":"v1.0","state":"active"},
+				{"id":2,"title":"v1.1","state":"active"}
+			]`)
+		}))
+
+		values, _, err := searchGroupMilestoneTitles(context.Background(), client, "99", "v1")
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if gotSearch != "v1" {
+			t.Errorf("query param 'search' = %q, want %q", gotSearch, "v1")
+		}
+		if len(values) != 2 {
+			t.Fatalf("expected 2 titles, got %d: %v", len(values), values)
+		}
+		if values[0] != "v1.0" || values[1] != "v1.1" {
+			t.Errorf("titles = %v, want [v1.0 v1.1]", values)
+		}
+	})
+
+	t.Run("empty query", func(t *testing.T) {
+		var hadSearch bool
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v4/groups/99/milestones" {
+				http.NotFound(w, r)
+				return
+			}
+			_, hadSearch = r.URL.Query()["search"]
+			respondJSON(w, http.StatusOK, `[]`)
+		}))
+
+		_, _, err := searchGroupMilestoneTitles(context.Background(), client, "99", "")
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if hadSearch {
+			t.Error("expected no 'search' query param when query is empty")
+		}
+	})
+}
+
+// TestSearchGroupMilestoneTitles_APIError verifies group milestone API errors
+// are wrapped with search context.
+func TestSearchGroupMilestoneTitles_APIError(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	_, _, err := searchGroupMilestoneTitles(context.Background(), client, "99", "v1")
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+	if !strings.Contains(err.Error(), "search group milestone titles") {
+		t.Errorf("expected error to be wrapped with 'search group milestone titles', got: %v", err)
 	}
 }

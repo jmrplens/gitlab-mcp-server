@@ -280,6 +280,75 @@ func TestComplete_PromptGroupID(t *testing.T) {
 	}
 }
 
+// TestComplete_PromptGroupMilestoneTitle verifies milestone completion falls
+// back to group scope when project_id is absent and group_id is resolved.
+func TestComplete_PromptGroupMilestoneTitle(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/99/milestones" {
+			if gotSearch := r.URL.Query().Get("search"); gotSearch != "v" {
+				t.Errorf("search query = %q, want v", gotSearch)
+			}
+			respondJSON(w, http.StatusOK, `[{"id":1,"title":"v1.0","state":"active"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	h := NewHandler(client)
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "group_milestone_progress"},
+		Argument: mcp.CompleteParamsArgument{Name: "milestone", Value: "v"},
+		Context:  &mcp.CompleteContext{Arguments: map[string]string{"group_id": "99"}},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 1 {
+		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
+	}
+	if result.Completion.Values[0] != "v1.0" {
+		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
+	}
+}
+
+// TestComplete_PromptMilestoneWithoutScope verifies milestone completion is
+// empty when neither project_id nor group_id is resolved.
+func TestComplete_PromptMilestoneWithoutScope(t *testing.T) {
+	h := NewHandler(newTestClient(t, http.NotFoundHandler()))
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "group_milestone_progress"},
+		Argument: mcp.CompleteParamsArgument{Name: "milestone", Value: "v"},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 0 {
+		t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+	}
+}
+
+// TestCompleteGroupMilestoneTitle_APIErrorReturnsEmpty verifies group milestone
+// search failures are handled as empty completions.
+func TestCompleteGroupMilestoneTitle_APIErrorReturnsEmpty(t *testing.T) {
+	h := NewHandler(newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})))
+
+	result, err := h.completeGroupMilestoneTitle(context.Background(), "99", "v")
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 0 {
+		t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+	}
+}
+
 // TestComplete_APIErrorReturnsEmpty verifies that [Handler.Complete] returns
 // empty results instead of an error when the GitLab API call fails.
 func TestComplete_APIErrorReturnsEmpty(t *testing.T) {
