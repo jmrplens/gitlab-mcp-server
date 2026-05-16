@@ -641,16 +641,8 @@ const (
 	fmtUnexpErr = "unexpected error: %v"
 	// covMilestoneJSON identifies the cov milestone JSON constant used by this package.
 	covMilestoneJSON = `{"id":1,"iid":1,"project_id":42,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-03-31","web_url":"https://gitlab.example.com/-/milestones/1","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T10:00:00Z","expired":false}`
-	// covMilestoneMinimalJSON identifies the cov milestone minimal JSON constant used by this package.
-	covMilestoneMinimalJSON = `{"id":2,"iid":2,"project_id":42,"title":"v2.0","state":"closed"}`
-	// covMilestoneGroupJSON identifies the cov milestone group JSON constant used by this package.
-	covMilestoneGroupJSON = `{"id":3,"iid":3,"project_id":42,"title":"v3.0","state":"active","group_id":99}`
 	// covMilestoneListJSON identifies the cov milestone list JSON constant used by this package.
 	covMilestoneListJSON = `[` + covMilestoneJSON + `]`
-	// covIssuePath identifies the cov issue path constant used by this package.
-	covIssuePath = "/api/v4/projects/42/milestones/1/issues"
-	// covMRPath identifies the cov MR path constant used by this package.
-	covMRPath = "/api/v4/projects/42/milestones/1/merge_requests"
 	// covIssueJSON identifies the cov issue JSON constant used by this package.
 	covIssueJSON = `[{"id":10,"iid":1,"title":"Bug","state":"opened","web_url":"https://example.com/issues/1","created_at":"2026-01-05T00:00:00Z"}]`
 	// covIssueNoDateJSON identifies the cov issue no date JSON constant used by this package.

@@ -610,8 +610,6 @@ const (
 	pathGroup99Restore = "/api/v4/groups/99/restore"
 	// pathGroup99Projects identifies the path group 99 projects constant used by this package.
 	pathGroup99Projects = "/api/v4/groups/99/projects"
-	// pathGroup99Transfer identifies the path group 99 transfer constant used by this package.
-	pathGroup99Transfer = "/api/v4/groups/99/transfer"
 )
 
 // groupProjectsJSON stores the package-level group projects JSON state.

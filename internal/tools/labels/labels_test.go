@@ -19,8 +19,6 @@ const (
 	pathProjectLabels = "/api/v4/projects/42/labels"
 	// pathLabelBug identifies the path label bug constant used by this package.
 	pathLabelBug = "/api/v4/projects/42/labels/bug"
-	// pathLabel1 identifies the path label 1 constant used by this package.
-	pathLabel1 = "/api/v4/projects/42/labels/1"
 	// labelJSON identifies the label JSON constant used by this package.
 	labelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
 )
@@ -387,8 +385,6 @@ const (
 	fmtUnexpErr = "unexpected error: %v"
 	// covLabelJSON identifies the cov label JSON constant used by this package.
 	covLabelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":true,"subscribed":false}`
-	// covLabelMinimalJSON identifies the cov label minimal JSON constant used by this package.
-	covLabelMinimalJSON = `{"id":2,"name":"wontfix","color":"#000000","text_color":"#FFFFFF","is_project_label":true}`
 	// covLabelListJSON identifies the cov label list JSON constant used by this package.
 	covLabelListJSON = `[` + covLabelJSON + `]`
 	// covLabelWithPriJSON identifies the cov label with pri JSON constant used by this package.

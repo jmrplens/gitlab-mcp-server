@@ -347,8 +347,6 @@ func TestToOutput_AutoMasking(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 const (
-	// msgServerError identifies the msg server error constant used by this package.
-	msgServerError = "server error"
 	// errExpectedAPI identifies the err expected API constant used by this package.
 	errExpectedAPI = "expected API error, got nil"
 	// testEnvScope identifies the test env scope constant used by this package.

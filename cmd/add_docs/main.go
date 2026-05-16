@@ -181,7 +181,7 @@ func processFile(path string) {
 
 // editRangeForDoc returns the line range to replace for an existing doc comment,
 // or an empty insertion range immediately before pos when no doc exists.
-func editRangeForDoc(fset *token.FileSet, doc *ast.CommentGroup, pos token.Pos) (int, int) {
+func editRangeForDoc(fset *token.FileSet, doc *ast.CommentGroup, pos token.Pos) (startLine, endLine int) {
 	if doc == nil {
 		line := fset.Position(pos).Line
 		return line, line - 1
@@ -349,7 +349,7 @@ func subjectScenarioPhrase(subject, scenario string) string {
 
 // splitAtPredicate divides a phrase around the first predicate that can move
 // before the scenario context in generated test comments.
-func splitAtPredicate(phrase string) (string, string, bool) {
+func splitAtPredicate(phrase string) (before, after string, ok bool) {
 	words := strings.Fields(phrase)
 	for i := 1; i < len(words); i++ {
 		if !isReorderablePredicate(words[i]) {

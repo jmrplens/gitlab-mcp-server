@@ -795,8 +795,6 @@ func TestDelete_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const (
-	// msgServerError identifies the msg server error constant used by this package.
-	msgServerError = "server error"
 	// pathIssueLinks identifies the path issue links constant used by this package.
 	pathIssueLinks = "/api/v4/projects/42/issues/10/links"
 	// pathIssueLink99 identifies the path issue link 99 constant used by this package.

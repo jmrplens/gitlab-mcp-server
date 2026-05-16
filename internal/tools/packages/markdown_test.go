@@ -194,20 +194,12 @@ const (
 	fmtExpCtxCancelErr = "expected context canceled error, got: %v"
 	// pathAPIPkgs1 identifies the path API pkgs 1 constant used by this package.
 	pathAPIPkgs1 = "/api/v4/projects/1/packages"
-	// testFileDataBin identifies the test file data bin constant used by this package.
-	testFileDataBin = "data.bin"
-	// testPkgTestPkg identifies the test pkg test pkg constant used by this package.
-	testPkgTestPkg = "test-pkg"
 	// testFileAppBin identifies the test file app bin constant used by this package.
 	testFileAppBin = "app.bin"
 	// testFileOutBin identifies the test file out bin constant used by this package.
 	testFileOutBin = "out.bin"
 	// fmtExpCtxCancelGot identifies the fmt exp ctx cancel got constant used by this package.
 	fmtExpCtxCancelGot = "expected context canceled, got: %v"
-	// fmtCallToolErr identifies the fmt call tool err constant used by this package.
-	fmtCallToolErr = "CallTool error: %v"
-	// msgCallToolIsError identifies the msg call tool is error constant used by this package.
-	msgCallToolIsError = "CallTool returned IsError=true"
 )
 
 // ---------------------------------------------------------------------------

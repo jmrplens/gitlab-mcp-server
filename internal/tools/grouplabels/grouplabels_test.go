@@ -17,8 +17,6 @@ const (
 	pathGroupLabels = "/api/v4/groups/10/labels"
 	// pathLabel1 identifies the path label 1 constant used by this package.
 	pathLabel1 = "/api/v4/groups/10/labels/1"
-	// pathLabelBug identifies the path label bug constant used by this package.
-	pathLabelBug = "/api/v4/groups/10/labels/bug"
 	// labelJSON identifies the label JSON constant used by this package.
 	labelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":false,"subscribed":false}`
 )

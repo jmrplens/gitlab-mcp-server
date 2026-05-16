@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	// msgNotFound identifies the msg not found constant used by this package.
-	msgNotFound = "not found"
 	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 	errExpCancelledCtx = "expected error for canceled context"
 	// fmtUnexpErr identifies the fmt unexp err constant used by this package.

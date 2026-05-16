@@ -43,10 +43,6 @@ const (
 	modelEvalDynamic3ResultsStart = "<!-- START MODEL EVAL DYNAMIC3 RESULTS -->"
 	// modelEvalDynamic3ResultsEnd identifies the model eval dynamic 3 results end constant used by this package.
 	modelEvalDynamic3ResultsEnd = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
-	// modelEvalSummaryStart identifies the model eval summary start constant used by this package.
-	modelEvalSummaryStart = "<!-- START MODEL EVAL SUMMARY -->"
-	// modelEvalSummaryEnd identifies the model eval summary end constant used by this package.
-	modelEvalSummaryEnd = "<!-- END MODEL EVAL SUMMARY -->"
 	// modelEvalResultsStart identifies the model eval results start constant used by this package.
 	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
 	// modelEvalResultsEnd identifies the model eval results end constant used by this package.

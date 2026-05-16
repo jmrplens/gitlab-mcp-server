@@ -286,8 +286,6 @@ const (
 	argProjectID = "project_id"
 	// argDomain identifies the arg domain constant used by this package.
 	argDomain = "domain"
-	// msgBadRequest identifies the msg bad request constant used by this package.
-	msgBadRequest = "bad request"
 	// testDomain identifies the test domain constant used by this package.
 	testDomain = "example.com"
 	// testPagesURL identifies the test pages URL constant used by this package.

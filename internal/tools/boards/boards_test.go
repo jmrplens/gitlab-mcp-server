@@ -594,8 +594,6 @@ const (
 	errExpCancelledCtx = "expected error for canceled context"
 	// covBoardMinimalJSON identifies the cov board minimal JSON constant used by this package.
 	covBoardMinimalJSON = `{"id":2,"name":"Minimal","hide_backlog_list":false,"hide_closed_list":false}`
-	// covBoardListMinimalJSON identifies the cov board list minimal JSON constant used by this package.
-	covBoardListMinimalJSON = `{"id":200,"position":1}`
 )
 
 // ---------------------------------------------------------------------------

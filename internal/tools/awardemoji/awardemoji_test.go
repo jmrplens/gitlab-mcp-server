@@ -36,8 +36,6 @@ const (
 	testEmojiStar = "star"
 	// fmtExpected1Emoji identifies the fmt expected 1 emoji constant used by this package.
 	fmtExpected1Emoji = "expected 1 emoji, got %d"
-	// testFieldIID identifies the test field IID constant used by this package.
-	testFieldIID = "iid"
 	// testFieldIssueIID identifies the test field issue IID constant used by this package.
 	testFieldIssueIID = "issue_iid"
 	// testFieldMRIID identifies the test field mriid constant used by this package.

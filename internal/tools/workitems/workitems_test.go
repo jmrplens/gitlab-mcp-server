@@ -277,8 +277,6 @@ const (
 	testLabelUrgent = "urgent"
 	// testWorkItemURL identifies the test work item URL constant used by this package.
 	testWorkItemURL = "https://gitlab.example.com/-/work_items/42"
-	// testVersion identifies the test version constant used by this package.
-	testVersion = "0.0.1"
 	// testSectionDesc identifies the test section desc constant used by this package.
 	testSectionDesc = "### Description"
 	// fmtDescWant identifies the fmt desc want constant used by this package.
