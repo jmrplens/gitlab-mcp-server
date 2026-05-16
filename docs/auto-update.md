@@ -277,7 +277,7 @@ graph TD
     end
 
     subgraph "internal/tools/serverupdate"
-        C --> L[RegisterTools]
+        C --> L[ActionSpecs]
         L --> M[gitlab_server_check_update]
         L --> N[gitlab_server_apply_update]
         M --> H

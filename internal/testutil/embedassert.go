@@ -2,49 +2,15 @@ package testutil
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 // EmbedToggle is the signature of the toolutil.EnableEmbeddedResources
 // setter, declared here so testutil can drive the toggle without importing
 // toolutil (which would create an import cycle through other packages).
 type EmbedToggle func(bool)
-
-// RegisterFn is the per-package tool registration callback. Every domain
-// sub-package exposes a RegisterTools(server, client) function with this
-// shape; tests pass it to NewEmbedTestSession so the helper does not have
-// to import any specific tool sub-package.
-type RegisterFn func(server *mcp.Server, client *gitlabclient.Client)
-
-// NewEmbedTestSession bootstraps an in-memory MCP session for embed-resource
-// integration tests. It builds a mock GitLab client backed by handler,
-// instantiates an MCP server, invokes register to wire the package's tools,
-// connects an in-memory client, and returns the live session. The session
-// is closed via t.Cleanup so callers do not need to track it.
-func NewEmbedTestSession(t *testing.T, handler http.Handler, register RegisterFn) (*mcp.ClientSession, context.Context) {
-	t.Helper()
-	client := NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	register(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
-	return session, ctx
-}
 
 // AssertEmbeddedResource invokes the named tool with args twice: first with
 // the embed toggle enabled (expecting an *mcp.EmbeddedResource block whose

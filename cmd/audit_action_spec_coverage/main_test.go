@@ -105,6 +105,8 @@ func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 		want bool
 	}{
 		{name: "legacy create register tools", line: "4. Create `register.go` with `RegisterTools(server, client)`", want: true},
+		{name: "legacy compatibility register tools", line: "Existing package-local `RegisterTools` files may remain for compatibility.", want: true},
+		{name: "legacy subpackage delegation", line: "register.go # RegisterAll() — delegates to sub-package RegisterTools()", want: true},
 		{name: "legacy register meta function", line: "func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {", want: true},
 		{name: "negative guidance allowed", line: "Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions.", want: false},
 		{name: "catalog guidance allowed", line: "Add or update domain-local `ActionSpecs` and the audited catalog aggregation path.", want: false},
@@ -115,6 +117,17 @@ func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 				t.Fatalf("staleAIContextLine(%q) = %t, want %t", tt.line, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools(t *testing.T) {
+	err := assertCoverageInvariants([]domainCoverage{{
+		Package:          "example",
+		HasRegisterTools: true,
+		HasMetaSpecs:     true,
+	}})
+	if err == nil {
+		t.Fatal("assertCoverageInvariants() error = nil, want package-local RegisterTools error")
 	}
 }
 

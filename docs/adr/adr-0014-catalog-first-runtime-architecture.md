@@ -41,7 +41,7 @@ Root runtime registration is catalog-backed:
 - Dynamic search/describe/execute builds its registry from the same catalog.
 - Schema resources, LLM files, audits, metrics, and evaluation tooling read the same catalog.
 
-Package-local `RegisterTools` files may remain for existing domains as compatibility context, but ordinary GitLab actions must not rely on root calls to domain `RegisterTools` as the final runtime path. Package-level `RegisterMeta` is not an approved path for ordinary GitLab API actions.
+Package-local `RegisterTools` files have been removed from ordinary GitLab API domains. New ordinary GitLab actions must use domain-local `ActionSpecs` and catalog-backed projection rather than introducing package-local registration functions. Package-level `RegisterMeta` is not an approved path for ordinary GitLab API actions.
 
 `TOOL_SURFACE` is the canonical tool selector. `META_TOOLS` remains a deprecated compatibility fallback for one compatibility window when `TOOL_SURFACE` is absent.
 
@@ -65,7 +65,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 ### Negative
 
 - **NEG-001**: The catalog aggregation path is still a central build artifact and must remain audited or generated to avoid drift.
-- **NEG-002**: Existing package-local `RegisterTools` code can be mistaken for active root runtime architecture unless AI guidance and docs stay current.
+- **NEG-002**: Stale examples can still imply package-local registration is valid unless AI guidance and docs stay current.
 - **NEG-003**: Model-backed validation remains necessary because catalog correctness does not guarantee model selection quality.
 
 ## Implementation Notes
@@ -79,6 +79,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 
 - [x] `BuildActionCatalog` does not call `toolutil.CaptureMetaToolDefinitions`, `registerAllMetaGroups`, or package-level `RegisterMeta`.
 - [x] `RegisterAll` does not call per-domain `RegisterTools` for ordinary GitLab actions.
+- [x] Ordinary GitLab API domains no longer define package-local `RegisterTools` functions.
 - [x] Meta-tools, Dynamic, schema resources, and individual projection consume the canonical catalog.
 - [x] `TOOL_SURFACE` is documented as canonical; `META_TOOLS` is compatibility only.
 - [x] Dynamic compatibility aliases and parameter aliases are catalog/spec policy data.

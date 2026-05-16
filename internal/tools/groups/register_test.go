@@ -57,9 +57,9 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-			if err != nil {
-				t.Fatalf("CallTool error: %v", err)
+			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if callErr != nil {
+				t.Fatalf("CallTool error: %v", callErr)
 			}
 			if result == nil {
 				t.Fatal("expected non-nil result for declined confirmation")

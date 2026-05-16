@@ -86,7 +86,7 @@ gitlab-mcp-server/
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
 - Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. Keep `dynamic-2` experimental unless explicitly requested.
-- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Existing package-local `RegisterTools` files may remain for compatibility, but root runtime registration must stay catalog-backed.
+- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
 ### GitLab Integration

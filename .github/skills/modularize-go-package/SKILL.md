@@ -147,7 +147,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 ```
 
-Existing package-local `register.go` files can remain during migration if needed for compatibility, but the root runtime must use catalog projection from `ActionSpecs`. Do not create package-level `RegisterMeta` for ordinary GitLab API domains.
+Do not create package-local `RegisterTools` or package-level `RegisterMeta` functions for ordinary GitLab API domains. The root runtime must use catalog projection from `ActionSpecs`.
 
 #### 3d. Move and Transform Test File
 

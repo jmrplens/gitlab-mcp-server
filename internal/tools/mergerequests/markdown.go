@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type mergeRequestNotFoundOutput struct {

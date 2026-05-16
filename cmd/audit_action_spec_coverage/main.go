@@ -234,10 +234,13 @@ func buildCoverageReport(root string) (coverageReport, error) {
 func assertCoverageInvariants(domains []domainCoverage) error {
 	var gaps []string
 	for _, domain := range domains {
+		if domain.HasRegisterTools {
+			gaps = append(gaps, fmt.Sprintf("%s still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs", domain.Package))
+		}
 		if domain.HasRegisterMeta {
 			gaps = append(gaps, fmt.Sprintf("%s still defines package-level RegisterMeta", domain.Package))
 		}
-		if domain.HasIndividualTools && !domain.HasMetaSpecs {
+		if !domain.HasRegisterTools && domain.HasIndividualTools && !domain.HasMetaSpecs {
 			gaps = append(gaps, fmt.Sprintf("%s has GitLab-client RegisterTools without canonical ActionSpecs", domain.Package))
 		}
 		if domain.SurfaceClassification == "individual-only" {
@@ -441,7 +444,9 @@ func staleAIContextLine(line string) bool {
 	}
 	staleNeedles := []string{
 		"registerall() — delegates to sub-package registertools",
+		"delegates to sub-package registertools",
 		"create `register.go` with `registertools",
+		"existing package-local `registertools` files may remain",
 		"wire the sub-package in `internal/tools/register.go`",
 		"internal/tools/register.go delegates to all sub-package",
 		"validated by `testallsubpackagesregistered`",

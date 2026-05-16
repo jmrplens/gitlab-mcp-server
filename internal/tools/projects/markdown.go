@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 type projectNotFoundOutput struct {

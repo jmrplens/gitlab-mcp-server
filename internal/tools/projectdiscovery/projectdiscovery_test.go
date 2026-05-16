@@ -563,7 +563,6 @@ func TestActionSpecs_CallRouteInvalidInput(t *testing.T) {
 	if err == nil {
 		t.Fatal("Route.Handler expected error for empty URL input")
 	}
-
 }
 
 func projectDiscoverySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {

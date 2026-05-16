@@ -18,10 +18,10 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,726 |
-| Unit test functions | 9,479 |
+| Total test functions | 9,727 |
+| Unit test functions | 9,480 |
 | E2E test functions | 247 |
-| cmd test functions | 479 |
+| cmd test functions | 480 |
 | Test files (internal/) | 433 |
 | Test files (cmd/) | 17 |
 | Test files (test/e2e/suite/) | 109 |
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,738 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,739 | 89.8% |
 | `TestFunc` (no underscore) | 709 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 279 | 2.9% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration | 258 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (167) | 7,116 | 335 | domain-specific GitLab tool handlers |
 | E2E integration | 247 | 109 | build-tagged real GitLab integration suite |
-| cmd packages | 479 | 17 | server entry point and developer command utilities |
-| **Total** | **9,726** | **559** |  |
+| cmd packages | 480 | 17 | server entry point and developer command utilities |
+| **Total** | **9,727** | **559** |  |
 
 ### Core Packages
 
@@ -69,7 +69,7 @@
 | roots | 21 | 98.5% | Package roots provides client workspace discovery via the MCP Roots capability. |
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
 | serverpool | 47 | 99.1% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
-| testutil | 21 | 60.9% | Package testutil provides shared test utilities for MCP tool tests. |
+| testutil | 21 | 68.3% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 404 | 92.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 242 | 87.2% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
 | **Subtotal** | **1,626** |  |  |
@@ -288,7 +288,7 @@
 
 | Package | Coverage |
 | --- | ---: |
-| cmd/audit_action_spec_coverage | 76.1% |
+| cmd/audit_action_spec_coverage | 76.2% |
 | cmd/audit_godocs | 50.7% |
 | cmd/audit_meta_schema | 80.2% |
 | cmd/audit_metrics | 28.4% |
@@ -319,7 +319,7 @@
 | roots | 98.5% |
 | sampling | 99.5% |
 | serverpool | 99.1% |
-| testutil | 60.9% |
+| testutil | 68.3% |
 | toolutil | 92.9% |
 | wizard | 87.2% |
 
@@ -509,9 +509,9 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (50.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_meta_tools** (59.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
+- **testutil** (68.3%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **surfaces** (75.3%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/audit_action_spec_coverage** (76.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_action_spec_coverage** (76.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (77.8%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.

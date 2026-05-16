@@ -67,20 +67,17 @@ Each `mcp.Icon` advertises:
 - **No external dependencies** — data URIs embedded in the binary, zero network requests
 - **One icon per domain** — related tools share the same icon for visual grouping
 
-### Registration Pattern
+### Catalog Projection Pattern
 
-Each tool sub-package assigns its icon in `register.go`:
+Each catalog-backed tool receives its icon when `RegisterAll` projects the canonical action catalog into individual MCP tools:
 
 ```go
-func RegisterTools(server *mcp.Server, client *gitlab.Client) {
-    mcp.AddTool(server, branches.ListInput{}, branches.ListOutput{},
-        &mcp.ToolOptions{
-            Name:        "gitlab_list_branches",
-            Description: "List branches in a project",
-            Icons:       toolutil.IconBranch,  // ← icon assignment
-        },
-        handler,
-    )
+func RegisterAll(server *mcp.Server, client *gitlab.Client, opts RegisterOptions) error {
+    catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: opts.Enterprise})
+    if err != nil {
+        return err
+    }
+    return RegisterIndividualCatalogTools(server, catalog, opts)
 }
 ```
 
