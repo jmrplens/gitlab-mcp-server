@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -709,5 +710,26 @@ func TestCollectMatchingFiles_NonexistentDir(t *testing.T) {
 	_, err := collectMatchingFiles("/nonexistent-path-42", "")
 	if err == nil {
 		t.Fatal("expected error for nonexistent directory, got nil")
+	}
+}
+
+type failingDirEntry struct{}
+
+func (failingDirEntry) Name() string { return "missing.bin" }
+
+func (failingDirEntry) IsDir() bool { return false }
+
+func (failingDirEntry) Type() fs.FileMode { return 0 }
+
+func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, fmt.Errorf("stat missing.bin") }
+
+// TestShouldIncludeFile_InfoError verifies shouldIncludeFile returns stat errors.
+func TestShouldIncludeFile_InfoError(t *testing.T) {
+	included, err := shouldIncludeFile(failingDirEntry{}, "")
+	if err == nil {
+		t.Fatal("expected info error, got nil")
+	}
+	if included {
+		t.Fatal("included = true, want false")
 	}
 }

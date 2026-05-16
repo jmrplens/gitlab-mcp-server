@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,969 |
-| Unit test functions | 9,720 |
+| Total test functions | 9,971 |
+| Unit test functions | 9,722 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.0% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.1% |
 | Overall coverage (`go test ./internal/...`) | 98.3% |
 | Average package coverage | 95.1% |
 
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,948 | 89.8% |
+| `TestFunc_Scenario` (2-part) | 8,950 | 89.8% |
 | `TestFunc` (no underscore) | 740 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 281 | 2.8% |
 
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages | 1,641 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,312 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,313 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,969** | **567** |  |
+| **Total** | **9,971** | **567** |  |
 
 ### Core Packages
 
@@ -60,7 +60,7 @@
 | completions | 91 | 94.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters. |
 | config | 63 | 94.8% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server. |
 | elicitation | 78 | 92.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol. |
-| gitlab | 40 | 99.2% | Package gitlab provides a wrapper around the GitLab REST API v4 client. |
+| gitlab | 41 | 100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client. |
 | logging | 16 | 100.0% | Package logging provides MCP protocol-level logging via ServerSession. |
 | oauth | 35 | 98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode. |
 | progress | 17 | 100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations. |
@@ -72,7 +72,7 @@
 | testutil | 25 | 91.9% | Package testutil provides shared test utilities for MCP tool tests. |
 | toolutil | 407 | 92.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 246 | 90.3% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,640** |  |  |
+| **Subtotal** | **1,641** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -87,8 +87,8 @@
 | groups | 125 | 100.0% | 18 |
 | dynamic | 123 | 99.9% | 4 |
 | search | 115 | 100.0% | 10 |
+| packages | 109 | 99.0% | 8 |
 | awardemoji | 108 | 100.0% | 24 |
-| packages | 108 | 98.8% | 8 |
 | runners | 105 | 100.0% | 19 |
 | commits | 104 | 100.0% | 13 |
 | pipelines | 104 | 100.0% | 12 |
@@ -226,7 +226,7 @@
 | namespaces | 35 | 1 | 98.9% | 4 |
 | notifications | 29 | 1 | 100.0% | 6 |
 | orbit | 26 | 1 | 100.0% | 5 |
-| packages | 108 | 5 | 98.8% | 8 |
+| packages | 109 | 5 | 99.0% | 8 |
 | pages | 54 | 2 | 100.0% | 9 |
 | pipelines | 104 | 2 | 100.0% | 12 |
 | pipelineschedules | 85 | 2 | 100.0% | 11 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,312** | **337** |  | **1,106** |
+| **Total** | **7,313** | **337** |  | **1,106** |
 
 </details>
 
@@ -316,7 +316,7 @@
 | completions | 94.0% |
 | config | 94.8% |
 | elicitation | 92.0% |
-| gitlab | 99.2% |
+| gitlab | 100.0% |
 | logging | 100.0% |
 | oauth | 98.6% |
 | progress | 100.0% |
@@ -449,7 +449,7 @@
 | namespaces | 98.9% |
 | notifications | 100.0% |
 | orbit | 100.0% |
-| packages | 98.8% |
+| packages | 99.0% |
 | pages | 100.0% |
 | pipelines | 100.0% |
 | pipelineschedules | 100.0% |

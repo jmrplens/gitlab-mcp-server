@@ -6,6 +6,7 @@ package gitlab
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -232,6 +233,17 @@ func TestNewClientWithToken_SkipTLS(t *testing.T) {
 	}
 	if _, err = client.Ping(context.Background()); err != nil {
 		t.Errorf("Ping() unexpected error with SkipTLS: %v", err)
+	}
+}
+
+// TestHTTPTransport_ReturnsRoundTripper verifies the shared HTTP transport helper.
+func TestHTTPTransport_ReturnsRoundTripper(t *testing.T) {
+	for _, skipTLSVerify := range []bool{false, true} {
+		t.Run(fmt.Sprintf("skipTLSVerify_%v", skipTLSVerify), func(t *testing.T) {
+			if transport := HTTPTransport(skipTLSVerify); transport == nil {
+				t.Fatal("HTTPTransport() returned nil")
+			}
+		})
 	}
 }
 
