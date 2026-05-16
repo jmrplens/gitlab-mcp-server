@@ -736,6 +736,33 @@ func TestPipelineScheduleCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestPipelineScheduleCreate_StatusErrorBranches verifies create status-specific hints.
+func TestPipelineScheduleCreate_StatusErrorBranches(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "bad request", statusCode: http.StatusBadRequest, wantText: "check cron expression"},
+		{name: "not found", statusCode: http.StatusNotFound, wantText: "gitlab_project_get"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 * * * *"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), testCase.wantText) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantText)
+			}
+		})
+	}
+}
+
 // TestPipelineScheduleCreate_WithOptionalFields verifies PipelineScheduleCreate when with optional fields.
 func TestPipelineScheduleCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -780,6 +807,20 @@ func TestPipelineScheduleUpdate_APIError(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", ScheduleID: 1})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestPipelineScheduleUpdate_NotFound verifies update not-found hints.
+func TestPipelineScheduleUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", ScheduleID: 1})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), hintVerifyScheduleID) {
+		t.Fatalf("error = %v, want schedule hint", err)
 	}
 }
 
@@ -840,6 +881,20 @@ func TestPipelineScheduleDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestPipelineScheduleDelete_NotFound verifies delete not-found hints.
+func TestPipelineScheduleDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", ScheduleID: 1})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), hintVerifyScheduleID) {
+		t.Fatalf("error = %v, want schedule hint", err)
+	}
+}
+
 // TestPipelineScheduleDelete_MissingProjectID verifies PipelineScheduleDelete when missing project ID.
 func TestPipelineScheduleDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
@@ -861,6 +916,33 @@ func TestPipelineScheduleRun_APIError(t *testing.T) {
 	_, err := Run(context.Background(), client, RunInput{ProjectID: "1", ScheduleID: 1})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestPipelineScheduleRun_StatusErrorBranches verifies run status-specific hints.
+func TestPipelineScheduleRun_StatusErrorBranches(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, wantText: "rate-limited"},
+		{name: "not found", statusCode: http.StatusNotFound, wantText: hintVerifyScheduleID},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := Run(context.Background(), client, RunInput{ProjectID: "1", ScheduleID: 1})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), testCase.wantText) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantText)
+			}
+		})
 	}
 }
 
@@ -931,6 +1013,20 @@ func TestCreateVariable_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestCreateVariable_BadRequest verifies invalid variable key hints.
+func TestCreateVariable_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad key"}`)
+	}))
+	_, err := CreateVariable(context.Background(), client, CreateVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "variable key must match") {
+		t.Fatalf("error = %v, want variable key hint", err)
 	}
 }
 

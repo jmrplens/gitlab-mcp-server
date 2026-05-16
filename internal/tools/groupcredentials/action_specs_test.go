@@ -119,6 +119,36 @@ func TestActionSpecs_DeleteOutputs(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DeleteOutputErrors verifies destructive wrappers propagate validation errors.
+func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when required identifiers are missing")
+	}))
+	tests := []struct {
+		name string
+		fn   func() (toolutil.DeleteOutput, error)
+	}{
+		{name: "revoke_pat", fn: func() (toolutil.DeleteOutput, error) {
+			return revokePATOutput(context.Background(), client, RevokePATInput{GroupID: toolutil.StringOrInt("mygroup")})
+		}},
+		{name: "delete_ssh_key", fn: func() (toolutil.DeleteOutput, error) {
+			return deleteSSHKeyOutput(context.Background(), client, DeleteSSHKeyInput{GroupID: toolutil.StringOrInt("mygroup")})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := tt.fn()
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if out.Status != "" || out.Message != "" {
+				t.Fatalf("output = %+v, want zero output", out)
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_ConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

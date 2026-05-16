@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,845 |
-| Unit test functions | 9,596 |
+| Total test functions | 9,857 |
+| Unit test functions | 9,608 |
 | E2E test functions | 249 |
 | cmd test functions | 507 |
 | Test files (internal/) | 436 |
@@ -28,14 +28,14 @@
 | Tool sub-packages tested | 168 |
 | Core packages tested | 16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 87.6% |
-| Overall coverage (`go test ./internal/...`) | 97.7% |
-| Average package coverage | 94.7% |
+| Overall coverage (`go test ./internal/...`) | 97.8% |
+| Average package coverage | 94.8% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,847 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,859 | 89.9% |
 | `TestFunc` (no underscore) | 718 | 7.3% |
 | `TestFunc_Scenario_Expected` (3+ part) | 280 | 2.8% |
 
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,640 | 87 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 261 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (168) | 7,188 | 337 | domain-specific GitLab tool handlers |
+| Tool sub-packages (168) | 7,200 | 337 | domain-specific GitLab tool handlers |
 | E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 507 | 22 | server entry point and developer command utilities |
-| **Total** | **9,845** | **567** |  |
+| **Total** | **9,857** | **567** |  |
 
 ### Core Packages
 
@@ -95,8 +95,8 @@
 | commits | 97 | 96.0% | 13 |
 | groupmilestones | 87 | 100.0% | 8 |
 | accesstokens | 85 | 98.6% | 18 |
+| pipelineschedules | 85 | 100.0% | 11 |
 | branches | 83 | 100.0% | 10 |
-| pipelineschedules | 80 | 97.0% | 11 |
 | files | 78 | 100.0% | 8 |
 | tags | 77 | 100.0% | 9 |
 | containerregistry | 74 | 100.0% | 12 |
@@ -170,7 +170,7 @@
 | gitignoretemplates | 14 | 1 | 100.0% | 2 |
 | groupanalytics | 8 | 2 | 100.0% | 3 |
 | groupboards | 54 | 2 | 98.7% | 10 |
-| groupcredentials | 33 | 3 | 97.4% | 4 |
+| groupcredentials | 36 | 3 | 100.0% | 4 |
 | groupepicboards | 8 | 2 | 100.0% | 2 |
 | groupimportexport | 27 | 1 | 100.0% | 3 |
 | groupiterations | 19 | 1 | 100.0% | 1 |
@@ -229,7 +229,7 @@
 | packages | 103 | 5 | 97.1% | 8 |
 | pages | 53 | 2 | 97.9% | 9 |
 | pipelines | 99 | 2 | 97.9% | 12 |
-| pipelineschedules | 80 | 2 | 97.0% | 11 |
+| pipelineschedules | 85 | 2 | 100.0% | 11 |
 | pipelinetriggers | 48 | 2 | 99.3% | 6 |
 | planlimits | 13 | 2 | 100.0% | 2 |
 | projectaliases | 25 | 2 | 100.0% | 4 |
@@ -250,7 +250,7 @@
 | resourceevents | 98 | 3 | 100.0% | 15 |
 | resourcegroups | 16 | 1 | 100.0% | 4 |
 | runnercontrollers | 29 | 2 | 97.6% | 5 |
-| runnercontrollerscopes | 30 | 2 | 97.1% | 5 |
+| runnercontrollerscopes | 34 | 2 | 100.0% | 5 |
 | runnercontrollertokens | 37 | 2 | 100.0% | 5 |
 | runners | 101 | 2 | 96.9% | 19 |
 | samplingtools | 166 | 14 | 100.0% | 11 |
@@ -279,7 +279,7 @@
 | vulnerabilities | 52 | 3 | 98.4% | 8 |
 | wikis | 58 | 2 | 98.7% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,188** | **337** |  | **1,106** |
+| **Total** | **7,200** | **337** |  | **1,106** |
 
 </details>
 
@@ -393,7 +393,7 @@
 | gitignoretemplates | 100.0% |
 | groupanalytics | 100.0% |
 | groupboards | 98.7% |
-| groupcredentials | 97.4% |
+| groupcredentials | 100.0% |
 | groupepicboards | 100.0% |
 | groupimportexport | 100.0% |
 | groupiterations | 100.0% |
@@ -452,7 +452,7 @@
 | packages | 97.1% |
 | pages | 97.9% |
 | pipelines | 97.9% |
-| pipelineschedules | 97.0% |
+| pipelineschedules | 100.0% |
 | pipelinetriggers | 99.3% |
 | planlimits | 100.0% |
 | projectaliases | 100.0% |
@@ -473,7 +473,7 @@
 | resourceevents | 100.0% |
 | resourcegroups | 100.0% |
 | runnercontrollers | 97.6% |
-| runnercontrollerscopes | 97.1% |
+| runnercontrollerscopes | 100.0% |
 | runnercontrollertokens | 100.0% |
 | runners | 96.9% |
 | samplingtools | 100.0% |
