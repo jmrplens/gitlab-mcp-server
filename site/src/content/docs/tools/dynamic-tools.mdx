@@ -19,7 +19,7 @@ Meta-tools remain the default today because they are the most broadly compatible
 
 ## Why dynamic mode exists
 
-Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1011 individual operations, and even the default meta-tool catalog advertises 33 to 48 domain tools.
+Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1019 individual operations, and even the default meta-tool catalog advertises 33 to 50 domain tools.
 
 Dynamic mode exposes that catalog through search, describe, and execute tools. The model discovers only what it needs for the current task.
 
@@ -234,7 +234,7 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 | Question                         | Meta-tools                                          | Dynamic toolset                                               |
 | -------------------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
-| What is visible in `tools/list`? | 33 to 48 domain tools                               | 3 public discovery/execution tools                            |
+| What is visible in `tools/list`? | 33 to 50 domain tools                               | 3 public discovery/execution tools                            |
 | How does the model choose?       | Pick a domain tool and action                       | Search the canonical action catalog, then describe the action |
 | Where are schemas found?         | Tool schema or `gitlab://schema/meta/...` resources | `gitlab_describe_tools`                                       |
 | Best current use                 | Default compatibility                               | Low-token clients and compact action discovery                |

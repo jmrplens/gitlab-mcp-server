@@ -59,7 +59,7 @@ gitlab-mcp-server/
 └── .env                         # Local secrets (gitignored)
 ```
 
-Meta-tool counts are additive: 33 base tools, 14 Enterprise/Premium-specific meta-tools for 47 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 48 when Orbit is available.
+Meta-tool counts are additive: 33 base tools, 16 Enterprise/Premium-specific meta-tools for 49 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 50 when Orbit is available.
 
 ## Architecture
 
@@ -101,7 +101,7 @@ graph TD
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
-4. **Meta-tools** group catalog actions into 33 base tools (47 on self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
+4. **Meta-tools** group catalog actions into 33 base tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation

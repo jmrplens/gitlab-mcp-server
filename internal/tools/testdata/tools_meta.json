@@ -4490,6 +4490,172 @@
     }
   },
   {
+    "name": "gitlab_security_attribute",
+    "description": "Use {\"action\":\"bulk_update\",\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/gitlab_security_attribute/\u003caction\u003e.\n\nManage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.\nReturns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.\n\nParam conventions: IDs are numeric GitLab IDs; mode is one of ADD, REMOVE, or REPLACE.\n\n- create: namespace_id*, category_id*, attributes* (array of {name, description, color})\n- update: attribute_id*, name, description, color\n- delete: attribute_id*\n- project_update: project_id*, add_attribute_ids, remove_attribute_ids\n- bulk_update: group_ids or project_ids*, attribute_ids*, mode*\n\nSee also: gitlab_security_category, gitlab_project, gitlab_group",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
+          "enum": [
+            "bulk_update",
+            "create",
+            "delete",
+            "project_update",
+            "update"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped. For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action).",
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": true,
+      "title": "Security Attribute"
+    }
+  },
+  {
+    "name": "gitlab_security_category",
+    "description": "Use {\"action\":\"create\",\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/gitlab_security_category/\u003caction\u003e.\n\nManage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.\nReturns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.\n\nParam conventions: IDs are numeric GitLab IDs.\n\n- create: namespace_id*, name*, description, multiple_selection\n- update: category_id*, namespace_id*, name, description\n- delete: category_id*\n\nSee also: gitlab_security_attribute, gitlab_group, gitlab_project",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
+          "enum": [
+            "create",
+            "delete",
+            "update"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped. For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action).",
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": true,
+      "title": "Security Category"
+    }
+  },
+  {
     "name": "gitlab_security_finding",
     "description": "Use {\"action\":\"list\",\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/gitlab_security_finding/\u003caction\u003e.\n\nList pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.\nReturns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden — with actionable hints.\n\n- list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after\n\nSee also: gitlab_vulnerability, gitlab_pipeline",
     "inputSchema": {

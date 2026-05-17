@@ -98,7 +98,7 @@ Package-local `RegisterTools` functions have since been removed for ordinary Git
 - **POS-002**: Independent test compilation — `go test ./internal/tools/branches/` runs only branch tests
 - **POS-003**: Clear domain boundaries — each sub-package is self-contained and independently reviewable
 - **POS-004**: Zero import cycles enforced by Go compiler — sub-packages cannot import each other
-- **POS-005**: Scales to 163 sub-packages and 1006 self-managed Enterprise/Premium tools (1011 on GitLab.com Enterprise/Premium with Orbit) without package-level congestion
+- **POS-005**: Scales to 160+ sub-packages and 1000+ Enterprise/Premium tools without package-level congestion
 - **POS-006**: New tools follow a repeatable, discoverable pattern
 
 ### Negative

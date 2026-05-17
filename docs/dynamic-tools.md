@@ -14,9 +14,9 @@ Use the dynamic toolset when the initial MCP `tools/list` payload is the limitin
 
 | Mode | Visible Tools | Best For |
 | --- | ---: | --- |
-| Meta-tools, current default | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection |
+| Meta-tools, current default | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection |
 | Dynamic toolset | 3 | Low-token clients that can search, describe, then execute actions |
-| Individual tools | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation |
+| Individual tools | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 
@@ -353,7 +353,7 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 | Concern | Meta-tools | Dynamic toolset |
 | --- | --- | --- |
-| Initial tool count | 33/47/48 | 3 |
+| Initial tool count | 33/49/50 | 3 |
 | Model selection | Choose a domain tool and action | Search an action registry, describe, execute |
 | Schema discovery | `action` enum plus optional schema resources or `META_PARAM_SCHEMA=compact/full` | `gitlab_describe_tools` returns action schemas inline |
 | Minimal capabilities | Loses meta-schema resources and prompts | Keeps action schema discovery through describe |

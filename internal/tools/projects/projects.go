@@ -423,8 +423,7 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.SharedRunnersEnabled = input.SharedRunnersEnabled
 	}
 	if input.PublicBuilds != nil {
-		//lint:ignore SA1019 CreateProjectOptions lacks PublicJobs field
-		opts.PublicBuilds = input.PublicBuilds //nolint:staticcheck // SA1019: no PublicJobs field
+		opts.PublicJobs = input.PublicBuilds
 	}
 	if input.PackagesEnabled != nil {
 		//lint:ignore SA1019 backward compat with PackagesEnabled field

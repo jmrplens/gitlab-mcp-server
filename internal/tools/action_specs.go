@@ -128,6 +128,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityattributes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitycategories"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
@@ -452,6 +454,28 @@ func buildRunnerActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 
 func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_search", search.ActionSpecs(client))
+}
+
+func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	groups := actionSpecGroup("gitlab_security_attribute", securityattributes.ActionSpecs(client))
+	if len(groups) > 0 {
+		groups[0].Description = "Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.\nReturns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.\n\nParam conventions: IDs are numeric GitLab IDs; mode is one of ADD, REMOVE, or REPLACE.\n\n- create: namespace_id*, category_id*, attributes* (array of {name, description, color})\n- update: attribute_id*, name, description, color\n- delete: attribute_id*\n- project_update: project_id*, add_attribute_ids, remove_attribute_ids\n- bulk_update: group_ids or project_ids*, attribute_ids*, mode*\n\nSee also: gitlab_security_category, gitlab_project, gitlab_group"
+	}
+	return groups
+}
+
+func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+	if !enterprise {
+		return nil
+	}
+	groups := actionSpecGroup("gitlab_security_category", securitycategories.ActionSpecs(client))
+	if len(groups) > 0 {
+		groups[0].Description = "Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.\nReturns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.\n\nParam conventions: IDs are numeric GitLab IDs.\n\n- create: namespace_id*, name*, description, multiple_selection\n- update: category_id*, namespace_id*, name, description\n- delete: category_id*\n\nSee also: gitlab_security_attribute, gitlab_group, gitlab_project"
+	}
+	return groups
 }
 
 func buildSecurityFindingActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {

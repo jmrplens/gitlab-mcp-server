@@ -801,7 +801,11 @@ func TestDebug_ErrorType(t *testing.T) {
 	t.Logf("error value: %v", err)
 	t.Logf("errors.As for ErrorResponse: %v", errors.As(err, &glErr))
 	if errors.As(err, &glErr) {
-		t.Logf("ErrorResponse.Response.StatusCode: %d", glErr.Response.StatusCode)
+		if glErr.Response != nil {
+			t.Logf("ErrorResponse.Response.StatusCode: %d", glErr.Response.StatusCode)
+		} else {
+			t.Log("ErrorResponse.Response is nil")
+		}
 	} else {
 		t.Log("error is NOT a *gl.ErrorResponse")
 		t.Logf("unwrapped: %v", errors.Unwrap(err))

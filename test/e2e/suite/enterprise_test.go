@@ -23,9 +23,54 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectaliases"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityattributes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securitycategories"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+// TestEnterpriseSecurityTools_NotRegisteredOnCE verifies that CE E2E runs do
+// not expose Premium/Ultimate security classification tools at all.
+func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
+	t.Parallel()
+	if sess.enterprise {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	individual, err := sess.individual.ListTools(ctx, nil)
+	requireNoError(t, err, "list individual tools")
+	individualForbidden := map[string]bool{
+		"gitlab_bulk_update_security_attributes":   true,
+		"gitlab_create_security_attribute":         true,
+		"gitlab_create_security_category":          true,
+		"gitlab_delete_security_attribute":         true,
+		"gitlab_delete_security_category":          true,
+		"gitlab_project_update_security_attribute": true,
+		"gitlab_update_security_attribute":         true,
+		"gitlab_update_security_category":          true,
+	}
+	for _, tool := range individual.Tools {
+		if individualForbidden[tool.Name] {
+			t.Fatalf("CE individual surface exposed enterprise tool %q", tool.Name)
+		}
+	}
+
+	meta, err := sess.meta.ListTools(ctx, nil)
+	requireNoError(t, err, "list meta-tools")
+	metaForbidden := map[string]bool{
+		"gitlab_security_attribute": true,
+		"gitlab_security_category":  true,
+	}
+	for _, tool := range meta.Tools {
+		if metaForbidden[tool.Name] {
+			t.Fatalf("CE meta surface exposed enterprise tool %q", tool.Name)
+		}
+	}
+}
 
 // TestMeta_MergeTrains exercises merge train tools via the gitlab_merge_train meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
@@ -294,6 +339,165 @@ func TestMeta_SecurityFindings(t *testing.T) {
 		requirePremiumFeature(t, err, "security findings")
 		t.Log("Security finding list OK")
 	})
+}
+
+// TestMeta_SecurityClassifications exercises security category and security
+// attribute lifecycle tools via their Premium/Ultimate meta-tools.
+func TestMeta_SecurityClassifications(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	e2e := NewE2EContext(t)
+	group := CreateGroupMeta(ctx, e2e, sess.meta, "e2e-sec-class-")
+
+	projectName := uniqueName(e2eProjectPrefix + "sec-class-" + sanitizeTestName(t.Name()))
+	project, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":                   projectName,
+			"path":                   projectName,
+			"namespace_id":           int(group.ID),
+			"description":            "E2E security classification project",
+			"visibility":             "private",
+			"initialize_with_readme": true,
+			"default_branch":         defaultBranch,
+		},
+	})
+	requireNoError(t, err, "create project for security classification tests")
+	requireTruef(t, project.ID > 0, "project ID should be positive")
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_project", map[string]any{
+			"action": "delete",
+			"params": map[string]any{
+				"project_id":         strconv.FormatInt(project.ID, 10),
+				"permanently_remove": true,
+				"full_path":          project.PathWithNamespace,
+			},
+		})
+	})
+
+	description := "E2E security classification category"
+	multipleSelection := true
+	category, err := callToolOn[securitycategories.Output](ctx, sess.meta, "gitlab_security_category", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"namespace_id":       group.ID,
+			"name":               uniqueName("e2e-category-"),
+			"description":        description,
+			"multiple_selection": multipleSelection,
+		},
+	})
+	requirePremiumFeature(t, err, "security categories")
+	requireTruef(t, category.ID > 0, "category ID should be positive")
+	requireTruef(t, category.MultipleSelection, "category should allow multiple selection")
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_security_category", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"category_id": category.ID},
+		})
+	})
+
+	updatedDescription := "Updated E2E security classification category"
+	updatedCategory, err := callToolOn[securitycategories.Output](ctx, sess.meta, "gitlab_security_category", map[string]any{
+		"action": "update",
+		"params": map[string]any{
+			"category_id":  category.ID,
+			"namespace_id": group.ID,
+			"description":  updatedDescription,
+		},
+	})
+	requirePremiumFeature(t, err, "security categories")
+	requireTruef(t, updatedCategory.Description == updatedDescription, "category description = %q, want %q", updatedCategory.Description, updatedDescription)
+
+	attributes, err := callToolOn[securityattributes.CreateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"namespace_id": group.ID,
+			"category_id":  category.ID,
+			"attributes": []map[string]any{
+				{
+					"name":        uniqueName("e2e-attribute-"),
+					"description": "E2E security classification attribute",
+					"color":       "#FF0000",
+				},
+			},
+		},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+	requireTruef(t, len(attributes.Attributes) == 1, "created attributes = %d, want 1", len(attributes.Attributes))
+	attribute := attributes.Attributes[0]
+	requireTruef(t, attribute.ID > 0, "attribute ID should be positive")
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_security_attribute", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"attribute_id": attribute.ID},
+		})
+	})
+
+	updatedColor := "#00FF00"
+	updatedAttribute, err := callToolOn[securityattributes.Output](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "update",
+		"params": map[string]any{
+			"attribute_id": attribute.ID,
+			"color":        updatedColor,
+		},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+	requireTruef(t, updatedAttribute.Color == updatedColor, "attribute color = %q, want %q", updatedAttribute.Color, updatedColor)
+
+	projectAdd, err := callToolOn[securityattributes.ProjectUpdateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "project_update",
+		"params": map[string]any{
+			"project_id":        project.ID,
+			"add_attribute_ids": []int64{attribute.ID},
+		},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+	requireTruef(t, projectAdd.AddedCount >= 1, "added count should be at least one")
+
+	bulk, err := callToolOn[securityattributes.BulkUpdateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "bulk_update",
+		"params": map[string]any{
+			"project_ids":   []int64{project.ID},
+			"attribute_ids": []int64{attribute.ID},
+			"mode":          securityattributes.BulkUpdateModeAdd,
+		},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+	requireTruef(t, bulk.Status == "success", "bulk update status = %q, want success", bulk.Status)
+
+	projectRemove, err := callToolOn[securityattributes.ProjectUpdateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "project_update",
+		"params": map[string]any{
+			"project_id":           project.ID,
+			"remove_attribute_ids": []int64{attribute.ID},
+		},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+	requireTruef(t, projectRemove.RemovedCount >= 1, "removed count should be at least one")
+
+	err = callToolVoidOn(ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		"action": "delete",
+		"params": map[string]any{"attribute_id": attribute.ID},
+	})
+	requirePremiumFeature(t, err, "security attributes")
+
+	err = callToolVoidOn(ctx, sess.meta, "gitlab_security_category", map[string]any{
+		"action": "delete",
+		"params": map[string]any{"category_id": category.ID},
+	})
+	requirePremiumFeature(t, err, "security categories")
 }
 
 // TestMeta_GroupSCIM exercises Group SCIM tools via the gitlab_group_scim meta-tool.

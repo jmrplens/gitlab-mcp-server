@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "1006 GitLab MCP tools self-managed; 1011 on GitLab.com Enterprise/Premium with Orbit.",
+  "description": "GitLab MCP server with meta/dynamic tools, resources, prompts, and broad GitLab API coverage.",
   "version": "1.6.1",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
@@ -63,7 +63,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -94,6 +122,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -105,6 +139,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "/path/to/exports:/another/path/to/exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",
@@ -183,7 +237,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -214,6 +296,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -225,6 +313,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "/path/to/exports:/another/path/to/exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",
@@ -303,7 +411,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -334,6 +470,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -345,6 +487,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "/path/to/exports:/another/path/to/exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",
@@ -423,7 +585,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -454,6 +644,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -465,6 +661,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "/path/to/exports:/another/path/to/exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",
@@ -543,7 +759,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -574,6 +818,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -585,6 +835,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "C:\\path\\to\\exports;D:\\other\\exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",
@@ -663,7 +933,35 @@
           "name": "TOOL_SURFACE",
           "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
           "isRequired": false,
-          "default": "meta"
+          "default": "meta",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic",
+            "dynamic-2",
+            "dynamic-3"
+          ]
+        },
+        {
+          "name": "CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full)",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
         },
         {
           "name": "GITLAB_ENTERPRISE",
@@ -694,6 +992,12 @@
           "format": "boolean"
         },
         {
+          "name": "EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
           "name": "GITLAB_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
@@ -705,6 +1009,26 @@
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
           "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "C:\\path\\to\\exports;D:\\other\\exports"
+        },
+        {
+          "name": "RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
         },
         {
           "name": "LOG_LEVEL",

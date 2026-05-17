@@ -47,3 +47,57 @@ func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
 	}
 	t.Fatalf("listResources() templates missing meta-schema template: %v", templates)
 }
+
+func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema map[string]any
+		want   string
+	}{
+		{
+			name:   "nullable string",
+			schema: map[string]any{"type": []any{"null", "string"}},
+			want:   "string",
+		},
+		{
+			name: "nullable integer array",
+			schema: map[string]any{
+				"type":  []any{"null", "array"},
+				"items": map[string]any{"type": "integer"},
+			},
+			want: "array of integers",
+		},
+		{
+			name: "object array",
+			schema: map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": "object"},
+			},
+			want: "array of objects",
+		},
+		{
+			name:   "untyped any value",
+			schema: map[string]any{},
+			want:   "any",
+		},
+		{
+			name: "nested string array",
+			schema: map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"type": "string"},
+				},
+			},
+			want: "array of arrays of strings",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := schemaTypeLabel(tt.schema); got != tt.want {
+				t.Fatalf("schemaTypeLabel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

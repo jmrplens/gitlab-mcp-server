@@ -198,10 +198,10 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
-| **Meta-tools** (default) | `TOOL_SURFACE=meta` | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise | Most users — lower token usage |
+| **Meta-tools** (default) | `TOOL_SURFACE=meta` | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Most users — lower token usage |
 | **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
 | **Dynamic-2 variant** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental two-tool surface that combines discovery and schema lookup |
-| **Individual tools** | `TOOL_SURFACE=individual` | 863 CE / 1006 self-managed enterprise / 1011 GitLab.com Enterprise | Clients that need granular tool selection |
+| **Individual tools** | `TOOL_SURFACE=individual` | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Clients that need granular tool selection |
 
 `TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need to pin the explicit three-tool selector, and reserve `dynamic-2` for find/execute experiments. `META_TOOLS` remains accepted for one compatibility window only and should appear only in migration guidance.
 

@@ -153,7 +153,7 @@ mcp.AddTool(server, &mcp.Tool{Name: "gitlab_list_projects", ...},
     })
 ```
 
-This means **every single tool call** (up to 1011 individual tools on GitLab.com Enterprise/Premium) generates a structured log entry with the tool name, execution duration, and success or failure status — with zero manual instrumentation per tool.
+This means **every single tool call** (up to 1019 individual tools on GitLab.com Enterprise/Premium) generates a structured log entry with the tool name, execution duration, and success or failure status — with zero manual instrumentation per tool.
 
 ## MCP Logging vs stderr
 

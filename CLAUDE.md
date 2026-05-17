@@ -20,17 +20,17 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1006 self-managed Enterprise/Premium; 1011 on GitLab.com Enterprise/Premium with Orbit                     |
-| Meta-mode tools           | 33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise (Orbit)                                    |
+| MCP Tools (individual)    | 1014 self-managed Enterprise/Premium; 1019 on GitLab.com Enterprise/Premium with Orbit                     |
+| Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 3 dynamic tools (`gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
 | MCP Resources             | 46                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 629+ (infrastructure + 163 sub-packages)                                                                     |
+| Source files (tools)      | 629+ (infrastructure + 165 sub-packages)                                                                     |
 | Test files (tools)        | 320                                                                                                          |
-| Go packages               | 187 (16 core + 163 tool packages + 8 cmd)                                                                    |
+| Go packages               | 189 (16 core + 165 tool packages + 8 cmd)                                                                    |
 
 ## Project Structure
 
@@ -54,7 +54,7 @@ gitlab-mcp-server/
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
+│   ├── tools/                   # Tool orchestration layer + 165 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic search/describe/execute surface over catalog routes
@@ -160,7 +160,7 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used by all 163 domain sub-packages:
+Four error wrapping functions in `internal/toolutil/errors.go`, used by all 165 domain sub-packages:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -442,14 +442,14 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (163 sub-packages, 1006 self-managed tools / 1011 GitLab.com Enterprise tools) |
-| ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (5 GraphQL-only domains)             |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (165 sub-packages, 1014 self-managed tools / 1019 GitLab.com Enterprise tools) |
+| ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package is split into 163 domain sub-packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package is split into 165 domain sub-packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
@@ -481,11 +481,11 @@ Search combines canonical `domain.action` IDs, domain/action names, aliases, nat
 
 **Individual mode** (`TOOL_SURFACE=individual`; legacy `META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 
-- projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
+- projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityattributes, securitycategories, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
-**Meta-tool mode** (`TOOL_SURFACE=meta`, default) — gates 14 dedicated Enterprise/Premium catalog groups:
+**Meta-tool mode** (`TOOL_SURFACE=meta`, default) — gates 16 dedicated Enterprise/Premium catalog groups:
 
-- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_finding
+- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_attribute, gitlab_security_category, gitlab_security_finding
 
 Plus enterprise-only routes injected into 3 base meta-tools:
 
