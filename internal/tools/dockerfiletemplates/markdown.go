@@ -6,11 +6,9 @@ import (
 
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	return toolutil.FormatTemplateListMarkdown(toolutil.TemplateMarkdowns(out.Templates, toTemplateMarkdown), out.Pagination, toolutil.TemplateListMarkdownOptions{
-		Title:        "Dockerfile Templates",
-		EmptyMessage: "No templates found.\n",
-		Hint:         "Use `gitlab_get_dockerfile_template` to view a specific template",
-	})
+	return toolutil.FormatTemplateCollectionMarkdown(out.Templates, out.Pagination, toTemplateMarkdown, "Dockerfile Templates", "No templates found.\n",
+		"Use `gitlab_get_dockerfile_template` to view a specific template",
+	)
 }
 
 // FormatGetMarkdown formats the get output as markdown.

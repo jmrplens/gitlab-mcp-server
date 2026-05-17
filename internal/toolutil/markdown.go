@@ -245,6 +245,19 @@ func FormatCICDVariableMarkdown(v CICDVariableMarkdown, opts CICDVariableMarkdow
 	return b.String()
 }
 
+// FormatCICDVariableDetailMarkdown renders a CI/CD variable with standard
+// update/delete next-step hints shared by project and group variables.
+func FormatCICDVariableDetailMarkdown(v CICDVariableMarkdown, title string, includeEnvironmentScope bool) string {
+	return FormatCICDVariableMarkdown(v, CICDVariableMarkdownOptions{
+		Title:                   title,
+		IncludeEnvironmentScope: includeEnvironmentScope,
+		Hints: []string{
+			"Use action 'update' to change this variable",
+			"Use action 'delete' to remove this variable",
+		},
+	})
+}
+
 // CICDVariableListMarkdownOptions configures the shared CI/CD variable list
 // renderer.
 type CICDVariableListMarkdownOptions struct {
@@ -268,26 +281,31 @@ func FormatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination
 		b.WriteString(MarkdownTableHeader("Key", "Type", "Protected", "Masked"))
 	}
 	for _, v := range variables {
-		if opts.IncludeEnvironmentScope {
-			b.WriteString(MarkdownTableRow(
-				EscapeMdTableCell(v.Key),
-				EscapeMdTableCell(v.VariableType),
-				strconv.FormatBool(v.Protected),
-				strconv.FormatBool(v.Masked),
-				EscapeMdTableCell(v.EnvironmentScope),
-			))
-			continue
-		}
-		b.WriteString(MarkdownTableRow(
+		cells := []string{
 			EscapeMdTableCell(v.Key),
 			EscapeMdTableCell(v.VariableType),
-			strconv.FormatBool(v.Protected),
-			strconv.FormatBool(v.Masked),
-		))
+			BoolEmoji(v.Protected),
+			BoolEmoji(v.Masked),
+		}
+		if opts.IncludeEnvironmentScope {
+			cells = append(cells, EscapeMdTableCell(v.EnvironmentScope))
+		}
+		b.WriteString(MarkdownTableRow(cells...))
 	}
 	WritePagination(&b, pagination)
-	WriteHints(&b, opts.Hints...)
+	WriteHints(&b, ListHints(opts.Hints...)...)
 	return b.String()
+}
+
+// FormatCICDVariableCollectionMarkdown maps package-specific CI/CD variable
+// outputs and renders them as a shared Markdown list.
+func FormatCICDVariableCollectionMarkdown[T any](variables []T, pagination PaginationOutput, convert func(T) CICDVariableMarkdown, title, emptyMessage string, includeEnvironmentScope bool, hints ...string) string {
+	return FormatCICDVariableListMarkdown(CICDVariableMarkdowns(variables, convert), pagination, CICDVariableListMarkdownOptions{
+		Title:                   title,
+		EmptyMessage:            emptyMessage,
+		IncludeEnvironmentScope: includeEnvironmentScope,
+		Hints:                   hints,
+	})
 }
 
 // DiscussionNoteMarkdown carries common note fields rendered inside discussion
@@ -339,11 +357,11 @@ func DiscussionMarkdowns[T any](discussions []T, convert func(T) DiscussionMarkd
 
 // DiscussionListMarkdownOptions configures shared discussion list rendering.
 type DiscussionListMarkdownOptions struct {
-	Title          string
-	EmptyMessage   string
-	ListSummary    string
-	PaginationText string
-	Hints          []string
+	Title             string
+	EmptyMessage      string
+	Pagination        PaginationOutput
+	GraphQLPagination *GraphQLPaginationOutput
+	Hints             []string
 }
 
 // FormatDiscussionListMarkdown renders discussion threads as Markdown.
@@ -353,24 +371,51 @@ func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts Discuss
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, len(discussions))
-	b.WriteString(opts.ListSummary)
+	if opts.GraphQLPagination == nil {
+		WriteListSummary(&b, len(discussions), opts.Pagination)
+	}
 	for _, discussion := range discussions {
 		fmt.Fprintf(&b, "### Discussion %s\n", discussion.ID)
-		writeDiscussionNotes(&b, discussion.Notes, true)
+		writeDiscussionNotes(&b, discussion.Notes)
 		b.WriteString("\n")
 	}
-	if opts.PaginationText != "" {
-		b.WriteString(opts.PaginationText)
+	if opts.GraphQLPagination != nil {
+		b.WriteString(FormatGraphQLPagination(*opts.GraphQLPagination, len(discussions)))
+		b.WriteString("\n")
+	} else {
+		WritePagination(&b, opts.Pagination)
 	}
-	WriteHints(&b, opts.Hints...)
+	WriteHints(&b, ListHints(opts.Hints...)...)
 	return b.String()
+}
+
+// FormatRESTDiscussionListMarkdown maps REST discussion outputs and renders
+// them with offset pagination metadata.
+func FormatRESTDiscussionListMarkdown[T any](discussions []T, pagination PaginationOutput, convert func(T) DiscussionMarkdown, title, emptyMessage string, hints ...string) string {
+	return FormatDiscussionListMarkdown(DiscussionMarkdowns(discussions, convert), DiscussionListMarkdownOptions{
+		Title:        title,
+		EmptyMessage: emptyMessage,
+		Pagination:   pagination,
+		Hints:        hints,
+	})
+}
+
+// FormatGraphQLDiscussionListMarkdown maps GraphQL discussion outputs and
+// renders them with cursor pagination metadata.
+func FormatGraphQLDiscussionListMarkdown[T any](discussions []T, pagination GraphQLPaginationOutput, convert func(T) DiscussionMarkdown, title, emptyMessage string, hints ...string) string {
+	return FormatDiscussionListMarkdown(DiscussionMarkdowns(discussions, convert), DiscussionListMarkdownOptions{
+		Title:             title,
+		EmptyMessage:      emptyMessage,
+		GraphQLPagination: &pagination,
+		Hints:             hints,
+	})
 }
 
 // FormatDiscussionMarkdown renders a single discussion thread as Markdown.
 func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Discussion %s\n\n", discussion.ID)
-	writeDiscussionNotes(&b, discussion.Notes, false)
+	writeDiscussionNotes(&b, discussion.Notes)
 	WriteHints(&b, hints...)
 	return b.String()
 }
@@ -381,7 +426,9 @@ func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) 
 	b.WriteString("## Note\n\n")
 	fmt.Fprintf(&b, FmtMdID, note.ID)
 	fmt.Fprintf(&b, FmtMdAuthorAt, note.Author)
-	fmt.Fprintf(&b, "- **Body**: %s\n", note.Body)
+	b.WriteString("- **Body**:\n\n")
+	b.WriteString(WrapGFMBody(note.Body))
+	b.WriteString("\n")
 	if note.CreatedAt != "" {
 		fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
 	}
@@ -389,13 +436,9 @@ func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) 
 	return b.String()
 }
 
-func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown, normalizeBody bool) {
+func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown) {
 	for _, note := range notes {
-		body := note.Body
-		if normalizeBody {
-			body = NormalizeText(body)
-		}
-		fmt.Fprintf(b, "- **@%s** (%s): %s\n", note.Author, FormatTime(note.CreatedAt), body)
+		fmt.Fprintf(b, "- **@%s** (%s): %s\n", note.Author, FormatTime(note.CreatedAt), note.Body)
 	}
 }
 
@@ -421,11 +464,21 @@ func TemplateMarkdowns[T any](templates []T, convert func(T) TemplateMarkdown) [
 	return out
 }
 
+// FormatTemplateCollectionMarkdown maps package-specific template outputs and
+// renders them as a shared Markdown list.
+func FormatTemplateCollectionMarkdown[T any](templates []T, pagination PaginationOutput, convert func(T) TemplateMarkdown, title, emptyMessage string, hints ...string) string {
+	return FormatTemplateListMarkdown(TemplateMarkdowns(templates, convert), pagination, TemplateListMarkdownOptions{
+		Title:        title,
+		EmptyMessage: emptyMessage,
+		Hints:        hints,
+	})
+}
+
 // TemplateListMarkdownOptions configures shared template list rendering.
 type TemplateListMarkdownOptions struct {
 	Title        string
 	EmptyMessage string
-	Hint         string
+	Hints        []string
 }
 
 // FormatTemplateListMarkdown renders GitLab template list entries as Markdown.
@@ -442,19 +495,24 @@ func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination Paginat
 		b.WriteString(MarkdownTableRow(EscapeMdTableCell(template.Key), EscapeMdTableCell(template.Name)))
 	}
 	WritePagination(&b, pagination)
-	WriteHints(&b, opts.Hint)
+	WriteHints(&b, ListHints(opts.Hints...)...)
 	return b.String()
 }
 
 // FormatTemplateContentMarkdown renders a GitLab template body inside a fenced
 // code block.
-func FormatTemplateContentMarkdown(title, name, language, content, hint string) string {
+func FormatTemplateContentMarkdown(title, name, language, content string, hints ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s: %s\n\n", title, name)
-	fmt.Fprintf(&b, "```%s\n", language)
+	fence := "```"
+	if strings.Contains(content, "```") {
+		fence = "````"
+	}
+	safeLanguage := strings.NewReplacer("`", "", "\r", "", "\n", "").Replace(language)
+	fmt.Fprintf(&b, "%s%s\n", fence, safeLanguage)
 	b.WriteString(content)
-	b.WriteString("\n```\n")
-	WriteHints(&b, hint)
+	fmt.Fprintf(&b, "\n%s\n", fence)
+	WriteHints(&b, hints...)
 	return b.String()
 }
 
@@ -555,25 +613,19 @@ func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, o
 		b.WriteString(MarkdownTableHeader("ID", "Author", "Created", "System"))
 	}
 	for _, note := range notes {
-		if opts.IncludeInternal {
-			b.WriteString(MarkdownTableRow(
-				strconv.FormatInt(note.ID, 10),
-				EscapeMdTableCell(note.Author),
-				FormatTime(note.CreatedAt),
-				strconv.FormatBool(note.System),
-				strconv.FormatBool(note.Internal),
-			))
-			continue
-		}
-		b.WriteString(MarkdownTableRow(
+		cells := []string{
 			strconv.FormatInt(note.ID, 10),
 			EscapeMdTableCell(note.Author),
 			FormatTime(note.CreatedAt),
-			strconv.FormatBool(note.System),
-		))
+			BoolEmoji(note.System),
+		}
+		if opts.IncludeInternal {
+			cells = append(cells, BoolEmoji(note.Internal))
+		}
+		b.WriteString(MarkdownTableRow(cells...))
 	}
 	WritePagination(&b, pagination)
-	WriteHints(&b, opts.Hints...)
+	WriteHints(&b, ListHints(opts.Hints...)...)
 	return b.String()
 }
 

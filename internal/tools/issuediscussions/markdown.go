@@ -1,11 +1,9 @@
 package issuediscussions
 
 import (
-	"strings"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // FormatListMarkdown formats a list of discussions as Markdown.
@@ -15,18 +13,10 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	var b strings.Builder
-	toolutil.WriteListSummary(&b, len(out.Discussions), out.Pagination)
-	return toolutil.FormatDiscussionListMarkdown(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), toolutil.DiscussionListMarkdownOptions{
-		Title:          "Issue Discussions",
-		EmptyMessage:   "No issue discussions found.\n",
-		ListSummary:    b.String(),
-		PaginationText: toolutil.FormatPagination(out.Pagination),
-		Hints: []string{
-			"Use action 'discussion_get' with discussion_id to see full discussion",
-			"Use action 'discussion_add_note' to reply to a discussion",
-		},
-	})
+	return toolutil.FormatRESTDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Issue Discussions", "No issue discussions found.\n",
+		"Use action 'discussion_get' with discussion_id to see full discussion",
+		"Use action 'discussion_add_note' to reply to a discussion",
+	)
 }
 
 // FormatMarkdown formats a single discussion as Markdown.

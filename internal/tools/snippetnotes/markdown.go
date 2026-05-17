@@ -18,11 +18,10 @@ func FormatListMarkdown(out ListOutput) string {
 	return toolutil.FormatNoteListMarkdown(toolutil.NoteMarkdowns(out.Notes, toNoteMarkdown), out.Pagination, toolutil.NoteListMarkdownOptions{
 		Title:        "Snippet Notes",
 		EmptyMessage: "No snippet notes found.\n",
-		Hints: []string{
-			toolutil.HintPreserveLinks,
+		Hints: toolutil.ListHints(
 			"Use action 'note_get' with note_id to read a specific note",
 			"Use action 'note_create' to add a new note to this snippet",
-		},
+		),
 	})
 }
 

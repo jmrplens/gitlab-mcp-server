@@ -13,12 +13,9 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatDiscussionListMarkdown(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), toolutil.DiscussionListMarkdownOptions{
-		Title:          "Epic Discussions",
-		EmptyMessage:   "No epic discussions found.\n",
-		PaginationText: toolutil.FormatGraphQLPagination(out.Pagination, len(out.Discussions)) + "\n",
-		Hints:          []string{"Use `gitlab_get_epic_discussion` to view full discussion details"},
-	})
+	return toolutil.FormatGraphQLDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Epic Discussions", "No epic discussions found.\n",
+		"Use `gitlab_get_epic_discussion` to view full discussion details",
+	)
 }
 
 // FormatMarkdown formats a single discussion as Markdown.

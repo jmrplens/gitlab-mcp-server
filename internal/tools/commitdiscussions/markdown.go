@@ -1,11 +1,9 @@
 package commitdiscussions
 
 import (
-	"strings"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // FormatListMarkdown formats a list of discussions as Markdown.
@@ -15,15 +13,9 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	var b strings.Builder
-	toolutil.WriteListSummary(&b, len(out.Discussions), out.Pagination)
-	return toolutil.FormatDiscussionListMarkdown(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), toolutil.DiscussionListMarkdownOptions{
-		Title:          "Commit Discussions",
-		EmptyMessage:   "No commit discussions found.\n",
-		ListSummary:    b.String(),
-		PaginationText: toolutil.FormatPagination(out.Pagination),
-		Hints:          []string{"Use `gitlab_get_commit_discussion` to view full discussion details"},
-	})
+	return toolutil.FormatRESTDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Commit Discussions", "No commit discussions found.\n",
+		"Use `gitlab_get_commit_discussion` to view full discussion details",
+	)
 }
 
 // FormatMarkdown formats a single discussion as Markdown.

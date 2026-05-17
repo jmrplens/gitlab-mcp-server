@@ -6,11 +6,9 @@ import (
 
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	return toolutil.FormatTemplateListMarkdown(toolutil.TemplateMarkdowns(out.Templates, toTemplateMarkdown), out.Pagination, toolutil.TemplateListMarkdownOptions{
-		Title:        "CI YAML Templates",
-		EmptyMessage: "No templates found.\n",
-		Hint:         "Use `gitlab_get_ci_yaml_template` to view a specific template",
-	})
+	return toolutil.FormatTemplateCollectionMarkdown(out.Templates, out.Pagination, toTemplateMarkdown, "CI YAML Templates", "No templates found.\n",
+		"Use `gitlab_get_ci_yaml_template` to view a specific template",
+	)
 }
 
 // FormatGetMarkdown formats the get output as markdown.

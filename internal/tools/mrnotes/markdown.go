@@ -20,11 +20,10 @@ func FormatListMarkdown(out ListOutput) string {
 	return toolutil.FormatNoteListMarkdown(toolutil.NoteMarkdowns(out.Notes, toNoteMarkdown), out.Pagination, toolutil.NoteListMarkdownOptions{
 		Title:        "MR Notes",
 		EmptyMessage: "No merge request notes found.\n",
-		Hints: []string{
-			toolutil.HintPreserveLinks,
+		Hints: toolutil.ListHints(
 			"Use the selected tool surface's merge-request note get action with the same project_id, merge_request_iid, and note_id to read a specific note",
 			"Use the selected tool surface's merge-request note create action with the same project_id and merge_request_iid to add a new note to this MR",
-		},
+		),
 	})
 }
 
