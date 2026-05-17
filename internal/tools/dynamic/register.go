@@ -1580,7 +1580,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"environment.protected_get": {
 		Usage:          "Gets one protected environment by params.name; environment.get reads a normal environment by environment_id.",
-		RelatedActions: []string{"environment.protected_list", "environment.deployment_list"},
+		RelatedActions: []string{"environment.protected_list", actionEnvironmentDeploymentList},
 	},
 	actionEnvironmentDeploymentList: {
 		Usage:          "Lists deployments for an environment/project; use after environment.list or protected environment lookup when deployment approval context is needed.",
@@ -1608,7 +1608,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"issue.note_create": {
 		Usage:          "Creates a note/comment on an issue; subsequent get/update/delete steps need the returned note_id.",
-		RelatedActions: []string{"issue.note_get", "issue.note_update", "issue.note_delete"},
+		RelatedActions: []string{actionIssueNoteGet, actionIssueNoteUpdate, actionIssueNoteDelete},
 	},
 	actionIssueNoteGet: {
 		Usage:          "Gets one issue note by params.note_id; issue.note_list lists notes and does not fetch a specific note.",
@@ -1616,7 +1616,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"issue.note_list": {
 		Usage:          "Lists issue notes/comments; use issue.note_get when a specific note_id is known.",
-		RelatedActions: []string{"issue.note_get"},
+		RelatedActions: []string{actionIssueNoteGet},
 	},
 	actionIssueNoteUpdate: {
 		Usage:          "Updates one issue note/comment and requires params.note_id.",
@@ -1635,7 +1635,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"tag.get": {
 		Usage:          "Use to verify that a tag exists before release cleanup or tag deletion workflows.",
-		RelatedActions: []string{"release.get", "release.link_list", "release.delete", "tag.delete"},
+		RelatedActions: []string{actionReleaseGet, actionReleaseLinkList, "release.delete", "tag.delete"},
 	},
 	actionReleaseGet: {
 		Usage:          "Use to verify a release for a tag after tag.get when the workflow asks to verify both.",
