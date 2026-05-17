@@ -22,12 +22,22 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func securityCategoryCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("name", map[string]any{"minLength": 1}),
+		toolutil.SchemaPropertyOverride("description", map[string]any{"type": "string"}),
+		toolutil.SchemaPropertyOverride("multiple_selection", map[string]any{"type": "boolean"}),
+	}
 	options.Usage = "Create a security category before creating security attributes under it."
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaAnyOfRequired("name", "description"),
+		toolutil.SchemaPropertyOverride("name", map[string]any{"type": "string", "minLength": 1}),
+		toolutil.SchemaPropertyOverride("description", map[string]any{"type": "string"}),
+	}
 	options.Idempotent = true
 	options.Usage = "Update editable custom security category metadata."
 	return toolutil.NewActionSpec(name, route, options)

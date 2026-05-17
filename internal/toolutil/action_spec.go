@@ -18,6 +18,7 @@ type ActionSpec struct {
 	RelatedActions         []string
 	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
+	InputSchemaOverrides   []InputSchemaOverride
 	ReadOnly               bool
 	Destructive            bool
 	Idempotent             bool
@@ -61,6 +62,15 @@ type ParameterAliasSpec struct {
 type CompatibilityPolicy struct {
 	ActionAliases    []ActionAliasSpec
 	ParameterAliases []ParameterAliasSpec
+}
+
+// InputSchemaOverride describes a deterministic JSON Schema patch for an
+// action input schema. PropertyPath is a dot-separated input property path; an
+// empty path applies Values at the schema root. Array properties automatically
+// traverse through their items schema for nested paths.
+type InputSchemaOverride struct {
+	PropertyPath string
+	Values       map[string]any
 }
 
 // IndividualToolSpec carries compatibility metadata for the individual-tool surface.
@@ -110,6 +120,7 @@ type ActionSpecOptions struct {
 	RelatedActions         []string
 	Compatibility          CompatibilityPolicy
 	ParameterGuidance      map[string]ParameterGuidance
+	InputSchemaOverrides   []InputSchemaOverride
 	ReadOnly               bool
 	Destructive            bool
 	Idempotent             bool
@@ -132,6 +143,8 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 	if opts.Destructive {
 		route.Destructive = true
 	}
+	inputSchemaOverrides := cloneInputSchemaOverrides(opts.InputSchemaOverrides)
+	applyInputSchemaOverrides(route.InputSchema, inputSchemaOverrides)
 	return ActionSpec{
 		Name:                   strings.TrimSpace(name),
 		Route:                  route,
@@ -141,6 +154,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		RelatedActions:         mergeActionSpecStrings(route.RelatedActions, opts.RelatedActions),
 		Compatibility:          CloneCompatibilityPolicy(opts.Compatibility),
 		ParameterGuidance:      cloneParameterGuidanceMap(opts.ParameterGuidance),
+		InputSchemaOverrides:   inputSchemaOverrides,
 		ReadOnly:               opts.ReadOnly,
 		Destructive:            route.Destructive,
 		Idempotent:             opts.Idempotent,
@@ -183,6 +197,7 @@ func actionSpecOptionsFromSpec(spec ActionSpec) ActionSpecOptions {
 		RelatedActions:         spec.RelatedActions,
 		Compatibility:          spec.Compatibility,
 		ParameterGuidance:      spec.ParameterGuidance,
+		InputSchemaOverrides:   spec.InputSchemaOverrides,
 		ReadOnly:               spec.ReadOnly,
 		Destructive:            spec.Destructive,
 		Idempotent:             spec.Idempotent,
@@ -268,6 +283,9 @@ func (spec ActionSpec) Validate() error {
 		return fmt.Errorf("action spec %q cannot be read-only and destructive", spec.Name)
 	}
 	if err := validateActionSpecPolicies(spec); err != nil {
+		return err
+	}
+	if err := validateInputSchemaOverrides(spec); err != nil {
 		return err
 	}
 	if err := validateActionSpecGuidance(spec); err != nil {

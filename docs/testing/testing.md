@@ -18,8 +18,8 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,103 |
-| Unit test functions | 9,852 |
+| Total test functions | 10,119 |
+| Unit test functions | 9,868 |
 | E2E test functions | 251 |
 | cmd test functions | 511 |
 | Test files (internal/) | 418 |
@@ -35,8 +35,8 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 9,069 | 89.8% |
-| `TestFunc` (no underscore) | 750 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 9,083 | 89.8% |
+| `TestFunc` (no underscore) | 752 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 284 | 2.8% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
-| Core packages | 1,693 | 78 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 283 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (170) | 7,365 | 328 | domain-specific GitLab tool handlers |
+| Core packages | 1,699 | 78 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration | 284 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tool sub-packages (170) | 7,374 | 328 | domain-specific GitLab tool handlers |
 | E2E integration | 251 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 511 | 22 | server entry point and developer command utilities |
-| **Total** | **10,103** | **549** |  |
+| **Total** | **10,119** | **549** |  |
 
 ### Core Packages
 
@@ -70,9 +70,9 @@
 | sampling | 83 | 99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis. |
 | serverpool | 47 | 99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL. |
 | testutil | 25 | 91.9% | Package testutil provides shared test utilities for MCP tool tests. |
-| toolutil | 432 | 96.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
+| toolutil | 438 | 96.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages. |
 | wizard | 252 | 93.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,693** |  |  |
+| **Subtotal** | **1,699** |  |  |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -256,8 +256,8 @@
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
 | securefiles | 24 | 2 | 98.8% | 4 |
-| securityattributes | 19 | 1 | 100.0% | 5 |
-| securitycategories | 12 | 1 | 100.0% | 3 |
+| securityattributes | 24 | 1 | 100.0% | 5 |
+| securitycategories | 16 | 1 | 100.0% | 3 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
 | serverupdate | 23 | 1 | 93.8% | 2 |
@@ -281,7 +281,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,365** | **328** |  | **1,114** |
+| **Total** | **7,374** | **328** |  | **1,114** |
 
 </details>
 

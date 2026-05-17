@@ -58,11 +58,11 @@ func loadCatalogIndividualToolDescriptions() map[string]string {
 	return descriptions
 }
 
-func catalogGroupDescription(toolName string, routes toolutil.ActionMap) string {
+func catalogGroupDescription(toolName string, _ toolutil.ActionMap) string {
 	fullDescription := catalogMetaToolDescriptions[toolName]
 	if fullDescription != "" {
-		prefix := toolutil.MetaToolDescriptionPrefix(toolName, routes)
-		if baseDescription, ok := strings.CutPrefix(fullDescription, prefix); ok {
+		baseDescription := toolutil.StripMetaToolDescriptionPrefix(fullDescription)
+		if strings.TrimSpace(baseDescription) != "" && baseDescription != fullDescription {
 			return baseDescription
 		}
 	}

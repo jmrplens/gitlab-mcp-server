@@ -13,6 +13,61 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+const (
+	namespaceGIDType         = "Namespace"
+	securityAttributeGIDType = "Security::Attribute"
+	securityCategoryGIDType  = "Security::Category"
+
+	securityCategoryCreateMutation = `
+		mutation CreateSecurityCategory($input: SecurityCategoryCreateInput!) {
+			securityCategoryCreate(input: $input) {
+				securityCategory {
+					id
+					name
+					description
+					multipleSelection
+					editableState
+					templateType
+					securityAttributes {
+						id
+						name
+						color
+						description
+						editableState
+					}
+				}
+				errors
+			}
+		}`
+	securityCategoryUpdateMutation = `
+		mutation UpdateSecurityCategory($input: SecurityCategoryUpdateInput!) {
+			securityCategoryUpdate(input: $input) {
+				securityCategory {
+					id
+					name
+					description
+					multipleSelection
+					editableState
+					templateType
+					securityAttributes {
+						id
+						name
+						color
+						description
+						editableState
+					}
+				}
+				errors
+			}
+		}`
+	securityCategoryDestroyMutation = `
+		mutation DestroySecurityCategory($input: SecurityCategoryDestroyInput!) {
+			securityCategoryDestroy(input: $input) {
+				errors
+			}
+		}`
+)
+
 // CreateInput defines parameters for creating a security category.
 type CreateInput struct {
 	NamespaceID       int64   `json:"namespace_id"                  jsonschema:"Numeric namespace ID,required"`
@@ -55,39 +110,112 @@ type Output struct {
 	SecurityAttributes []AttributeSummary `json:"security_attributes,omitempty"`
 }
 
-func toOutput(category *gl.SecurityCategory) Output {
+type categoryNode struct {
+	ID                 string          `json:"id"`
+	Name               string          `json:"name"`
+	Description        *string         `json:"description"`
+	MultipleSelection  bool            `json:"multipleSelection"`
+	EditableState      string          `json:"editableState"`
+	TemplateType       *string         `json:"templateType"`
+	SecurityAttributes []attributeNode `json:"securityAttributes"`
+}
+
+type attributeNode struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Color         string `json:"color"`
+	Description   string `json:"description"`
+	EditableState string `json:"editableState"`
+}
+
+type categoryMutationEnvelope struct {
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+type securityCategoryCreatePayload struct {
+	SecurityCategory *categoryNode `json:"securityCategory"`
+	Errors           []string      `json:"errors"`
+}
+
+type securityCategoryCreateData struct {
+	SecurityCategoryCreate *securityCategoryCreatePayload `json:"securityCategoryCreate"`
+}
+
+type securityCategoryCreateResponse struct {
+	Data securityCategoryCreateData `json:"data"`
+	categoryMutationEnvelope
+}
+
+type securityCategoryUpdatePayload struct {
+	SecurityCategory *categoryNode `json:"securityCategory"`
+	Errors           []string      `json:"errors"`
+}
+
+type securityCategoryUpdateData struct {
+	SecurityCategoryUpdate *securityCategoryUpdatePayload `json:"securityCategoryUpdate"`
+}
+
+type securityCategoryUpdateResponse struct {
+	Data securityCategoryUpdateData `json:"data"`
+	categoryMutationEnvelope
+}
+
+type securityCategoryDestroyPayload struct {
+	Errors []string `json:"errors"`
+}
+
+type securityCategoryDestroyData struct {
+	SecurityCategoryDestroy *securityCategoryDestroyPayload `json:"securityCategoryDestroy"`
+}
+
+type securityCategoryDestroyResponse struct {
+	Data securityCategoryDestroyData `json:"data"`
+	categoryMutationEnvelope
+}
+
+func categoryNodeOutput(category *categoryNode) (Output, error) {
 	if category == nil {
-		return Output{}
+		return Output{}, nil
+	}
+	_, id, err := toolutil.ParseGID(category.ID)
+	if err != nil {
+		return Output{}, fmt.Errorf("parse security category id: %w", err)
 	}
 	out := Output{
-		ID:                category.ID,
-		Name:              category.Name,
-		MultipleSelection: category.MultipleSelection,
-		EditableState:     string(category.EditableState),
+		ID:                 id,
+		Name:               category.Name,
+		MultipleSelection:  category.MultipleSelection,
+		EditableState:      category.EditableState,
+		SecurityAttributes: make([]AttributeSummary, 0, len(category.SecurityAttributes)),
 	}
 	if category.Description != nil {
 		out.Description = *category.Description
 	}
 	if category.TemplateType != nil {
-		out.TemplateType = string(*category.TemplateType)
+		out.TemplateType = *category.TemplateType
 	}
 	for _, attribute := range category.SecurityAttributes {
-		out.SecurityAttributes = append(out.SecurityAttributes, attributeSummary(attribute))
+		mapped, attributeErr := attributeNodeSummary(attribute)
+		if attributeErr != nil {
+			return Output{}, attributeErr
+		}
+		out.SecurityAttributes = append(out.SecurityAttributes, mapped)
 	}
-	return out
+	return out, nil
 }
 
-func attributeSummary(attribute *gl.SecurityAttribute) AttributeSummary {
-	if attribute == nil {
-		return AttributeSummary{}
+func attributeNodeSummary(attribute attributeNode) (AttributeSummary, error) {
+	_, id, err := toolutil.ParseGID(attribute.ID)
+	if err != nil {
+		return AttributeSummary{}, fmt.Errorf("parse security attribute id: %w", err)
 	}
 	return AttributeSummary{
-		ID:            attribute.ID,
+		ID:            id,
 		Name:          attribute.Name,
 		Color:         attribute.Color,
 		Description:   attribute.Description,
-		EditableState: string(attribute.EditableState),
-	}
+		EditableState: attribute.EditableState,
+	}, nil
 }
 
 func optionalText(value *string) *string {
@@ -130,11 +258,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Description:       optionalText(input.Description),
 		MultipleSelection: input.MultipleSelection,
 	}
-	category, _, err := client.GL().SecurityCategories.CreateSecurityCategory(input.NamespaceID, opts, gl.WithContext(ctx))
+	category, err := createSecurityCategory(ctx, client, input.NamespaceID, opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("create security category", err, "verify namespace_id and that the token has permission on a Premium or Ultimate namespace")
 	}
-	return toOutput(category), nil
+	return categoryNodeOutput(category)
 }
 
 // Update updates a GitLab security category.
@@ -160,11 +288,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		}
 		opts.Name = &name
 	}
-	category, _, err := client.GL().SecurityCategories.UpdateSecurityCategory(input.CategoryID, input.NamespaceID, opts, gl.WithContext(ctx))
+	category, err := updateSecurityCategory(ctx, client, input.CategoryID, input.NamespaceID, opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("update security category", err, "verify category_id and namespace_id; only editable custom categories can be updated")
 	}
-	return toOutput(category), nil
+	return categoryNodeOutput(category)
 }
 
 // Delete deletes a GitLab security category and its associated attributes.
@@ -175,11 +303,95 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err := validatePositiveID(input.CategoryID, "category_id"); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	if _, err := client.GL().SecurityCategories.DestroySecurityCategory(input.CategoryID, gl.WithContext(ctx)); err != nil {
+	if err := destroySecurityCategory(ctx, client, input.CategoryID); err != nil {
 		return toolutil.DeleteOutput{}, toolutil.WrapErrWithHint("delete security category", err, "verify category_id; deleting a category also deletes its associated security attributes")
 	}
 	return toolutil.DeleteOutput{
 		Status:  "success",
 		Message: fmt.Sprintf("Successfully deleted security category %d and its attributes.", input.CategoryID),
 	}, nil
+}
+
+func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, namespaceID int64, opts *gl.CreateSecurityCategoryOptions) (*categoryNode, error) {
+	input := map[string]any{
+		"namespaceId": toolutil.FormatGID(namespaceGIDType, namespaceID),
+		"name":        opts.Name,
+	}
+	if opts.Description != nil {
+		input["description"] = opts.Description
+	}
+	if opts.MultipleSelection != nil {
+		input["multipleSelection"] = opts.MultipleSelection
+	}
+	var result securityCategoryCreateResponse
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryCreateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryCreate", result.Errors); topLevelErr != nil {
+		return nil, topLevelErr
+	}
+	payload := result.Data.SecurityCategoryCreate
+	if payload == nil {
+		return nil, gl.ErrNotFound
+	}
+	if mutationErr := toolutil.GraphQLMutationError("securityCategoryCreate", payload.Errors); mutationErr != nil {
+		return nil, mutationErr
+	}
+	if payload.SecurityCategory == nil {
+		return nil, gl.ErrNotFound
+	}
+	return payload.SecurityCategory, nil
+}
+
+func updateSecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID, namespaceID int64, opts *gl.UpdateSecurityCategoryOptions) (*categoryNode, error) {
+	input := map[string]any{
+		"id":          toolutil.FormatGID(securityCategoryGIDType, categoryID),
+		"namespaceId": toolutil.FormatGID(namespaceGIDType, namespaceID),
+	}
+	if opts.Name != nil {
+		input["name"] = opts.Name
+	}
+	if opts.Description != nil {
+		input["description"] = opts.Description
+	}
+	var result securityCategoryUpdateResponse
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryUpdate", result.Errors); topLevelErr != nil {
+		return nil, topLevelErr
+	}
+	payload := result.Data.SecurityCategoryUpdate
+	if payload == nil {
+		return nil, gl.ErrNotFound
+	}
+	if mutationErr := toolutil.GraphQLMutationError("securityCategoryUpdate", payload.Errors); mutationErr != nil {
+		return nil, mutationErr
+	}
+	if payload.SecurityCategory == nil {
+		return nil, gl.ErrNotFound
+	}
+	return payload.SecurityCategory, nil
+}
+
+func destroySecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID int64) error {
+	var result securityCategoryDestroyResponse
+	query := gl.GraphQLQuery{
+		Query:     securityCategoryDestroyMutation,
+		Variables: map[string]any{"input": map[string]any{"id": toolutil.FormatGID(securityCategoryGIDType, categoryID)}},
+	}
+	_, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryDestroy", result.Errors); topLevelErr != nil {
+		return topLevelErr
+	}
+	payload := result.Data.SecurityCategoryDestroy
+	if payload == nil {
+		return gl.ErrNotFound
+	}
+	return toolutil.GraphQLMutationError("securityCategoryDestroy", payload.Errors)
 }

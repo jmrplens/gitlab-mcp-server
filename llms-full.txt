@@ -1451,7 +1451,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Branch**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_branch/<action>.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
@@ -1576,7 +1576,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **CI Catalog**
 
-Use {"action":"get","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_ci_catalog/<action>.
 
 Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
@@ -1619,7 +1619,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **CI Variable**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_ci_variable/<action>.
 
 Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
@@ -1782,7 +1782,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Custom Emoji**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_custom_emoji/<action>.
 
 Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
@@ -1855,7 +1855,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Environment**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_environment/<action>.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
@@ -2213,10 +2213,187 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group**
 
-Use {"action":"archive","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group/<action>.
 
-GitLab group actions.
+Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
+When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
+
+Behavior:
+- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / release_list (Premium+ adds wiki_list / epic_list / protected_*_list / ldap_link_list / saml_link_list / service_account_*_list).
+- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add are NON-idempotent (re-invocation creates a duplicate or returns 409).
+- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
+- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_* are irreversible. Premium+ adds destructive: epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete, service_account_pat_revoke. archive is reversible via unarchive.
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
+Errors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).
+
+Param conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.
+
+Group CRUD:
+- list: search, owned, top_level_only (no group_id needed)
+- get: group_id*
+- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch
+- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch
+- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)
+- restore: group_id*
+- archive / unarchive: group_id* (requires Owner role)
+- search: query* (no group_id needed)
+- transfer_project: group_id*, project_id*
+
+Group queries:
+- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared
+- members: group_id*, query (filter name/username)
+- subgroups: group_id*, search
+- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username
+
+Webhooks (hook_*):
+- hook_list: group_id*
+- hook_get / hook_delete: group_id*, hook_id*
+- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter
+- hook_edit: group_id*, hook_id*, same params as hook_add
+
+Badges (badge_*):
+- badge_list: group_id*, name
+- badge_get / badge_delete: group_id*, badge_id*
+- badge_add / badge_preview: group_id*, link_url*, image_url*, name
+- badge_edit: group_id*, badge_id*, link_url, image_url, name
+
+Members (group_member_*):
+- group_member_get: group_id*, user_id*
+- group_member_get_inherited: group_id*, user_id* (includes inherited)
+- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at
+- group_member_remove: group_id*, user_id*
+- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at
+- group_member_unshare: group_id*, shared_with_group_id*
+
+Labels (group_label_*):
+- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups
+- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*
+- group_label_create: group_id*, name*, color*, description
+- group_label_update: group_id*, label_id*, new_name, color, description
+
+Group milestones (group_milestone_* — group scope only; use gitlab_project milestone_* for project milestones):
+- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
+- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
+- group_milestone_create: group_id*, title*, description, start_date, due_date
+- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event
+- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*
+
+Boards (group_board_*):
+- group_board_list: group_id*
+- group_board_get / group_board_delete: group_id*, board_id*
+- group_board_create: group_id*, name*
+- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight
+- group_board_list_lists: group_id*, board_id*
+- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*
+- group_board_create_list: group_id*, board_id*, label_id
+- group_board_update_list: group_id*, board_id*, list_id*, position
+
+Uploads:
+- group_upload_list: group_id*
+- group_upload_delete_by_id: group_id*, upload_id*
+- group_upload_delete_by_secret: group_id*, secret*, filename*
+
+Import/Export:
+- group_relations_schedule / group_relations_list_status: group_id*
+- group_export_schedule / group_export_download: group_id*
+- group_import_file: name*, path*, file*, parent_id (no group_id)
+
+Releases:
+- release_list: group_id*, simple
+
+Premium+ behavior notes (GITLAB_ENTERPRISE=true): service_account_pat_create returns the cleartext token only ONCE — store it immediately in a secure secrets manager and never log or echo it. service_account_delete and service_account_pat_revoke are irreversible.
+
+Epics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
+
+Epic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
+- epic_discussion_list / epic_discussion_get (+ discussion_id*)
+- epic_discussion_create: body*
+- epic_discussion_add_note: discussion_id*, body*
+- epic_discussion_update_note: note_id*, body*
+- epic_discussion_delete_note: note_id*
+
+Epic CRUD (epic_*): full_path* for all.
+- epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants
+- epic_get: epic_iid*
+- epic_get_links: epic_iid* [REST]
+- epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status
+- epic_update: epic_iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
+- epic_delete: epic_iid*
+
+Epic issues (epic_issue_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
+- epic_issue_list
+- epic_issue_assign / epic_issue_remove: child_project_path*, child_iid*
+- epic_issue_update: child_id*, adjacent_id*, relative_position* (BEFORE/AFTER)
+
+Epic notes (epic_note_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
+- epic_note_list / epic_note_get (+ note_id*) / epic_note_delete (+ note_id*)
+- epic_note_create: body*
+- epic_note_update: note_id*, body*
+
+Epic boards [Deprecated]:
+- epic_board_list: group_id*
+- epic_board_get: group_id*, board_id*
+
+Group Wikis (Premium+):
+- wiki_list: group_id*, with_content
+- wiki_get: group_id*, slug*, render_html, version
+- wiki_create: group_id*, title*, content*, format (markdown/rdoc/asciidoc/org)
+- wiki_edit: group_id*, slug*, title, content, format
+- wiki_delete: group_id*, slug*
+
+Protected Branches (Premium+):
+- protected_branch_list: group_id*, search
+- protected_branch_get / protected_branch_unprotect: group_id*, branch*
+- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
+- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
+
+Protected Environments (Premium+):
+- protected_env_list: group_id*
+- protected_env_get / protected_env_unprotect: group_id*, environment*
+- protected_env_protect: group_id*, name*, deploy_access_levels, required_approval_count, approval_rules
+- protected_env_update: group_id*, environment*, name, deploy_access_levels, required_approval_count, approval_rules
+
+LDAP Links (Premium+):
+- ldap_link_list: group_id*
+- ldap_link_add: group_id*, cn*, group_access* (int), provider*
+- ldap_link_delete: group_id*, cn, filter, provider
+- ldap_link_delete_for_provider: group_id*, provider*, cn*
+
+SAML Links (Premium+):
+- saml_link_list: group_id*
+- saml_link_get / saml_link_delete: group_id*, saml_group_name*
+- saml_link_add: group_id*, saml_group_name*, access_level* (int)
+
+Service Accounts (Premium+):
+- service_account_list: group_id*, order_by, sort
+- service_account_create: group_id*, name*, username*
+- service_account_update: group_id*, service_account_id*, name, username
+- service_account_delete: group_id*, service_account_id*, hard_delete
+- service_account_pat_list: group_id*, service_account_id*
+- service_account_pat_create: group_id*, service_account_id*, name*, scopes* (array), expires_at (YYYY-MM-DD)
+- service_account_pat_revoke: group_id*, service_account_id*, token_id*
+
+Analytics (Premium+):
+- analytics_issues_count / analytics_mr_count / analytics_members_count: group_path* (URL-encoded)
+
+Credentials (Ultimate):
+- credential_list_pats: group_id*, search, state (active/inactive), revoked
+- credential_list_ssh_keys: group_id*
+- credential_revoke_pat: group_id*, token_id*
+- credential_delete_ssh_key: group_id*, key_id*
+
+SSH Certificates (Premium+):
+- ssh_cert_list: group_id*
+- ssh_cert_create: group_id*, key*, title*
+- ssh_cert_delete: group_id*, certificate_id*
+
+Security Settings (Ultimate):
+- security_settings_update: group_id*, secret_push_protection_enabled*, projects_to_exclude (array)
+
+
+See also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -3377,7 +3554,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Issue**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
 Parameter guidance:
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
@@ -3982,7 +4159,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Job**
 
-Use {"action":"artifacts","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_job/<action>.
 Parameter guidance:
 - token_scope_remove_project.project_id: scope_owner_project; source: Owning project whose CI job token allowlist is being changed.; avoid: Do not use the project being removed as project_id.
@@ -4234,7 +4411,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Request**
 
-Use {"action":"approval_config","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
@@ -5056,7 +5233,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Package**
 
-Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_package/<action>.
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
@@ -5310,7 +5487,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Pipeline**
 
-Use {"action":"cancel","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
@@ -5636,7 +5813,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Project**
 
-Use {"action":"approval_config_change","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_project/<action>.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
@@ -6771,7 +6948,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Release**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_release/<action>.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
@@ -7317,7 +7494,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Runner**
 
-Use {"action":"controller_create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_runner/<action>.
 Parameter guidance:
 - delete_registered.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
@@ -7784,7 +7961,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Snippet**
 
-Use {"action":"content","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_snippet/<action>.
 
 Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
@@ -8123,7 +8300,36 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"get_project","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_storage_move/<action>.
 
-GitLab storage move actions.
+Manage repository storage moves for projects, groups, and snippets (admin only).
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
+Param conventions: * = required. retrieve_all/list actions accept page, per_page. Each resource type (project/group/snippet) has the same action pattern.
+
+Project storage moves:
+- retrieve_all_project: page, per_page
+- retrieve_project: project_id*, page, per_page
+- get_project: id*
+- get_project_for_project: project_id*, id*
+- schedule_project: project_id*, destination_storage_name
+- schedule_all_project: source_storage_name, destination_storage_name
+
+Group storage moves:
+- retrieve_all_group: page, per_page
+- retrieve_group: group_id*, page, per_page
+- get_group: id*
+- get_group_for_group: group_id*, id*
+- schedule_group: group_id*, destination_storage_name
+- schedule_all_group: source_storage_name, destination_storage_name
+
+Snippet storage moves:
+- retrieve_all_snippet: page, per_page
+- retrieve_snippet: snippet_id*, page, per_page
+- get_snippet: id*
+- get_snippet_for_snippet: snippet_id*, id*
+- schedule_snippet: snippet_id*, destination_storage_name
+- schedule_all_snippet: source_storage_name, destination_storage_name
+
+See also: gitlab_admin
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -8277,7 +8483,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Tag**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_tag/<action>.
 
 Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
@@ -8518,7 +8724,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **User**
 
-Use {"action":"activate","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_user/<action>.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
@@ -9208,7 +9414,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Wiki**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_wiki/<action>.
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
@@ -9293,7 +9499,7 @@ These 17 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including 
 
 **Attestation**
 
-Use {"action":"download","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_attestation/<action>.
 
 List and download build attestations (SLSA provenance) for project artifacts.
@@ -9436,7 +9642,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Dependency**
 
-Use {"action":"export_create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_dependency/<action>.
 
 List project dependencies and create/download SBOM exports (CycloneDX).
@@ -9526,7 +9732,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Enterprise User**
 
-Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_enterprise_user/<action>.
 
 Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
@@ -9672,7 +9878,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Geo**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_geo/<action>.
 
 Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
@@ -9759,7 +9965,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group Scim**
 
-Use {"action":"delete","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group_scim/<action>.
 
 Manage SCIM identities for GitLab group provisioning.
@@ -9887,7 +10093,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Train**
 
-Use {"action":"add","params":{...}}; only top-level keys are action and params.
+Use {"action":"get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_train/<action>.
 
 Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
@@ -9995,7 +10201,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Project Alias**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_project_alias/<action>.
 
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
@@ -10047,7 +10253,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Security Attribute**
 
-Use {"action":"bulk_update","params":{...}}; only top-level keys are action and params.
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_security_attribute/<action>.
 
 Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
@@ -10183,7 +10389,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Vulnerability**
 
-Use {"action":"confirm","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_vulnerability/<action>.
 
 List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.

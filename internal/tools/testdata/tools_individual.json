@@ -4482,16 +4482,26 @@
     "description": "Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "group_ids"
+          ]
+        },
+        {
+          "required": [
+            "project_ids"
+          ]
+        }
+      ],
       "properties": {
         "attribute_ids": {
           "description": "Security attribute IDs to apply",
           "items": {
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         },
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
@@ -4502,13 +4512,16 @@
           "items": {
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         },
         "mode": {
           "description": "Bulk update mode: ADD, REMOVE, or REPLACE",
+          "enum": [
+            "ADD",
+            "REMOVE",
+            "REPLACE"
+          ],
           "type": "string"
         },
         "project_ids": {
@@ -4516,10 +4529,8 @@
           "items": {
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         }
       },
       "required": [
@@ -10147,14 +10158,17 @@
             "properties": {
               "color": {
                 "description": "Security attribute color as a hex code (e.g. #FF0000)",
+                "pattern": "^#[0-9A-Fa-f]{6}$",
                 "type": "string"
               },
               "description": {
                 "description": "Security attribute description",
+                "minLength": 1,
                 "type": "string"
               },
               "name": {
                 "description": "Security attribute name",
+                "minLength": 1,
                 "type": "string"
               }
             },
@@ -10165,10 +10179,8 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         },
         "category_id": {
           "description": "Numeric security category ID",
@@ -10290,20 +10302,15 @@
       "properties": {
         "description": {
           "description": "Security category description",
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "multiple_selection": {
           "description": "Whether multiple attributes can be selected for the category",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "name": {
           "description": "Security category name",
+          "minLength": 1,
           "type": "string"
         },
         "namespace_id": {
@@ -112219,16 +112226,26 @@
     "description": "Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_security_attribute, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "add_attribute_ids"
+          ]
+        },
+        {
+          "required": [
+            "remove_attribute_ids"
+          ]
+        }
+      ],
       "properties": {
         "add_attribute_ids": {
           "description": "Security attribute IDs to add",
           "items": {
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         },
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
@@ -112243,10 +112260,8 @@
           "items": {
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "minItems": 1,
+          "type": "array"
         }
       },
       "required": [
@@ -112379,6 +112394,23 @@
     "description": "Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "description"
+          ]
+        },
+        {
+          "required": [
+            "color"
+          ]
+        }
+      ],
       "properties": {
         "attribute_id": {
           "description": "Numeric security attribute ID",
@@ -112386,24 +112418,17 @@
         },
         "color": {
           "description": "New security attribute color as a hex code (e.g. #FF0000)",
-          "type": [
-            "null",
-            "string"
-          ]
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "type": "string"
         },
         "description": {
           "description": "New security attribute description",
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "name": {
           "description": "New security attribute name",
-          "type": [
-            "null",
-            "string"
-          ]
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
@@ -112489,6 +112514,18 @@
     "description": "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "description"
+          ]
+        }
+      ],
       "properties": {
         "category_id": {
           "description": "Numeric security category ID",
@@ -112496,17 +112533,12 @@
         },
         "description": {
           "description": "New security category description",
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "name": {
           "description": "New security category name",
-          "type": [
-            "null",
-            "string"
-          ]
+          "minLength": 1,
+          "type": "string"
         },
         "namespace_id": {
           "description": "Numeric namespace ID",

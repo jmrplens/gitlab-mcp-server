@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -213,6 +214,90 @@ func TestActionSpecValidate_CompatibilityPolicyAcceptsNestedParameterAlias(t *te
 
 	if err := spec.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+}
+
+// TestNewActionSpec_AppliesInputSchemaOverrides verifies ActionSpec schema
+// overrides patch root, property, and nested array-item schemas defensively.
+func TestNewActionSpec_AppliesInputSchemaOverrides(t *testing.T) {
+	inputSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"mode": map[string]any{"type": "string"},
+			"items": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"color": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+	overrides := []InputSchemaOverride{
+		SchemaAnyOfRequired("mode", "items"),
+		SchemaPropertyOverride("mode", map[string]any{"enum": []string{"ADD", "REMOVE"}}),
+		SchemaPropertyOverride("items", map[string]any{"minItems": 1}),
+		SchemaPropertyOverride("items.color", map[string]any{"pattern": "^#[0-9A-Fa-f]{6}$"}),
+	}
+
+	spec := NewActionSpec("bulk_update", ActionRoute{InputSchema: inputSchema}, ActionSpecOptions{InputSchemaOverrides: overrides})
+	overrides[1].Values["enum"] = []string{"changed"}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+	if got := spec.Route.InputSchema["anyOf"].([]any); len(got) != 2 {
+		t.Fatalf("anyOf = %#v, want two branches", got)
+	}
+	mode := spec.Route.InputSchema["properties"].(map[string]any)["mode"].(map[string]any)
+	modeEnum, ok := mode["enum"].([]string)
+	if !ok {
+		t.Fatalf("mode enum = %#v, want []string", mode["enum"])
+	}
+	if wantModeEnum := []string{"ADD", "REMOVE"}; !reflect.DeepEqual(modeEnum, wantModeEnum) {
+		t.Fatalf("mode enum = %#v, want %#v", modeEnum, wantModeEnum)
+	}
+	items := spec.Route.InputSchema["properties"].(map[string]any)["items"].(map[string]any)
+	if got := items["minItems"]; got != 1 {
+		t.Fatalf("items minItems = %v, want 1", got)
+	}
+	color := items["items"].(map[string]any)["properties"].(map[string]any)["color"].(map[string]any)
+	if got := color["pattern"]; got != "^#[0-9A-Fa-f]{6}$" {
+		t.Fatalf("color pattern = %v, want hex pattern", got)
+	}
+
+	clone := CloneActionSpec(spec)
+	spec.InputSchemaOverrides[1].Values["enum"] = []string{"mutated"}
+	cloneEnum, ok := clone.InputSchemaOverrides[1].Values["enum"].([]string)
+	if !ok {
+		t.Fatalf("CloneActionSpec enum type = %T, want []string", clone.InputSchemaOverrides[1].Values["enum"])
+	}
+	if cloneEnum[0] != "ADD" {
+		t.Fatalf("clone schema overrides share metadata, got %q", cloneEnum[0])
+	}
+}
+
+// TestActionSpecValidate_RejectsInvalidInputSchemaOverride verifies schema
+// overrides must target existing input properties.
+func TestActionSpecValidate_RejectsInvalidInputSchemaOverride(t *testing.T) {
+	spec := NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{
+		InputSchemaOverrides: []InputSchemaOverride{SchemaPropertyOverride("missing", map[string]any{"type": "string"})},
+	})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "unknown property path") {
+		t.Fatalf("Validate() error = %v, want unknown property path", err)
+	}
+}
+
+func TestSchemaAnyOfRequired_RejectsEmptyPropertyNames(t *testing.T) {
+	spec := NewActionSpec("update", ActionRoute{InputSchema: testActionSpecSchema("name")}, ActionSpecOptions{
+		InputSchemaOverrides: []InputSchemaOverride{SchemaAnyOfRequired(" ", "")},
+	})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "empty input schema override") {
+		t.Fatalf("Validate() error = %v, want empty override", err)
 	}
 }
 
