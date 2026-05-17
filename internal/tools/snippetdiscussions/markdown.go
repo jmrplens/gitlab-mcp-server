@@ -13,9 +13,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatRESTDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Snippet Discussions", "No snippet discussions found.\n",
-		"Use `gitlab_get_snippet_discussion` to view full discussion details",
-	)
+	return toolutil.FormatRESTDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details")
 }
 
 // FormatMarkdown formats a single discussion as Markdown.
