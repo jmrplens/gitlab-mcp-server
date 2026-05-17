@@ -7991,7 +7991,7 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "ranker_miss"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
-	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
+	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticMissingRequiredStandalone) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
 		return "params_shape_miss"
 	case dynamicMultiStepOrderMiss(text):
 		return "multi_step_order_miss"
@@ -8069,7 +8069,7 @@ func failureDiagnosticCategory(notes []string) string {
 		return "fixture_setup_failure"
 	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool"):
 		return "model_route_selection_miss"
-	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
+	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticMissingRequiredStandalone) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
 		return "model_parameter_shape_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"

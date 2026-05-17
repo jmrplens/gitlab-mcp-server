@@ -535,6 +535,7 @@ func TestFailureDiagnosticCategory_SeparatesPhase4Buckets(t *testing.T) {
 		{[]string{"fixture state is missing project identity"}, "fixture_setup_failure"},
 		{[]string{"expected action issue.create, got project.create"}, "model_route_selection_miss"},
 		{[]string{"unknown params for gitlab/issue.create: iid"}, "model_parameter_shape_miss"},
+		{[]string{"missing required project_id"}, "model_parameter_shape_miss"},
 		{[]string{"destructive task requires params.confirm=true"}, "destructive_safety"},
 		{[]string{"context deadline exceeded"}, "timeout_resource_exhaustion"},
 	}
@@ -558,6 +559,7 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 		{name: "alias miss", notes: []string{"step 1: expected action repository.file_get, got repository_file.get"}, want: "alias_miss"},
 		{name: "standalone unavailable", notes: []string{"step 1: expected tool gitlab_discover_project, got gitlab_execute_tool; standalone tool uses top-level input fields, not params"}, want: "standalone_unavailable"},
 		{name: "params shape", notes: []string{"step 1: missing required params: project_id"}, want: "params_shape_miss"},
+		{name: "standalone params shape", notes: []string{"step 1: missing required project_id"}, want: "params_shape_miss"},
 		{name: "multi step order", notes: []string{"tool-call step limit reached after 2/3 scenario steps"}, want: "multi_step_order_miss"},
 		{name: "ce or sampling", notes: []string{"step 1 simulation sampling_unsupported_continue: simulated sampling capability unsupported"}, want: "ce_or_sampling_limitation"},
 		{name: "true discovery", notes: []string{"model returned no tool_use block"}, want: "true_discovery_miss"},
