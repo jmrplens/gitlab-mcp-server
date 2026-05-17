@@ -270,8 +270,12 @@ func TestNewActionSpec_AppliesInputSchemaOverrides(t *testing.T) {
 
 	clone := CloneActionSpec(spec)
 	spec.InputSchemaOverrides[1].Values["enum"] = []string{"mutated"}
-	if got := clone.InputSchemaOverrides[1].Values["enum"].([]string)[0]; got != "ADD" {
-		t.Fatalf("clone schema overrides share metadata, got %q", got)
+	cloneEnum, ok := clone.InputSchemaOverrides[1].Values["enum"].([]string)
+	if !ok {
+		t.Fatalf("CloneActionSpec enum type = %T, want []string", clone.InputSchemaOverrides[1].Values["enum"])
+	}
+	if cloneEnum[0] != "ADD" {
+		t.Fatalf("clone schema overrides share metadata, got %q", cloneEnum[0])
 	}
 }
 
