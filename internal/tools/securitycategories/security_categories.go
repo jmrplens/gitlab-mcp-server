@@ -1,3 +1,4 @@
+// Package securitycategories provides handlers for GitLab security category tools.
 package securitycategories
 
 import (

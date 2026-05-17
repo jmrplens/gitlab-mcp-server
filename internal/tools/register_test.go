@@ -1866,7 +1866,8 @@ var knownNonKeywordDestructive = map[string]struct{}{
 }
 
 var knownRouteDestructiveExceptions = map[string]struct{}{
-	"security_attribute.bulk_update": {},
+	"security_attribute.bulk_update":    {},
+	"security_attribute.project_update": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the

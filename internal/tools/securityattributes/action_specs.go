@@ -19,7 +19,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		securityAttributeCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_security_attribute", descriptionCreateSecurityAttribute),
 		securityAttributeUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_update_security_attribute", descriptionUpdateSecurityAttribute),
 		securityAttributeDeleteSpec("delete", toolutil.DestructiveAction(client, Delete), "gitlab_delete_security_attribute", descriptionDeleteSecurityAttribute),
-		securityAttributeUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_update_project_security_attributes", descriptionUpdateProjectSecurityAttribute),
+		securityAttributeProjectUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_update_project_security_attributes", descriptionUpdateProjectSecurityAttribute),
 		securityAttributeBulkUpdateSpec("bulk_update", toolutil.DestructiveAction(client, BulkUpdate), "gitlab_bulk_update_security_attributes", descriptionBulkUpdateSecurityAttributes),
 	}
 }
@@ -42,6 +42,14 @@ func securityAttributeDeleteSpec(name string, route toolutil.ActionRoute, indivi
 	options.Destructive = true
 	options.Idempotent = true
 	options.Usage = "Delete an editable custom security attribute."
+	return toolutil.NewActionSpec(name, route, options)
+}
+
+func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
+	options := securityAttributeOptions(individualTool, description)
+	options.Destructive = true
+	options.Idempotent = true
+	options.Usage = "Add or remove security attributes on a project."
 	return toolutil.NewActionSpec(name, route, options)
 }
 

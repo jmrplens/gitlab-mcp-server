@@ -112230,6 +112230,10 @@
             "array"
           ]
         },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Numeric project ID",
           "type": "integer"
@@ -112248,7 +112252,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -112276,7 +112281,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true
     }

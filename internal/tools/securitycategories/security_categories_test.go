@@ -297,7 +297,7 @@ func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
-func TestFormatOutputMarkdown(t *testing.T) {
+func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                7,
 		Name:              "Business | impact",
@@ -319,7 +319,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-func TestOutputHelpersHandleNilValues(t *testing.T) {
+func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
 	if out := toOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
 		t.Fatalf("toOutput(nil) = %#v", out)
 	}
@@ -328,7 +328,7 @@ func TestOutputHelpersHandleNilValues(t *testing.T) {
 	}
 }
 
-func TestActionSpecs(t *testing.T) {
+func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)
 	if len(specs) != 3 {

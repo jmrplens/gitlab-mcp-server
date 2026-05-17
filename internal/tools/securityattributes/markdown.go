@@ -7,6 +7,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+const (
+	fieldValueTableHeader    = "| Field | Value |\n"
+	fieldValueTableSeparator = "|-------|-------|\n"
+)
+
 // FormatOutputMarkdown renders a security attribute as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
@@ -53,8 +58,8 @@ func FormatCreateMarkdown(out CreateOutput) string {
 func FormatProjectUpdateMarkdown(out ProjectUpdateOutput) string {
 	var sb strings.Builder
 	sb.WriteString(toolutil.EmojiSuccess + " Project security attributes updated.\n\n")
-	sb.WriteString("| Field | Value |\n")
-	sb.WriteString("|-------|-------|\n")
+	sb.WriteString(fieldValueTableHeader)
+	sb.WriteString(fieldValueTableSeparator)
 	fmt.Fprintf(&sb, "| Added | `%d` |\n", out.AddedCount)
 	fmt.Fprintf(&sb, "| Removed | `%d` |\n", out.RemovedCount)
 	return sb.String()
@@ -64,8 +69,8 @@ func FormatProjectUpdateMarkdown(out ProjectUpdateOutput) string {
 func FormatBulkUpdateMarkdown(out BulkUpdateOutput) string {
 	var sb strings.Builder
 	sb.WriteString(toolutil.EmojiSuccess + " Security attributes updated in bulk.\n\n")
-	sb.WriteString("| Field | Value |\n")
-	sb.WriteString("|-------|-------|\n")
+	sb.WriteString(fieldValueTableHeader)
+	sb.WriteString(fieldValueTableSeparator)
 	fmt.Fprintf(&sb, "| Mode | `%s` |\n", out.Mode)
 	fmt.Fprintf(&sb, "| Attributes | `%v` |\n", out.AttributeIDs)
 	if len(out.GroupIDs) > 0 {
@@ -78,8 +83,8 @@ func FormatBulkUpdateMarkdown(out BulkUpdateOutput) string {
 }
 
 func writeAttributeTable(sb *strings.Builder, out Output) {
-	sb.WriteString("| Field | Value |\n")
-	sb.WriteString("|-------|-------|\n")
+	sb.WriteString(fieldValueTableHeader)
+	sb.WriteString(fieldValueTableSeparator)
 	fmt.Fprintf(sb, "| ID | `%d` |\n", out.ID)
 	fmt.Fprintf(sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(sb, "| Color | `%s` |\n", toolutil.EscapeMdTableCell(out.Color))

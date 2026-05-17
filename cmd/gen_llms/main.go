@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -585,7 +586,7 @@ func writeInputSchema(b *strings.Builder, schema any) {
 		if !isMap {
 			continue
 		}
-		typ, _ := prop["type"].(string)
+		typ := schemaTypeLabel(prop)
 		desc, _ := prop["description"].(string)
 		desc = strings.TrimSuffix(desc, ",required")
 		req := ""
@@ -599,6 +600,80 @@ func writeInputSchema(b *strings.Builder, schema any) {
 		}
 	}
 	b.WriteString("\n")
+}
+
+func schemaTypeLabel(schema map[string]any) string {
+	types := schemaTypeValues(schema["type"])
+	types = removeSchemaType(types, "null")
+	if len(types) == 0 {
+		if _, ok := schema["items"]; ok {
+			return "array"
+		}
+		if _, ok := schema["properties"]; ok {
+			return "object"
+		}
+		return "any"
+	}
+	if slices.Contains(types, "array") {
+		items, _ := schema["items"].(map[string]any)
+		itemType := schemaTypeLabel(items)
+		if itemType == "" || itemType == "any" {
+			return "array"
+		}
+		return "array of " + pluralSchemaType(itemType)
+	}
+	if len(types) == 1 {
+		return types[0]
+	}
+	return strings.Join(types, " or ")
+}
+
+func schemaTypeValues(raw any) []string {
+	switch value := raw.(type) {
+	case string:
+		return []string{value}
+	case []any:
+		values := make([]string, 0, len(value))
+		for _, item := range value {
+			text, ok := item.(string)
+			if ok && strings.TrimSpace(text) != "" {
+				values = append(values, text)
+			}
+		}
+		return values
+	default:
+		return nil
+	}
+}
+
+func removeSchemaType(types []string, remove string) []string {
+	filtered := types[:0]
+	for _, typ := range types {
+		if typ != remove {
+			filtered = append(filtered, typ)
+		}
+	}
+	return filtered
+}
+
+func pluralSchemaType(typ string) string {
+	switch typ {
+	case "integer":
+		return "integers"
+	case "number":
+		return "numbers"
+	case "string":
+		return "strings"
+	case "boolean":
+		return "booleans"
+	case "object":
+		return "objects"
+	default:
+		if strings.Contains(typ, " or ") {
+			return "values"
+		}
+		return typ + "s"
+	}
 }
 
 // countDomains counts unique domain prefixes from tool names (gitlab_{domain}_*).

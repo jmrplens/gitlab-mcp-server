@@ -10,6 +10,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const sampleAttribute = `{
@@ -358,10 +359,10 @@ func TestProjectUpdate_Success(t *testing.T) {
 			if input["projectId"] != "gid://gitlab/Project/42" {
 				t.Fatalf("projectId = %#v", input["projectId"])
 			}
-			if got := input["addAttributeIds"].([]any)[0]; got != "gid://gitlab/Security::Attribute/9" {
+			if input["addAttributeIds"].([]any)[0] != "gid://gitlab/Security::Attribute/9" {
 				t.Fatalf("addAttributeIds = %#v", input["addAttributeIds"])
 			}
-			if got := input["removeAttributeIds"].([]any)[0]; got != "gid://gitlab/Security::Attribute/10" {
+			if input["removeAttributeIds"].([]any)[0] != "gid://gitlab/Security::Attribute/10" {
 				t.Fatalf("removeAttributeIds = %#v", input["removeAttributeIds"])
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeProjectUpdate":{"addedCount":1,"removedCount":1,"errors":[]}}`)
@@ -467,7 +468,7 @@ func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
-func TestMarkdownEscapesTableCellsAndPreserveLinkHint(t *testing.T) {
+func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
 	attribute := Output{
 		ID:               9,
 		Name:             "High | Risk",
@@ -518,7 +519,7 @@ func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
 	}
 }
 
-func TestOutputHelpersHandleNilValues(t *testing.T) {
+func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
 	if out := toOutput(nil); out.ID != 0 || out.SecurityCategory != nil {
 		t.Fatalf("toOutput(nil) = %#v", out)
 	}
@@ -530,22 +531,33 @@ func TestOutputHelpersHandleNilValues(t *testing.T) {
 	}
 }
 
-func TestActionSpecs(t *testing.T) {
+func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)
 	if len(specs) != 5 {
 		t.Fatalf("ActionSpecs() len = %d, want 5", len(specs))
 	}
-	if specs[2].Name != "delete" || !specs[2].Destructive || specs[2].IndividualTool.Name != "gitlab_delete_security_attribute" {
-		t.Fatalf("delete spec = %#v", specs[2])
+
+	specByName := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByName[spec.Name] = spec
 	}
-	if specs[4].Name != "bulk_update" || !specs[4].Destructive || specs[4].IndividualTool.Name != "gitlab_bulk_update_security_attributes" {
-		t.Fatalf("bulk update spec = %#v", specs[4])
+	deleteSpec := specByName["delete"]
+	if !deleteSpec.Destructive || deleteSpec.IndividualTool.Name != "gitlab_delete_security_attribute" {
+		t.Fatalf("delete spec = %#v", deleteSpec)
+	}
+	bulkUpdateSpec := specByName["bulk_update"]
+	if !bulkUpdateSpec.Destructive || bulkUpdateSpec.IndividualTool.Name != "gitlab_bulk_update_security_attributes" {
+		t.Fatalf("bulk update spec = %#v", bulkUpdateSpec)
+	}
+	projectUpdateSpec := specByName["project_update"]
+	if !projectUpdateSpec.Destructive || projectUpdateSpec.IndividualTool.Name != "gitlab_update_project_security_attributes" {
+		t.Fatalf("project update spec = %#v", projectUpdateSpec)
 	}
 	if strings.Count(strings.Join(specs[0].RelatedActions, ","), "security_category.create") != 1 {
 		t.Fatalf("create related actions = %#v, want security_category.create once", specs[0].RelatedActions)
 	}
-	if !strings.Contains(specs[4].IndividualTool.Description, "selected target/attribute IDs") {
-		t.Fatalf("bulk update description = %q", specs[4].IndividualTool.Description)
+	if !strings.Contains(bulkUpdateSpec.IndividualTool.Description, "selected target/attribute IDs") {
+		t.Fatalf("bulk update description = %q", bulkUpdateSpec.IndividualTool.Description)
 	}
 }

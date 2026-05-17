@@ -144,7 +144,7 @@
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
           "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
           "isRequired": false,
-          "placeholder": "/path/to/exports"
+          "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "RATE_LIMIT_RPS",
@@ -318,7 +318,7 @@
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
           "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
           "isRequired": false,
-          "placeholder": "/path/to/exports"
+          "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "RATE_LIMIT_RPS",
@@ -492,7 +492,7 @@
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
           "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
           "isRequired": false,
-          "placeholder": "/path/to/exports"
+          "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "RATE_LIMIT_RPS",
@@ -666,7 +666,7 @@
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
           "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
           "isRequired": false,
-          "placeholder": "/path/to/exports"
+          "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "RATE_LIMIT_RPS",
