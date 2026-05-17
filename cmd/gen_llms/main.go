@@ -657,6 +657,9 @@ func removeSchemaType(types []string, remove string) []string {
 }
 
 func pluralSchemaType(typ string) string {
+	if itemType, ok := strings.CutPrefix(typ, "array of "); ok {
+		return "arrays of " + itemType
+	}
 	switch typ {
 	case "integer":
 		return "integers"

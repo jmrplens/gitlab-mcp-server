@@ -80,6 +80,17 @@ func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
 			schema: map[string]any{},
 			want:   "any",
 		},
+		{
+			name: "nested string array",
+			schema: map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"type": "string"},
+				},
+			},
+			want: "array of arrays of strings",
+		},
 	}
 
 	for _, tt := range tests {
