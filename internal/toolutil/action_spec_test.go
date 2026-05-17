@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -251,9 +252,12 @@ func TestNewActionSpec_AppliesInputSchemaOverrides(t *testing.T) {
 		t.Fatalf("anyOf = %#v, want two branches", got)
 	}
 	mode := spec.Route.InputSchema["properties"].(map[string]any)["mode"].(map[string]any)
-	modeEnum := mode["enum"].([]string)
-	if modeEnum[0] != "ADD" {
-		t.Fatalf("mode enum = %#v, want cloned ADD/REMOVE", modeEnum)
+	modeEnum, ok := mode["enum"].([]string)
+	if !ok {
+		t.Fatalf("mode enum = %#v, want []string", mode["enum"])
+	}
+	if wantModeEnum := []string{"ADD", "REMOVE"}; !reflect.DeepEqual(modeEnum, wantModeEnum) {
+		t.Fatalf("mode enum = %#v, want %#v", modeEnum, wantModeEnum)
 	}
 	items := spec.Route.InputSchema["properties"].(map[string]any)["items"].(map[string]any)
 	if got := items["minItems"]; got != 1 {
