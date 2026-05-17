@@ -128,8 +128,24 @@ func TestGraphQLTopLevelError(t *testing.T) {
 	}
 
 	err = GraphQLTopLevelError("securityAttributeCreate", []GraphQLError{{Message: " "}})
-	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate GraphQL errors") {
+	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate: 1 GraphQL errors with empty messages") {
 		t.Fatalf("GraphQLTopLevelError(blank) = %v, want generic error", err)
+	}
+}
+
+func TestGraphQLMutationError(t *testing.T) {
+	if err := GraphQLMutationError("securityAttributeCreate", nil); err != nil {
+		t.Fatalf("GraphQLMutationError(nil) = %v, want nil", err)
+	}
+
+	err := GraphQLMutationError("securityAttributeCreate", []string{"first", " second "})
+	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate mutation errors: first; second") {
+		t.Fatalf("GraphQLMutationError() = %v, want joined messages", err)
+	}
+
+	err = GraphQLMutationError("securityAttributeCreate", []string{" "})
+	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate mutation errors: 1 errors with empty messages") {
+		t.Fatalf("GraphQLMutationError(blank) = %v, want generic error", err)
 	}
 }
 

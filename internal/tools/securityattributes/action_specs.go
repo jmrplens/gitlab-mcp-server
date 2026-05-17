@@ -45,7 +45,7 @@ func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, indivi
 		toolutil.SchemaPropertyOverride("color", map[string]any{"type": "string", "pattern": hexColorSchemaPattern}),
 	}
 	options.Idempotent = true
-	options.Usage = "Update security attribute metadata or assignments."
+	options.Usage = "Update security attribute metadata."
 	return toolutil.NewActionSpec(name, route, options)
 }
 

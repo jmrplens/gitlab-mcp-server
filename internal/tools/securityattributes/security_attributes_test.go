@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -341,6 +343,70 @@ func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	}
 }
 
+func TestHandlers_WrapTransportErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create",
+			queryKey: "securityAttributeCreate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+				return err
+			},
+		},
+		{
+			name:     "update",
+			queryKey: "securityAttributeUpdate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				return err
+			},
+		},
+		{
+			name:     "delete",
+			queryKey: "securityAttributeDestroy",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
+				return err
+			},
+		},
+		{
+			name:     "project update",
+			queryKey: "securityAttributeProjectUpdate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+				return err
+			},
+		},
+		{
+			name:     "bulk update",
+			queryKey: "bulkUpdateSecurityAttributes",
+			call: func(client *gitlabclient.Client) error {
+				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					http.Error(w, "boom", http.StatusInternalServerError)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "500") {
+				t.Fatalf("handler error = %v, want HTTP 500", err)
+			}
+		})
+	}
+}
+
 func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -358,12 +424,57 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			},
 		},
 		{
+			name:     "create null payload",
+			queryKey: "securityAttributeCreate",
+			payload:  `{"securityAttributeCreate":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+				return err
+			},
+		},
+		{
 			name:     "update null attribute",
 			queryKey: "securityAttributeUpdate",
 			payload:  `{"securityAttributeUpdate":{"securityAttribute":null,"errors":[]}}`,
 			call: func(client *gitlabclient.Client) error {
 				name := "High"
 				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
+				return err
+			},
+		},
+		{
+			name:     "update null payload",
+			queryKey: "securityAttributeUpdate",
+			payload:  `{"securityAttributeUpdate":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				return err
+			},
+		},
+		{
+			name:     "delete null payload",
+			queryKey: "securityAttributeDestroy",
+			payload:  `{"securityAttributeDestroy":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
+				return err
+			},
+		},
+		{
+			name:     "project update null payload",
+			queryKey: "securityAttributeProjectUpdate",
+			payload:  `{"securityAttributeProjectUpdate":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+				return err
+			},
+		},
+		{
+			name:     "bulk update null payload",
+			queryKey: "bulkUpdateSecurityAttributes",
+			payload:  `{"bulkUpdateSecurityAttributes":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
 				return err
 			},
 		},
@@ -385,8 +496,64 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	}
 }
 
+func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		call    func(*gitlabclient.Client) error
+		want    string
+	}{
+		{
+			name:    "attribute id",
+			payload: strings.Replace(sampleAttribute, "gid://gitlab/Security::Attribute/9", "bad-attribute-id", 1),
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				return err
+			},
+			want: "parse security attribute id",
+		},
+		{
+			name:    "category id",
+			payload: strings.Replace(sampleAttribute, "gid://gitlab/Security::Category/7", "bad-category-id", 1),
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				return err
+			},
+			want: "parse security category id",
+		},
+		{
+			name:    "create attribute id",
+			payload: strings.Replace(sampleAttribute, "gid://gitlab/Security::Attribute/9", "bad-attribute-id", 1),
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+				return err
+			},
+			want: "parse security attribute id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				"securityAttributeCreate": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeCreate":{"securityAttributes":[`+tt.payload+`],"errors":[]}}`)
+				},
+				"securityAttributeUpdate": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+tt.payload+`,"errors":[]}}`)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("handler error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdate_Success(t *testing.T) {
 	name := "Critical"
+	description := "Critical impact"
 	color := "#990000"
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeUpdate": func(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +561,7 @@ func TestUpdate_Success(t *testing.T) {
 			if input["id"] != "gid://gitlab/Security::Attribute/9" {
 				t.Fatalf("id = %#v", input["id"])
 			}
-			if input["name"] != name || input["color"] != color {
+			if input["name"] != name || input["description"] != description || input["color"] != color {
 				t.Fatalf("input = %#v", input)
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+sampleAttribute+`,"errors":[]}}`)
@@ -402,7 +569,7 @@ func TestUpdate_Success(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
-	out, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name, Color: &color})
+	out, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name, Description: &description, Color: &color})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -581,6 +748,29 @@ func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	mode := glBulkMode(BulkUpdateModeAdd)
+	ids := []int64{9}
+	tests := []struct {
+		name string
+		opts *gl.BulkUpdateSecurityAttributesOptions
+		want string
+	}{
+		{name: "missing attributes", opts: &gl.BulkUpdateSecurityAttributesOptions{Mode: &mode}, want: "attribute_ids is required"},
+		{name: "missing mode", opts: &gl.BulkUpdateSecurityAttributesOptions{AttributeIDs: &ids}, want: "mode is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := bulkUpdateSecurityAttributes(context.Background(), client, tt.opts)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("bulkUpdateSecurityAttributes() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
 	attribute := Output{
 		ID:               9,
@@ -633,15 +823,19 @@ func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
 }
 
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
-	if out := attributeNodeOutput(nil); out.ID != 0 || out.SecurityCategory != nil {
+	if out, err := attributeNodeOutput(nil); err != nil || out.ID != 0 || out.SecurityCategory != nil {
 		t.Fatalf("attributeNodeOutput(nil) = %#v", out)
 	}
-	if summary := categoryNodeSummary(nil); summary != nil {
-		t.Fatalf("categoryNodeSummary(nil) = %#v, want nil", summary)
+	if summary, err := categoryNodeSummary(nil); err != nil || summary == nil || summary.ID != 0 {
+		t.Fatalf("categoryNodeSummary(nil) = %#v, want zero summary", summary)
 	}
-	if out := attributeNodesOutput(nil); len(out.Attributes) != 0 {
+	if out, err := attributeNodesOutput(nil); err != nil || len(out.Attributes) != 0 {
 		t.Fatalf("attributeNodesOutput(nil) = %#v", out)
 	}
+}
+
+func glBulkMode(mode BulkUpdateMode) gl.SecurityAttributeBulkUpdateMode {
+	return gl.SecurityAttributeBulkUpdateMode(mode)
 }
 
 func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {

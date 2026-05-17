@@ -33,6 +33,25 @@ const (
 	minSegmentTerms  = 3
 	maxSegmentTerms  = 6
 	segmentTermBoost = 90
+
+	actionAdminBroadcastMessageList = "admin.broadcast_message_list"
+	actionAdminSettingsGet          = "admin.settings_get"
+	actionAnalyzeReleaseNotes       = "analyze.release_notes"
+	actionEnvironmentDeploymentList = "environment.deployment_list"
+	actionFeatureFlagUserListGet    = "feature_flags.ff_user_list_get"
+	actionFeatureFlagUserListList   = "feature_flags.ff_user_list_list"
+	actionIssueNoteDelete           = "issue.note_delete"
+	actionIssueNoteGet              = "issue.note_get"
+	actionIssueNoteUpdate           = "issue.note_update"
+	actionJobDownloadSingleArtifact = "job.download_single_artifact"
+	actionReleaseGet                = "release.get"
+	actionReleaseLinkDelete         = "release.link_delete"
+	actionReleaseLinkGet            = "release.link_get"
+	actionReleaseLinkList           = "release.link_list"
+	tagIssueComment                 = "issue comment"
+	tagIssueNote                    = "issue note"
+	tagIssueTimeTracking            = "issue time tracking"
+	tagReleaseNotes                 = "release notes"
 )
 
 // SearchInput is the input for gitlab_search_tools.
@@ -1188,12 +1207,12 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		case "delete":
 			add("delete release", "remove release", "preserve tag")
 		case "list":
-			add("releases", "list releases", "release inventory", "release notes")
+			add("releases", "list releases", "release inventory", tagReleaseNotes)
 		}
 	case domain == "repository" && action == "compare":
-		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", "release notes", "release compare")
+		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
 	case domain == "analyze" && action == "release_notes":
-		add("release notes", "generate release notes", "from ref", "to ref", "from", "to")
+		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
 	case domain == "package":
 		switch action {
 		case "list":
@@ -1213,23 +1232,23 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 	case domain == "issue":
 		switch action {
 		case "note_create":
-			add("issue note", "issue comment", "create note", "create comment")
+			add(tagIssueNote, tagIssueComment, "create note", "create comment")
 		case "note_get":
-			add("issue note", "issue comment", "get note", "note_id", "read one note")
+			add(tagIssueNote, tagIssueComment, "get note", "note_id", "read one note")
 		case "note_list":
 			add("issue notes", "issue comments", "list notes", "list comments")
 		case "note_update":
-			add("issue note", "issue comment", "update note", "edit comment", "note_id")
+			add(tagIssueNote, tagIssueComment, "update note", "edit comment", "note_id")
 		case "note_delete":
-			add("issue note", "issue comment", "delete note", "remove comment", "note_id")
+			add(tagIssueNote, tagIssueComment, "delete note", "remove comment", "note_id")
 		case "time_estimate_set":
-			add("issue time tracking", "set estimate", "time estimate", "estimate", "2h")
+			add(tagIssueTimeTracking, "set estimate", "time estimate", "estimate", "2h")
 		case "spent_time_add":
-			add("issue time tracking", "add spent time", "spent time", "30m", "summary")
+			add(tagIssueTimeTracking, "add spent time", "spent time", "30m", "summary")
 		case "spent_time_reset":
-			add("issue time tracking", "reset spent time", "clear spent time")
+			add(tagIssueTimeTracking, "reset spent time", "clear spent time")
 		case "time_estimate_reset":
-			add("issue time tracking", "reset estimate", "clear estimate")
+			add(tagIssueTimeTracking, "reset estimate", "clear estimate")
 		}
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
@@ -1523,13 +1542,13 @@ type actionUXMetadata struct {
 }
 
 var actionUXMetadataByID = map[string]actionUXMetadata{
-	"job.download_single_artifact": {
+	actionJobDownloadSingleArtifact: {
 		Usage:          "Use for one artifact file path from a known numeric job_id, for example coverage/report.xml; do not use job.artifacts or job.download_artifacts for this case.",
 		RelatedActions: []string{"job.artifacts", "job.download_artifacts"},
 	},
 	"job.artifacts": {
 		Usage:          "Downloads the whole artifact archive for a known numeric job_id; use job.download_single_artifact when one artifact_path is requested.",
-		RelatedActions: []string{"job.download_single_artifact"},
+		RelatedActions: []string{actionJobDownloadSingleArtifact},
 	},
 	"job.download_artifacts": {
 		Usage:          "Downloads the whole artifact archive by ref_name and job name; do not use with numeric job_id.",
@@ -1537,19 +1556,19 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"job.download_single_artifact_by_ref": {
 		Usage:          "Downloads one artifact file by ref_name and job name; use job.download_single_artifact when the prompt gives numeric job_id.",
-		RelatedActions: []string{"job.download_single_artifact"},
+		RelatedActions: []string{actionJobDownloadSingleArtifact},
 	},
-	"admin.settings_get": {
+	actionAdminSettingsGet: {
 		Usage:          "Use for current instance/application settings; broadcast_message_list only lists existing broadcast messages.",
-		RelatedActions: []string{"admin.settings_update", "admin.broadcast_message_list"},
+		RelatedActions: []string{"admin.settings_update", actionAdminBroadcastMessageList},
 	},
-	"admin.broadcast_message_list": {
+	actionAdminBroadcastMessageList: {
 		Usage:          "Lists existing broadcast messages only; it does not read current instance settings.",
-		RelatedActions: []string{"admin.settings_get", "admin.broadcast_message_create"},
+		RelatedActions: []string{actionAdminSettingsGet, "admin.broadcast_message_create"},
 	},
 	"admin.broadcast_message_create": {
 		Usage:          "Creates a broadcast message after any requested settings read; message text goes in params.message.",
-		RelatedActions: []string{"admin.settings_get", "admin.broadcast_message_list"},
+		RelatedActions: []string{actionAdminSettingsGet, actionAdminBroadcastMessageList},
 	},
 	"access.deploy_key_list_project": {
 		Usage:          "Lists deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.",
@@ -1563,49 +1582,49 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		Usage:          "Gets one protected environment by params.name; environment.get reads a normal environment by environment_id.",
 		RelatedActions: []string{"environment.protected_list", "environment.deployment_list"},
 	},
-	"environment.deployment_list": {
+	actionEnvironmentDeploymentList: {
 		Usage:          "Lists deployments for an environment/project; use after environment.list or protected environment lookup when deployment approval context is needed.",
 		RelatedActions: []string{"environment.list", "environment.deployment_approve_or_reject"},
 	},
 	"environment.deployment_approve_or_reject": {
 		Usage:          "Approves or rejects a deployment and requires params.deployment_id plus params.status.",
-		RelatedActions: []string{"environment.deployment_list"},
+		RelatedActions: []string{actionEnvironmentDeploymentList},
 	},
-	"feature_flags.ff_user_list_get": {
+	actionFeatureFlagUserListGet: {
 		Usage:          "Gets one feature flag user list by params.user_list_iid; ff_user_list_list lists all user lists and does not accept user_list_iid.",
-		RelatedActions: []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update"},
+		RelatedActions: []string{actionFeatureFlagUserListList, "feature_flags.ff_user_list_update"},
 	},
-	"feature_flags.ff_user_list_list": {
+	actionFeatureFlagUserListList: {
 		Usage:          "Lists feature flag user lists for a project; use ff_user_list_get when a specific user_list_iid is known.",
-		RelatedActions: []string{"feature_flags.ff_user_list_get"},
+		RelatedActions: []string{actionFeatureFlagUserListGet},
 	},
 	"feature_flags.ff_user_list_update": {
 		Usage:          "Updates one feature flag user list and requires params.user_list_iid.",
-		RelatedActions: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"},
+		RelatedActions: []string{actionFeatureFlagUserListGet, actionFeatureFlagUserListList},
 	},
 	"feature_flags.ff_user_list_delete": {
 		Usage:          "Deletes one feature flag user list and requires params.user_list_iid.",
-		RelatedActions: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"},
+		RelatedActions: []string{actionFeatureFlagUserListGet, actionFeatureFlagUserListList},
 	},
 	"issue.note_create": {
 		Usage:          "Creates a note/comment on an issue; subsequent get/update/delete steps need the returned note_id.",
 		RelatedActions: []string{"issue.note_get", "issue.note_update", "issue.note_delete"},
 	},
-	"issue.note_get": {
+	actionIssueNoteGet: {
 		Usage:          "Gets one issue note by params.note_id; issue.note_list lists notes and does not fetch a specific note.",
-		RelatedActions: []string{"issue.note_list", "issue.note_update", "issue.note_delete"},
+		RelatedActions: []string{"issue.note_list", actionIssueNoteUpdate, actionIssueNoteDelete},
 	},
 	"issue.note_list": {
 		Usage:          "Lists issue notes/comments; use issue.note_get when a specific note_id is known.",
 		RelatedActions: []string{"issue.note_get"},
 	},
-	"issue.note_update": {
+	actionIssueNoteUpdate: {
 		Usage:          "Updates one issue note/comment and requires params.note_id.",
-		RelatedActions: []string{"issue.note_get", "issue.note_delete"},
+		RelatedActions: []string{actionIssueNoteGet, actionIssueNoteDelete},
 	},
-	"issue.note_delete": {
+	actionIssueNoteDelete: {
 		Usage:          "Deletes one issue note/comment and requires params.note_id.",
-		RelatedActions: []string{"issue.note_get", "issue.note_update"},
+		RelatedActions: []string{actionIssueNoteGet, actionIssueNoteUpdate},
 	},
 	"mr_review.draft_note_publish_all": {
 		Usage:          "Publishes all pending draft MR review notes; use draft_note_create first when adding draft comments.",
@@ -1618,31 +1637,31 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		Usage:          "Use to verify that a tag exists before release cleanup or tag deletion workflows.",
 		RelatedActions: []string{"release.get", "release.link_list", "release.delete", "tag.delete"},
 	},
-	"release.get": {
+	actionReleaseGet: {
 		Usage:          "Use to verify a release for a tag after tag.get when the workflow asks to verify both.",
-		RelatedActions: []string{"tag.get", "release.link_list", "release.delete"},
+		RelatedActions: []string{"tag.get", actionReleaseLinkList, "release.delete"},
 	},
-	"release.link_list": {
+	actionReleaseLinkList: {
 		Usage:          "Lists asset links for an existing release tag; it is not a release existence check.",
-		RelatedActions: []string{"release.get", "release.link_create", "release.link_delete"},
+		RelatedActions: []string{actionReleaseGet, "release.link_create", actionReleaseLinkDelete},
 	},
-	"release.link_get": {
+	actionReleaseLinkGet: {
 		Usage:          "Gets one release asset link by link_id; use release.link_list to discover link IDs for a tag.",
-		RelatedActions: []string{"release.link_list", "release.link_update", "release.link_delete"},
+		RelatedActions: []string{actionReleaseLinkList, "release.link_update", actionReleaseLinkDelete},
 	},
 	"release.link_update": {
 		Usage:          "Updates one release asset link by link_id; use release.link_list or release.link_get before editing when the ID is unknown.",
-		RelatedActions: []string{"release.link_get", "release.link_list", "release.link_delete"},
+		RelatedActions: []string{actionReleaseLinkGet, actionReleaseLinkList, actionReleaseLinkDelete},
 	},
-	"release.link_delete": {
+	actionReleaseLinkDelete: {
 		Usage:          "Deletes one release asset link by link_id; use release.link_list before deletion when the ID is unknown.",
-		RelatedActions: []string{"release.link_get", "release.link_list"},
+		RelatedActions: []string{actionReleaseLinkGet, actionReleaseLinkList},
 	},
 	"repository.compare": {
 		Usage:          "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.",
-		RelatedActions: []string{"analyze.release_notes", "release.list", "tag.list"},
+		RelatedActions: []string{actionAnalyzeReleaseNotes, "release.list", "tag.list"},
 	},
-	"analyze.release_notes": {
+	actionAnalyzeReleaseNotes: {
 		Usage:          "Generates release notes with params.project_id, params.from, and params.to; call after requested release/compare prerequisite steps.",
 		RelatedActions: []string{"repository.compare", "release.list", "tag.list"},
 	},

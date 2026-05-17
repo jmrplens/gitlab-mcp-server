@@ -282,6 +282,16 @@ func TestActionSpecValidate_RejectsInvalidInputSchemaOverride(t *testing.T) {
 	}
 }
 
+func TestSchemaAnyOfRequired_RejectsEmptyPropertyNames(t *testing.T) {
+	spec := NewActionSpec("update", ActionRoute{InputSchema: testActionSpecSchema("name")}, ActionSpecOptions{
+		InputSchemaOverrides: []InputSchemaOverride{SchemaAnyOfRequired(" ", "")},
+	})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "empty input schema override") {
+		t.Fatalf("Validate() error = %v, want empty override", err)
+	}
+}
+
 // TestActionSpecValidate_RejectsInvalidCompatibilityPolicy covers ActionSpecValidate with table-driven subtests for rejects invalid compatibility policy.
 func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	testCases := []struct {

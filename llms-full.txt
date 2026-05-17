@@ -2303,7 +2303,7 @@ Import/Export:
 Releases:
 - release_list: group_id*, simple
 
-Premium+ behavior notes (GITLAB_ENTERPRISE=true): service_account_pat_create returns the cleartext token only ONCE — store it immediately. service_account_delete and service_account_pat_revoke are irreversible.
+Premium+ behavior notes (GITLAB_ENTERPRISE=true): service_account_pat_create returns the cleartext token only ONCE — store it immediately in a secure secrets manager and never log or echo it. service_account_delete and service_account_pat_revoke are irreversible.
 
 Epics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
 

@@ -233,6 +233,54 @@ func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	}
 }
 
+func TestHandlers_WrapTransportErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create",
+			queryKey: "securityCategoryCreate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
+			name:     "update",
+			queryKey: "securityCategoryUpdate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+				return err
+			},
+		},
+		{
+			name:     "delete",
+			queryKey: "securityCategoryDestroy",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 7})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					http.Error(w, "boom", http.StatusInternalServerError)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "500") {
+				t.Fatalf("handler error = %v, want HTTP 500", err)
+			}
+		})
+	}
+}
+
 func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -250,12 +298,39 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			},
 		},
 		{
+			name:     "create null payload",
+			queryKey: "securityCategoryCreate",
+			payload:  `{"securityCategoryCreate":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
 			name:     "update null category",
 			queryKey: "securityCategoryUpdate",
 			payload:  `{"securityCategoryUpdate":{"securityCategory":null,"errors":[]}}`,
 			call: func(client *gitlabclient.Client) error {
 				name := "Business impact"
 				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+				return err
+			},
+		},
+		{
+			name:     "update null payload",
+			queryKey: "securityCategoryUpdate",
+			payload:  `{"securityCategoryUpdate":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+				return err
+			},
+		},
+		{
+			name:     "delete null payload",
+			queryKey: "securityCategoryDestroy",
+			payload:  `{"securityCategoryDestroy":null}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 7})
 				return err
 			},
 		},
@@ -272,6 +347,40 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			err := tt.call(client)
 			if err == nil || !strings.Contains(err.Error(), "Not Found") {
 				t.Fatalf("handler error = %v, want Not Found", err)
+			}
+		})
+	}
+}
+
+func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{
+			name:    "category id",
+			payload: strings.Replace(sampleCategory, "gid://gitlab/Security::Category/7", "bad-category-id", 1),
+			want:    "parse security category id",
+		},
+		{
+			name:    "attribute id",
+			payload: strings.Replace(sampleCategory, "gid://gitlab/Security::Attribute/9", "bad-attribute-id", 1),
+			want:    "parse security attribute id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				"securityCategoryUpdate": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryUpdate":{"securityCategory":`+tt.payload+`,"errors":[]}}`)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Update() error = %v, want %q", err, tt.want)
 			}
 		})
 	}
@@ -414,7 +523,7 @@ func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 }
 
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
-	if out := categoryNodeOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
+	if out, err := categoryNodeOutput(nil); err != nil || out.ID != 0 || len(out.SecurityAttributes) != 0 {
 		t.Fatalf("categoryNodeOutput(nil) = %#v", out)
 	}
 }

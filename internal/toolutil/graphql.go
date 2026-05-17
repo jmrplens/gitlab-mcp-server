@@ -108,9 +108,27 @@ func GraphQLTopLevelError(operation string, errors []GraphQLError) error {
 		}
 	}
 	if len(messages) == 0 {
-		return fmt.Errorf("%s GraphQL errors", operation)
+		return fmt.Errorf("%s: %d GraphQL errors with empty messages", operation, len(errors))
 	}
 	return fmt.Errorf("%s GraphQL errors: %s", operation, strings.Join(messages, "; "))
+}
+
+// GraphQLMutationError formats mutation payload errors, if any.
+func GraphQLMutationError(operation string, errors []string) error {
+	if len(errors) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(errors))
+	for _, mutationError := range errors {
+		message := strings.TrimSpace(mutationError)
+		if message != "" {
+			messages = append(messages, message)
+		}
+	}
+	if len(messages) == 0 {
+		return fmt.Errorf("%s mutation errors: %d errors with empty messages", operation, len(errors))
+	}
+	return fmt.Errorf("%s mutation errors: %s", operation, strings.Join(messages, "; "))
 }
 
 // FormatGraphQLPagination renders cursor-based pagination metadata as a

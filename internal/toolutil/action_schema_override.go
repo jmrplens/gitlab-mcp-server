@@ -26,6 +26,9 @@ func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
 		}
 		branches = append(branches, map[string]any{"required": []string{propertyName}})
 	}
+	if len(branches) == 0 {
+		return InputSchemaOverride{}
+	}
 	return SchemaRootOverride(map[string]any{"anyOf": branches})
 }
 
