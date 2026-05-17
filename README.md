@@ -37,7 +37,7 @@ Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals e
 
 | Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Individual tools (Enterprise/Premium catalog) | 1014 | 1014 | 552,243 | 17,622 | 569,865 |
+| Individual tools (Enterprise/Premium catalog) | 1014 | 1014 | 552,458 | 17,622 | 570,080 |
 | Meta-tools (base catalog + MCP helpers, **default**) | 34 | 867 | 58,223 | 18,198 | 76,421 |
 | Meta-tools (Enterprise/Premium catalog + MCP helpers) | 50 | 1018 | 75,851 | 18,198 | 94,049 |
 | Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 867 / 1018 | 2,813 | 18,198 | 21,011 |
@@ -476,8 +476,8 @@ Numbers nobody asked for, but here they are anyway.
 | --- | ---: | ---: |
 | Source (`.go`, non-test) | 846 | 139,391 |
 | Unit tests (`_test.go`) | 440 | 239,944 |
-| End-to-end tests | 111 | 24,223 |
-| **Total** | **1,397** | **403,558** |
+| End-to-end tests | 111 | 24,427 |
+| **Total** | **1,397** | **403,762** |
 
 ### Functions
 
@@ -488,7 +488,7 @@ Numbers nobody asked for, but here they are anyway.
 | — unexported (private) | 3,114 |
 | Unit test functions (`TestXxx`) | 9,846 |
 | Subtests (`t.Run(...)`) | 2,165 |
-| End-to-end test functions | 250 |
+| End-to-end test functions | 252 |
 
 ### Ratios worth noting
 
@@ -505,7 +505,7 @@ Numbers nobody asked for, but here they are anyway.
 | Pattern | Count |
 | --- | ---: |
 | `if err != nil` checks | 5,852 |
-| `defer` statements | 745 |
+| `defer` statements | 750 |
 | `struct` types defined | 2,153 |
 | `//nolint` suppressions | 49 |
 | `TODO` / `FIXME` / `HACK` comments | 1 |
@@ -516,8 +516,8 @@ Numbers nobody asked for, but here they are anyway.
 | --- | ---: |
 | Go packages | 206 |
 | Direct dependencies (`go.mod`) | 11 |
-| Indirect dependencies | 47 |
-| Git commits | 137 |
+| Indirect dependencies | 49 |
+| Git commits | 140 |
 | Unique contributors | 2 |
 
 ### Hall of fame

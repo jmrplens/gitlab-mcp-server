@@ -49,7 +49,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Positive
 
-- **POS-001**: Reduces the initial visible tool count from 32/47/48 to 3 in low-token mode.
+- **POS-001**: Reduces the initial visible tool count from 33/49/50 to 3 in low-token mode.
 - **POS-002**: Keeps plain MCP compatibility because discovery and execution remain ordinary tool calls.
 - **POS-003**: Reuses canonical `ActionSpec`/catalog routes, per-action schemas, handlers, markdown formatters, destructive flags,
   read-only mode, safe mode, and scope filtering.
@@ -69,7 +69,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Keep Current Domain Meta-Tools Only
 
-- **ALT-001**: **Description**: Continue optimizing descriptions and schema resources within the 32/47/48 meta-tool model.
+- **ALT-001**: **Description**: Continue optimizing descriptions and schema resources within the 33/49/50 meta-tool model.
 - **ALT-002**: **Rejection Reason**: This preserves compatibility but cannot reach the 2-4 visible tool target.
 
 ### Unified Dispatcher
