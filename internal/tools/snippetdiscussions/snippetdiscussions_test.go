@@ -268,9 +268,6 @@ func TestProjectIDRequired_Validation(t *testing.T) {
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
-// errExpNonNilResult identifies the err exp non nil result constant used by this package.
-const errExpNonNilResult = "expected non-nil result"
-
 // covDiscussionJSON identifies the cov discussion JSON constant used by this package.
 const covDiscussionJSON = `{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}`
 
@@ -415,10 +412,6 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 			},
 		},
 	}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
 	s := FormatListMarkdownString(out)
 	if !strings.Contains(s, "Snippet Discussions") {
 		t.Error("expected header")
@@ -444,10 +437,6 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 			{ID: 1, Author: "bob", CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
 		},
 	}
-	result := FormatMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
 	s := FormatMarkdownString(out)
 	if !strings.Contains(s, "Discussion d1") {
 		t.Error("expected discussion ID")
@@ -464,10 +453,6 @@ func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 		Author:    "carol",
 		Body:      "test body",
 		CreatedAt: "2026-01-01T00:00:00Z",
-	}
-	result := FormatNoteMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
 	}
 	s := FormatNoteMarkdownString(out)
 	if !strings.Contains(s, "Note") {

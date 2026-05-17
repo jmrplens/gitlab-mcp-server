@@ -18,10 +18,7 @@ type ListInput struct {
 }
 
 // TemplateListItem represents a Dockerfile template in a list.
-type TemplateListItem struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-}
+type TemplateListItem = toolutil.TemplateMarkdown
 
 // ListOutput is the output for listing Dockerfile templates.
 type ListOutput struct {

@@ -349,14 +349,6 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_ReturnsCallToolResult verifies FormatListMarkdown returns call tool result.
-func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal("FormatListMarkdown returned nil")
-	}
-}
-
 // TestFormatMarkdownString_Populated verifies FormatMarkdownString when populated.
 func TestFormatMarkdownString_Populated(t *testing.T) {
 	out := Output{
@@ -385,14 +377,6 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 	md := FormatMarkdownString(Output{})
 	if !strings.Contains(md, "Discussion") {
 		t.Error("FormatMarkdownString should contain Discussion header for empty output")
-	}
-}
-
-// TestFormatMarkdown_ReturnsCallToolResult verifies FormatMarkdown returns call tool result.
-func TestFormatMarkdown_ReturnsCallToolResult(t *testing.T) {
-	result := FormatMarkdown(Output{ID: "x"})
-	if result == nil {
-		t.Fatal("FormatMarkdown returned nil")
 	}
 }
 
@@ -427,14 +411,6 @@ func TestFormatNoteMarkdownString_Empty(t *testing.T) {
 	// CreatedAt is empty, so "Created" line should not appear.
 	if strings.Contains(md, "**Created**") {
 		t.Error("should not contain Created line when CreatedAt is empty")
-	}
-}
-
-// TestFormatNoteMarkdown_ReturnsCallToolResult verifies FormatNoteMarkdown returns call tool result.
-func TestFormatNoteMarkdown_ReturnsCallToolResult(t *testing.T) {
-	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "x", Author: "u"})
-	if result == nil {
-		t.Fatal("FormatNoteMarkdown returned nil")
 	}
 }
 

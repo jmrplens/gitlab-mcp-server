@@ -78,6 +78,19 @@ func WithHints[O any](result *mcp.CallToolResult, out O, err error) (*mcp.CallTo
 // markdown links when presenting list results to the user.
 const HintPreserveLinks = "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab"
 
+// ListHints prepends HintPreserveLinks to list-result next-step hints.
+func ListHints(hints ...string) []string {
+	out := make([]string, 0, len(hints)+1)
+	out = append(out, HintPreserveLinks)
+	for _, hint := range hints {
+		if hint == "" || hint == HintPreserveLinks {
+			continue
+		}
+		out = append(out, hint)
+	}
+	return out
+}
+
 // WriteHints appends a "💡 Next steps" section to the Markdown builder.
 // Each hint is a short string describing a related action the LLM can take
 // (e.g. "Use action 'delete' to remove this package").

@@ -1,43 +1,23 @@
 package gitignoretemplates
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+var markdownRenderer = toolutil.NewTemplateRenderer("Gitignore Templates", "No templates found.\n", "Use `gitlab_get_gitignore_template` to view a specific template", "Gitignore Template", "gitignore", "Copy this template to your `.gitignore` file and customize it")
+
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Gitignore Templates\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Templates), out.Pagination)
-	if len(out.Templates) == 0 {
-		sb.WriteString("No templates found.\n")
-		return sb.String()
-	}
-	sb.WriteString(toolutil.MarkdownTableHeader("Key", "Name"))
-	for _, t := range out.Templates {
-		fmt.Fprintf(&sb, "| %s | %s |\n",
-			toolutil.EscapeMdTableCell(t.Key), toolutil.EscapeMdTableCell(t.Name))
-	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_gitignore_template` to view a specific template")
-	return sb.String()
+	pagination := out.Pagination
+	return markdownRenderer.FormatList(out.Templates, pagination)
 }
 
 // FormatGetMarkdown formats the get output as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Gitignore Template: %s\n\n", out.Name)
-	sb.WriteString("```gitignore\n")
-	sb.WriteString(out.Content)
-	sb.WriteString("\n```\n")
-	toolutil.WriteHints(&sb, "Copy this template to your `.gitignore` file and customize it")
-	return sb.String()
+	content := out.Content
+	return markdownRenderer.FormatContent(out.Name, content)
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatListMarkdown)
-	toolutil.RegisterMarkdown(FormatGetMarkdown)
+	toolutil.RegisterMarkdownPair(FormatListMarkdown, FormatGetMarkdown)
 }

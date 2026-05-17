@@ -1,76 +1,27 @@
 package snippetdiscussions
 
-import (
-	"fmt"
-	"strings"
+import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-)
-
-// FormatListMarkdown formats a list of discussions as Markdown.
-func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
-}
+var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details", "Use `gitlab_add_snippet_discussion_note` to reply to this discussion", "Use `gitlab_update_snippet_discussion_note` to edit this note")
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	if len(out.Discussions) == 0 {
-		return "No snippet discussions found.\n"
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet Discussions (%d)\n\n", len(out.Discussions))
-	toolutil.WriteListSummary(&b, len(out.Discussions), out.Pagination)
-	for _, d := range out.Discussions {
-		fmt.Fprintf(&b, "### Discussion %s\n", d.ID)
-		for _, n := range d.Notes {
-			fmt.Fprintf(&b, "- **@%s** (%s): %s\n", n.Author, toolutil.FormatTime(n.CreatedAt), toolutil.NormalizeText(n.Body))
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
-	toolutil.WriteHints(&b, "Use `gitlab_get_snippet_discussion` to view full discussion details")
-	return b.String()
-}
-
-// FormatMarkdown formats a single discussion as Markdown.
-func FormatMarkdown(out Output) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
+	discussions := toolutil.DiscussionOutputMarkdowns(out.Discussions)
+	return markdownRenderer.FormatRESTList(discussions, out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.
 func FormatMarkdownString(out Output) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Discussion %s\n\n", out.ID)
-	for _, n := range out.Notes {
-		fmt.Fprintf(&b, "- **@%s** (%s): %s\n", n.Author, toolutil.FormatTime(n.CreatedAt), n.Body)
-	}
-	toolutil.WriteHints(&b, "Use `gitlab_add_snippet_discussion_note` to reply to this discussion")
-	return b.String()
-}
-
-// FormatNoteMarkdown formats a single note as Markdown.
-func FormatNoteMarkdown(out NoteOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(FormatNoteMarkdownString(out))
+	discussion := out.MarkdownDiscussion()
+	return markdownRenderer.FormatDiscussion(discussion)
 }
 
 // FormatNoteMarkdownString renders a note as Markdown.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	var b strings.Builder
-	b.WriteString("## Note\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, out.Author)
-	fmt.Fprintf(&b, "- **Body**: %s\n", out.Body)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(&b, "Use `gitlab_update_snippet_discussion_note` to edit this note")
-	return b.String()
+	note := out.MarkdownNote()
+	return markdownRenderer.FormatNote(note)
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatListMarkdownString)
-	toolutil.RegisterMarkdown(FormatMarkdownString)
-	toolutil.RegisterMarkdown(FormatNoteMarkdownString)
+	toolutil.RegisterMarkdownTriple(FormatListMarkdownString, FormatMarkdownString, FormatNoteMarkdownString)
 }

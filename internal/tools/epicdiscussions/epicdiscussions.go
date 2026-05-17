@@ -246,6 +246,14 @@ func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 	return out
 }
 
+func nodeToDiscussionOutput(disc gqlDiscussionNode) Output {
+	notes := make([]NoteOutput, len(disc.Notes.Nodes))
+	for idx := range disc.Notes.Nodes {
+		notes[idx] = nodeToNoteOutput(disc.Notes.Nodes[idx])
+	}
+	return Output{ID: extractDiscussionHex(disc.ID), Notes: notes}
+}
+
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
 func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPath string, iid int64) (string, error) {
 	var resp struct {
@@ -385,14 +393,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		}
 		pageInfo = w.Discussions.PageInfo
 		for _, disc := range w.Discussions.Nodes {
-			d := Output{
-				ID:    extractDiscussionHex(disc.ID),
-				Notes: make([]NoteOutput, 0, len(disc.Notes.Nodes)),
-			}
-			for _, n := range disc.Notes.Nodes {
-				d.Notes = append(d.Notes, nodeToNoteOutput(n))
-			}
-			discussions = append(discussions, d)
+			discussions = append(discussions, nodeToDiscussionOutput(disc))
 		}
 	}
 
@@ -444,14 +445,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		}
 		for _, disc := range w.Discussions.Nodes {
 			if disc.ID == targetGID {
-				d := Output{
-					ID:    extractDiscussionHex(disc.ID),
-					Notes: make([]NoteOutput, 0, len(disc.Notes.Nodes)),
-				}
-				for _, n := range disc.Notes.Nodes {
-					d.Notes = append(d.Notes, nodeToNoteOutput(n))
-				}
-				return d, nil
+				return nodeToDiscussionOutput(disc), nil
 			}
 		}
 	}

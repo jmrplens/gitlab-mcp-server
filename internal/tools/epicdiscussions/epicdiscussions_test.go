@@ -11,8 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const testFullPath = "my-group"
@@ -913,8 +911,8 @@ func TestDeleteNote(t *testing.T) {
 // Formatters
 // --------------------------------------------------------------------------
 
-// TestFormatListMarkdown uses table-driven subtests to verify that FormatListMarkdown renders a table for populated inputs and an empty-state message otherwise.
-func TestFormatListMarkdown(t *testing.T) {
+// TestFormatListMarkdownString uses table-driven subtests to verify that FormatListMarkdownString renders a table for populated inputs and an empty-state message otherwise.
+func TestFormatListMarkdownString(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   ListOutput
@@ -944,20 +942,16 @@ func TestFormatListMarkdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatListMarkdown(tt.input)
-			if result == nil {
-				t.Fatal("expected non-nil result")
-			}
-			text := result.Content[0].(*mcp.TextContent).Text
-			if !strings.Contains(text, tt.wantSub) {
-				t.Errorf("output %q does not contain %q", text, tt.wantSub)
+			md := FormatListMarkdownString(tt.input)
+			if !strings.Contains(md, tt.wantSub) {
+				t.Errorf("output %q does not contain %q", md, tt.wantSub)
 			}
 		})
 	}
 }
 
-// TestFormatMarkdown uses table-driven subtests to verify that FormatMarkdown renders a discussion with notes and handles an empty discussion.
-func TestFormatMarkdown(t *testing.T) {
+// TestFormatMarkdownString uses table-driven subtests to verify that FormatMarkdownString renders a discussion with notes and handles an empty discussion.
+func TestFormatMarkdownString(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   Output
@@ -977,27 +971,19 @@ func TestFormatMarkdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatMarkdown(tt.input)
-			if result == nil {
-				t.Fatal("expected non-nil result")
-			}
-			text := result.Content[0].(*mcp.TextContent).Text
-			if !strings.Contains(text, tt.wantSub) {
-				t.Errorf("output %q does not contain %q", text, tt.wantSub)
+			md := FormatMarkdownString(tt.input)
+			if !strings.Contains(md, tt.wantSub) {
+				t.Errorf("output %q does not contain %q", md, tt.wantSub)
 			}
 		})
 	}
 }
 
-// TestFormatNoteMarkdown verifies that FormatNoteMarkdown renders a note with its author in the output.
-func TestFormatNoteMarkdown(t *testing.T) {
-	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "carol") {
-		t.Errorf("expected author 'carol' in output, got %q", text)
+// TestFormatNoteMarkdownString verifies that FormatNoteMarkdownString renders a note with its author in the output.
+func TestFormatNoteMarkdownString(t *testing.T) {
+	md := FormatNoteMarkdownString(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
+	if !strings.Contains(md, "carol") {
+		t.Errorf("expected author 'carol' in output, got %q", md)
 	}
 }
 

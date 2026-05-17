@@ -9,37 +9,28 @@ import (
 
 // FormatGetMarkdown formats plan limits as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Plan Limits\n\n")
-	sb.WriteString("| Limit | Value |\n")
-	sb.WriteString("|---|---|\n")
-	fmt.Fprintf(&sb, "| Conan Max File Size | %d |\n", out.ConanMaxFileSize)
-	fmt.Fprintf(&sb, "| Generic Packages Max File Size | %d |\n", out.GenericPackagesMaxFileSize)
-	fmt.Fprintf(&sb, "| Helm Max File Size | %d |\n", out.HelmMaxFileSize)
-	fmt.Fprintf(&sb, "| Maven Max File Size | %d |\n", out.MavenMaxFileSize)
-	fmt.Fprintf(&sb, "| NPM Max File Size | %d |\n", out.NPMMaxFileSize)
-	fmt.Fprintf(&sb, "| NuGet Max File Size | %d |\n", out.NugetMaxFileSize)
-	fmt.Fprintf(&sb, "| PyPI Max File Size | %d |\n", out.PyPiMaxFileSize)
-	fmt.Fprintf(&sb, "| Terraform Module Max File Size | %d |\n", out.TerraformModuleMaxFileSize)
-	toolutil.WriteHints(&sb, "Use `gitlab_change_plan_limits` to modify these limits")
-	return sb.String()
+	return formatPlanLimitsMarkdown("Plan Limits", out.PlanLimitItem, "Use `gitlab_change_plan_limits` to modify these limits")
 }
 
 // FormatChangeMarkdown formats changed plan limits as markdown.
 func FormatChangeMarkdown(out ChangeOutput) string {
+	return formatPlanLimitsMarkdown("Updated Plan Limits", out.PlanLimitItem, "Verify changes with `gitlab_get_plan_limits`")
+}
+
+func formatPlanLimitsMarkdown(title string, limits PlanLimitItem, hint string) string {
 	var sb strings.Builder
-	sb.WriteString("## Updated Plan Limits\n\n")
+	fmt.Fprintf(&sb, "## %s\n\n", title)
 	sb.WriteString("| Limit | Value |\n")
 	sb.WriteString("|---|---|\n")
-	fmt.Fprintf(&sb, "| Conan Max File Size | %d |\n", out.ConanMaxFileSize)
-	fmt.Fprintf(&sb, "| Generic Packages Max File Size | %d |\n", out.GenericPackagesMaxFileSize)
-	fmt.Fprintf(&sb, "| Helm Max File Size | %d |\n", out.HelmMaxFileSize)
-	fmt.Fprintf(&sb, "| Maven Max File Size | %d |\n", out.MavenMaxFileSize)
-	fmt.Fprintf(&sb, "| NPM Max File Size | %d |\n", out.NPMMaxFileSize)
-	fmt.Fprintf(&sb, "| NuGet Max File Size | %d |\n", out.NugetMaxFileSize)
-	fmt.Fprintf(&sb, "| PyPI Max File Size | %d |\n", out.PyPiMaxFileSize)
-	fmt.Fprintf(&sb, "| Terraform Module Max File Size | %d |\n", out.TerraformModuleMaxFileSize)
-	toolutil.WriteHints(&sb, "Verify changes with `gitlab_get_plan_limits`")
+	fmt.Fprintf(&sb, "| Conan Max File Size | %d |\n", limits.ConanMaxFileSize)
+	fmt.Fprintf(&sb, "| Generic Packages Max File Size | %d |\n", limits.GenericPackagesMaxFileSize)
+	fmt.Fprintf(&sb, "| Helm Max File Size | %d |\n", limits.HelmMaxFileSize)
+	fmt.Fprintf(&sb, "| Maven Max File Size | %d |\n", limits.MavenMaxFileSize)
+	fmt.Fprintf(&sb, "| NPM Max File Size | %d |\n", limits.NPMMaxFileSize)
+	fmt.Fprintf(&sb, "| NuGet Max File Size | %d |\n", limits.NugetMaxFileSize)
+	fmt.Fprintf(&sb, "| PyPI Max File Size | %d |\n", limits.PyPiMaxFileSize)
+	fmt.Fprintf(&sb, "| Terraform Module Max File Size | %d |\n", limits.TerraformModuleMaxFileSize)
+	toolutil.WriteHints(&sb, hint)
 	return sb.String()
 }
 

@@ -203,31 +203,13 @@ type ApproveOutput struct {
 
 // ToOutput converts a GitLab API [gl.MergeRequest] to the MCP tool output format.
 func ToOutput(m *gl.MergeRequest) Output {
-	out := Output{
-		ID:                          m.ID,
-		IID:                         m.IID,
-		ProjectID:                   m.ProjectID,
-		Title:                       m.Title,
-		Description:                 m.Description,
-		State:                       m.State,
-		SourceBranch:                m.SourceBranch,
-		TargetBranch:                m.TargetBranch,
-		WebURL:                      m.WebURL,
-		MergeStatus:                 m.DetailedMergeStatus,
-		Draft:                       m.Draft,
-		HasConflicts:                m.HasConflicts,
-		BlockingDiscussionsResolved: m.BlockingDiscussionsResolved,
-		Squash:                      m.Squash,
-		SHA:                         m.SHA,
-		MergeCommitSHA:              m.MergeCommitSHA,
-		MergeError:                  m.MergeError,
-		ChangesCount:                m.ChangesCount,
-		RebaseInProgress:            m.RebaseInProgress,
-		DivergedCommitsCount:        m.DivergedCommitsCount,
-		UserNotesCount:              m.UserNotesCount,
-		Subscribed:                  m.Subscribed,
-		FirstContribution:           m.FirstContribution,
-	}
+	out := BasicToOutput(&m.BasicMergeRequest)
+	out.MergeError = m.MergeError
+	out.ChangesCount = m.ChangesCount
+	out.RebaseInProgress = m.RebaseInProgress
+	out.DivergedCommitsCount = m.DivergedCommitsCount
+	out.Subscribed = m.Subscribed
+	out.FirstContribution = m.FirstContribution
 	if m.DiffRefs.BaseSha != "" || m.DiffRefs.HeadSha != "" || m.DiffRefs.StartSha != "" {
 		out.DiffRefs = &DiffRefsOutput{
 			BaseSHA:  m.DiffRefs.BaseSha,
@@ -249,7 +231,6 @@ func ToOutput(m *gl.MergeRequest) Output {
 	if m.LatestBuildFinishedAt != nil {
 		out.LatestBuildFinishedAt = m.LatestBuildFinishedAt.Format(time.RFC3339)
 	}
-	populatePeople(&out, &m.BasicMergeRequest)
 	return out
 }
 
