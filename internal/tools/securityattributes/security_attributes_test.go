@@ -3,10 +3,12 @@ package securityattributes
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -22,7 +24,7 @@ const sampleAttribute = `{
 		"description": "Business impact labels",
 		"multipleSelection": true,
 		"editableState": "EDITABLE",
-		"templateType": null
+		"templateType": "APPLICATION"
 	}
 }`
 
@@ -80,6 +82,9 @@ func TestCreate_Success(t *testing.T) {
 	if len(out.Attributes) != 1 || out.Attributes[0].ID != 9 || out.Attributes[0].SecurityCategory.ID != 7 {
 		t.Fatalf("Create() output = %#v", out)
 	}
+	if out.Attributes[0].SecurityCategory.TemplateType != "APPLICATION" {
+		t.Fatalf("TemplateType = %q, want APPLICATION", out.Attributes[0].SecurityCategory.TemplateType)
+	}
 }
 
 func TestCreate_RequiresAttributes(t *testing.T) {
@@ -113,6 +118,16 @@ func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 			want:  "attributes[0].name is required",
 		},
 		{
+			name:  "blank description",
+			input: CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: " ", Color: "#FF0000"}}},
+			want:  "attributes[0].description is required",
+		},
+		{
+			name:  "blank color",
+			input: CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: " "}}},
+			want:  "attributes[0].color is required",
+		},
+		{
 			name:  "invalid color",
 			input: CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "red"}}},
 			want:  "attributes[0].color must be a hex color",
@@ -124,6 +139,133 @@ func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 			_, err := Create(context.Background(), client, tt.input)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Create() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandlers_ReturnContextErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	name := "High"
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "create",
+			call: func() error {
+				_, err := Create(ctx, client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+				return err
+			},
+		},
+		{
+			name: "update",
+			call: func() error {
+				_, err := Update(ctx, client, UpdateInput{AttributeID: 9, Name: &name})
+				return err
+			},
+		},
+		{
+			name: "delete",
+			call: func() error {
+				_, err := Delete(ctx, client, DeleteInput{AttributeID: 9})
+				return err
+			},
+		},
+		{
+			name: "project update",
+			call: func() error {
+				_, err := ProjectUpdate(ctx, client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+				return err
+			},
+		},
+		{
+			name: "bulk update",
+			call: func() error {
+				_, err := BulkUpdate(ctx, client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); !errors.Is(err, context.Canceled) {
+				t.Fatalf("handler error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
+func TestHandlers_WrapGitLabErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		payload  string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create",
+			queryKey: "securityAttributeCreate",
+			payload:  `{"securityAttributeCreate":{"securityAttributes":[],"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+				return err
+			},
+		},
+		{
+			name:     "update",
+			queryKey: "securityAttributeUpdate",
+			payload:  `{"securityAttributeUpdate":{"securityAttribute":null,"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				name := "High"
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
+				return err
+			},
+		},
+		{
+			name:     "delete",
+			queryKey: "securityAttributeDestroy",
+			payload:  `{"securityAttributeDestroy":{"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
+				return err
+			},
+		},
+		{
+			name:     "project update",
+			queryKey: "securityAttributeProjectUpdate",
+			payload:  `{"securityAttributeProjectUpdate":{"addedCount":0,"removedCount":0,"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+				return err
+			},
+		},
+		{
+			name:     "bulk update",
+			queryKey: "bulkUpdateSecurityAttributes",
+			payload:  `{"bulkUpdateSecurityAttributes":{"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, tt.payload)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "forbidden") {
+				t.Fatalf("handler error = %v, want forbidden", err)
 			}
 		})
 	}
@@ -198,6 +340,14 @@ func TestDelete_Success(t *testing.T) {
 	}
 	if out.Status != "success" || !strings.Contains(out.Message, "security attribute 9") {
 		t.Fatalf("Delete() output = %#v", out)
+	}
+}
+
+func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 0})
+	if err == nil || !strings.Contains(err.Error(), "attribute_id must be greater than 0") {
+		t.Fatalf("Delete() error = %v, want invalid attribute ID", err)
 	}
 }
 
@@ -318,7 +468,14 @@ func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 }
 
 func TestMarkdownEscapesTableCellsAndPreserveLinkHint(t *testing.T) {
-	attribute := Output{ID: 9, Name: "High | Risk", Color: "#FF|0000", SecurityCategory: &CategorySummary{Name: "Business | Impact"}}
+	attribute := Output{
+		ID:               9,
+		Name:             "High | Risk",
+		Color:            "#FF|0000",
+		Description:      "Needs | review",
+		EditableState:    "EDITABLE",
+		SecurityCategory: &CategorySummary{Name: "Business | Impact"},
+	}
 	createMarkdown := FormatCreateMarkdown(CreateOutput{Attributes: []Output{attribute}})
 	if !strings.Contains(createMarkdown, "High &#124; Risk") || !strings.Contains(createMarkdown, "#FF&#124;0000") || !strings.Contains(createMarkdown, "Business &#124; Impact") {
 		t.Fatalf("FormatCreateMarkdown() did not escape table cells:\n%s", createMarkdown)
@@ -328,8 +485,17 @@ func TestMarkdownEscapesTableCellsAndPreserveLinkHint(t *testing.T) {
 	}
 
 	outputMarkdown := FormatOutputMarkdown(attribute)
-	if !strings.Contains(outputMarkdown, "#FF&#124;0000") {
-		t.Fatalf("FormatOutputMarkdown() did not escape color:\n%s", outputMarkdown)
+	for _, want := range []string{"#FF&#124;0000", "Needs &#124; review", "| Editable state | `EDITABLE` |"} {
+		if !strings.Contains(outputMarkdown, want) {
+			t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, outputMarkdown)
+		}
+	}
+}
+
+func TestFormatCreateMarkdown_Empty(t *testing.T) {
+	md := FormatCreateMarkdown(CreateOutput{})
+	if !strings.Contains(md, "No security attributes returned.") {
+		t.Fatalf("FormatCreateMarkdown() =\n%s", md)
 	}
 }
 

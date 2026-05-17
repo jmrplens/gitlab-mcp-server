@@ -3,10 +3,12 @@ package securitycategories
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -16,7 +18,7 @@ const sampleCategory = `{
 	"description": "Business impact labels",
 	"multipleSelection": true,
 	"editableState": "EDITABLE",
-	"templateType": null,
+	"templateType": "APPLICATION",
 	"securityAttributes": [{
 		"id": "gid://gitlab/Security::Attribute/9",
 		"name": "High",
@@ -78,8 +80,106 @@ func TestCreate_Success(t *testing.T) {
 	if out.ID != 7 || out.Name != "Business impact" || !out.MultipleSelection {
 		t.Fatalf("Create() output = %#v", out)
 	}
+	if out.TemplateType != "APPLICATION" {
+		t.Fatalf("TemplateType = %q, want APPLICATION", out.TemplateType)
+	}
 	if len(out.SecurityAttributes) != 1 || out.SecurityAttributes[0].ID != 9 {
 		t.Fatalf("SecurityAttributes = %#v", out.SecurityAttributes)
+	}
+}
+
+func TestHandlers_ReturnContextErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	name := "Business impact"
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "create",
+			call: func() error {
+				_, err := Create(ctx, client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
+			name: "update",
+			call: func() error {
+				_, err := Update(ctx, client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+				return err
+			},
+		},
+		{
+			name: "delete",
+			call: func() error {
+				_, err := Delete(ctx, client, DeleteInput{CategoryID: 7})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); !errors.Is(err, context.Canceled) {
+				t.Fatalf("handler error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
+func TestHandlers_WrapGitLabErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		payload  string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create",
+			queryKey: "securityCategoryCreate",
+			payload:  `{"securityCategoryCreate":{"securityCategory":null,"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
+			name:     "update",
+			queryKey: "securityCategoryUpdate",
+			payload:  `{"securityCategoryUpdate":{"securityCategory":null,"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				name := "Business impact"
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+				return err
+			},
+		},
+		{
+			name:     "delete",
+			queryKey: "securityCategoryDestroy",
+			payload:  `{"securityCategoryDestroy":{"errors":["forbidden"]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 7})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, tt.payload)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "forbidden") {
+				t.Fatalf("handler error = %v, want forbidden", err)
+			}
+		})
 	}
 }
 
