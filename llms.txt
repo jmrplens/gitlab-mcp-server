@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v1.6.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1019 individual MCP tools across 98 GitLab API domains, 33 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
-an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+an optional 2-tool dynamic find/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
@@ -17,7 +17,7 @@ an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 pro
 - GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
-- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2
+- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3
 - META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs
 - CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny
 - GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)
@@ -69,7 +69,7 @@ tool with an "action" parameter. Key meta-tools:
 
 ## Dynamic Toolset
 
-Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.
+Set TOOL_SURFACE=dynamic to expose only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-2 is an explicit alias for the two-tool surface, while dynamic-3 pins the earlier search/describe/execute variant.
 
 ## Resources
 
@@ -169,7 +169,7 @@ Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_too
 
 - docs/configuration.md — Full configuration reference
 - docs/meta-tools.md — Meta-tool action reference
-- docs/dynamic-tools.md — Low-token dynamic search/describe/execute mode
+- docs/dynamic-tools.md — Low-token dynamic find/execute mode
 - docs/tools/README.md — All tools reference
 - docs/resources-reference.md — Resources reference
 - docs/prompts-reference.md — Prompts reference

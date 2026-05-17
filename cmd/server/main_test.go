@@ -1010,9 +1010,9 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	}
 }
 
-// TestCreateServer_DynamicToolSurface verifies that the low-token dynamic
-// surface exposes only search, describe, and execute tools while still
-// advertising meta-schema resources for the catalog-backed action registry.
+// TestCreateServer_DynamicToolSurface verifies that the default low-token
+// dynamic surface exposes find and execute while still advertising meta-schema
+// resources for the catalog-backed action registry.
 func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
@@ -1023,9 +1023,8 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 		t.Fatalf("ListTools() error = %v", err)
 	}
 	wantTools := map[string]bool{
-		"gitlab_search_tools":   false,
-		"gitlab_describe_tools": false,
-		"gitlab_execute_tool":   false,
+		"gitlab_find_action":  false,
+		"gitlab_execute_tool": false,
 	}
 	for _, tool := range toolsResult.Tools {
 		if _, ok := wantTools[tool.Name]; !ok {
@@ -1124,8 +1123,8 @@ func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
 	}
 }
 
-// TestCreateServer_DynamicThreeToolSurface verifies the explicit current
-// three-tool dynamic selector remains equivalent to TOOL_SURFACE=dynamic.
+// TestCreateServer_DynamicThreeToolSurface verifies the explicit three-tool
+// dynamic selector remains available as TOOL_SURFACE=dynamic-3.
 func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3})
@@ -1173,8 +1172,8 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	}{
 		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
 		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
-		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true, wantDescribe: true},
-		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal, wantDescribe: true},
+		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
+		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal},
 		{name: "dynamic-2 full", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
 		{name: "dynamic-2 minimal", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceMinimal},
 		{name: "dynamic-3 full", toolSurface: config.ToolSurfaceDynamic3, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true, wantDescribe: true},
@@ -1325,7 +1324,7 @@ func assertDynamicDescribeIncludesSchema(t *testing.T, session *mcp.ClientSessio
 }
 
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
-// keeps discovery tools but removes execution from the dynamic surface.
+// keeps discovery but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
@@ -1334,8 +1333,7 @@ func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 		t.Fatalf("list dynamic read-only tools: %v", err)
 	}
 	wantTools := map[string]struct{}{
-		"gitlab_search_tools":   {},
-		"gitlab_describe_tools": {},
+		"gitlab_find_action": {},
 	}
 	gotTools := make(map[string]struct{}, len(toolsResult))
 	for _, tool := range toolsResult {
@@ -2166,7 +2164,7 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 	}{
 		{name: "meta", toolSurface: config.ToolSurfaceMeta, query: "project"},
 		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
-		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "search"},
+		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "find"},
 		{name: "dynamic-2", toolSurface: config.ToolSurfaceDynamic2, query: "find"},
 		{name: "dynamic-3", toolSurface: config.ToolSurfaceDynamic3, query: "search"},
 	}
@@ -3410,8 +3408,8 @@ func TestBuildServerCard_MinimalCapabilitySurface(t *testing.T) {
 		t.Fatalf("invalid JSON: %v", unmarshalErr)
 	}
 	toolsRaw, toolsOK := card["tools"].([]any)
-	if !toolsOK || len(toolsRaw) != 3 {
-		t.Fatalf("card tools = %d, want 3 dynamic tools", len(toolsRaw))
+	if !toolsOK || len(toolsRaw) != 2 {
+		t.Fatalf("card tools = %d, want 2 dynamic tools", len(toolsRaw))
 	}
 	resourcesRaw, resourcesOK := card["resources"].([]any)
 	if !resourcesOK || len(resourcesRaw) == 0 {

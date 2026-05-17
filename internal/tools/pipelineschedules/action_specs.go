@@ -42,34 +42,44 @@ func deleteVariableOutput(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 func pipelineScheduleReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(individualTool)
+	options := pipelineScheduleOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func pipelineScheduleCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, pipelineScheduleOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
 }
 
 func pipelineScheduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(individualTool)
+	options := pipelineScheduleOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func pipelineScheduleDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(individualTool)
+	options := pipelineScheduleOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func pipelineScheduleOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func pipelineScheduleOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"ci", "pipeline", "schedule"},
 		OpenWorld:      true,
 		OwnerPackage:   "pipelineschedules",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "schedule_create_variable" || actionName == "schedule_edit_variable" {
+		options.Usage = "Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"value": {
+				SemanticRole: "pipeline_schedule_variable_value",
+				ValueSource:  "Required variable value to store on the schedule; supply an explicit value even when the task only names the key.",
+			},
+		}
+	}
+	return options
 }

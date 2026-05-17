@@ -4,6 +4,7 @@ package releaselinks
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,6 +42,28 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_CreateBatchGuidance verifies batch release links expose
+// package-asset parameter guidance and schema descriptions.
+func TestActionSpecs_CreateBatchGuidance(t *testing.T) {
+	byTool := releaseLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, releaseLinksActionHandler())))
+	spec := byTool["gitlab_release_link_create_batch"]
+
+	if !strings.Contains(spec.Usage, "absolute URLs returned by package publish actions") {
+		t.Fatalf("Usage = %q, want package URL guidance", spec.Usage)
+	}
+	guidance := spec.ParameterGuidance["links"]
+	if guidance.SemanticRole != "release_asset_links" {
+		t.Fatalf("links SemanticRole = %q, want release_asset_links", guidance.SemanticRole)
+	}
+	if !containsText(guidance.CommonConfusions, "direct_asset_path") {
+		t.Fatalf("links CommonConfusions = %v, want unsupported field warning", guidance.CommonConfusions)
+	}
+	description := schemaPropertyDescription(t, spec.Route.InputSchema, "links")
+	if !strings.Contains(description, "supports only name, url, and link_type") {
+		t.Fatalf("links schema description = %q, want supported fields warning", description)
 	}
 }
 
@@ -153,4 +176,30 @@ func releaseLinkSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName string) string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("schema property %q = %T, want map[string]any", propertyName, properties[propertyName])
+	}
+	description, ok := property["description"].(string)
+	if !ok {
+		t.Fatalf("schema property %q description = %T, want string", propertyName, property["description"])
+	}
+	return description
+}
+
+func containsText(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

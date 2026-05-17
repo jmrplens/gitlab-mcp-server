@@ -87,6 +87,7 @@ type SearchOutput struct {
 	Count       int            `json:"count" jsonschema:"Number of returned matches."`
 	Results     []SearchResult `json:"results" jsonschema:"Matching GitLab catalog actions."`
 	Suggestions []string       `json:"suggestions,omitempty" jsonschema:"Small set of nearby tokens or common domains to try when no results matched."`
+	NextStep    string         `json:"next_step,omitempty" jsonschema:"Compact instruction for the next Dynamic-3 discovery step after search."`
 }
 
 // DescribeInput is the input for gitlab_describe_tools.
@@ -225,7 +226,7 @@ func addSearchTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         searchToolName,
 		Title:        "GitLab Search Tools",
-		Description:  "Search the canonical GitLab action catalog for the exact action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Then pass the returned canonical domain.action ID to gitlab_describe_tools or gitlab_execute_tool. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
+		Description:  "Search the canonical GitLab action catalog for the exact action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Results include required_params and next_step for choosing the next Dynamic-3 discovery step; use gitlab_describe_tools for the selected action when exact schema details are needed. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Search Tools"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -393,7 +394,7 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 		results = append(results, result)
 	}
 
-	output := SearchOutput{Query: query, Count: len(results), Results: results}
+	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results)}
 	if len(results) == 0 {
 		output.Suggestions = r.suggestSearchTokens(query, 6)
 	}
@@ -993,7 +994,7 @@ func dedupeSortedStrings(values []string) []string {
 }
 
 var searchSynonymsMap = map[string][]string{
-	"access":        {"token", "deploy", "member"},
+	"access":        {"token"},
 	"approve":       {"approval", "review", "feedback"},
 	"approved":      {"approval", "review", "approved"},
 	"artifact":      {"job", "download"},
@@ -2568,6 +2569,37 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 	}
 }
 
+func searchNextStep(results []SearchResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	top := results[0]
+	if top.LowConfidence || len(top.AmbiguousWith) > 0 {
+		return fmt.Sprintf("Top result %s needs confirmation; choose the intended canonical action ID, then call gitlab_describe_tools for that action before executing.", backtickString(top.ID))
+	}
+	if len(top.RequiredParams) == 0 {
+		return fmt.Sprintf("Top result %s has no required params. In Dynamic-3, call gitlab_describe_tools only if optional params or output shape matter; otherwise execute with params:{}.", backtickString(top.ID))
+	}
+	b := strings.Builder{}
+	fmt.Fprintf(&b, "Top result %s is high confidence. Call gitlab_describe_tools for %s to get exact parameter schema before executing", backtickString(top.ID), backtickString(top.ID))
+	fmt.Fprintf(&b, "; search only proves required params %s.", compactParamList(top.RequiredParams, 8))
+	if top.Destructive {
+		b.WriteString(" Because this action is destructive, execute later with top-level confirm:true only after explicit user approval.")
+	}
+	return b.String()
+}
+
+func compactParamList(params []string, limit int) string {
+	if len(params) == 0 {
+		return "none"
+	}
+	if limit <= 0 || len(params) <= limit {
+		return strings.Join(backtickStrings(params), ", ")
+	}
+	shown := strings.Join(backtickStrings(params[:limit]), ", ")
+	return fmt.Sprintf("%s, and %d more", shown, len(params)-limit)
+}
+
 func placeholderForParam(name string) any {
 	switch name {
 	case "project_id", "target_project_id":
@@ -2639,7 +2671,11 @@ func formatSearchOutput(output SearchOutput) string {
 			fmt.Fprintf(&b, "| `%s` | %t | %s |\n", result.ID, result.Destructive, required)
 		}
 	}
-	b.WriteString("\nCall `gitlab_describe_tools` with an action ID before executing it.\n")
+	if output.NextStep != "" {
+		fmt.Fprintf(&b, "\nNext step: %s\n", output.NextStep)
+	} else {
+		b.WriteString("\nUse `gitlab_describe_tools` only when the chosen action's full schema is still needed.\n")
+	}
 	return b.String()
 }
 

@@ -956,7 +956,7 @@ func classifySurface(source domainSource, coverage domainCoverage) string {
 func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	notes := make([]string, 0, 4)
 	if source.HasDynamicCatalogRegistration {
-		notes = append(notes, "dynamic search/describe/execute surface registered from the canonical action catalog")
+		notes = append(notes, "dynamic controller surface registered from the canonical action catalog")
 	}
 	if coverage.HasSurfaceSpecs {
 		notes = append(notes, fmt.Sprintf("%d explicit surface specs: %s", coverage.SurfaceSpecCount, strings.Join(coverage.SurfaceKinds, ",")))

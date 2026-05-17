@@ -22,16 +22,23 @@ const (
 	actionInteractiveIssueCreate         = "interactive.issue_create"
 	actionIssueLinkCreate                = "issue.link_create"
 	actionIssueNoteList                  = "issue.note_list"
+	actionIssueSpentTimeAdd              = "issue.spent_time_add"
+	actionIssueTimeEstimateSet           = "issue.time_estimate_set"
 	actionIssueUpdate                    = "issue.update"
 	actionJobList                        = "job.list"
+	actionMergeRequestEmojiMRCreate      = "merge_request.emoji_mr_create"
+	actionMergeRequestSpentTimeAdd       = "merge_request.spent_time_add"
 	actionMRReviewDraftNotePublishAll    = "mr_review.draft_note_publish_all"
 	actionPackageList                    = "package.list"
+	actionPackagePublishDirectory        = "package.publish_directory"
 	actionPipelineScheduleCreate         = "pipeline.schedule_create"
 	actionPipelineScheduleUpdate         = "pipeline.schedule_update"
 	actionProjectMemberAdd               = "project.member_add"
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
+	actionReleaseCreate                  = "release.create"
 	actionReleaseLinkCreate              = "release.link_create"
+	actionReleaseLinkCreateBatch         = "release.link_create_batch"
 	actionReleaseLinkDelete              = "release.link_delete"
 	actionReleaseLinkGet                 = "release.link_get"
 	actionReleaseLinkList                = "release.link_list"
@@ -116,20 +123,24 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("merge_request.emoji_award_delete", "merge_request.emoji_mr_delete"),
 		compatActionAlias("merge_request.emoji_mr_award_create", "merge_request.emoji_mr_create"),
 		compatActionAlias("merge_request.emoji_mr_award_delete", "merge_request.emoji_mr_delete"),
+		compatActionAlias("merge_request.award_emoji_add", actionMergeRequestEmojiMRCreate),
+		compatActionAlias("merge_request.award_emoji_create", actionMergeRequestEmojiMRCreate),
 		compatActionAlias("merge_request_note.create", "mr_review.note_create"),
 		compatActionAlias("merge_request_note.delete", "mr_review.note_delete"),
 		compatActionAlias("merge_request_note.get", "mr_review.note_get"),
 		compatActionAlias("merge_request_note.update", "mr_review.note_update"),
-		compatActionAlias("merge_request.add_spent_time", "merge_request.spent_time_add"),
+		compatActionAlias("merge_request.add_spent_time", actionMergeRequestSpentTimeAdd),
 		compatActionAlias("merge_request.set_time_estimate", "merge_request.time_estimate_set"),
 		compatActionAlias("merge_request.time_estimate", "merge_request.time_estimate_set"),
-		compatActionAlias("merge_request.time_spent_add", "merge_request.spent_time_add"),
+		compatActionAlias("merge_request.time_spent_add", actionMergeRequestSpentTimeAdd),
+		compatActionAlias("merge_request.time_spent_set", actionMergeRequestSpentTimeAdd),
 		compatActionAlias("mr_review.draft_notes_publish", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("mr_review.publish", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("package.files", "package.file_list"),
 		compatActionAlias("package.list_generic", actionPackageList),
 		compatActionAlias("personal_snippet.raw", "snippet.content"),
 		compatActionAlias("project.releases.list", "release.list"),
+		compatActionAlias("project.hook_create", "project.hook_add"),
 		compatActionAlias("project.hooks.list", "project.hook_list"),
 		compatActionAlias("project.member_remove", actionProjectMemberDelete),
 		compatActionAlias("project.member_update", actionProjectMemberEdit),
@@ -159,12 +170,21 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("merge_request.time_spent_reset", "merge_request.spent_time_reset"),
 		compatActionAlias("generic_package.list", actionPackageList),
 		compatActionAlias("issue_note.create", "issue.note_create"),
+		compatActionAlias("gitlab_release.create", actionReleaseCreate),
+		compatActionAlias("gitlab_release/create", actionReleaseCreate),
 		compatActionAlias("release.create_link", actionReleaseLinkCreate),
 		compatActionAlias("release.asset_link.create", actionReleaseLinkCreate),
 		compatActionAlias("release.asset_link.delete", "release.link_delete"),
 		compatActionAlias("release.asset_link.get", "release.link_get"),
 		compatActionAlias("release.asset_link.list", actionReleaseLinkList),
 		compatActionAlias("release.asset_link.update", "release.link_update"),
+		compatActionAlias("gitlab_release.link_create_batch", actionReleaseLinkCreateBatch),
+		compatActionAlias("gitlab_release/link_create_batch", actionReleaseLinkCreateBatch),
+		compatActionAlias("gitlab_release_link.link_create_batch", actionReleaseLinkCreateBatch),
+		compatActionAlias("gitlab_release_link/link_create_batch", actionReleaseLinkCreateBatch),
+		compatActionAlias("release_link.create_batch", actionReleaseLinkCreateBatch),
+		compatActionAlias("release_link.link_create", actionReleaseLinkCreate),
+		compatActionAlias("release_link.link_create_batch", actionReleaseLinkCreateBatch),
 		compatActionAlias("release_link.link_list", actionReleaseLinkList),
 		compatActionAlias("release.generate_notes", "analyze.release_notes"),
 		compatActionAlias("package.list_project", actionPackageList),
@@ -185,6 +205,10 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("repository.tag.delete", "tag.delete"),
 		compatActionAlias("runner.delete", "runner.remove"),
 		compatActionAlias("wiki.show", "wiki.get"),
+		compatActionAlias("generic_package.publish_directory", actionPackagePublishDirectory),
+		compatActionAlias("generic_packages.publish_directory", actionPackagePublishDirectory),
+		compatActionAlias("gitlab_package.publish_directory", actionPackagePublishDirectory),
+		compatActionAlias("gitlab_package/publish_directory", actionPackagePublishDirectory),
 		compatActionAlias("webhook.add", "project.hook_add"),
 		compatActionAlias("webhook.create", "project.hook_add"),
 		compatActionAlias("webhook.delete", "project.hook_delete"),

@@ -22,7 +22,7 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1014 self-managed Enterprise/Premium; 1019 on GitLab.com Enterprise/Premium with Orbit                     |
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
-| Dynamic-mode tools        | 3 dynamic tools (`gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
+| Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_tool`); `dynamic-3` keeps the three-tool search/describe/execute variant — see Dynamic toolset mode below |
 | MCP Resources             | 46                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
@@ -57,7 +57,7 @@ gitlab-mcp-server/
 │   ├── tools/                   # Tool orchestration layer + 165 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
-│   │   ├── dynamic/             # Low-token dynamic search/describe/execute surface over catalog routes
+│   │   ├── dynamic/             # Low-token dynamic find/execute and dynamic-3 search/describe/execute surfaces over catalog routes
 │   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
 │   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
 │   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
@@ -469,9 +469,9 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 ### Dynamic toolset mode
 
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` register only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. `dynamic-2` is an experimental two-tool surface (`gitlab_find_action` + `gitlab_execute_tool`) and should not be promoted unless explicitly requested.
+`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-2` register only `gitlab_find_action` and `gitlab_execute_tool`. `TOOL_SURFACE=dynamic-3` explicitly registers `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering. Meta-tools remain the default today; dynamic is the low-token find/execute alternative.
 
-Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds search/describe/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
+Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds find/execute over it, dynamic-3 builds search/describe/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
 Search combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should search, describe exact schemas, then execute the canonical action ID returned by search or describe. See `docs/dynamic-tools.md` and ADR-0011.
 
@@ -515,7 +515,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -d '{
 - **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: legacy `META_TOOLS=false` maps to `TOOL_SURFACE=individual`; prefer setting `TOOL_SURFACE=meta` explicitly
-- **Dynamic mode shows only three tools**: this is expected when `TOOL_SURFACE=dynamic` or `dynamic-3` is set. Use `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`; unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta` to return to default meta-tools.
+- **Dynamic mode shows only two tools**: this is expected when `TOOL_SURFACE=dynamic` or `dynamic-2` is set. Use `gitlab_find_action` and `gitlab_execute_tool`; unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta` to return to default meta-tools. Use `TOOL_SURFACE=dynamic-3` for the three-tool search/describe/execute variant.
 - **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler
 
@@ -559,7 +559,7 @@ The suite runs three sequential workflows:
 
 - **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → sampling → elicitation → cleanup)
 - **TestMetaToolWorkflow** (~151 subtests): exercises the same operations through meta-tools plus 15 additional domains (wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, milestones)
-- **TestDynamicToolSurface**: exercises the default dynamic three-tool search/describe/execute surface, including standalone project discovery, multi-intent search, and destructive-action confirmation guards. Run only this workflow in Docker mode after the Docker GitLab setup scripts complete:
+- **TestDynamicToolSurface**: exercises the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this workflow in Docker mode after the Docker GitLab setup scripts complete:
 
 	```bash
 	E2E_MODE=docker \

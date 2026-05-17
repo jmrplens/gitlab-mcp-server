@@ -31,7 +31,7 @@ Documented source-level exceptions are intentionally narrow:
 
 | Package | Reason |
 | --- | --- |
-| `internal/tools/dynamic/register.go` | Registers the dynamic search/describe/execute controller surface generated from the canonical catalog, not individual GitLab API tools |
+| `internal/tools/dynamic/register.go` | Registers the dynamic find/execute and dynamic-3 search/describe/execute controller surfaces generated from the canonical catalog, not individual GitLab API tools |
 | `internal/tools/serverupdate/action_specs.go` | Defines updater tool handlers that are registered from catalog surface specs with `*autoupdate.Updater`, outside the GitLab client action catalog |
 
 ## Parity Checklist

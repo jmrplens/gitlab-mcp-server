@@ -43,7 +43,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 165 domain sub-packages
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
-│   │   ├── dynamic/        # Low-token dynamic search/describe/execute tool surface
+│   │   ├── dynamic/        # Low-token dynamic find/execute and dynamic-3 search/describe/execute surfaces
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
 │   │   ├── issues/         # Issue CRUD tools
@@ -85,8 +85,8 @@ gitlab-mcp-server/
 - Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
-- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-3`) exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token search/describe/execute alternative. Keep `dynamic-2` experimental unless explicitly requested.
-- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
+- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-2`) exposes `gitlab_find_action` and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token find/execute alternative. Use `dynamic-3` to explicitly select the three-tool search/describe/execute surface.
+- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, dynamic-3 search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
 ### GitLab Integration

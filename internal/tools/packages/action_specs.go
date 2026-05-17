@@ -41,28 +41,45 @@ func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *git
 }
 
 func packageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := packageOptions(individualTool)
+	options := packageOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func packageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, packageOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, packageOptions(name, individualTool))
 }
 
 func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := packageOptions(individualTool)
+	options := packageOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func packageOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"package"},
 		OpenWorld:      true,
 		OwnerPackage:   "packages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "publish_directory" {
+		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list."
+		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files"}
+		options.Tags = append(options.Tags, "generic_package", "directory_upload")
+		options.RelatedActions = []string{"release.create", "release.link_create_batch", "package.publish"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"include_pattern": {
+				SemanticRole: "single_glob_filter",
+				ValueSource:  "Optional single glob matched against file names inside directory_path; omit it to include all regular files.",
+				CommonConfusions: []string{
+					"Do not pass comma-separated filenames.",
+					"Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.",
+				},
+			},
+		}
+	}
+	return options
 }

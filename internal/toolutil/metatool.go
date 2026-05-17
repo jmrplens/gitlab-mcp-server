@@ -1996,7 +1996,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	}
 	sort.Strings(actions)
 	exampleAction := metaToolExampleAction(actions)
-	guidance := metaToolParameterGuidanceSummary(routes, actions)
+	guidance := metaToolActionGuidanceSummary(routes, actions) + metaToolParameterGuidanceSummary(routes, actions)
 	return fmt.Sprintf(
 		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.%s\n\n",
 		exampleAction, toolName,
@@ -2011,6 +2011,22 @@ func metaToolExampleAction(sortedActions []string) string {
 		}
 	}
 	return sortedActions[0]
+}
+
+func metaToolActionGuidanceSummary(routes ActionMap, actionNames []string) string {
+	var lines []string
+	for _, action := range actionNames {
+		usage := strings.TrimSpace(routes[action].Usage)
+		if usage == "" {
+			continue
+		}
+		usage = strings.Join(strings.Fields(usage), " ")
+		lines = append(lines, fmt.Sprintf("- %s: %s", action, usage))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\nAction guidance:\n" + strings.Join(lines, "\n")
 }
 
 func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) string {
@@ -2067,7 +2083,11 @@ func StripMetaToolDescriptionPrefix(description string) string {
 	}
 
 	start := 2
-	if start < len(lines) && strings.TrimSpace(lines[start]) == "Parameter guidance:" {
+	for start < len(lines) {
+		section := strings.TrimSpace(lines[start])
+		if section != "Action guidance:" && section != "Parameter guidance:" {
+			break
+		}
 		start++
 		for start < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[start]), "- ") {
 			start++

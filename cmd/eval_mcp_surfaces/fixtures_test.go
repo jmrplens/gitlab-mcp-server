@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,6 +37,11 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		SnippetID:              26,
 		CleanupReleaseTag:      "v0.0.0-eval-delete",
 		ReleaseSummaryTag:      "v0.0.0-eval-summary",
+		PackageReleaseName:     liveFixturePackageReleaseName,
+		PackageReleaseVersion:  liveFixturePackageReleaseVersion,
+		PackageReleaseTag:      liveFixturePackageReleaseTag,
+		PackageReleaseDir:      "/tmp/package-release-files",
+		PackageReleaseFiles:    []string{"app-linux.txt", "checksums.txt"},
 	}
 	tasks := []evalTask{
 		{ID: "MT-013", Prompt: "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`."},
@@ -53,6 +60,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MS-012", Prompt: "Compare refs `main` and `v0.0.0-eval-ms` in project `my-org/tools/gitlab-mcp-server`."},
 		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
 		{ID: "MT-174", Prompt: "Schedule a storage move for numeric snippet ID `44` to shard `default`."},
+		{ID: taskPackageReleaseID, Prompt: "Publish files `__PACKAGE_RELEASE_FILES__` from `__PACKAGE_RELEASE_DIR__` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -77,6 +85,40 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[13].Prompt, "`v0.0.0-eval-summary`")
 	assertContains(t, got[14].Prompt, "MR `25`")
 	assertContains(t, got[15].Prompt, "numeric snippet ID `26`")
+	assertContains(t, got[16].Prompt, "`app-linux.txt, checksums.txt`")
+	assertContains(t, got[16].Prompt, "`/tmp/package-release-files`")
+	assertContains(t, got[16].Prompt, "`eval-release-package`")
+	assertContains(t, got[16].Prompt, "`0.1.0`")
+	assertContains(t, got[16].Prompt, "`v0.0.0-eval-packages`")
+}
+
+// TestEnsurePackageReleaseFixtureFiles_WritesLocalFiles verifies package release fixture file creation.
+func TestEnsurePackageReleaseFixtureFiles_WritesLocalFiles(t *testing.T) {
+	state := &liveFixtureState{}
+	fixturesPath := filepath.Join(t.TempDir(), "state", "e2e-fixtures.json")
+
+	if err := ensurePackageReleaseFixtureFiles(state, fixturesPath); err != nil {
+		t.Fatalf("ensurePackageReleaseFixtureFiles() error = %v", err)
+	}
+
+	if !filepath.IsAbs(state.PackageReleaseDir) {
+		t.Fatalf("PackageReleaseDir = %q, want absolute path", state.PackageReleaseDir)
+	}
+	if len(state.PackageReleaseFiles) != len(packageReleaseFixtureFiles) || len(state.PackageReleasePaths) != len(packageReleaseFixtureFiles) {
+		t.Fatalf("fixture file counts = %d/%d, want %d", len(state.PackageReleaseFiles), len(state.PackageReleasePaths), len(packageReleaseFixtureFiles))
+	}
+	for _, path := range state.PackageReleasePaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read fixture file %s: %v", path, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("fixture file %s is empty", path)
+		}
+	}
+	assertContains(t, state.PackageReleaseName, liveFixturePackageReleaseName)
+	assertContains(t, state.PackageReleaseVersion, liveFixturePackageReleaseVersion)
+	assertContains(t, state.PackageReleaseTag, liveFixturePackageReleaseTag)
 }
 
 // TestFilterTasksByLiveFixtureState_SkipsMissingJobResources verifies that missing Docker job fixtures do not become model failures.

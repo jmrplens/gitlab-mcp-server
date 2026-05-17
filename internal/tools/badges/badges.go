@@ -159,7 +159,7 @@ type EditProjectInput struct {
 	BadgeID   int64                `json:"badge_id" jsonschema:"Badge ID,required"`
 	LinkURL   string               `json:"link_url,omitempty" jsonschema:"New badge link URL"`
 	ImageURL  string               `json:"image_url,omitempty" jsonschema:"New badge image URL"`
-	Name      string               `json:"name,omitempty" jsonschema:"New badge name"`
+	Name      string               `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name"`
 }
 
 // EditProjectOutput is the output after editing a project badge.
@@ -354,7 +354,7 @@ type EditGroupInput struct {
 	BadgeID  int64                `json:"badge_id" jsonschema:"Badge ID,required"`
 	LinkURL  string               `json:"link_url,omitempty" jsonschema:"New badge link URL"`
 	ImageURL string               `json:"image_url,omitempty" jsonschema:"New badge image URL"`
-	Name     string               `json:"name,omitempty" jsonschema:"New badge name"`
+	Name     string               `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name"`
 }
 
 // EditGroupOutput is the output after editing a group badge.

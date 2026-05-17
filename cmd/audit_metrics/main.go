@@ -302,7 +302,7 @@ func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actionc
 // catalog action routes and returns the advertised tool definitions.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000})
-	dynamictools.RegisterCatalogTools(server, catalog)
+	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
 }
 

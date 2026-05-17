@@ -721,6 +721,9 @@ func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic2); got != 1 {
 		t.Fatalf("repairAttemptLimitForSurface(dynamic-2) = %d, want 1", got)
 	}
+	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic); got != 1 {
+		t.Fatalf("repairAttemptLimitForSurface(dynamic) = %d, want 1", got)
+	}
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceMeta); got != 1 {
 		t.Fatalf("repairAttemptLimitForSurface(meta) = %d, want 1", got)
 	}
@@ -818,8 +821,8 @@ func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
 }
 
 // TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes verifies dynamic
-// mode advertises only the low-token public tools while retaining catalog routes
-// for validation and execution.
+// mode advertises the default low-token public tools while retaining catalog
+// routes for validation and execution.
 func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
 	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic)
@@ -833,8 +836,8 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
-		t.Fatalf("dynamic catalog tools = %q, want search/describe/execute", got)
+	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
+		t.Fatalf("dynamic catalog tools = %q, want find/execute", got)
 	}
 	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
 		t.Fatal("dynamic validation routes missing project.get")
@@ -848,7 +851,7 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 }
 
 // TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes verifies dynamic-3 keeps
-// the same three-tool surface and executable validation routes as dynamic mode.
+// the explicit three-tool surface and executable validation routes.
 func TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
 	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic3)
@@ -934,7 +937,7 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	system := systemPromptForTask(task, config.ToolSurfaceDynamic3)
 	requireContainsAll(t, "systemPromptForTask()", system, []string{
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first.",
-		"If the exact required params are not literally known from the prompt, call gitlab_describe_tools before gitlab_execute_tool.",
+		"After gitlab_search_tools, follow its next_step field; for high-confidence actions with required params, describe the selected action before executing.",
 		"Canonical action IDs use domain.action without the gitlab_ tool prefix",
 		"params is always required, even when empty",
 		"runner.delete_registered when the prompt gives numeric runner_id",
@@ -943,7 +946,7 @@ func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testi
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool.",
-		"If the exact required params are not literally known, call gitlab_describe_tools before gitlab_execute_tool.",
+		"After search, follow next_step; for high-confidence actions with required params, call gitlab_describe_tools for that selected action before executing.",
 		"params limited to the described input schema",
 		"Always include top-level params",
 		"Canonical action IDs do not include gitlab_ prefixes",
@@ -984,8 +987,24 @@ func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T)
 		"2. action=issue.list; required_params=project_id",
 		"Dynamic call budget: expected_steps=2; allowed_discovery_calls=1",
 	})
-	if strings.Contains(taskPromptForSurface(task, config.ToolSurfaceDynamic2), "Dynamic workflow plan:") {
-		t.Fatal("Dynamic-2 prompt unexpectedly received Dynamic-3 workflow plan")
+	dynamic2Prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic2)
+	requireContainsAll(t, "taskPromptForSurface(dynamic-2)", dynamic2Prompt, []string{
+		"Dynamic workflow plan:",
+		"1. action=issue.create; required_params=project_id, title",
+		"2. action=issue.list; required_params=project_id",
+		"do not call dynamic discovery tools such as gitlab_find_action",
+	})
+	if strings.Contains(dynamic2Prompt, "Dynamic call budget:") {
+		t.Fatal("Dynamic-2 prompt unexpectedly received Dynamic-3 call budget")
+	}
+	dynamicPrompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	requireContainsAll(t, "taskPromptForSurface(dynamic)", dynamicPrompt, []string{
+		"Dynamic workflow plan:",
+		"Dynamic-2 mode override",
+		"gitlab_find_action and gitlab_execute_tool",
+	})
+	if strings.Contains(dynamicPrompt, "Dynamic call budget:") {
+		t.Fatal("Dynamic prompt unexpectedly received Dynamic-3 call budget")
 	}
 }
 
@@ -1189,6 +1208,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) 
 		`"order_by":"updated_at"`,
 		`"sort":"desc"`,
 		`"per_page":10`,
+		"Preserve Dynamic-3 separation",
 		"execute it directly without an extra describe call",
 	})
 }
@@ -1223,7 +1243,7 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.
 		`"action":"pipeline.schedule_create"`,
 		`"description":"eval-crud-schedule"`,
 		`"active":false`,
-		"The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_search_tools or gitlab_describe_tools for these planned actions.",
+		"The listed action IDs and required params are the compact schema for this scenario; do not call dynamic discovery tools such as gitlab_find_action, gitlab_search_tools, or gitlab_describe_tools for these planned actions.",
 		"Values named *_id that are produced by earlier steps must be copied from the preceding tool result.",
 		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
 		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.",
@@ -1525,6 +1545,28 @@ func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T)
 	if !strings.Contains(content, `"note_id":104`) {
 		t.Fatalf("successfulSimulatedToolContent(alias) = %s, want note_id", content)
 	}
+}
+
+// TestSuccessfulSimulatedToolContent_IncludesPackageDirectoryURLs verifies simulated package publishes include usable URLs.
+func TestSuccessfulSimulatedToolContent_IncludesPackageDirectoryURLs(t *testing.T) {
+	content := successfulSimulatedToolContent(evalStep{ExpectedTool: "gitlab_package", ExpectedAction: "publish_directory"}, modelContentBlock{
+		Name: "gitlab_package",
+		Input: map[string]any{
+			"action": "publish_directory",
+			"params": map[string]any{
+				"project_id":      liveFixtureProjectPath,
+				"package_name":    liveFixturePackageReleaseName,
+				"package_version": liveFixturePackageReleaseVersion,
+				"directory_path":  "/tmp/package-release-files",
+			},
+		},
+	}, 2, 3)
+
+	requireContainsAll(t, "successfulSimulatedToolContent()", content, []string{
+		`"published"`,
+		`"file_name":"checksums.txt"`,
+		`"url":"https://gitlab.example.com/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/packages/generic/eval-release-package/0.1.0/checksums.txt"`,
+	})
 }
 
 // newEvalTestClient constructs eval test client test fixtures.
@@ -2431,6 +2473,54 @@ func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
 	}
 }
 
+// TestTaskPrompt_PackageReleaseWorkflowUsesExactOrder verifies package publishing and release linking guidance.
+func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrder(t *testing.T) {
+	task := evalTask{
+		ID:     taskPackageReleaseID,
+		Prompt: "Publish local fixture files to Generic Packages, then create a release, and link each uploaded package file to that release as a package asset.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_package", ExpectedAction: "publish_directory", RequiredParams: []string{"project_id", "package_name", "package_version", "directory_path"}},
+			{ExpectedTool: "gitlab_release", ExpectedAction: "create", RequiredParams: []string{"project_id", "tag_name", "ref"}},
+			{ExpectedTool: "gitlab_release", ExpectedAction: "link_create_batch", RequiredParams: []string{"project_id", "tag_name", "links"}},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	requireContainsAll(t, "taskPrompt()", prompt, []string{
+		"follow exactly this order: gitlab_package/publish_directory, gitlab_release/create, gitlab_release/link_create_batch",
+		"Omit params.include_pattern for this task",
+		"never a comma-separated file list",
+		"Use the returned published[].url values as links[].url",
+		"set each links[].link_type to \"package\"",
+		"do not construct package URLs manually",
+		"Create the release from params.ref=\"main\" before link_create_batch",
+		"do not send direct_asset_path or filepath",
+	})
+}
+
+// TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic3 verifies package
+// release guidance is preserved after dynamic action normalization.
+func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic3(t *testing.T) {
+	task := evalTask{
+		ID:     taskPackageReleaseID,
+		Prompt: "Publish local fixture files to Generic Packages, then create a release, and link each uploaded package file to that release as a package asset.",
+		Steps: []evalStep{
+			{ExpectedTool: dynamicExecuteTool, ExpectedAction: "package.publish_directory", RequiredParams: []string{"project_id", "package_name", "package_version", "directory_path"}},
+			{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.create", RequiredParams: []string{"project_id", "tag_name", "ref"}},
+			{ExpectedTool: dynamicExecuteTool, ExpectedAction: "release.link_create_batch", RequiredParams: []string{"project_id", "tag_name", "links"}},
+		},
+	}
+
+	prompt := taskPromptForSurface(task, "dynamic-3")
+	requireContainsAll(t, "taskPromptForSurface(dynamic-3)", prompt, []string{
+		"Dynamic workflow plan:",
+		"action=package.publish_directory",
+		"Use the returned published[].url values as links[].url",
+		"set each links[].link_type to \"package\"",
+		"do not send direct_asset_path or filepath",
+	})
+}
+
 // TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder verifies TaskPrompt when merge request time emoji uses exact order.
 func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
 	task := evalTask{
@@ -2693,6 +2783,8 @@ func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(
 		"do not call gitlab_discover_project or gitlab_project first",
 		"Use description, not name, for the schedule display label",
 		"never send masked or protected",
+		`use params.value="schedule-value-1" for schedule_create_variable`,
+		`params.value="schedule-value-2" for schedule_edit_variable`,
 		"Use the returned id as params.schedule_id",
 		"Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface",
 	} {
@@ -2719,6 +2811,8 @@ func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 		`call the standalone tool with top-level remote_url only`,
 		`{"remote_url":"<remote_url>"}`,
 		"do not send action, params, project_id, or ref to gitlab_discover_project",
+		"call gitlab_project/get to verify metadata before calling gitlab_repository/file_get",
+		"do not skip the project metadata verification step",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want discover_project guidance containing %q", prompt, want)
@@ -2746,6 +2840,8 @@ func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
 	prompt := taskPrompt(task)
 	for _, want := range []string{
 		`params.user_xids is a comma-separated string such as "u1,u2", not an array`,
+		"Use the returned iid as params.user_list_iid",
+		"do not use the user-list name for those lookup/delete actions",
 		"omit params.strategies unless the task gives an exact strategies JSON string",
 		`must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object`,
 	} {
@@ -2827,7 +2923,7 @@ func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
 					{ExpectedTool: "gitlab_project", ExpectedAction: "badge_delete", RequiredParams: []string{"project_id", "badge_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 				},
 			},
-			wants: []string{"badge_add requires valid absolute params.link_url and params.image_url", "https://example.com/eval-badge", "https://example.com/eval-badge.svg"},
+			wants: []string{"badge_add requires valid absolute params.link_url and params.image_url", "https://example.com/eval-badge", "https://example.com/eval-badge.svg", "badge_edit uses params.name", "never send new_name"},
 		},
 		{
 			name: "branch unprotect",
@@ -3010,7 +3106,7 @@ func TestTaskPrompt_AdminSettingsUsesDispatcherDirectly(t *testing.T) {
 	}
 
 	prompt := taskPrompt(task)
-	if !strings.Contains(prompt, `"action":"admin.settings_get","params":{}`) || !strings.Contains(prompt, "do not call gitlab_server") || !strings.Contains(prompt, "do not look up a schema") {
+	if !strings.Contains(prompt, `gitlab_admin with {"action":"settings_get","params":{}}`) || !strings.Contains(prompt, "gitlab_server") || !strings.Contains(prompt, "schema lookup") {
 		t.Fatalf("taskPrompt() = %q, want direct admin.settings_get guidance", prompt)
 	}
 }

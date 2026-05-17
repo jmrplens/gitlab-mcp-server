@@ -416,6 +416,7 @@ These rows are designed for Docker-backed model runs with `--prepare-fixtures --
 | MS-035 | Exercise group label lifecycle in group `my-org`: create label `eval-group-label` with color `#1f75cb`, fetch it by label ID or name, rename it to `eval-group-label-v2`, then delete it. | `gitlab_group` / `group_label_create` -> `gitlab_group` / `group_label_get` -> `gitlab_group` / `group_label_update` -> `gitlab_group` / `group_label_delete` | `group_id`, `name`, `color`; `group_id`, `label_id`; `group_id`, `label_id`; `group_id`, `label_id` | `description`, `priority`; none; `new_name`, `color`, `description`; `confirm` | 4 | The model uses `label_id` for get/update/delete even when the prompt provides a label name. |
 | MS-036 | Exercise group milestone lifecycle in group `my-org`: create milestone `Evaluation Group Milestone` with due date `2026-12-31`, fetch it using the returned milestone IID, update title to `Evaluation Group Milestone v2`, then delete it. | `gitlab_group` / `group_milestone_create` -> `gitlab_group` / `group_milestone_get` -> `gitlab_group` / `group_milestone_update` -> `gitlab_group` / `group_milestone_delete` | `group_id`, `title`; `group_id`, `milestone_iid`; `group_id`, `milestone_iid`; `group_id`, `milestone_iid` | `description`, `due_date`; none; `title`, `description`, `state_event`; `confirm` | 4 | Group milestone IID is carried through read, update, and confirmed delete. |
 | MS-037 | Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: get the project, list branches, list tags, list releases, list the repository tree at `main`, list project CI variables, list deploy keys, list deploy tokens, then list generic packages. | `gitlab_project` / `get` -> `gitlab_branch` / `list` -> `gitlab_tag` / `list` -> `gitlab_release` / `list` -> `gitlab_repository` / `tree` -> `gitlab_ci_variable` / `list` -> `gitlab_access` / `deploy_key_list_project` -> `gitlab_access` / `deploy_token_list_project` -> `gitlab_package` / `list` | `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id` | none; `per_page`; `per_page`; `per_page`; `ref`, `path`, `per_page`; `page`, `per_page`; `page`, `per_page`; `page`, `per_page`; `package_type`, `per_page` | none | Read-only list/get routes across repository, CI, access, and package domains all use the same project identifier. |
+| MS-038 | Publish the local fixture files `__PACKAGE_RELEASE_FILES__` from directory `__PACKAGE_RELEASE_DIR__` to GitLab Generic Packages in project `my-org/tools/gitlab-mcp-server` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__` from ref `main` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually. | `gitlab_package` / `publish_directory` -> `gitlab_release` / `create` -> `gitlab_release` / `link_create_batch` | `project_id`, `package_name`, `package_version`, `directory_path`; `project_id`, `tag_name`, `ref`; `project_id`, `tag_name`, `links` | `include_pattern`; `name`, `description`; none | none | Multiple local files are uploaded to Generic Packages, the release is created from `main`, and release asset links use the URLs returned by package publishing. |
 
 ## Failure Simulation Scenario Fixture
 
@@ -434,10 +435,10 @@ These rows use an extra `Simulation by step` column. The harness validates the m
 | Area | Cases |
 | --- | ---: |
 | Single-operation meta-tool cases | 179 |
-| Multi-step workflow scenarios | 37 |
+| Multi-step workflow scenarios | 38 |
 | Failure simulation scenarios | 5 |
-| Total automated cases | 221 |
-| Expected tool operations across all cases | 362 |
+| Total automated cases | 222 |
+| Expected tool operations across all cases | 365 |
 | Catalog tools covered | 48 / 48 |
 
 ## Maintenance Rules

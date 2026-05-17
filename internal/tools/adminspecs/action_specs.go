@@ -36,7 +36,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminCreateSpec("topic_create", toolutil.RouteAction(client, topics.Create), "gitlab_create_topic"),
 		adminUpdateSpec("topic_update", toolutil.RouteAction(client, topics.Update), "gitlab_update_topic"),
 		adminDeleteSpec("topic_delete", toolutil.DestructiveVoidAction(client, topics.Delete), "gitlab_delete_topic"),
-		adminReadSpec("settings_get", toolutil.RouteAction(client, settings.Get), "gitlab_get_settings"),
+		adminSettingsGetSpec(client),
 		adminUpdateSpec("settings_update", toolutil.RouteAction(client, settings.Update), "gitlab_update_settings"),
 		adminReadSpec("appearance_get", toolutil.RouteAction(client, appearance.Get), "gitlab_get_appearance"),
 		adminUpdateSpec("appearance_update", toolutil.RouteAction(client, appearance.Update), "gitlab_update_appearance"),
@@ -74,7 +74,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminCreateSpec("application_create", toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
 		adminDeleteSpec("application_delete", toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
 		adminReadSpec("app_statistics_get", toolutil.RouteAction(client, appstatistics.Get), "gitlab_get_application_statistics"),
-		adminReadSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), "gitlab_get_metadata"),
+		adminMetadataGetSpec(client),
 		adminReadSpec("custom_attr_list", toolutil.RouteAction(client, customattributes.List), "gitlab_list_custom_attributes"),
 		adminReadSpec("custom_attr_get", toolutil.RouteAction(client, customattributes.Get), "gitlab_get_custom_attribute"),
 		adminUpdateCreateIndividualSpec("custom_attr_set", toolutil.RouteAction(client, customattributes.Set), "gitlab_set_custom_attribute"),
@@ -170,6 +170,26 @@ func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
 	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
+}
+
+func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_get_settings")
+	options.ReadOnly = true
+	options.Idempotent = true
+	options.Usage = "Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information."
+	options.Aliases = []string{"application settings", "instance settings", "current settings", "admin settings", "gitlab settings"}
+	options.Tags = append(options.Tags, "settings", "application_settings")
+	return toolutil.NewActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
+}
+
+func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_get_metadata")
+	options.ReadOnly = true
+	options.Idempotent = true
+	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
+	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
+	options.Tags = append(options.Tags, "metadata", "version")
+	return toolutil.NewActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {

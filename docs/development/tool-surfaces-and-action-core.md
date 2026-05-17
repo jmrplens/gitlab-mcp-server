@@ -14,8 +14,8 @@ GitLab business logic.
 | --- | --- | ---: | --- |
 | Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) | One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
 | Meta-tools | default, `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
-| Dynamic / dynamic-3 | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Canonical action catalog |
-| Dynamic-2 | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
+| Dynamic / dynamic-2 | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
+| Dynamic-3 | `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Canonical action catalog |
 
 Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
 over the same action core. Domain packages still own typed handlers,
@@ -84,7 +84,7 @@ and `repository.file_get`.
 Every normal GitLab API action in the catalog is now backed by an `ActionSpec`.
 Every normal individual GitLab API tool derives its MCP metadata from an
 `ActionSpec` projection. The only documented source-level exceptions are the
-dynamic catalog search/describe/execute surface and the server auto-update
+dynamic catalog find/execute and dynamic-3 search/describe/execute surfaces and the server auto-update
 surface, which is wired from `cmd/server` with an updater instead of a GitLab
 client.
 Standalone dynamic actions such as `discover_project.resolve` and interactive

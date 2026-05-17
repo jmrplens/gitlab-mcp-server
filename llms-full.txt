@@ -1,10 +1,10 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.6.1 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
+> Version 1.6.1 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
-Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`. It exposes `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` over the same canonical action catalog used by the default meta-tool catalog. Models should search for candidate actions, describe selected actions for exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-2` remains a parked comparison surface with `gitlab_find_action` plus `gitlab_execute_tool`.
+Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-2`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the default meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-3` remains an explicit compatibility selector with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
 
 ## Meta-Tools
 
@@ -17,7 +17,17 @@ operations under a single tool with an `action` parameter.
 
 Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_access/<action>.
+Action guidance:
+- deploy_key_delete: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_key_enable: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_key_get: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
 Parameter guidance:
+- deploy_key_delete.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_get.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
 - deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
 
@@ -470,6 +480,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"alert_metric_image_delete","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_admin/<action>.
+Action guidance:
+- metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.
+- settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -1453,6 +1466,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_branch/<action>.
+Action guidance:
+- rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
@@ -2096,6 +2111,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"feature_flag_create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_feature_flags/<action>.
+Action guidance:
+- ff_user_list_delete: Read, update, or delete a feature flag user list by its user_list_iid returned from list or create operations.
+- ff_user_list_get: Read, update, or delete a feature flag user list by its user_list_iid returned from list or create operations.
+- ff_user_list_update: Read, update, or delete a feature flag user list by its user_list_iid returned from list or create operations.
+Parameter guidance:
+- ff_user_list_delete.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
+- ff_user_list_get.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
+- ff_user_list_update.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
 
 Manage project feature flags and feature-flag user lists for gradual rollouts. Delete is destructive; setting active=false disables the flag but preserves history.
 When to use: define rollout strategies (percentage, user-targeted, environment-scoped) for a project's feature flags, and manage the user lists referenced by `gitlabUserList` strategies.
@@ -2215,6 +2238,21 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group/<action>.
+Action guidance:
+- badge_add: Add a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- badge_delete: Delete a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- badge_edit: Edit a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project. Use the parameter name name for a new badge name; new_name is not supported.
+- badge_get: Get a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- badge_list: List group badges. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- badge_preview: Preview a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+Parameter guidance:
+- badge_add.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- badge_delete.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- badge_edit.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- badge_edit.name: badge_display_name; source: Optional replacement badge name. The parameter is named name.; avoid: Do not send new_name; badge_edit accepts name, link_url, and image_url.
+- badge_get.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- badge_list.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- badge_preview.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
@@ -3556,6 +3594,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
+Action guidance:
+- link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
 Parameter guidance:
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
 - link_create.project_id: source_project; source: Project that owns the source issue.; avoid: Use target_project_id for the linked issue's project when it differs.
@@ -4161,6 +4201,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_job/<action>.
+Action guidance:
+- token_scope_remove_project: Use when removing a target project from another project's CI job token inbound allowlist.
 Parameter guidance:
 - token_scope_remove_project.project_id: scope_owner_project; source: Owning project whose CI job token allowlist is being changed.; avoid: Do not use the project being removed as project_id.
 - token_scope_remove_project.target_project_id: target_project; source: Project being removed from or added to the allowlist.; avoid: Do not put the allowlist owner project here.
@@ -4413,6 +4455,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
+Action guidance:
+- create: Use to open a merge request from a source branch into the target branch in a project.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
@@ -5235,6 +5279,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_package/<action>.
+Action guidance:
+- publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list.
+Parameter guidance:
+- publish_directory.include_pattern: single_glob_filter; source: Optional single glob matched against file names inside directory_path; omit it to include all regular files.; avoid: Do not pass comma-separated filenames., Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
 When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
@@ -5489,6 +5537,12 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
+Action guidance:
+- schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+- schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+Parameter guidance:
+- schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
+- schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -5815,6 +5869,21 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_project/<action>.
+Action guidance:
+- badge_add: Add a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- badge_delete: Delete a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- badge_edit: Edit a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD. Use the parameter name name for a new badge name; new_name is not supported.
+- badge_get: Get a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- badge_list: List project badges. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- badge_preview: Preview a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+Parameter guidance:
+- badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- badge_edit.name: badge_display_name; source: Optional replacement badge name. The parameter is named name.; avoid: Do not send new_name; badge_edit accepts name, link_url, and image_url.
+- badge_edit.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- badge_get.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- badge_list.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- badge_preview.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -6950,6 +7019,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_release/<action>.
+Action guidance:
+- link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
+Parameter guidance:
+- link_create_batch.links: release_asset_links; source: Array of link objects. Each item supports only name, url, and link_type; url must be absolute.; avoid: Do not send direct_asset_path or filepath to link_create_batch., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
@@ -7089,6 +7162,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"archive","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_repository/<action>.
+Action guidance:
+- compare: Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.
 
 Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
 	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
@@ -10150,6 +10225,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"graph_status","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_orbit/<action>.
+Action guidance:
+- graph_status: Inspect experimental GitLab Orbit graph indexing status for one scope.
+- query: Execute a read-only experimental GitLab Orbit Knowledge Graph query.
+- schema: Inspect the experimental GitLab Orbit Knowledge Graph ontology.
+- status: Inspect experimental GitLab Orbit cluster health on GitLab.com.
+- tools: List the experimental GitLab Orbit MCP tool manifest and parameter schemas.
 
 GitLab orbit actions.
 
@@ -10255,6 +10336,12 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_security_attribute/<action>.
+Action guidance:
+- bulk_update: Apply security attributes to many groups and projects in one request.
+- create: Create security attributes under an existing security category.
+- delete: Delete an editable custom security attribute.
+- project_update: Add or remove security attributes on a project.
+- update: Update security attribute metadata.
 
 Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
 Returns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.
@@ -10319,6 +10406,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"create","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_security_category/<action>.
+Action guidance:
+- create: Create a security category before creating security attributes under it.
+- delete: Delete a custom security category and its associated attributes.
+- update: Update editable custom security category metadata.
 
 Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.
 Returns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.
@@ -12567,7 +12658,7 @@ Remove a deploy key from a GitLab project.
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `deploy_key_id` (integer) (required): Deploy key ID
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12578,7 +12669,7 @@ Enable an existing deploy key for a project (e.g., a key shared from another pro
 
 **Parameters:**
 
-- `deploy_key_id` (integer) (required): Deploy key ID to enable
+- `deploy_key_id` (integer) (required): Deploy key ID to enable; do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -12589,7 +12680,7 @@ Get a specific deploy key for a project by its ID.
 
 **Parameters:**
 
-- `deploy_key_id` (integer) (required): Deploy key ID
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -12637,7 +12728,7 @@ Update an existing deploy key's title or push access permission.
 **Parameters:**
 
 - `can_push` (boolean): Whether the key can push to the project
-- `deploy_key_id` (integer) (required): Deploy key ID
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 - `title` (string): New deploy key title
 
@@ -12969,7 +13060,7 @@ Edit an existing group badge.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `image_url` (string): New badge image URL
 - `link_url` (string): New badge link URL
-- `name` (string): New badge name
+- `name` (string): New badge name. Use name, not new_name
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -12982,7 +13073,7 @@ Edit an existing project badge.
 - `badge_id` (integer) (required): Badge ID
 - `image_url` (string): New badge image URL
 - `link_url` (string): New badge link URL
-- `name` (string): New badge name
+- `name` (string): New badge name. Use name, not new_name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -13423,7 +13514,7 @@ Delete a feature flag user list.
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -13434,7 +13525,7 @@ Get a single feature flag user list by IID.
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13459,7 +13550,7 @@ Update a feature flag user list.
 
 - `name` (string): New user list name
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
 - `user_xids` (string): Comma-separated list of user external IDs
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -19418,7 +19509,7 @@ Batch-upload all matching files from a local directory to the Generic Package Re
 **Parameters:**
 
 - `directory_path` (string) (required): Absolute path to a local directory whose files will be published
-- `include_pattern` (string): Glob pattern to filter files within the directory (e.g. *.tar.gz). If omitted, all regular files are included.
+- `include_pattern` (string): Single glob pattern to filter files within the directory (e.g. *.txt or *.tar.gz). If omitted, all regular files are included. Do not pass comma-separated filenames.
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -19732,7 +19823,7 @@ Create a new variable for a pipeline schedule. Variables are passed to pipelines
 - `key` (string) (required): Variable key
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
-- `value` (string) (required): Variable value
+- `value` (string) (required): Variable value. Required when creating a schedule variable
 - `variable_type` (string): Variable type: env_var (default) or file
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -19771,7 +19862,7 @@ Edit an existing pipeline schedule variable by key. Updates the value and option
 - `key` (string) (required): Variable key to edit
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
-- `value` (string) (required): New variable value
+- `value` (string) (required): New variable value. Required when editing a schedule variable
 - `variable_type` (string): Variable type: env_var or file
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -21554,7 +21645,7 @@ Add multiple asset links to a GitLab release in a single call. Use this instead 
 
 **Parameters:**
 
-- `links` (array of objects) (required): Array of links to create (each with name and url required)
+- `links` (array of objects) (required): Array of release asset links. Each item supports only name, url, and link_type.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
 

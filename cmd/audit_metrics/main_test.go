@@ -51,9 +51,9 @@ func TestCountResources_IncludesMetaSchema(t *testing.T) {
 	}
 }
 
-// TestListDynamicTools_ExposesThreeTools verifies audit metrics count the
+// TestListDynamicTools_ExposesTwoTools verifies audit metrics count the
 // dynamic public surface independently from catalog action volume.
-func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
+func TestListDynamicTools_ExposesTwoTools(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
 			"get": {Handler: func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{"ok": true}, nil }},
@@ -61,15 +61,15 @@ func TestListDynamicTools_ExposesThreeTools(t *testing.T) {
 	}
 
 	dynamicTools := listDynamicTools(actioncatalog.FromActionMaps(routes))
-	if len(dynamicTools) != 3 {
-		t.Fatalf("listDynamicTools() count = %d, want 3", len(dynamicTools))
+	if len(dynamicTools) != 2 {
+		t.Fatalf("listDynamicTools() count = %d, want 2", len(dynamicTools))
 	}
 	names := make([]string, 0, len(dynamicTools))
 	for _, tool := range dynamicTools {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	for _, want := range []string{"gitlab_describe_tools", "gitlab_execute_tool", "gitlab_search_tools"} {
+	for _, want := range []string{"gitlab_execute_tool", "gitlab_find_action"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
 		}
@@ -107,7 +107,7 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 	if metrics.UnsearchableAliasCount == 0 {
 		t.Fatalf("metrics = %+v, want non-zero unsearchable alias count", metrics)
 	}
-	if len(listDynamicTools(catalog)) != 3 {
+	if len(listDynamicTools(catalog)) != 2 {
 		t.Fatal("dynamic metrics changed advertised dynamic tool count")
 	}
 }

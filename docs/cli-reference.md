@@ -165,7 +165,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=individu
 # Start HTTP server with the dynamic toolset (reduces token usage for LLM context)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
 
-# Start HTTP server with a specific dynamic toolset version (dynamic-3)
+# Start HTTP server with the explicit three-tool dynamic variant (dynamic-3)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic-3
 
 # Start HTTP server with the dynamic toolset and reduced non-tool capabilities
@@ -195,6 +195,6 @@ See [Dynamic Tools](dynamic-tools.md) for how `dynamic`, `dynamic-2`, and `dynam
 
 - [Configuration](configuration.md) — Environment variables and `.env` files
 - [HTTP Server Mode](http-server-mode.md) — Architecture and deployment details
-- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute mode
+- [Dynamic Toolset](dynamic-tools.md) — Low-token find/execute mode
 - [Auto-Update](auto-update.md) — Update modes, release requirements, troubleshooting
 - [Getting Started](getting-started.md) — Step-by-step tutorial

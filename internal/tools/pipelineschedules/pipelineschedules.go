@@ -380,7 +380,7 @@ type CreateVariableInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	ScheduleID   int                  `json:"schedule_id" jsonschema:"Pipeline schedule ID,required"`
 	Key          string               `json:"key" jsonschema:"Variable key,required"`
-	Value        string               `json:"value" jsonschema:"Variable value,required"`
+	Value        string               `json:"value" jsonschema:"Variable value. Required when creating a schedule variable,required"`
 	VariableType string               `json:"variable_type,omitempty" jsonschema:"Variable type: env_var (default) or file"`
 }
 
@@ -430,7 +430,7 @@ type EditVariableInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	ScheduleID   int                  `json:"schedule_id" jsonschema:"Pipeline schedule ID,required"`
 	Key          string               `json:"key" jsonschema:"Variable key to edit,required"`
-	Value        string               `json:"value" jsonschema:"New variable value,required"`
+	Value        string               `json:"value" jsonschema:"New variable value. Required when editing a schedule variable,required"`
 	VariableType string               `json:"variable_type,omitempty" jsonschema:"Variable type: env_var or file"`
 }
 

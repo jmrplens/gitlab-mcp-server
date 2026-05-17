@@ -199,13 +199,13 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
 | **Meta-tools** (default) | `TOOL_SURFACE=meta` | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Most users — lower token usage |
-| **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
-| **Dynamic-2 variant** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental two-tool surface that combines discovery and schema lookup |
+| **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Low-token clients that can find actions with schemas, then execute actions |
+| **Dynamic-3 variant** | `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Compatibility selector for explicit search, describe, then execute separation |
 | **Individual tools** | `TOOL_SURFACE=individual` | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Clients that need granular tool selection |
 
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need to pin the explicit three-tool selector, and reserve `dynamic-2` for find/execute experiments. `META_TOOLS` remains accepted for one compatibility window only and should appear only in migration guidance.
+`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-2` are functionally equivalent today: they expose `gitlab_find_action` and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, and use `dynamic-3` when you need to pin the explicit three-tool selector. `META_TOOLS` remains accepted for one compatibility window only and should appear only in migration guidance.
 
-See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token search/describe/execute workflow.
+See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token find/execute workflow.
 
 ### Meta Parameter Schema
 
@@ -214,18 +214,18 @@ See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dyna
 | Tool surface | Visible tool schema impact | Schema resource availability | Dynamic describe behavior | Token impact | Recommended use |
 | --- | --- | --- | --- | --- | --- |
 | `meta` | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | Not applicable | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
-| `dynamic` | Does not change the three dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_describe_tools` always returns exact action schemas inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use describe |
-| `dynamic-3` | Same as `dynamic` | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_describe_tools` always returns exact action schemas inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use describe |
-| `dynamic-2` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; reserve `dynamic-2` for experiments |
+| `dynamic` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use find |
+| `dynamic-2` | Same as `dynamic` | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use find |
+| `dynamic-3` | Does not change the three dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_describe_tools` always returns exact action schemas inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use describe |
 | `individual` | Ignored because individual tools expose one operation per tool with direct typed schemas | Meta-schema resources are not registered in individual mode | Not applicable | None | Leave unset |
 
 The evaluated modes remain `opaque`, `compact`, and `full`. The setting name remains valid for the final architecture because it describes the meta-tool dispatcher envelope, while the action catalog remains the source of the underlying per-action schemas.
 
 ### Capability Surface
 
-`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_describe_tools` in `dynamic`/`dynamic-3` and `gitlab_find_action` in `dynamic-2` return exact action schemas inline.
+`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_find_action` in `dynamic`/`dynamic-2` and `gitlab_describe_tools` in `dynamic-3` return exact action schemas inline.
 
-Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing `dynamic + minimal + describe` workflow for low-token clients. Reconsider an intermediate mode only if future audits show a concrete client that needs schema resources but cannot tolerate prompts or static resources.
+Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing `dynamic + minimal + find` workflow for low-token clients. Reconsider an intermediate mode only if future audits show a concrete client that needs schema resources but cannot tolerate prompts or static resources.
 
 ### HTTP Server Mode
 

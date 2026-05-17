@@ -91,9 +91,9 @@ const (
 	ToolSurfaceMeta = "meta"
 	// ToolSurfaceIndividual exposes the full individual tool catalog.
 	ToolSurfaceIndividual = "individual"
-	// ToolSurfaceDynamic exposes the low-token search/describe/execute catalog.
+	// ToolSurfaceDynamic exposes the default low-token find/execute catalog.
 	ToolSurfaceDynamic = "dynamic"
-	// ToolSurfaceDynamic2 exposes the experimental find/execute dynamic catalog.
+	// ToolSurfaceDynamic2 explicitly selects the find/execute dynamic catalog.
 	ToolSurfaceDynamic2 = "dynamic-2"
 	// ToolSurfaceDynamic3 explicitly selects the search/describe/execute dynamic catalog.
 	ToolSurfaceDynamic3 = "dynamic-3"

@@ -29,7 +29,7 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `TOOL_SURFACE` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `TOOL_SURFACE` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`. `dynamic` and `dynamic-2` expose find/execute; `dynamic-3` exposes search/describe/execute |
 | `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, `dynamic` -> `dynamic`, `dynamic-2` -> `dynamic-2`, and `dynamic-3` -> `dynamic-3`. Ignored when `TOOL_SURFACE` is set |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts. Dynamic describe/find still returns action schemas inline with `minimal` |
 | `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, 6.5x opaque size) or `full` (oneOf with full per-action JSON Schemas, 11.9x opaque size). Applies to visible meta-tool schemas in `meta`; has no practical effect on `dynamic`, `dynamic-2`, `dynamic-3`, or `individual` tool schemas. When `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` for meta and dynamic catalog-backed surfaces |
@@ -167,7 +167,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 - [CLI Reference](cli-reference.md) — Command-line flags for HTTP mode
 - [Configuration](configuration.md) — Setup wizard, client config, secure token management
-- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute workflow and migration guidance
+- [Dynamic Toolset](dynamic-tools.md) — Low-token find/execute workflow and migration guidance
 - [Auto-Update](auto-update.md) — Update modes and release requirements
 - [Security](security.md) — Token management best practices
 - [HTTP Server Mode](http-server-mode.md) — OAuth mode architecture and deployment

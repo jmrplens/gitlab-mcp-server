@@ -79,13 +79,13 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
-		t.Fatalf("dynamic tools = %q, want search/describe/execute", got)
+	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
+		t.Fatalf("dynamic tools = %q, want find/execute", got)
 	}
 }
 
 // TestListDynamic2Tools_ExposesFindExecuteSurface verifies the token audit can
-// measure the experimental two-tool candidate independently from dynamic-3.
+// measure the explicit two-tool alias independently from dynamic-3.
 func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
 	client := newAuditTokensClient(t)
 	routes := buildMetaActionMaps(client, false)
@@ -94,7 +94,7 @@ func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
 	}
 
 	catalog := actioncatalog.FromActionMaps(routes)
-	dynamic3 := listDynamicTools(catalog)
+	dynamic3 := listDynamic3Tools(catalog)
 	dynamic2 := listDynamic2Tools(catalog)
 	names := make([]string, 0, len(dynamic2))
 	for _, tool := range dynamic2 {
@@ -106,5 +106,25 @@ func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
 	}
 	if len(dynamic2) >= len(dynamic3) {
 		t.Fatalf("dynamic-2 tool count = %d, want less than dynamic-3 count %d", len(dynamic2), len(dynamic3))
+	}
+}
+
+// TestListDynamic3Tools_ExposesSearchDescribeExecuteSurface verifies the token
+// audit can still measure the explicit three-tool dynamic variant.
+func TestListDynamic3Tools_ExposesSearchDescribeExecuteSurface(t *testing.T) {
+	client := newAuditTokensClient(t)
+	routes := buildMetaActionMaps(client, false)
+	if countActions(routes) == 0 {
+		t.Fatal("buildMetaActionMaps() returned no actions")
+	}
+
+	toolList := listDynamic3Tools(actioncatalog.FromActionMaps(routes))
+	names := make([]string, 0, len(toolList))
+	for _, tool := range toolList {
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
+		t.Fatalf("dynamic-3 tools = %q, want search/describe/execute", got)
 	}
 }

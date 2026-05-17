@@ -294,6 +294,40 @@ func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
+// TestCreateMRAwardEmoji_DuplicateReturnsExisting verifies CreateMRAwardEmoji returns an existing award on GitLab's duplicate-name 404.
+func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
+	requests := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path != testPathAPIProjects+testProjectID+"/merge_requests/3/award_emoji" {
+			t.Errorf(fmtUnexpPath, r.URL.Path)
+		}
+		switch r.Method {
+		case http.MethodPost:
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Award Emoji Name has already been taken Not Found"}`)
+		case http.MethodGet:
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"eyes","user":{"id":3,"username":"user3"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+		default:
+			t.Errorf("method = %s, want POST or GET", r.Method)
+		}
+	}))
+
+	out, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{
+		ProjectID: testProjectID,
+		IID:       3,
+		Name:      "eyes",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+	if out.ID != 30 || out.Name != "eyes" {
+		t.Fatalf("award = {ID:%d Name:%q}, want {ID:30 Name:eyes}", out.ID, out.Name)
+	}
+}
+
 // Snippet award emoji tests.
 
 // TestListSnippetAwardEmoji_Success verifies ListSnippetAwardEmoji when success.

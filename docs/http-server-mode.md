@@ -75,11 +75,11 @@ gitlab-mcp-server --http \
 
 - `meta`: domain-level meta-tools, the default consolidated catalog.
 - `individual`: every GitLab operation is exposed as its own tool.
-- `dynamic`: the current low-token three-tool surface with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
-- `dynamic-3`: explicit selector for the same three-tool dynamic surface, useful for pinned configurations.
-- `dynamic-2`: experimental two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
+- `dynamic`: the current low-token two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
+- `dynamic-2`: explicit selector for the same two-tool dynamic surface, useful for pinned configurations.
+- `dynamic-3`: compatibility selector for the earlier three-tool surface with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
 
-`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because `gitlab_describe_tools` and `gitlab_find_action` return schemas inline.
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` and the dynamic-3 `gitlab_describe_tools` return schemas inline.
 
 `--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client cannot read schema resources and needs `compact` or `full` schemas in `tools/list`; current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 

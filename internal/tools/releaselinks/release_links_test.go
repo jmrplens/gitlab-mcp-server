@@ -353,6 +353,28 @@ func TestReleaseLinkCreateBatch_Success(t *testing.T) {
 	}
 }
 
+// TestReleaseLinkType_DefaultsGenericPackageURLs verifies package registry URLs
+// are classified as package links unless the caller sets an explicit type.
+func TestReleaseLinkType_DefaultsGenericPackageURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		explicit string
+		want     gl.LinkTypeValue
+	}{
+		{name: "generic package", url: "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/bin", want: gl.PackageLinkType},
+		{name: "explicit wins", url: "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/bin", explicit: "other", want: gl.OtherLinkType},
+		{name: "ordinary url", url: "https://example.com/bin", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := releaseLinkType(tt.url, tt.explicit); got != tt.want {
+				t.Fatalf("releaseLinkType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestReleaseLinkCreateBatch_PartialFailure verifies that CreateBatch
 // continues creating links after one fails, collecting errors in Failed.
 func TestReleaseLinkCreateBatch_PartialFailure(t *testing.T) {

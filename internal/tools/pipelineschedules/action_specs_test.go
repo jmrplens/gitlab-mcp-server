@@ -4,6 +4,7 @@ package pipelineschedules
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,6 +48,26 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_VariableValueGuidance verifies schedule variable actions keep
+// value guidance in their catalog metadata and schemas.
+func TestActionSpecs_VariableValueGuidance(t *testing.T) {
+	byTool := pipelineScheduleSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pipelineScheduleActionHandler())))
+
+	for _, toolName := range []string{"gitlab_pipeline_schedule_create_variable", "gitlab_pipeline_schedule_edit_variable"} {
+		guidance := byTool[toolName].ParameterGuidance["value"]
+		if guidance.SemanticRole != "pipeline_schedule_variable_value" {
+			t.Fatalf("%s value SemanticRole = %q, want pipeline_schedule_variable_value", toolName, guidance.SemanticRole)
+		}
+		if !strings.Contains(guidance.ValueSource, "supply an explicit value") {
+			t.Fatalf("%s value ValueSource = %q, want explicit value guidance", toolName, guidance.ValueSource)
+		}
+		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "value")
+		if !strings.Contains(description, "Required") {
+			t.Fatalf("%s value schema description = %q, want required guidance", toolName, description)
+		}
 	}
 }
 
@@ -213,4 +234,21 @@ func pipelineScheduleSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName string) string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("schema property %q = %T, want map[string]any", propertyName, properties[propertyName])
+	}
+	description, ok := property["description"].(string)
+	if !ok {
+		t.Fatalf("schema property %q description = %T, want string", propertyName, property["description"])
+	}
+	return description
 }

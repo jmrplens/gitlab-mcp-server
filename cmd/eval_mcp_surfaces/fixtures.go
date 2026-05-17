@@ -54,6 +54,12 @@ const (
 	liveFixturePackageVer = "0.0.1"
 	// liveFixturePackageFile identifies the live fixture package file constant used by this package.
 	liveFixturePackageFile = "artifact.txt"
+	// liveFixturePackageReleaseName identifies the package name for the package-to-release workflow fixture.
+	liveFixturePackageReleaseName = "eval-release-package"
+	// liveFixturePackageReleaseVersion identifies the package version for the package-to-release workflow fixture.
+	liveFixturePackageReleaseVersion = "0.1.0"
+	// liveFixturePackageReleaseTag identifies the release tag for the package-to-release workflow fixture.
+	liveFixturePackageReleaseTag = "v0.0.0-eval-packages"
 	// liveFixtureWikiSlug identifies the live fixture wiki slug constant used by this package.
 	liveFixtureWikiSlug = "obsolete-eval"
 	// liveFixtureReviewBranch identifies the live fixture review branch constant used by this package.
@@ -70,7 +76,18 @@ const (
 	taskPipelineScheduleID = "MT-103"
 	// taskMergeRequestAwardID identifies the task merge request award ID constant used by this package.
 	taskMergeRequestAwardID = "MS-033"
+	// taskPackageReleaseID identifies the package publish plus release workflow task.
+	taskPackageReleaseID = "MS-038"
 )
+
+var packageReleaseFixtureFiles = []struct {
+	name    string
+	content string
+}{
+	{name: "gitlab-mcp-server-linux-amd64.txt", content: "linux amd64 evaluation package\n"},
+	{name: "gitlab-mcp-server-darwin-arm64.txt", content: "darwin arm64 evaluation package\n"},
+	{name: "checksums.txt", content: "sha256  gitlab-mcp-server-linux-amd64.txt\nsha256  gitlab-mcp-server-darwin-arm64.txt\n"},
+}
 
 // liveFixtureState captures live fixture state data for live evaluation fixtures.
 type liveFixtureState struct {
@@ -102,6 +119,12 @@ type liveFixtureState struct {
 	EnvironmentID          int64    `json:"environment_id"`
 	ProjectTokenID         int64    `json:"project_token_id"`
 	PackageID              int64    `json:"package_id"`
+	PackageReleaseName     string   `json:"package_release_name,omitempty"`
+	PackageReleaseVersion  string   `json:"package_release_version,omitempty"`
+	PackageReleaseTag      string   `json:"package_release_tag,omitempty"`
+	PackageReleaseDir      string   `json:"package_release_dir,omitempty"`
+	PackageReleaseFiles    []string `json:"package_release_files,omitempty"`
+	PackageReleasePaths    []string `json:"package_release_paths,omitempty"`
 	DeployKeyID            int64    `json:"deploy_key_id"`
 	DeployKeyCreateKey     string   `json:"deploy_key_create_key,omitempty"`
 	DeployTokenID          int64    `json:"deploy_token_id"`
@@ -165,6 +188,9 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 		ReleaseSummaryTag:     liveFixtureReleaseSummaryTag,
 		ElicitationReleaseTag: liveFixtureElicitationTag,
 	}
+	if fixtureErr := ensurePackageReleaseFixtureFiles(state, opts.Fixtures); fixtureErr != nil {
+		return nil, fixtureErr
+	}
 	preparer := &liveFixturePreparer{client: client, state: state}
 	if prepareErr := preparer.prepare(ctx); prepareErr != nil {
 		return nil, prepareErr
@@ -227,7 +253,54 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.ElicitationReleaseTag == "" {
 		state.ElicitationReleaseTag = liveFixtureElicitationTag
 	}
+	if fixtureErr := ensurePackageReleaseFixtureFiles(&state, path); fixtureErr != nil {
+		return nil, fixtureErr
+	}
 	return &state, nil
+}
+
+// ensurePackageReleaseFixtureFiles creates local files used by the package-to-release workflow.
+func ensurePackageReleaseFixtureFiles(state *liveFixtureState, fixturesPath string) error {
+	if state == nil {
+		return errors.New("package release fixture state is nil")
+	}
+	dir, err := packageReleaseFixtureDir(fixturesPath)
+	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("create package release fixture directory: %w", err)
+	}
+	names := make([]string, 0, len(packageReleaseFixtureFiles))
+	paths := make([]string, 0, len(packageReleaseFixtureFiles))
+	for _, file := range packageReleaseFixtureFiles {
+		path := filepath.Join(dir, file.name)
+		if writeErr := os.WriteFile(path, []byte(file.content), 0o600); writeErr != nil {
+			return fmt.Errorf("write package release fixture file %s: %w", path, writeErr)
+		}
+		names = append(names, file.name)
+		paths = append(paths, path)
+	}
+	state.PackageReleaseName = liveFixturePackageReleaseName
+	state.PackageReleaseVersion = liveFixturePackageReleaseVersion
+	state.PackageReleaseTag = liveFixturePackageReleaseTag
+	state.PackageReleaseDir = dir
+	state.PackageReleaseFiles = names
+	state.PackageReleasePaths = paths
+	return nil
+}
+
+// packageReleaseFixtureDir resolves the absolute local directory for package workflow files.
+func packageReleaseFixtureDir(fixturesPath string) (string, error) {
+	if fixturesPath == "" {
+		fixturesPath = defaultFixtures
+	}
+	dir := filepath.Join(filepath.Dir(fixturesPath), "package-release-files")
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve package release fixture directory: %w", err)
+	}
+	return abs, nil
 }
 
 // prepare creates or updates the live fixture resources tracked by liveFixturePreparer.
@@ -1349,7 +1422,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MT-069", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036":
+		"MT-069", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID:
 		return true
 	default:
 		return false
@@ -1457,7 +1530,29 @@ func replaceFixturePrompt(taskID, prompt string, state *liveFixtureState) string
 	prompt = replaceMergeRequestPlaceholders(taskID, prompt, state)
 	prompt = replacePipelinePlaceholders(taskID, prompt, state)
 	prompt = replaceResourcePlaceholders(taskID, prompt, state)
+	prompt = replacePackageReleasePlaceholders(prompt, state)
 	prompt = replaceLifecyclePlaceholders(prompt, state)
+	return prompt
+}
+
+// replacePackageReleasePlaceholders replaces package release fixture placeholders in prompts.
+func replacePackageReleasePlaceholders(prompt string, state *liveFixtureState) string {
+	if state == nil {
+		return prompt
+	}
+	files := strings.Join(state.PackageReleaseFiles, ", ")
+	replacements := map[string]string{
+		"__PACKAGE_RELEASE_DIR__":     state.PackageReleaseDir,
+		"__PACKAGE_RELEASE_PACKAGE__": state.PackageReleaseName,
+		"__PACKAGE_RELEASE_VERSION__": state.PackageReleaseVersion,
+		"__PACKAGE_RELEASE_TAG__":     state.PackageReleaseTag,
+		"__PACKAGE_RELEASE_FILES__":   files,
+	}
+	for old, newValue := range replacements {
+		if newValue != "" {
+			prompt = strings.ReplaceAll(prompt, old, newValue)
+		}
+	}
 	return prompt
 }
 

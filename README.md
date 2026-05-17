@@ -40,15 +40,16 @@ Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals e
 | Individual tools (Enterprise/Premium catalog) | 1014 | 1014 | 552,458 | 17,622 | 570,080 |
 | Meta-tools (base catalog + MCP helpers, **default**) | 34 | 867 | 58,223 | 18,198 | 76,421 |
 | Meta-tools (Enterprise/Premium catalog + MCP helpers) | 50 | 1018 | 75,851 | 18,198 | 94,049 |
-| Dynamic-3 (`TOOL_SURFACE=dynamic` or `dynamic-3`) | 3 | 867 / 1018 | 2,813 | 18,198 | 21,011 |
-| Dynamic-3 + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 3 | 867 / 1018 | 2,813 | 184 | 2,997 |
+| Dynamic (`TOOL_SURFACE=dynamic` or `dynamic-2`) | 2 | 867 / 1018 | 2,000 | 18,198 | 20,198 |
+| Dynamic + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 2 | 867 / 1018 | 2,000 | 184 | 2,184 |
+| Dynamic-3 (`TOOL_SURFACE=dynamic-3`) | 3 | 867 / 1018 | 2,813 | 18,198 | 21,011 |
 
-Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 862 / 1013 while the comparable reachable-action count is 867 / 1018. `dynamic` and `dynamic-3` expose the same current three-tool search/describe/execute surface. The experimental `dynamic-2` comparison surface uses two visible tools and measures about **20,198 tokens** with full capabilities or **2,184 tokens** with `CAPABILITY_SURFACE=minimal`.
+Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 862 / 1013 while the comparable reachable-action count is 867 / 1018. `dynamic` and `dynamic-2` expose the current two-tool find/execute surface. `dynamic-3` remains available for the earlier three-tool search/describe/execute workflow.
 
 ## Highlights
 
 - **1014 MCP tools** on self-managed Enterprise/Premium, or **1019 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 165 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog
+- **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). A low-token dynamic mode can expose only `gitlab_find_action` and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The current reviewed result is published in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -243,12 +244,12 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Dynamic Toolset** | 3 visible tools | Low-token search/describe/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic`. `dynamic-3` is an explicit alias for the current three-tool surface, and `dynamic-2` is an experimental find/execute variant. |
+| **Dynamic Toolset** | 2 visible tools | Low-token find/execute surface over the canonical action catalog. Enable with `TOOL_SURFACE=dynamic`. `dynamic-2` is an explicit alias for the current two-tool surface, and `dynamic-3` pins the earlier search/describe/execute variant. |
 | **Individual** | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources, prompts, and meta-schema resources. The default remains `full`.
 
-Meta-tools remain the default. Dynamic mode is the low-token search/describe/execute alternative; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware search ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance.
+Meta-tools remain the default. Dynamic mode is the low-token find/execute alternative; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance.
 
 Meta-tool summary:
 
@@ -380,7 +381,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
 | [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
 | [Meta-Tools](docs/meta-tools.md) | 33/49/50 domain meta-tools with action dispatching |
-| [Dynamic Toolset](docs/dynamic-tools.md) | 3-tool low-token mode with canonical action catalog, safety model, and examples |
+| [Dynamic Toolset](docs/dynamic-tools.md) | 2-tool low-token mode with canonical action catalog, safety model, and examples |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |

@@ -76,7 +76,7 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 | ------------------ | ---------------------------------------- |
 | `individual`       | Individual tools                          |
 | `meta`             | Meta-tools                                |
-| `dynamic`          | Default dynamic search/describe/execute surface      |
+| `dynamic`          | Default dynamic find/execute surface                 |
 | `sampling`         | Sampling tools with mock LLM handler      |
 | `elicitation`      | Elicitation tools with mock user handler  |
 | `safeMode`         | Mutating tools wrapped to return previews |
@@ -102,7 +102,7 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 | `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
 | `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
 | `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
-| `dynamic` | Default three-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses search/describe/execute rather than direct meta-tool calls |
+| `dynamic` | Default two-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses find/execute rather than direct meta-tool calls |
 | `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
 | `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |
 
@@ -115,7 +115,7 @@ go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/suite/
 # Meta-tools only
 go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
 
-# Dynamic search/describe/execute surface only
+# Dynamic find/execute surface only
 go test -v -tags e2e -timeout 300s -run '^TestDynamicToolSurface_' ./test/e2e/suite/
 
 # Dynamic surface only in Docker mode after setup-gitlab.sh and register-runner.sh

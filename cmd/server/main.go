@@ -626,20 +626,20 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
 	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
-		if catalogErr != nil {
-			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
-		}
-		metaSchemaRoutes = actionCatalog.ActionMaps()
-		dynamictools.RegisterCatalogTools(server, actionCatalog)
-	case config.ToolSurfaceDynamic2:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2:
 		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
 		if catalogErr != nil {
 			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
+	case config.ToolSurfaceDynamic3:
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+		}
+		metaSchemaRoutes = actionCatalog.ActionMaps()
+		dynamictools.RegisterCatalogTools(server, actionCatalog)
 	case config.ToolSurfaceMeta:
 		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 			Enterprise: cfg.Enterprise,
@@ -1616,18 +1616,18 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 		}
 	case config.ToolSurfaceIndividual:
 		gitlabtools.RegisterAll(server, nil, enterprise)
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		catalog, err := buildToolSearchCatalog(enterprise)
-		if err != nil {
-			return err
-		}
-		dynamictools.RegisterCatalogTools(server, catalog)
-	case config.ToolSurfaceDynamic2:
+	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2:
 		catalog, err := buildToolSearchCatalog(enterprise)
 		if err != nil {
 			return err
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	case config.ToolSurfaceDynamic3:
+		catalog, err := buildToolSearchCatalog(enterprise)
+		if err != nil {
+			return err
+		}
+		dynamictools.RegisterCatalogTools(server, catalog)
 	default:
 		return fmt.Errorf("unsupported tool surface for search: %q", toolSurface)
 	}

@@ -199,8 +199,8 @@ func TestMain(m *testing.M) {
 		log.Fatalf("e2e: connect meta MCP client: %v", err)
 	}
 
-	// Create a dynamic MCP server/client pair with the low-token search,
-	// describe, and execute surface backed by the canonical action catalog.
+	// Create a dynamic MCP server/client pair with the low-token find and
+	// execute surface backed by the canonical action catalog.
 	dynamicServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-dynamic",
 		Version: "test",
@@ -217,7 +217,7 @@ func TestMain(m *testing.M) {
 		metaServerCancel()
 		log.Fatalf("e2e: add standalone dynamic catalog: %v", err)
 	}
-	dynamictools.RegisterCatalogTools(dynamicServer, dynamicCatalog)
+	dynamictools.RegisterCatalogFindExecuteTools(dynamicServer, dynamicCatalog)
 
 	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()
 
