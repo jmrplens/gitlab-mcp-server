@@ -90,6 +90,45 @@ func TestCreate_RequiresAttributes(t *testing.T) {
 	}
 }
 
+func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  string
+	}{
+		{
+			name:  "invalid namespace ID",
+			input: CreateInput{NamespaceID: 0, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}},
+			want:  "namespace_id must be greater than 0",
+		},
+		{
+			name:  "invalid category ID",
+			input: CreateInput{NamespaceID: 101, CategoryID: -1, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}},
+			want:  "category_id must be greater than 0",
+		},
+		{
+			name:  "blank name",
+			input: CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: " ", Description: "High impact", Color: "#FF0000"}}},
+			want:  "attributes[0].name is required",
+		},
+		{
+			name:  "invalid color",
+			input: CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "red"}}},
+			want:  "attributes[0].color must be a hex color",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Create(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Create() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdate_Success(t *testing.T) {
 	name := "Critical"
 	color := "#990000"
@@ -113,6 +152,31 @@ func TestUpdate_Success(t *testing.T) {
 	}
 	if out.ID != 9 || out.SecurityCategory == nil {
 		t.Fatalf("Update() output = %#v", out)
+	}
+}
+
+func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	name := " "
+	color := "123456"
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  string
+	}{
+		{name: "invalid attribute ID", input: UpdateInput{AttributeID: 0, Color: &color}, want: "attribute_id must be greater than 0"},
+		{name: "missing changes", input: UpdateInput{AttributeID: 9}, want: "provide at least one"},
+		{name: "blank name", input: UpdateInput{AttributeID: 9, Name: &name}, want: "name is required"},
+		{name: "invalid color", input: UpdateInput{AttributeID: 9, Color: &color}, want: "color must be a hex color"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Update(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Update() error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -164,6 +228,29 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
+func TestProjectUpdate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	tests := []struct {
+		name  string
+		input ProjectUpdateInput
+		want  string
+	}{
+		{name: "invalid project ID", input: ProjectUpdateInput{ProjectID: 0, AddAttributeIDs: []int64{9}}, want: "project_id must be greater than 0"},
+		{name: "missing operations", input: ProjectUpdateInput{ProjectID: 42}, want: "provide add_attribute_ids or remove_attribute_ids"},
+		{name: "invalid add attribute ID", input: ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{0}}, want: "add_attribute_ids values must be greater than 0"},
+		{name: "invalid remove attribute ID", input: ProjectUpdateInput{ProjectID: 42, RemoveAttributeIDs: []int64{-1}}, want: "remove_attribute_ids values must be greater than 0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ProjectUpdate(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("ProjectUpdate() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestBulkUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +293,77 @@ func TestBulkUpdate_InvalidMode(t *testing.T) {
 	}
 }
 
+func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	tests := []struct {
+		name  string
+		input BulkUpdateInput
+		want  string
+	}{
+		{name: "missing targets", input: BulkUpdateInput{AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd}, want: "provide group_ids or project_ids"},
+		{name: "invalid group ID", input: BulkUpdateInput{GroupIDs: []int64{0}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd}, want: "group_ids values must be greater than 0"},
+		{name: "invalid project ID", input: BulkUpdateInput{ProjectIDs: []int64{-1}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd}, want: "project_ids values must be greater than 0"},
+		{name: "missing attributes", input: BulkUpdateInput{ProjectIDs: []int64{42}, Mode: BulkUpdateModeAdd}, want: "attribute_ids is required"},
+		{name: "invalid attribute ID", input: BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{0}, Mode: BulkUpdateModeAdd}, want: "attribute_ids values must be greater than 0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := BulkUpdate(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("BulkUpdate() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarkdownEscapesTableCellsAndPreserveLinkHint(t *testing.T) {
+	attribute := Output{ID: 9, Name: "High | Risk", Color: "#FF|0000", SecurityCategory: &CategorySummary{Name: "Business | Impact"}}
+	createMarkdown := FormatCreateMarkdown(CreateOutput{Attributes: []Output{attribute}})
+	if !strings.Contains(createMarkdown, "High &#124; Risk") || !strings.Contains(createMarkdown, "#FF&#124;0000") || !strings.Contains(createMarkdown, "Business &#124; Impact") {
+		t.Fatalf("FormatCreateMarkdown() did not escape table cells:\n%s", createMarkdown)
+	}
+	if !strings.Contains(createMarkdown, "clickable [text](url) links") {
+		t.Fatalf("FormatCreateMarkdown() missing preserve-link hint:\n%s", createMarkdown)
+	}
+
+	outputMarkdown := FormatOutputMarkdown(attribute)
+	if !strings.Contains(outputMarkdown, "#FF&#124;0000") {
+		t.Fatalf("FormatOutputMarkdown() did not escape color:\n%s", outputMarkdown)
+	}
+}
+
+func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
+	projectMarkdown := FormatProjectUpdateMarkdown(ProjectUpdateOutput{AddedCount: 2, RemovedCount: 1})
+	if !strings.Contains(projectMarkdown, "| Added | `2` |") || !strings.Contains(projectMarkdown, "| Removed | `1` |") {
+		t.Fatalf("FormatProjectUpdateMarkdown() =\n%s", projectMarkdown)
+	}
+
+	bulkMarkdown := FormatBulkUpdateMarkdown(BulkUpdateOutput{
+		Mode:         BulkUpdateModeReplace,
+		GroupIDs:     []int64{5},
+		ProjectIDs:   []int64{42},
+		AttributeIDs: []int64{9, 10},
+	})
+	for _, want := range []string{"| Mode | `REPLACE` |", "| Attributes | `[9 10]` |", "| Groups | `[5]` |", "| Projects | `[42]` |"} {
+		if !strings.Contains(bulkMarkdown, want) {
+			t.Fatalf("FormatBulkUpdateMarkdown() missing %q:\n%s", want, bulkMarkdown)
+		}
+	}
+}
+
+func TestOutputHelpersHandleNilValues(t *testing.T) {
+	if out := toOutput(nil); out.ID != 0 || out.SecurityCategory != nil {
+		t.Fatalf("toOutput(nil) = %#v", out)
+	}
+	if summary := categorySummary(nil); summary != nil {
+		t.Fatalf("categorySummary(nil) = %#v, want nil", summary)
+	}
+	if out := toCreateOutput(nil); len(out.Attributes) != 0 {
+		t.Fatalf("toCreateOutput(nil) = %#v", out)
+	}
+}
+
 func TestActionSpecs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)
@@ -217,5 +375,11 @@ func TestActionSpecs(t *testing.T) {
 	}
 	if specs[4].Name != "bulk_update" || !specs[4].Destructive || specs[4].IndividualTool.Name != "gitlab_bulk_update_security_attributes" {
 		t.Fatalf("bulk update spec = %#v", specs[4])
+	}
+	if strings.Count(strings.Join(specs[0].RelatedActions, ","), "security_category.create") != 1 {
+		t.Fatalf("create related actions = %#v, want security_category.create once", specs[0].RelatedActions)
+	}
+	if !strings.Contains(specs[4].IndividualTool.Description, "selected target/attribute IDs") {
+		t.Fatalf("bulk update description = %q", specs[4].IndividualTool.Description)
 	}
 }

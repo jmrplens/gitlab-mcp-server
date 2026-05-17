@@ -18,25 +18,25 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 10,082 |
-| Unit test functions | 9,833 |
-| E2E test functions | 249 |
+| Total test functions | 10,096 |
+| Unit test functions | 9,845 |
+| E2E test functions | 251 |
 | cmd test functions | 510 |
 | Test files (internal/) | 418 |
 | Test files (cmd/) | 22 |
 | Test files (test/e2e/suite/) | 109 |
 | Tool sub-packages tested | 170 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.6% |
-| Overall coverage (`go test ./internal/...`) | 98.8% |
-| Average package coverage | 95.0% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 88.7% |
+| Overall coverage (`go test ./internal/...`) | 99.1% |
+| Average package coverage | 95.3% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 9,053 | 89.8% |
-| `TestFunc` (no underscore) | 751 | 7.4% |
+| `TestFunc_Scenario` (2-part) | 9,062 | 89.8% |
+| `TestFunc` (no underscore) | 756 | 7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) | 278 | 2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | --- | ---: | ---: | --- |
 | Core packages | 1,693 | 78 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration | 283 | 12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
-| Tool sub-packages (170) | 7,347 | 328 | domain-specific GitLab tool handlers |
-| E2E integration | 249 | 109 | build-tagged real GitLab integration suite |
+| Tool sub-packages (170) | 7,359 | 328 | domain-specific GitLab tool handlers |
+| E2E integration | 251 | 109 | build-tagged real GitLab integration suite |
 | cmd packages | 510 | 22 | server entry point and developer command utilities |
-| **Total** | **10,082** | **549** |  |
+| **Total** | **10,096** | **549** |  |
 
 ### Core Packages
 
@@ -256,8 +256,8 @@
 | samplingtools | 166 | 14 | 100.0% | 11 |
 | search | 115 | 1 | 100.0% | 10 |
 | securefiles | 24 | 2 | 98.8% | 4 |
-| securityattributes | 8 | 1 | 59.9% | 5 |
-| securitycategories | 5 | 1 | 59.1% | 3 |
+| securityattributes | 15 | 1 | 91.4% | 5 |
+| securitycategories | 10 | 1 | 92.7% | 3 |
 | securityfindings | 17 | 1 | 100.0% | 1 |
 | securitysettings | 31 | 3 | 100.0% | 3 |
 | serverupdate | 23 | 1 | 93.8% | 2 |
@@ -281,7 +281,7 @@
 | vulnerabilities | 57 | 3 | 100.0% | 8 |
 | wikis | 59 | 2 | 99.4% | 6 |
 | workitems | 66 | 2 | 100.0% | 5 |
-| **Total** | **7,347** | **328** |  | **1,114** |
+| **Total** | **7,359** | **328** |  | **1,114** |
 
 </details>
 
@@ -481,8 +481,8 @@
 | samplingtools | 100.0% |
 | search | 100.0% |
 | securefiles | 98.8% |
-| securityattributes | 59.9% |
-| securitycategories | 59.1% |
+| securityattributes | 91.4% |
+| securitycategories | 92.7% |
 | securityfindings | 100.0% |
 | securitysettings | 100.0% |
 | serverupdate | 93.8% |
@@ -518,9 +518,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_tools** (36.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (50.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **securitycategories** (59.1%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/eval_mcp_surfaces** (59.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **securityattributes** (59.9%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (60.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (76.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

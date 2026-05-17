@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -11,6 +12,8 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // BulkUpdateMode is the mode used when applying security attributes in bulk.
 type BulkUpdateMode string
@@ -165,7 +168,17 @@ func optionalText(value *string) *string {
 
 func validatePositiveID(value int64, field string) error {
 	if value <= 0 {
+		return fmt.Errorf("%s must be greater than 0", field)
+	}
+	return nil
+}
+
+func validateHexColor(color, field string) error {
+	if strings.TrimSpace(color) == "" {
 		return toolutil.ErrFieldRequired(field)
+	}
+	if !hexColorPattern.MatchString(strings.TrimSpace(color)) {
+		return fmt.Errorf("%s must be a hex color in #RRGGBB format", field)
 	}
 	return nil
 }
@@ -193,8 +206,8 @@ func validateAttributeInputs(attributes []AttributeInput) error {
 		if strings.TrimSpace(attribute.Description) == "" {
 			return fmt.Errorf("attributes[%d].description is required", index)
 		}
-		if strings.TrimSpace(attribute.Color) == "" {
-			return fmt.Errorf("attributes[%d].color is required", index)
+		if err := validateHexColor(attribute.Color, fmt.Sprintf("attributes[%d].color", index)); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -256,6 +269,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Name == nil && input.Description == nil && input.Color == nil {
 		return Output{}, errors.New("update security attribute: provide at least one of name, description, or color")
+	}
+	if input.Color != nil {
+		if err := validateHexColor(*input.Color, "color"); err != nil {
+			return Output{}, err
+		}
 	}
 
 	opts := &gl.UpdateSecurityAttributeOptions{

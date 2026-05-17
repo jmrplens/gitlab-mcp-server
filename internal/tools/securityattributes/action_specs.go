@@ -10,7 +10,7 @@ const (
 	descriptionUpdateSecurityAttribute        = "Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate"
 	descriptionDeleteSecurityAttribute        = "Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy"
 	descriptionUpdateProjectSecurityAttribute = "Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_security_attribute, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate"
-	descriptionBulkUpdateSecurityAttributes   = "Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status and updated projects. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes"
+	descriptionBulkUpdateSecurityAttributes   = "Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes"
 )
 
 // ActionSpecs returns canonical specs for security attribute actions.
@@ -27,7 +27,6 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func securityAttributeCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.Usage = "Create security attributes under an existing security category."
-	options.RelatedActions = append(options.RelatedActions, "security_category.create")
 	return toolutil.NewActionSpec(name, route, options)
 }
 

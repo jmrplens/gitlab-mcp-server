@@ -464,7 +464,7 @@ func TestMeta_SecurityClassifications(t *testing.T) {
 		},
 	})
 	requirePremiumFeature(t, err, "security attributes")
-	requireTruef(t, projectAdd.AddedCount >= 0, "added count should be non-negative")
+	requireTruef(t, projectAdd.AddedCount >= 1, "added count should be at least one")
 
 	bulk, err := callToolOn[securityattributes.BulkUpdateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
 		"action": "bulk_update",
@@ -485,7 +485,7 @@ func TestMeta_SecurityClassifications(t *testing.T) {
 		},
 	})
 	requirePremiumFeature(t, err, "security attributes")
-	requireTruef(t, projectRemove.RemovedCount >= 0, "removed count should be non-negative")
+	requireTruef(t, projectRemove.RemovedCount >= 1, "removed count should be at least one")
 
 	err = callToolVoidOn(ctx, sess.meta, "gitlab_security_attribute", map[string]any{
 		"action": "delete",

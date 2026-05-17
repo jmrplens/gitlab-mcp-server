@@ -30,7 +30,7 @@
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
 | Source files (tools)      | 629+ (infrastructure + 165 sub-packages)                                                                     |
 | Test files (tools)        | 320                                                                                                          |
-| Go packages               | 187 (16 core + 163 tool packages + 8 cmd)                                                                    |
+| Go packages               | 189 (16 core + 165 tool packages + 8 cmd)                                                                    |
 
 ## Project Structure
 

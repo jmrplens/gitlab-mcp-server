@@ -1862,13 +1862,22 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"group_member_unshare": {},
 	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
-	"transfer": {}, "bulk_update": {},
+	"transfer": {},
+}
+
+var knownRouteDestructiveExceptions = map[string]struct{}{
+	"security_attribute.bulk_update": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the
 // normal destructive-name heuristic but is accepted by explicit policy.
 func isExactMatchException(action string) bool {
 	_, ok := knownNonKeywordDestructive[action]
+	return ok
+}
+
+func isRouteDestructiveException(id string) bool {
+	_, ok := knownRouteDestructiveExceptions[id]
 	return ok
 }
 
@@ -1942,6 +1951,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		// Rule 2: Action with safe keyword MUST NOT be marked destructive,
 		// UNLESS it also contains a destructive keyword or is a known exception.
 		_, isKnownException := knownNonKeywordDestructive[r.action]
+		isKnownException = isKnownException || isRouteDestructiveException(r.id)
 		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s action %q contains safe keyword but is destructive", r.id, r.action)
 			failures++

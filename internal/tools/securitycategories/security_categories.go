@@ -99,7 +99,14 @@ func optionalText(value *string) *string {
 
 func validateNamespaceID(namespaceID int64) error {
 	if namespaceID <= 0 {
-		return toolutil.ErrFieldRequired("namespace_id")
+		return errors.New("namespace_id must be greater than 0")
+	}
+	return nil
+}
+
+func validatePositiveID(value int64, field string) error {
+	if value <= 0 {
+		return fmt.Errorf("%s must be greater than 0", field)
 	}
 	return nil
 }
@@ -134,8 +141,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.CategoryID <= 0 {
-		return Output{}, toolutil.ErrFieldRequired("category_id")
+	if err := validatePositiveID(input.CategoryID, "category_id"); err != nil {
+		return Output{}, err
 	}
 	if err := validateNamespaceID(input.NamespaceID); err != nil {
 		return Output{}, err
@@ -164,8 +171,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err := ctx.Err(); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	if input.CategoryID <= 0 {
-		return toolutil.DeleteOutput{}, toolutil.ErrFieldRequired("category_id")
+	if err := validatePositiveID(input.CategoryID, "category_id"); err != nil {
+		return toolutil.DeleteOutput{}, err
 	}
 	if _, err := client.GL().SecurityCategories.DestroySecurityCategory(input.CategoryID, gl.WithContext(ctx)); err != nil {
 		return toolutil.DeleteOutput{}, toolutil.WrapErrWithHint("delete security category", err, "verify category_id; deleting a category also deletes its associated security attributes")

@@ -5,7 +5,7 @@
 > **Individual tools**: 3
 > **Meta-tool**: `gitlab_security_category` (default `TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [SecurityCategory GraphQL object](https://docs.gitlab.com/api/graphql/reference/#securitycategory) · [Create](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate) · [Update](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate) · [Delete](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy)
-> **Audience**: 👤 End users, AI assistant users
+> **Audience**: End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium
 
 ---

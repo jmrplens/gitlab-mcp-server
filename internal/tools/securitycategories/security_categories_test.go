@@ -123,6 +123,51 @@ func TestUpdate_RequiresChanges(t *testing.T) {
 	}
 }
 
+func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  string
+	}{
+		{name: "invalid namespace ID", input: CreateInput{NamespaceID: 0, Name: "Business impact"}, want: "namespace_id must be greater than 0"},
+		{name: "blank name", input: CreateInput{NamespaceID: 101, Name: " "}, want: "name is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Create(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Create() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	name := " "
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  string
+	}{
+		{name: "invalid category ID", input: UpdateInput{CategoryID: 0, NamespaceID: 101, Name: &name}, want: "category_id must be greater than 0"},
+		{name: "invalid namespace ID", input: UpdateInput{CategoryID: 7, NamespaceID: -1, Name: &name}, want: "namespace_id must be greater than 0"},
+		{name: "missing changes", input: UpdateInput{CategoryID: 7, NamespaceID: 101}, want: "provide at least one"},
+		{name: "blank name", input: UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name}, want: "name is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Update(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Update() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestDelete_Success(t *testing.T) {
 	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
 		"securityCategoryDestroy": func(w http.ResponseWriter, r *http.Request) {
@@ -144,13 +189,61 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 0})
+	if err == nil || !strings.Contains(err.Error(), "category_id must be greater than 0") {
+		t.Fatalf("Delete() error = %v, want invalid category ID", err)
+	}
+}
+
+func TestFormatOutputMarkdown(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		ID:                7,
+		Name:              "Business | impact",
+		Description:       "Business | labels",
+		MultipleSelection: true,
+		EditableState:     "EDITABLE",
+		TemplateType:      "CUSTOM",
+		SecurityAttributes: []AttributeSummary{{
+			ID:            9,
+			Name:          "High | Risk",
+			Color:         "#FF0000",
+			EditableState: "EDITABLE",
+		}},
+	})
+	for _, want := range []string{"Business &#124; impact", "Business &#124; labels", "| Multiple selection | true |", "| Template type | `CUSTOM` |", "High &#124; Risk"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, md)
+		}
+	}
+}
+
+func TestOutputHelpersHandleNilValues(t *testing.T) {
+	if out := toOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
+		t.Fatalf("toOutput(nil) = %#v", out)
+	}
+	if summary := attributeSummary(nil); summary.ID != 0 || summary.Name != "" {
+		t.Fatalf("attributeSummary(nil) = %#v", summary)
+	}
+}
+
 func TestActionSpecs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)
 	if len(specs) != 3 {
 		t.Fatalf("ActionSpecs() len = %d, want 3", len(specs))
 	}
-	if specs[2].Name != "delete" || !specs[2].Destructive || specs[2].IndividualTool.Name != "gitlab_delete_security_category" {
-		t.Fatalf("delete spec = %#v", specs[2])
+	var deleteSpecFound bool
+	for _, spec := range specs {
+		if spec.Name == "delete" {
+			deleteSpecFound = true
+			if !spec.Destructive || spec.IndividualTool.Name != "gitlab_delete_security_category" {
+				t.Fatalf("delete spec = %#v", spec)
+			}
+		}
+	}
+	if !deleteSpecFound {
+		t.Fatal("delete spec not found")
 	}
 }

@@ -37,11 +37,12 @@ func FormatCreateMarkdown(out CreateOutput) string {
 		fmt.Fprintf(&sb, "| `%d` | %s | `%s` | %s |\n",
 			attribute.ID,
 			toolutil.EscapeMdTableCell(attribute.Name),
-			attribute.Color,
+			toolutil.EscapeMdTableCell(attribute.Color),
 			category,
 		)
 	}
 	toolutil.WriteHints(&sb,
+		toolutil.HintPreserveLinks,
 		"Use `gitlab_update_project_security_attributes` to apply attributes to a project",
 		"Use `gitlab_bulk_update_security_attributes` to apply attributes to many groups or projects",
 	)
@@ -81,7 +82,7 @@ func writeAttributeTable(sb *strings.Builder, out Output) {
 	sb.WriteString("|-------|-------|\n")
 	fmt.Fprintf(sb, "| ID | `%d` |\n", out.ID)
 	fmt.Fprintf(sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(sb, "| Color | `%s` |\n", out.Color)
+	fmt.Fprintf(sb, "| Color | `%s` |\n", toolutil.EscapeMdTableCell(out.Color))
 	if out.Description != "" {
 		fmt.Fprintf(sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	}

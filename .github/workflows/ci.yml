@@ -69,6 +69,9 @@ jobs:
           cache-dependency-path: site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: site
+      - name: Audit docs dependencies
+        run: pnpm audit --audit-level=high
+        working-directory: site
       - name: SonarCloud Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@v8
