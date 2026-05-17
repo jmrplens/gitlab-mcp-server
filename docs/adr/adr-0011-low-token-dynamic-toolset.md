@@ -16,8 +16,8 @@ Status: Accepted.
 
 ## Context
 
-ADR-0005 consolidated the GitLab MCP meta-tool catalog from 68 tools to 32 base tools, with 47 self-managed
-Enterprise/Premium tools and 48 GitLab.com Enterprise/Premium tools when all gated capabilities are visible. This remains
+ADR-0005 consolidated the GitLab MCP meta-tool catalog from 68 tools to 33 base tools, with 49 self-managed
+Enterprise/Premium tools and 50 GitLab.com Enterprise/Premium tools when all gated capabilities are visible. This remains
 the most compatible general-purpose mode and already reduces advertised tool-definition cost by about 89.5% versus the
 individual tool catalog.
 

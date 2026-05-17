@@ -33,6 +33,8 @@ This document explains when and how the GraphQL integration is used, the pattern
 | Epic Discussions (7 tools) | `internal/tools/epicdiscussions/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items discussions widgets via client-go `WorkItems` service |
 | Epic Issues (4 tools) | `internal/tools/epicissues/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items children/parent widgets via client-go `WorkItems` service |
 | Vulnerabilities | `internal/tools/vulnerabilities/` | GraphQL provides richer query/mutation capabilities than REST |
+| Security Attributes | `internal/tools/securityattributes/` | GraphQL-only namespace classification feature via client-go `SecurityAttributes` service |
+| Security Categories | `internal/tools/securitycategories/` | GraphQL-only namespace classification feature via client-go `SecurityCategories` service |
 | Security Findings | `internal/tools/securityfindings/` | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement |
 | CI/CD Catalog | `internal/tools/cicatalog/` | GraphQL-only feature — no REST API exists |
 | Branch Rules | `internal/tools/branchrules/` | GraphQL-only aggregated view of branch protections, approval rules, and status checks |
@@ -72,7 +74,7 @@ graph TD
 
 ### Pattern 1: Raw `GraphQL.Do()` for tool handlers
 
-Used by domain sub-packages (`vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, `customemoji`) that implement complete tool handlers with GraphQL queries.
+Used by domain sub-packages (`vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, `customemoji`) that implement complete tool handlers with GraphQL queries. Domains backed by typed client-go GraphQL services, such as `securityattributes` and `securitycategories`, follow the same ActionSpec and markdown patterns while delegating query construction to client-go.
 
 ```go
 // Define the query as a Go constant

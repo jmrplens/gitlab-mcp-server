@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 self-managed Enterprise/Premium individual tools or 1011 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (47 self-managed Enterprise/Premium, 48 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1014 self-managed Enterprise/Premium individual tools or 1019 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (49 self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`TOOL_SURFACE=meta`, default), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 14 additional enterprise inline meta-tools for **47 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **48 tools**.
+In meta-tool mode (`TOOL_SURFACE=meta`, default), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 
@@ -61,8 +61,8 @@ Meta-tools remain the default because they are the most broadly compatible conso
 
 | Mode | Tool Count | Best For |
 | --- | ---: | --- |
-| Meta-tools | 33 base / 47 self-managed Enterprise/Premium / 48 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 863 CE / 1006 self-managed Enterprise/Premium / 1011 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
+| Meta-tools | 33 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Individual tools | 863 CE / 1014 self-managed Enterprise/Premium / 1019 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
 
 ---
 

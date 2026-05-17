@@ -67,11 +67,11 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>163 domain sub-packages]
+        SPECS[domain ActionSpecs<br/>165 domain sub-packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1006 self-managed / 1011 GitLab.com Enterprise tools]
-        META[meta projection<br/>33 base / 47 self-managed enterprise / 48 GitLab.com Enterprise tools]
+        IND[individual projection<br/>1014 self-managed / 1019 GitLab.com Enterprise tools]
+        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
         DYN[dynamic projection<br/>3 visible search / describe / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
@@ -178,7 +178,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1006 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1011 total in that catalog, organized across 163 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
+The largest package — contains 1014 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1019 total in that catalog, organized across 165 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -268,7 +268,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base tools total. The Enterprise/Premium catalog adds 14 enterprise inline meta-tools, bringing the self-managed total to 47; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 48. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -588,7 +588,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (33/47/48) | Reduce tool count for LLM token efficiency; enterprise tier adds 14 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (33/49/50) | Reduce tool count for LLM token efficiency; enterprise tier adds 16 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |

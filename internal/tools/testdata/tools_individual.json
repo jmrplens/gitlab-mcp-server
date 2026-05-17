@@ -4478,6 +4478,121 @@
     }
   },
   {
+    "name": "gitlab_bulk_update_security_attributes",
+    "description": "Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status and updated projects. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute_ids": {
+          "description": "Security attribute IDs to apply",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_ids": {
+          "description": "Numeric group IDs to update",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "mode": {
+          "description": "Bulk update mode: ADD, REMOVE, or REPLACE",
+          "type": "string"
+        },
+        "project_ids": {
+          "description": "Numeric project IDs to update",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "attribute_ids",
+        "mode"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "group_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "mode",
+        "attribute_ids"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_cancel_bulk_import",
     "description": "Cancel an in-progress bulk import migration. Returns the migration with updated status.\n\nReturns: migration summary with id and status.\n\nSee also: gitlab_get_bulk_import, gitlab_list_bulk_imports.",
     "inputSchema": {
@@ -10020,6 +10135,264 @@
     }
   },
   {
+    "name": "gitlab_create_security_attribute",
+    "description": "Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "description": "Security attributes to create",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "description": "Security attribute color as a hex code (e.g. #FF0000)",
+                "type": "string"
+              },
+              "description": {
+                "description": "Security attribute description",
+                "type": "string"
+              },
+              "name": {
+                "description": "Security attribute name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "color"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "category_id": {
+          "description": "Numeric security category ID",
+          "type": "integer"
+        },
+        "namespace_id": {
+          "description": "Numeric namespace ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "namespace_id",
+        "category_id",
+        "attributes"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "editable_state": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "security_category": {
+                "additionalProperties": false,
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "editable_state": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "multiple_selection": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "template_type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "multiple_selection"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "attributes"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_create_security_category",
+    "description": "Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "Security category description",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "multiple_selection": {
+          "description": "Whether multiple attributes can be selected for the category",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "Security category name",
+          "type": "string"
+        },
+        "namespace_id": {
+          "description": "Numeric namespace ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "namespace_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "editable_state": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "multiple_selection": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "security_attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "editable_state": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "template_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "multiple_selection"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_create_service_account",
     "description": "Create a new GitLab service account user. Service accounts are machine users for automation.\n\nSee also: gitlab_list_service_accounts\n\nReturns: JSON with the created user details.",
     "inputSchema": {
@@ -12869,6 +13242,110 @@
       "required": [
         "project_id",
         "mirror_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_delete_security_attribute",
+    "description": "Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute_id": {
+          "description": "Numeric security attribute ID",
+          "type": "integer"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "attribute_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_delete_security_category",
+    "description": "Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "category_id": {
+          "description": "Numeric security category ID",
+          "type": "integer"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "category_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -111738,6 +112215,73 @@
     }
   },
   {
+    "name": "gitlab_update_project_security_attributes",
+    "description": "Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_security_attribute, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "add_attribute_ids": {
+          "description": "Security attribute IDs to add",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "description": "Numeric project ID",
+          "type": "integer"
+        },
+        "remove_attribute_ids": {
+          "description": "Security attribute IDs to remove",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "added_count": {
+          "type": "integer"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "removed_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "added_count",
+        "removed_count"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_update_repository_submodule",
     "description": "Update an existing submodule reference in a GitLab repository to point to a new commit SHA.\n\nReturns: JSON with the updated submodule reference.\n\nSee also: gitlab_list_repository_submodules",
     "inputSchema": {
@@ -111816,6 +112360,227 @@
         "author_name",
         "author_email",
         "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_update_security_attribute",
+    "description": "Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute_id": {
+          "description": "Numeric security attribute ID",
+          "type": "integer"
+        },
+        "color": {
+          "description": "New security attribute color as a hex code (e.g. #FF0000)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "description": {
+          "description": "New security attribute description",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "description": "New security attribute name",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "attribute_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "editable_state": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "security_category": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "editable_state": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "multiple_selection": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "template_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "multiple_selection"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "color"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_update_security_category",
+    "description": "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "category_id": {
+          "description": "Numeric security category ID",
+          "type": "integer"
+        },
+        "description": {
+          "description": "New security category description",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "description": "New security category name",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "namespace_id": {
+          "description": "Numeric namespace ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_id",
+        "namespace_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "editable_state": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "multiple_selection": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "security_attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "editable_state": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "template_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "multiple_selection"
       ],
       "type": "object"
     },

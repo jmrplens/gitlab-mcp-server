@@ -1079,8 +1079,8 @@ func assertCreateFeatureBodyCI(t *testing.T, body map[string]any) {
 	if v, ok := body["shared_runners_enabled"].(bool); !ok || !v {
 		t.Errorf("shared_runners_enabled = %v, want true", body["shared_runners_enabled"])
 	}
-	if v, ok := body["public_builds"].(bool); !ok || v {
-		t.Errorf("public_builds = %v, want false", body["public_builds"])
+	if v, ok := body["public_jobs"].(bool); !ok || v {
+		t.Errorf("public_jobs = %v, want false", body["public_jobs"])
 	}
 }
 

@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1006
+		const expectedTools = 1014
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -233,7 +233,7 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 33 base, 47 with enterprise.
+// the expected number of meta-tools: 33 base, 49 with enterprise.
 // Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
 // tools that cannot be folded into action+params meta-tools (they require
 // multi-round MCP elicitation/create exchanges with the client).
@@ -263,7 +263,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 47
+		const expectedTools = 49
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -378,6 +378,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_approve_user":                         true,
 		"gitlab_ban_user":                             true,
 		"gitlab_block_user":                           true,
+		"gitlab_bulk_update_security_attributes":      true,
 		"gitlab_board_create":                         true,
 		"gitlab_board_delete":                         true,
 		"gitlab_board_get":                            true,
@@ -439,6 +440,8 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_create_personal_access_token":         true,
 		"gitlab_create_project_alias":                 true,
 		"gitlab_create_project_external_status_check": true,
+		"gitlab_create_security_attribute":            true,
+		"gitlab_create_security_category":             true,
 		"gitlab_create_secure_file":                   true,
 		"gitlab_create_service_account":               true,
 		"gitlab_create_snippet_discussion":            true,
@@ -483,6 +486,8 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_delete_project_badge":                   true,
 		"gitlab_delete_project_external_status_check":   true,
 		"gitlab_delete_project_mirror":                  true,
+		"gitlab_delete_security_attribute":              true,
+		"gitlab_delete_security_category":               true,
 		"gitlab_delete_snippet_discussion_note":         true,
 		"gitlab_delete_ssh_key":                         true,
 		"gitlab_delete_ssh_key_for_user":                true,
@@ -1335,8 +1340,11 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_update_package_protection_rule":                    true,
 		"gitlab_update_project_external_status_check":              true,
 		"gitlab_update_project_mr_approval_settings":               true,
+		"gitlab_update_project_security_attributes":                true,
 		"gitlab_update_project_secret_push_protection":             true,
 		"gitlab_update_repository_submodule":                       true,
+		"gitlab_update_security_attribute":                         true,
+		"gitlab_update_security_category":                          true,
 		"gitlab_update_settings":                                   true,
 		"gitlab_update_snippet_discussion_note":                    true,
 		"gitlab_update_topic":                                      true,
@@ -1412,6 +1420,8 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		"gitlab_discover_project":      true,
 		"gitlab_runner":                true,
 		"gitlab_search":                true,
+		"gitlab_security_attribute":    true,
+		"gitlab_security_category":     true,
 		"gitlab_security_finding":      true,
 		"gitlab_snippet":               true,
 		"gitlab_storage_move":          true,
@@ -1852,7 +1862,7 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"group_member_unshare": {},
 	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
-	"transfer": {},
+	"transfer": {}, "bulk_update": {},
 }
 
 // isExactMatchException reports whether an action name is too generic for the

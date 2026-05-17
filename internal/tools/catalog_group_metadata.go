@@ -131,6 +131,8 @@ var catalogGroupIconsByToolName = map[string][]mcp.Icon{
 	"gitlab_repository":            toolutil.IconFile,
 	"gitlab_runner":                toolutil.IconRunner,
 	"gitlab_search":                toolutil.IconSearch,
+	"gitlab_security_attribute":    toolutil.IconSecurity,
+	"gitlab_security_category":     toolutil.IconSecurity,
 	"gitlab_security_finding":      toolutil.IconSecurity,
 	"gitlab_snippet":               toolutil.IconSnippet,
 	"gitlab_storage_move":          toolutil.IconInfra,

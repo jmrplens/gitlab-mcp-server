@@ -11,11 +11,11 @@ Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaqueta
 
 ### Modo individual
 
-En modo individual, el servidor registra una herramienta por operación de GitLab: **863 herramientas** para CE, **1006 herramientas** para Enterprise/Premium autoalojado, o **1011 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
+En modo individual, el servidor registra una herramienta por operación de GitLab: **863 herramientas** para CE, **1014 herramientas** para Enterprise/Premium autoalojado, o **1019 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
 ### Modo meta-herramientas (predeterminado)
 
-En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **33 meta-herramientas base**, **47 en Enterprise/Premium autoalojado**, o **48 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
+En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **33 meta-herramientas base**, **49 en Enterprise/Premium autoalojado**, o **50 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
 ```json
 {
@@ -129,7 +129,7 @@ Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_s
 
 Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 15 meta-herramientas adicionales para funciones Premium y Ultimate en instancias autoalojadas:
 
-`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_finding`
+`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`
 
 En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con cinco acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `query` y `graph_status`.
 

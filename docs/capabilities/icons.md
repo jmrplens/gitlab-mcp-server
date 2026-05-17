@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1006 self-managed Enterprise/Premium tools (1011 on GitLab.com Enterprise/Premium with Orbit), 33 base meta-tools (47 self-managed Enterprise, 48 GitLab.com Enterprise), 46 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
+gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1014 self-managed Enterprise/Premium tools (1019 on GitLab.com Enterprise/Premium with Orbit), 33 base meta-tools (49 self-managed Enterprise, 50 GitLab.com Enterprise), 46 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -175,7 +175,7 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 | Preview | Name | Packages |
 | ------- | ---- | -------- |
-| <img src="icons/security.svg" width="32" height="32" alt="Security"> | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securitysettings |
+| <img src="icons/security.svg" width="32" height="32" alt="Security"> | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
 | <img src="icons/shield.svg" width="32" height="32" alt="Shield"> | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
 | <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | securityfindings, vulnerabilities |
 | <img src="icons/compliance.svg" width="32" height="32" alt="Compliance"> | `IconCompliance` | attestations, compliancepolicy |
@@ -260,7 +260,7 @@ Alphabetical listing of all 50 icons and every sub-package that uses each one.
 | Runner | `IconRunner` | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
 | Schedule | `IconSchedule` | freezeperiods, pipelineschedules |
 | Search | `IconSearch` | search |
-| Security | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securitysettings |
+| Security | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
 | Server | `IconServer` | metadata, serverupdate |
 | Shield | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
 | Snippet | `IconSnippet` | snippets |

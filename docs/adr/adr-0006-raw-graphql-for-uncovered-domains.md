@@ -57,7 +57,7 @@ However, several GitLab API domains are **only available via GraphQL** and have 
 
 #### Pattern 1: Tool handlers (5 domains)
 
-Used by `vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, and `customemoji`. Each sub-package:
+Used by `vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, and `customemoji`. Related typed client-go GraphQL service packages include `securityattributes` and `securitycategories`. Each sub-package:
 
 1. Defines GraphQL query/mutation strings as Go constants
 2. Defines typed response structs matching the expected JSON shape

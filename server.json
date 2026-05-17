@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "1006 GitLab MCP tools self-managed; 1011 on GitLab.com Enterprise/Premium with Orbit.",
+  "description": "1014 GitLab MCP tools self-managed; 1019 on GitLab.com Enterprise/Premium with Orbit.",
   "version": "1.6.1",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",

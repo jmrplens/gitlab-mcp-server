@@ -116,7 +116,7 @@ Because all surfaces share the same catalog entry, schemas, read-only filtering,
 
 ### Meta-tool mode (default)
 
-With `TOOL_SURFACE=meta` (default), the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 14 Enterprise/Premium tools for 47 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 48 total. Each meta-tool groups related operations:
+With `TOOL_SURFACE=meta` (default), the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 50 total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -148,7 +148,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1006 on self-managed Enterprise/Premium, or 1011 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1014 on self-managed Enterprise/Premium, or 1019 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
 ### Dynamic toolset
 

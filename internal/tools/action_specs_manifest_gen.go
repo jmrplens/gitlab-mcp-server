@@ -39,6 +39,8 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildRepositoryActionSpecs,
 		buildRunnerActionSpecs,
 		buildSearchActionSpecs,
+		buildSecurityAttributeActionSpecs,
+		buildSecurityCategoryActionSpecs,
 		buildSecurityFindingActionSpecs,
 		buildSnippetActionSpecs,
 		buildStorageMoveActionSpecs,

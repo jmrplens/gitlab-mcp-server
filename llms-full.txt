@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.6.1 | up to 1011 tools | 33 base meta-tools; 47 self-managed enterprise meta-tools; 48 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
+> Version 1.6.1 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 3 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
@@ -9287,7 +9287,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 15 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 17 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
@@ -10043,6 +10043,116 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+### gitlab_security_attribute
+
+**Security Attribute**
+
+Use {"action":"bulk_update","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_security_attribute/<action>.
+
+Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
+Returns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.
+
+Param conventions: IDs are numeric GitLab IDs; mode is one of ADD, REMOVE, or REPLACE.
+
+- create: namespace_id*, category_id*, attributes* (array of {name, description, color})
+- update: attribute_id*, name, description, color
+- delete: attribute_id*
+- project_update: project_id*, add_attribute_ids, remove_attribute_ids
+- bulk_update: group_ids or project_ids*, attribute_ids*, mode*
+
+See also: gitlab_security_category, gitlab_project, gitlab_group
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>bulk_update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"attribute_ids":{"items":{"type":"integer"},"type":["null","array"]},"group_ids":{"items":{"type":"integer"},"type":["null","array"]},"message":{"type":"string"},"mode":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_ids":{"items":{"type":"integer"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message","mode","attribute_ids"],"type":"object"}
+```
+
+</details>
+
+<details><summary>create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"attributes":{"items":{"additionalProperties":false,"properties":{"color":{"type":"string"},"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"security_category":{"additionalProperties":false,"properties":{"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"multiple_selection":{"type":"boolean"},"name":{"type":"string"},"template_type":{"type":"string"}},"required":["id","name","multiple_selection"],"type":["null","object"]}},"required":["id","name","color"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["attributes"],"type":"object"}
+```
+
+</details>
+
+<details><summary>delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>project_update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"added_count":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"removed_count":{"type":"integer"}},"required":["added_count","removed_count"],"type":"object"}
+```
+
+</details>
+
+<details><summary>update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"color":{"type":"string"},"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"security_category":{"additionalProperties":false,"properties":{"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"multiple_selection":{"type":"boolean"},"name":{"type":"string"},"template_type":{"type":"string"}},"required":["id","name","multiple_selection"],"type":["null","object"]}},"required":["id","name","color"],"type":"object"}
+```
+
+</details>
+
+### gitlab_security_category
+
+**Security Category**
+
+Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://schema/meta/gitlab_security_category/<action>.
+
+Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.
+Returns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.
+
+Param conventions: IDs are numeric GitLab IDs.
+
+- create: namespace_id*, name*, description, multiple_selection
+- update: category_id*, namespace_id*, name, description
+- delete: category_id*
+
+See also: gitlab_security_attribute, gitlab_group, gitlab_project
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"multiple_selection":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"security_attributes":{"items":{"additionalProperties":false,"properties":{"color":{"type":"string"},"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"}},"required":["id","name","color"],"type":"object"},"type":["null","array"]},"template_type":{"type":"string"}},"required":["id","name","multiple_selection"],"type":"object"}
+```
+
+</details>
+
+<details><summary>delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"multiple_selection":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"security_attributes":{"items":{"additionalProperties":false,"properties":{"color":{"type":"string"},"description":{"type":"string"},"editable_state":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"}},"required":["id","name","color"],"type":"object"},"type":["null","array"]},"template_type":{"type":"string"}},"required":["id","name","multiple_selection"],"type":"object"}
+```
+
+</details>
+
 ### gitlab_security_finding
 
 **Security Finding**
@@ -10159,7 +10269,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1011 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1006.
+When `TOOL_SURFACE=individual`, up to 1019 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1014.
 Grouped by domain:
 
 ### access (8 tools)
@@ -10817,6 +10927,22 @@ Remove all protection rules from a GitLab branch, allowing unrestricted push, me
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
+### bulk (1 tools)
+
+#### gitlab_bulk_update_security_attributes
+
+Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status and updated projects. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes
+
+**Parameters:**
+
+- `attribute_ids` () (required): Security attribute IDs to apply
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `group_ids` (): Numeric group IDs to update
+- `mode` (string) (required): Bulk update mode: ADD, REMOVE, or REPLACE
+- `project_ids` (): Numeric project IDs to update
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
 ### cancel (2 tools)
 
 #### gitlab_cancel_bulk_import
@@ -11167,7 +11293,7 @@ Confirm a detected vulnerability (requires Ultimate/Premium). Changes state from
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### create (28 tools)
+### create (30 tools)
 
 #### gitlab_create_application
 
@@ -11500,6 +11626,31 @@ Create a new CI/CD secure file. Provide either file_path (absolute path to a loc
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
+#### gitlab_create_security_attribute
+
+Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate
+
+**Parameters:**
+
+- `attributes` () (required): Security attributes to create
+- `category_id` (integer) (required): Numeric security category ID
+- `namespace_id` (integer) (required): Numeric namespace ID
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_create_security_category
+
+Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate
+
+**Parameters:**
+
+- `description` (): Security category description
+- `multiple_selection` (): Whether multiple attributes can be selected for the category
+- `name` (string) (required): Security category name
+- `namespace_id` (integer) (required): Numeric namespace ID
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
 #### gitlab_create_service_account
 
 Create a new GitLab service account user. Service accounts are machine users for automation.
@@ -11624,7 +11775,7 @@ Deactivate an active GitLab user (admin only). Deactivated users cannot login bu
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### delete (44 tools)
+### delete (46 tools)
 
 #### gitlab_delete_alert_metric_image
 
@@ -12031,6 +12182,28 @@ Delete a remote push mirror from a GitLab project.
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `mirror_id` (integer) (required): Remote mirror ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_delete_security_attribute
+
+Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy
+
+**Parameters:**
+
+- `attribute_id` (integer) (required): Numeric security attribute ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_delete_security_category
+
+Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy
+
+**Parameters:**
+
+- `category_id` (integer) (required): Numeric security category ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -22935,7 +23108,7 @@ Unlock a Terraform state
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### update (20 tools)
+### update (23 tools)
 
 #### gitlab_update_alert_metric_image
 
@@ -23153,6 +23326,18 @@ Enable or disable secret push protection for a GitLab project.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_update_project_security_attributes
+
+Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_security_attribute, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate
+
+**Parameters:**
+
+- `add_attribute_ids` (): Security attribute IDs to add
+- `project_id` (integer) (required): Numeric project ID
+- `remove_attribute_ids` (): Security attribute IDs to remove
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_update_repository_submodule
 
 Update an existing submodule reference in a GitLab repository to point to a new commit SHA.
@@ -23164,6 +23349,32 @@ Update an existing submodule reference in a GitLab repository to point to a new 
 - `commit_sha` (string) (required): Full commit SHA to update the submodule to
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `submodule` (string) (required): URL-encoded full path to the submodule
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_update_security_attribute
+
+Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate
+
+**Parameters:**
+
+- `attribute_id` (integer) (required): Numeric security attribute ID
+- `color` (): New security attribute color as a hex code (e.g. #FF0000)
+- `description` (): New security attribute description
+- `name` (): New security attribute name
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_update_security_category
+
+Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate
+
+**Parameters:**
+
+- `category_id` (integer) (required): Numeric security category ID
+- `description` (): New security category description
+- `name` (): New security category name
+- `namespace_id` (integer) (required): Numeric namespace ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
