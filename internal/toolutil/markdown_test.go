@@ -134,6 +134,242 @@ func TestMarkdownTableRow(t *testing.T) {
 	}
 }
 
+// TestFormatCICDVariableMarkdown verifies the shared CI/CD variable detail renderer.
+func TestFormatCICDVariableMarkdown(t *testing.T) {
+	md := FormatCICDVariableMarkdown(CICDVariableMarkdown{
+		Key:              "SECRET_KEY",
+		Value:            "hidden-value",
+		VariableType:     "env_var",
+		Protected:        true,
+		Masked:           true,
+		Hidden:           true,
+		Raw:              true,
+		EnvironmentScope: "prod|blue",
+		Description:      "token|value",
+	}, CICDVariableMarkdownOptions{
+		Title:                   "Variable",
+		IncludeEnvironmentScope: true,
+		Hints:                   []string{"Use action 'update' to change this variable"},
+	})
+
+	for _, want := range []string{
+		"## Variable: SECRET_KEY",
+		"| Protected | " + BoolEmoji(true) + " |",
+		"| Hidden | " + BoolEmoji(true) + " |",
+		"| Environment Scope | prod&#124;blue |",
+		"| Description | token&#124;value |",
+		"| Value | [masked] |",
+		"Use action 'update' to change this variable",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "hidden-value") {
+		t.Errorf("masked variable value leaked in markdown:\n%s", md)
+	}
+}
+
+// TestFormatCICDVariableListMarkdown verifies the shared CI/CD variable list renderer.
+func TestFormatCICDVariableListMarkdown(t *testing.T) {
+	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
+	md := FormatCICDVariableListMarkdown([]CICDVariableMarkdown{
+		{Key: "MY|VAR", VariableType: "env_var", Protected: true, EnvironmentScope: "prod|blue"},
+	}, pagination, CICDVariableListMarkdownOptions{
+		Title:                   "CI/CD Variables",
+		EmptyMessage:            "No variables found.\n",
+		IncludeEnvironmentScope: true,
+		Hints:                   []string{"Use action 'get' with a key to see variable details"},
+	})
+
+	for _, want := range []string{
+		"## CI/CD Variables (1)",
+		"| Key | Type | Protected | Masked | Scope |",
+		"| MY&#124;VAR | env_var | true | false | prod&#124;blue |",
+		"Use action 'get' with a key to see variable details",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+
+	empty := FormatCICDVariableListMarkdown(nil, pagination, CICDVariableListMarkdownOptions{EmptyMessage: "No variables found.\n"})
+	if empty != "No variables found.\n" {
+		t.Errorf("empty markdown = %q, want no-results message", empty)
+	}
+}
+
+// TestFormatDiscussionListMarkdown verifies shared discussion list rendering.
+func TestFormatDiscussionListMarkdown(t *testing.T) {
+	md := FormatDiscussionListMarkdown([]DiscussionMarkdown{
+		NewDiscussionMarkdown("abc123", []DiscussionNoteMarkdown{
+			NewDiscussionNoteMarkdown(1, "hello\nworld", "alice", "2026-05-17T12:00:00Z"),
+		}),
+	}, DiscussionListMarkdownOptions{
+		Title:          "Commit Discussions",
+		EmptyMessage:   "No discussions found.\n",
+		PaginationText: "Page 1 of 1 | 1 items total | 20 per page",
+		Hints:          []string{"Use `gitlab_get_commit_discussion` to view full discussion details"},
+	})
+
+	for _, want := range []string{
+		"## Commit Discussions (1)",
+		"### Discussion abc123",
+		"- **@alice** (17 May 2026 12:00 UTC): hello\nworld",
+		"Page 1 of 1 | 1 items total | 20 per page",
+		"Use `gitlab_get_commit_discussion` to view full discussion details",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+
+	empty := FormatDiscussionListMarkdown(nil, DiscussionListMarkdownOptions{EmptyMessage: "No discussions found.\n"})
+	if empty != "No discussions found.\n" {
+		t.Errorf("empty markdown = %q, want no-results message", empty)
+	}
+}
+
+// TestFormatDiscussionMarkdown verifies shared single discussion rendering.
+func TestFormatDiscussionMarkdown(t *testing.T) {
+	md := FormatDiscussionMarkdown(NewDiscussionMarkdown("abc123", []DiscussionNoteMarkdown{
+		NewDiscussionNoteMarkdown(1, "hello\nworld", "alice", "2026-05-17T12:00:00Z"),
+	}), "Use action 'discussion_add_note' to reply to this discussion")
+
+	for _, want := range []string{
+		"## Discussion abc123",
+		"- **@alice** (17 May 2026 12:00 UTC): hello\nworld",
+		"Use action 'discussion_add_note' to reply to this discussion",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatDiscussionNoteMarkdown verifies shared discussion note rendering.
+func TestFormatDiscussionNoteMarkdown(t *testing.T) {
+	md := FormatDiscussionNoteMarkdown(
+		NewDiscussionNoteMarkdown(42, "body", "alice", "2026-05-17T12:00:00Z"),
+		"Use action 'discussion_update_note' with note_id to edit this note",
+	)
+
+	for _, want := range []string{
+		"## Note",
+		"- **ID**: 42",
+		"- **Author**: @alice",
+		"- **Body**: body",
+		"- **Created**: 17 May 2026 12:00 UTC",
+		"Use action 'discussion_update_note' with note_id to edit this note",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatTemplateListMarkdown verifies shared template list rendering.
+func TestFormatTemplateListMarkdown(t *testing.T) {
+	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
+	md := FormatTemplateListMarkdown([]TemplateMarkdown{
+		NewTemplateMarkdown("Go|Test", "Go template"),
+	}, pagination, TemplateListMarkdownOptions{
+		Title:        "CI YAML Templates",
+		EmptyMessage: "No templates found.\n",
+		Hint:         "Use `gitlab_get_ci_yaml_template` to view a specific template",
+	})
+
+	for _, want := range []string{
+		"## CI YAML Templates",
+		"| Key | Name |",
+		"| Go&#124;Test | Go template |",
+		"Page 1 of 1 | 1 items total | 20 per page",
+		"Use `gitlab_get_ci_yaml_template` to view a specific template",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+
+	empty := FormatTemplateListMarkdown(nil, pagination, TemplateListMarkdownOptions{Title: "CI YAML Templates", EmptyMessage: "No templates found.\n"})
+	if !strings.Contains(empty, "## CI YAML Templates") || !strings.Contains(empty, "No templates found.") {
+		t.Errorf("empty template markdown missing heading or message:\n%s", empty)
+	}
+}
+
+// TestFormatTemplateContentMarkdown verifies shared template body rendering.
+func TestFormatTemplateContentMarkdown(t *testing.T) {
+	md := FormatTemplateContentMarkdown("Dockerfile Template", "Go", "dockerfile", "FROM golang:latest", "Copy this template to your Dockerfile and customize it")
+
+	for _, want := range []string{
+		"## Dockerfile Template: Go",
+		"```dockerfile\nFROM golang:latest\n```",
+		"Copy this template to your Dockerfile and customize it",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatNoteMarkdown verifies shared GitLab note detail rendering.
+func TestFormatNoteMarkdown(t *testing.T) {
+	md := FormatNoteMarkdown(
+		NewNoteMarkdown(7, "note body", "alice", "2026-05-17T12:00:00Z", true, true, true, true, "bob"),
+		NoteMarkdownOptions{
+			Title:             "MR Note",
+			IncludeInternal:   true,
+			IncludeResolvable: true,
+			Hints:             []string{"Use note update to edit this note"},
+		},
+	)
+
+	for _, want := range []string{
+		"## MR Note #7",
+		"- **Author**: alice",
+		"- **Created**: 17 May 2026 12:00 UTC",
+		"- **System note**",
+		"- **Internal note**",
+		"- **Resolvable**: resolved",
+		"- **Resolved By**: @bob",
+		"note body",
+		"Use note update to edit this note",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatNoteListMarkdown verifies shared GitLab note list rendering.
+func TestFormatNoteListMarkdown(t *testing.T) {
+	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
+	md := FormatNoteListMarkdown([]NoteMarkdown{
+		NewNoteMarkdown(7, "", "alice|dev", "2026-05-17T12:00:00Z", true, true, false, false, ""),
+	}, pagination, NoteListMarkdownOptions{
+		Title:           "Issue Notes",
+		EmptyMessage:    "No issue notes found.\n",
+		IncludeInternal: true,
+		Hints:           []string{HintPreserveLinks},
+	})
+
+	for _, want := range []string{
+		"## Issue Notes (1)",
+		"| ID | Author | Created | System | Internal |",
+		"| 7 | alice&#124;dev | 17 May 2026 12:00 UTC | true | true |",
+		HintPreserveLinks,
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+
+	empty := FormatNoteListMarkdown(nil, pagination, NoteListMarkdownOptions{Title: "Issue Notes", EmptyMessage: "No issue notes found.\n"})
+	if !strings.Contains(empty, "## Issue Notes (1)") || !strings.Contains(empty, "No issue notes found.") {
+		t.Errorf("empty note markdown missing heading or message:\n%s", empty)
+	}
+}
+
 // TestMRStateEmoji verifies merge request state emoji mapping.
 func TestMRStateEmoji(t *testing.T) {
 	tests := []struct {

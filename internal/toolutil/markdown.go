@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -163,6 +164,417 @@ func MarkdownTableRow(cells ...string) string {
 		return ""
 	}
 	return markdownTableLine(cells)
+}
+
+// CICDVariableMarkdown carries the common fields rendered by GitLab CI/CD
+// variable tools at project, group, and instance scopes.
+type CICDVariableMarkdown struct {
+	Key              string
+	Value            string
+	VariableType     string
+	Protected        bool
+	Masked           bool
+	Hidden           bool
+	Raw              bool
+	EnvironmentScope string
+	Description      string
+}
+
+// NewCICDVariableMarkdown builds a shared Markdown view model for CI/CD
+// variables without forcing tool packages to duplicate composite literals.
+func NewCICDVariableMarkdown(key, value, variableType string, protected, masked, hidden, raw bool, environmentScope, description string) CICDVariableMarkdown {
+	return CICDVariableMarkdown{
+		Key:              key,
+		Value:            value,
+		VariableType:     variableType,
+		Protected:        protected,
+		Masked:           masked,
+		Hidden:           hidden,
+		Raw:              raw,
+		EnvironmentScope: environmentScope,
+		Description:      description,
+	}
+}
+
+// CICDVariableMarkdowns maps package-specific variable outputs to the shared
+// CI/CD variable Markdown view model.
+func CICDVariableMarkdowns[T any](variables []T, convert func(T) CICDVariableMarkdown) []CICDVariableMarkdown {
+	out := make([]CICDVariableMarkdown, 0, len(variables))
+	for _, variable := range variables {
+		out = append(out, convert(variable))
+	}
+	return out
+}
+
+// CICDVariableMarkdownOptions configures the shared CI/CD variable detail
+// renderer.
+type CICDVariableMarkdownOptions struct {
+	Title                   string
+	IncludeEnvironmentScope bool
+	Hints                   []string
+}
+
+// FormatCICDVariableMarkdown renders a single CI/CD variable as a Markdown
+// detail table.
+func FormatCICDVariableMarkdown(v CICDVariableMarkdown, opts CICDVariableMarkdownOptions) string {
+	if v.Key == "" {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s: %s\n\n", opts.Title, v.Key)
+	b.WriteString(TblFieldValue)
+	fmt.Fprintf(&b, "| Type | %s |\n", EscapeMdTableCell(v.VariableType))
+	fmt.Fprintf(&b, "| Protected | %s |\n", BoolEmoji(v.Protected))
+	fmt.Fprintf(&b, "| Masked | %s |\n", BoolEmoji(v.Masked))
+	if v.Hidden {
+		fmt.Fprintf(&b, "| Hidden | %s |\n", BoolEmoji(true))
+	}
+	fmt.Fprintf(&b, "| Raw | %s |\n", BoolEmoji(v.Raw))
+	if opts.IncludeEnvironmentScope {
+		fmt.Fprintf(&b, "| Environment Scope | %s |\n", EscapeMdTableCell(v.EnvironmentScope))
+	}
+	if v.Description != "" {
+		fmt.Fprintf(&b, "| Description | %s |\n", EscapeMdTableCell(v.Description))
+	}
+	if !v.Masked && !v.Hidden {
+		fmt.Fprintf(&b, "| Value | %s |\n", EscapeMdTableCell(v.Value))
+	} else {
+		b.WriteString("| Value | [masked] |\n")
+	}
+	WriteHints(&b, opts.Hints...)
+	return b.String()
+}
+
+// CICDVariableListMarkdownOptions configures the shared CI/CD variable list
+// renderer.
+type CICDVariableListMarkdownOptions struct {
+	Title                   string
+	EmptyMessage            string
+	IncludeEnvironmentScope bool
+	Hints                   []string
+}
+
+// FormatCICDVariableListMarkdown renders CI/CD variables as a Markdown table.
+func FormatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination PaginationOutput, opts CICDVariableListMarkdownOptions) string {
+	if len(variables) == 0 {
+		return opts.EmptyMessage
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, pagination.TotalItems)
+	WriteListSummary(&b, len(variables), pagination)
+	if opts.IncludeEnvironmentScope {
+		b.WriteString(MarkdownTableHeader("Key", "Type", "Protected", "Masked", "Scope"))
+	} else {
+		b.WriteString(MarkdownTableHeader("Key", "Type", "Protected", "Masked"))
+	}
+	for _, v := range variables {
+		if opts.IncludeEnvironmentScope {
+			b.WriteString(MarkdownTableRow(
+				EscapeMdTableCell(v.Key),
+				EscapeMdTableCell(v.VariableType),
+				strconv.FormatBool(v.Protected),
+				strconv.FormatBool(v.Masked),
+				EscapeMdTableCell(v.EnvironmentScope),
+			))
+			continue
+		}
+		b.WriteString(MarkdownTableRow(
+			EscapeMdTableCell(v.Key),
+			EscapeMdTableCell(v.VariableType),
+			strconv.FormatBool(v.Protected),
+			strconv.FormatBool(v.Masked),
+		))
+	}
+	WritePagination(&b, pagination)
+	WriteHints(&b, opts.Hints...)
+	return b.String()
+}
+
+// DiscussionNoteMarkdown carries common note fields rendered inside discussion
+// Markdown responses.
+type DiscussionNoteMarkdown struct {
+	ID        int64
+	Body      string
+	Author    string
+	CreatedAt string
+}
+
+// NewDiscussionNoteMarkdown builds a shared Markdown view model for discussion
+// notes.
+func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) DiscussionNoteMarkdown {
+	return DiscussionNoteMarkdown{ID: id, Body: body, Author: author, CreatedAt: createdAt}
+}
+
+// DiscussionNoteMarkdowns maps package-specific note outputs to the shared
+// discussion note Markdown view model.
+func DiscussionNoteMarkdowns[T any](notes []T, convert func(T) DiscussionNoteMarkdown) []DiscussionNoteMarkdown {
+	out := make([]DiscussionNoteMarkdown, 0, len(notes))
+	for _, note := range notes {
+		out = append(out, convert(note))
+	}
+	return out
+}
+
+// DiscussionMarkdown carries common discussion fields for Markdown responses.
+type DiscussionMarkdown struct {
+	ID    string
+	Notes []DiscussionNoteMarkdown
+}
+
+// NewDiscussionMarkdown builds a shared Markdown view model for discussion
+// threads.
+func NewDiscussionMarkdown(id string, notes []DiscussionNoteMarkdown) DiscussionMarkdown {
+	return DiscussionMarkdown{ID: id, Notes: notes}
+}
+
+// DiscussionMarkdowns maps package-specific discussion outputs to the shared
+// discussion Markdown view model.
+func DiscussionMarkdowns[T any](discussions []T, convert func(T) DiscussionMarkdown) []DiscussionMarkdown {
+	out := make([]DiscussionMarkdown, 0, len(discussions))
+	for _, discussion := range discussions {
+		out = append(out, convert(discussion))
+	}
+	return out
+}
+
+// DiscussionListMarkdownOptions configures shared discussion list rendering.
+type DiscussionListMarkdownOptions struct {
+	Title          string
+	EmptyMessage   string
+	ListSummary    string
+	PaginationText string
+	Hints          []string
+}
+
+// FormatDiscussionListMarkdown renders discussion threads as Markdown.
+func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts DiscussionListMarkdownOptions) string {
+	if len(discussions) == 0 {
+		return opts.EmptyMessage
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, len(discussions))
+	b.WriteString(opts.ListSummary)
+	for _, discussion := range discussions {
+		fmt.Fprintf(&b, "### Discussion %s\n", discussion.ID)
+		writeDiscussionNotes(&b, discussion.Notes, true)
+		b.WriteString("\n")
+	}
+	if opts.PaginationText != "" {
+		b.WriteString(opts.PaginationText)
+	}
+	WriteHints(&b, opts.Hints...)
+	return b.String()
+}
+
+// FormatDiscussionMarkdown renders a single discussion thread as Markdown.
+func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Discussion %s\n\n", discussion.ID)
+	writeDiscussionNotes(&b, discussion.Notes, false)
+	WriteHints(&b, hints...)
+	return b.String()
+}
+
+// FormatDiscussionNoteMarkdown renders a single discussion note as Markdown.
+func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) string {
+	var b strings.Builder
+	b.WriteString("## Note\n\n")
+	fmt.Fprintf(&b, FmtMdID, note.ID)
+	fmt.Fprintf(&b, FmtMdAuthorAt, note.Author)
+	fmt.Fprintf(&b, "- **Body**: %s\n", note.Body)
+	if note.CreatedAt != "" {
+		fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
+	}
+	WriteHints(&b, hints...)
+	return b.String()
+}
+
+func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown, normalizeBody bool) {
+	for _, note := range notes {
+		body := note.Body
+		if normalizeBody {
+			body = NormalizeText(body)
+		}
+		fmt.Fprintf(b, "- **@%s** (%s): %s\n", note.Author, FormatTime(note.CreatedAt), body)
+	}
+}
+
+// TemplateMarkdown carries common fields rendered by template list tools.
+type TemplateMarkdown struct {
+	Key  string
+	Name string
+}
+
+// NewTemplateMarkdown builds a shared Markdown view model for GitLab template
+// list entries.
+func NewTemplateMarkdown(key, name string) TemplateMarkdown {
+	return TemplateMarkdown{Key: key, Name: name}
+}
+
+// TemplateMarkdowns maps package-specific template outputs to the shared
+// template Markdown view model.
+func TemplateMarkdowns[T any](templates []T, convert func(T) TemplateMarkdown) []TemplateMarkdown {
+	out := make([]TemplateMarkdown, 0, len(templates))
+	for _, template := range templates {
+		out = append(out, convert(template))
+	}
+	return out
+}
+
+// TemplateListMarkdownOptions configures shared template list rendering.
+type TemplateListMarkdownOptions struct {
+	Title        string
+	EmptyMessage string
+	Hint         string
+}
+
+// FormatTemplateListMarkdown renders GitLab template list entries as Markdown.
+func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination PaginationOutput, opts TemplateListMarkdownOptions) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s\n\n", opts.Title)
+	WriteListSummary(&b, len(templates), pagination)
+	if len(templates) == 0 {
+		b.WriteString(opts.EmptyMessage)
+		return b.String()
+	}
+	b.WriteString(MarkdownTableHeader("Key", "Name"))
+	for _, template := range templates {
+		b.WriteString(MarkdownTableRow(EscapeMdTableCell(template.Key), EscapeMdTableCell(template.Name)))
+	}
+	WritePagination(&b, pagination)
+	WriteHints(&b, opts.Hint)
+	return b.String()
+}
+
+// FormatTemplateContentMarkdown renders a GitLab template body inside a fenced
+// code block.
+func FormatTemplateContentMarkdown(title, name, language, content, hint string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s: %s\n\n", title, name)
+	fmt.Fprintf(&b, "```%s\n", language)
+	b.WriteString(content)
+	b.WriteString("\n```\n")
+	WriteHints(&b, hint)
+	return b.String()
+}
+
+// NoteMarkdown carries common fields rendered by issue, merge request, and
+// snippet note tools.
+type NoteMarkdown struct {
+	ID         int64
+	Body       string
+	Author     string
+	CreatedAt  string
+	System     bool
+	Internal   bool
+	Resolvable bool
+	Resolved   bool
+	ResolvedBy string
+}
+
+// NewNoteMarkdown builds a shared Markdown view model for GitLab notes.
+func NewNoteMarkdown(id int64, body, author, createdAt string, system, internal, resolvable, resolved bool, resolvedBy string) NoteMarkdown {
+	return NoteMarkdown{
+		ID:         id,
+		Body:       body,
+		Author:     author,
+		CreatedAt:  createdAt,
+		System:     system,
+		Internal:   internal,
+		Resolvable: resolvable,
+		Resolved:   resolved,
+		ResolvedBy: resolvedBy,
+	}
+}
+
+// NoteMarkdowns maps package-specific note outputs to the shared note Markdown
+// view model.
+func NoteMarkdowns[T any](notes []T, convert func(T) NoteMarkdown) []NoteMarkdown {
+	out := make([]NoteMarkdown, 0, len(notes))
+	for _, note := range notes {
+		out = append(out, convert(note))
+	}
+	return out
+}
+
+// NoteMarkdownOptions configures shared note detail rendering.
+type NoteMarkdownOptions struct {
+	Title             string
+	IncludeInternal   bool
+	IncludeResolvable bool
+	Hints             []string
+}
+
+// FormatNoteMarkdown renders a single GitLab note as Markdown.
+func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s #%d\n\n", opts.Title, note.ID)
+	fmt.Fprintf(&b, FmtMdAuthor, note.Author)
+	fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
+	if note.System {
+		b.WriteString("- **System note**\n")
+	}
+	if opts.IncludeInternal && note.Internal {
+		b.WriteString("- **Internal note**\n")
+	}
+	if opts.IncludeResolvable && note.Resolvable {
+		resolved := "unresolved"
+		if note.Resolved {
+			resolved = "resolved"
+		}
+		fmt.Fprintf(&b, "- **Resolvable**: %s\n", resolved)
+		if note.ResolvedBy != "" {
+			fmt.Fprintf(&b, "- **Resolved By**: @%s\n", note.ResolvedBy)
+		}
+	}
+	fmt.Fprintf(&b, "\n%s\n", WrapGFMBody(note.Body))
+	WriteHints(&b, opts.Hints...)
+	return b.String()
+}
+
+// NoteListMarkdownOptions configures shared note list rendering.
+type NoteListMarkdownOptions struct {
+	Title           string
+	EmptyMessage    string
+	IncludeInternal bool
+	Hints           []string
+}
+
+// FormatNoteListMarkdown renders a list of GitLab notes as Markdown.
+func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, opts NoteListMarkdownOptions) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, pagination.TotalItems)
+	WriteListSummary(&b, len(notes), pagination)
+	if len(notes) == 0 {
+		b.WriteString(opts.EmptyMessage)
+		return b.String()
+	}
+	if opts.IncludeInternal {
+		b.WriteString(MarkdownTableHeader("ID", "Author", "Created", "System", "Internal"))
+	} else {
+		b.WriteString(MarkdownTableHeader("ID", "Author", "Created", "System"))
+	}
+	for _, note := range notes {
+		if opts.IncludeInternal {
+			b.WriteString(MarkdownTableRow(
+				strconv.FormatInt(note.ID, 10),
+				EscapeMdTableCell(note.Author),
+				FormatTime(note.CreatedAt),
+				strconv.FormatBool(note.System),
+				strconv.FormatBool(note.Internal),
+			))
+			continue
+		}
+		b.WriteString(MarkdownTableRow(
+			strconv.FormatInt(note.ID, 10),
+			EscapeMdTableCell(note.Author),
+			FormatTime(note.CreatedAt),
+			strconv.FormatBool(note.System),
+		))
+	}
+	WritePagination(&b, pagination)
+	WriteHints(&b, opts.Hints...)
+	return b.String()
 }
 
 func markdownTableLine(cells []string) string {

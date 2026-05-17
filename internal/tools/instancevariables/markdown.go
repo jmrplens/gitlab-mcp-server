@@ -35,24 +35,18 @@ func FormatOutputMarkdown(v Output) string {
 
 // FormatListMarkdown renders a paginated list of instance CI/CD variables as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	if len(out.Variables) == 0 {
-		return "No instance CI/CD variables found.\n"
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance CI/CD Variables (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Variables), out.Pagination)
-	b.WriteString("| Key | Type | Protected | Masked |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
-	for _, v := range out.Variables {
-		fmt.Fprintf(&b, "| %s | %s | %t | %t |\n",
-			toolutil.EscapeMdTableCell(v.Key), v.VariableType, v.Protected, v.Masked)
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
-		"Use action 'get' with key for full details",
-		"Use action 'create' to add a new instance variable",
-	)
-	return b.String()
+	return toolutil.FormatCICDVariableListMarkdown(toolutil.CICDVariableMarkdowns(out.Variables, toMarkdownVariable), out.Pagination, toolutil.CICDVariableListMarkdownOptions{
+		Title:        "Instance CI/CD Variables",
+		EmptyMessage: "No instance CI/CD variables found.\n",
+		Hints: []string{
+			"Use action 'get' with key for full details",
+			"Use action 'create' to add a new instance variable",
+		},
+	})
+}
+
+func toMarkdownVariable(v Output) toolutil.CICDVariableMarkdown {
+	return toolutil.NewCICDVariableMarkdown(v.Key, v.Value, v.VariableType, v.Protected, v.Masked, false, v.Raw, "", v.Description)
 }
 
 func init() {
