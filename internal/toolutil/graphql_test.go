@@ -117,6 +117,22 @@ func TestParseGID_Roundtrip(t *testing.T) {
 	}
 }
 
+func TestGraphQLTopLevelError(t *testing.T) {
+	if err := GraphQLTopLevelError("securityAttributeCreate", nil); err != nil {
+		t.Fatalf("GraphQLTopLevelError(nil) = %v, want nil", err)
+	}
+
+	err := GraphQLTopLevelError("securityAttributeCreate", []GraphQLError{{Message: "first"}, {Message: " second "}})
+	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate GraphQL errors: first; second") {
+		t.Fatalf("GraphQLTopLevelError() = %v, want joined messages", err)
+	}
+
+	err = GraphQLTopLevelError("securityAttributeCreate", []GraphQLError{{Message: " "}})
+	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate GraphQL errors") {
+		t.Fatalf("GraphQLTopLevelError(blank) = %v, want generic error", err)
+	}
+}
+
 // TestGraphQLPaginationInput_EffectiveFirst verifies that EffectiveFirst applies
 // the correct default, minimum, and maximum bounds to the page size. Table-driven
 // subtests cover: nil First (returns GraphQLDefaultFirst), explicit value within

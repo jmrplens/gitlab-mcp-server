@@ -116,6 +116,7 @@ func cloneSpecWithCompatibility(spec toolutil.ActionSpec, compatibility toolutil
 		RelatedActions:         spec.RelatedActions,
 		Compatibility:          compatibility,
 		ParameterGuidance:      spec.ParameterGuidance,
+		InputSchemaOverrides:   spec.InputSchemaOverrides,
 		ReadOnly:               spec.ReadOnly,
 		Destructive:            spec.Destructive,
 		Idempotent:             spec.Idempotent,

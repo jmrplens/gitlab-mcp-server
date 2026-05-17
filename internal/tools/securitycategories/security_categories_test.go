@@ -10,6 +10,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const sampleCategory = `{
@@ -183,6 +184,99 @@ func TestHandlers_WrapGitLabErrors(t *testing.T) {
 	}
 }
 
+func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create",
+			queryKey: "securityCategoryCreate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
+			name:     "update",
+			queryKey: "securityCategoryUpdate",
+			call: func(client *gitlabclient.Client) error {
+				name := "Business impact"
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+				return err
+			},
+		},
+		{
+			name:     "delete",
+			queryKey: "securityCategoryDestroy",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 7})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQLError(w, http.StatusOK, "top-level forbidden")
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "top-level forbidden") {
+				t.Fatalf("handler error = %v, want top-level GraphQL error", err)
+			}
+		})
+	}
+}
+
+func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
+	tests := []struct {
+		name     string
+		queryKey string
+		payload  string
+		call     func(*gitlabclient.Client) error
+	}{
+		{
+			name:     "create null category",
+			queryKey: "securityCategoryCreate",
+			payload:  `{"securityCategoryCreate":{"securityCategory":null,"errors":[]}}`,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+				return err
+			},
+		},
+		{
+			name:     "update null category",
+			queryKey: "securityCategoryUpdate",
+			payload:  `{"securityCategoryUpdate":{"securityCategory":null,"errors":[]}}`,
+			call: func(client *gitlabclient.Client) error {
+				name := "Business impact"
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, tt.payload)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "Not Found") {
+				t.Fatalf("handler error = %v, want Not Found", err)
+			}
+		})
+	}
+}
+
 func TestUpdate_Success(t *testing.T) {
 	name := "Application tier"
 	description := "Updated description"
@@ -320,11 +414,8 @@ func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 }
 
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
-	if out := toOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
-		t.Fatalf("toOutput(nil) = %#v", out)
-	}
-	if summary := attributeSummary(nil); summary.ID != 0 || summary.Name != "" {
-		t.Fatalf("attributeSummary(nil) = %#v", summary)
+	if out := categoryNodeOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
+		t.Fatalf("categoryNodeOutput(nil) = %#v", out)
 	}
 }
 
@@ -334,16 +425,23 @@ func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	if len(specs) != 3 {
 		t.Fatalf("ActionSpecs() len = %d, want 3", len(specs))
 	}
-	var deleteSpecFound bool
+	specByName := make(map[string]toolutil.ActionSpec, len(specs))
 	for _, spec := range specs {
-		if spec.Name == "delete" {
-			deleteSpecFound = true
-			if !spec.Destructive || spec.IndividualTool.Name != "gitlab_delete_security_category" {
-				t.Fatalf("delete spec = %#v", spec)
-			}
-		}
+		specByName[spec.Name] = spec
 	}
-	if !deleteSpecFound {
-		t.Fatal("delete spec not found")
+	deleteSpec := specByName["delete"]
+	if !deleteSpec.Destructive || deleteSpec.IndividualTool.Name != "gitlab_delete_security_category" {
+		t.Fatalf("delete spec = %#v", deleteSpec)
+	}
+	createProperties := specByName["create"].Route.InputSchema["properties"].(map[string]any)
+	if createProperties["name"].(map[string]any)["minLength"] != 1 {
+		t.Fatalf("create name schema = %#v", createProperties["name"])
+	}
+	if createProperties["multiple_selection"].(map[string]any)["type"] != "boolean" {
+		t.Fatalf("create multiple_selection schema = %#v", createProperties["multiple_selection"])
+	}
+	updateSchema := specByName["update"].Route.InputSchema
+	if anyOf, ok := updateSchema["anyOf"].([]any); !ok || len(anyOf) != 2 {
+		t.Fatalf("update anyOf = %#v, want name/description requirement", updateSchema["anyOf"])
 	}
 }

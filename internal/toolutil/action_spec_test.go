@@ -216,6 +216,72 @@ func TestActionSpecValidate_CompatibilityPolicyAcceptsNestedParameterAlias(t *te
 	}
 }
 
+// TestNewActionSpec_AppliesInputSchemaOverrides verifies ActionSpec schema
+// overrides patch root, property, and nested array-item schemas defensively.
+func TestNewActionSpec_AppliesInputSchemaOverrides(t *testing.T) {
+	inputSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"mode": map[string]any{"type": "string"},
+			"items": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"color": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+	overrides := []InputSchemaOverride{
+		SchemaAnyOfRequired("mode", "items"),
+		SchemaPropertyOverride("mode", map[string]any{"enum": []string{"ADD", "REMOVE"}}),
+		SchemaPropertyOverride("items", map[string]any{"minItems": 1}),
+		SchemaPropertyOverride("items.color", map[string]any{"pattern": "^#[0-9A-Fa-f]{6}$"}),
+	}
+
+	spec := NewActionSpec("bulk_update", ActionRoute{InputSchema: inputSchema}, ActionSpecOptions{InputSchemaOverrides: overrides})
+	overrides[1].Values["enum"] = []string{"changed"}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+	if got := spec.Route.InputSchema["anyOf"].([]any); len(got) != 2 {
+		t.Fatalf("anyOf = %#v, want two branches", got)
+	}
+	mode := spec.Route.InputSchema["properties"].(map[string]any)["mode"].(map[string]any)
+	if got := mode["enum"].([]string)[0]; got != "ADD" {
+		t.Fatalf("mode enum = %#v, want cloned ADD/REMOVE", mode["enum"])
+	}
+	items := spec.Route.InputSchema["properties"].(map[string]any)["items"].(map[string]any)
+	if got := items["minItems"]; got != 1 {
+		t.Fatalf("items minItems = %v, want 1", got)
+	}
+	color := items["items"].(map[string]any)["properties"].(map[string]any)["color"].(map[string]any)
+	if got := color["pattern"]; got != "^#[0-9A-Fa-f]{6}$" {
+		t.Fatalf("color pattern = %v, want hex pattern", got)
+	}
+
+	clone := CloneActionSpec(spec)
+	spec.InputSchemaOverrides[1].Values["enum"] = []string{"mutated"}
+	if got := clone.InputSchemaOverrides[1].Values["enum"].([]string)[0]; got != "ADD" {
+		t.Fatalf("clone schema overrides share metadata, got %q", got)
+	}
+}
+
+// TestActionSpecValidate_RejectsInvalidInputSchemaOverride verifies schema
+// overrides must target existing input properties.
+func TestActionSpecValidate_RejectsInvalidInputSchemaOverride(t *testing.T) {
+	spec := NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{
+		InputSchemaOverrides: []InputSchemaOverride{SchemaPropertyOverride("missing", map[string]any{"type": "string"})},
+	})
+
+	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "unknown property path") {
+		t.Fatalf("Validate() error = %v, want unknown property path", err)
+	}
+}
+
 // TestActionSpecValidate_RejectsInvalidCompatibilityPolicy covers ActionSpecValidate with table-driven subtests for rejects invalid compatibility policy.
 func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	testCases := []struct {

@@ -1516,8 +1516,8 @@ func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
 }
 
 // TestMetaToolDescriptionPrefix_FormatsLiteralExample checks that the prefix
-// embeds the alphabetically first action and the resource pointer for the
-// given tool name. Empty routes return an empty string.
+// embeds a representative action and the resource pointer for the given tool
+// name. Empty routes return an empty string.
 func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
@@ -1540,6 +1540,18 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 
 	if MetaToolDescriptionPrefix("gitlab_empty", ActionMap{}) != "" {
 		t.Error("empty routes should yield empty prefix")
+	}
+}
+
+// TestMetaToolDescriptionPrefix_PrefersReadableExampleAction verifies the
+// usage example does not default to destructive actions when a common read
+// action is available.
+func TestMetaToolDescriptionPrefix_PrefersReadableExampleAction(t *testing.T) {
+	routes := ActionMap{"archive": Route(nil), "delete": Route(nil), "get": Route(nil), "update": Route(nil)}
+	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
+
+	if !strings.Contains(got, `Use {"action":"get","params":{...}}`) {
+		t.Fatalf("prefix action example = %q, want get", got)
 	}
 }
 

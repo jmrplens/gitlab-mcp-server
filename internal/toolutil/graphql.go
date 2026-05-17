@@ -89,6 +89,30 @@ type GraphQLRawPageInfo struct {
 	StartCursor     string `json:"startCursor"`
 }
 
+// GraphQLError is one top-level GraphQL error returned in a successful HTTP
+// response body.
+type GraphQLError struct {
+	Message string `json:"message"`
+}
+
+// GraphQLTopLevelError formats top-level GraphQL response errors, if any.
+func GraphQLTopLevelError(operation string, errors []GraphQLError) error {
+	if len(errors) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(errors))
+	for _, graphQLError := range errors {
+		message := strings.TrimSpace(graphQLError.Message)
+		if message != "" {
+			messages = append(messages, message)
+		}
+	}
+	if len(messages) == 0 {
+		return fmt.Errorf("%s GraphQL errors", operation)
+	}
+	return fmt.Errorf("%s GraphQL errors: %s", operation, strings.Join(messages, "; "))
+}
+
 // FormatGraphQLPagination renders cursor-based pagination metadata as a
 // Markdown summary line, suitable for appending to list tool responses.
 func FormatGraphQLPagination(p GraphQLPaginationOutput, shown int) string {

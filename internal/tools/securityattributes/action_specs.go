@@ -26,12 +26,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func securityAttributeCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("attributes", map[string]any{"type": "array", "minItems": 1}),
+		toolutil.SchemaPropertyOverride("attributes.name", map[string]any{"minLength": 1}),
+		toolutil.SchemaPropertyOverride("attributes.description", map[string]any{"minLength": 1}),
+		toolutil.SchemaPropertyOverride("attributes.color", map[string]any{"pattern": hexColorSchemaPattern}),
+	}
 	options.Usage = "Create security attributes under an existing security category."
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaAnyOfRequired("name", "description", "color"),
+		toolutil.SchemaPropertyOverride("name", map[string]any{"type": "string", "minLength": 1}),
+		toolutil.SchemaPropertyOverride("description", map[string]any{"type": "string"}),
+		toolutil.SchemaPropertyOverride("color", map[string]any{"type": "string", "pattern": hexColorSchemaPattern}),
+	}
 	options.Idempotent = true
 	options.Usage = "Update security attribute metadata or assignments."
 	return toolutil.NewActionSpec(name, route, options)
@@ -47,6 +59,11 @@ func securityAttributeDeleteSpec(name string, route toolutil.ActionRoute, indivi
 
 func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaAnyOfRequired("add_attribute_ids", "remove_attribute_ids"),
+		toolutil.SchemaPropertyOverride("add_attribute_ids", map[string]any{"type": "array", "minItems": 1}),
+		toolutil.SchemaPropertyOverride("remove_attribute_ids", map[string]any{"type": "array", "minItems": 1}),
+	}
 	options.Destructive = true
 	options.Idempotent = true
 	options.Usage = "Add or remove security attributes on a project."
@@ -55,6 +72,13 @@ func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute,
 
 func securityAttributeBulkUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaAnyOfRequired("group_ids", "project_ids"),
+		toolutil.SchemaPropertyOverride("group_ids", map[string]any{"type": "array", "minItems": 1}),
+		toolutil.SchemaPropertyOverride("project_ids", map[string]any{"type": "array", "minItems": 1}),
+		toolutil.SchemaPropertyOverride("attribute_ids", map[string]any{"type": "array", "minItems": 1}),
+		toolutil.SchemaPropertyOverride("mode", map[string]any{"enum": []string{string(BulkUpdateModeAdd), string(BulkUpdateModeRemove), string(BulkUpdateModeReplace)}}),
+	}
 	options.Destructive = true
 	options.Idempotent = true
 	options.Usage = "Apply security attributes to many groups and projects in one request."

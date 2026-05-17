@@ -14,7 +14,74 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+const hexColorSchemaPattern = `^#[0-9A-Fa-f]{6}$`
+
+var hexColorPattern = regexp.MustCompile(hexColorSchemaPattern)
+
+const (
+	securityAttributeCreateMutation = `
+		mutation CreateSecurityAttributes($input: SecurityAttributeCreateInput!) {
+			securityAttributeCreate(input: $input) {
+				securityAttributes {
+					id
+					name
+					color
+					description
+					editableState
+					securityCategory {
+						id
+						name
+						description
+						multipleSelection
+						editableState
+						templateType
+					}
+				}
+				errors
+			}
+		}`
+	securityAttributeUpdateMutation = `
+		mutation UpdateSecurityAttribute($input: SecurityAttributeUpdateInput!) {
+			securityAttributeUpdate(input: $input) {
+				securityAttribute {
+					id
+					name
+					color
+					description
+					editableState
+					securityCategory {
+						id
+						name
+						description
+						multipleSelection
+						editableState
+						templateType
+					}
+				}
+				errors
+			}
+		}`
+	securityAttributeDestroyMutation = `
+		mutation DestroySecurityAttribute($input: SecurityAttributeDestroyInput!) {
+			securityAttributeDestroy(input: $input) {
+				errors
+			}
+		}`
+	securityAttributeProjectUpdateMutation = `
+		mutation ProjectUpdateSecurityAttribute($input: SecurityAttributeProjectUpdateInput!) {
+			securityAttributeProjectUpdate(input: $input) {
+				addedCount
+				removedCount
+				errors
+			}
+		}`
+	securityAttributeBulkUpdateMutation = `
+		mutation BulkUpdateSecurityAttributes($input: BulkUpdateSecurityAttributesInput!) {
+			bulkUpdateSecurityAttributes(input: $input) {
+				errors
+			}
+		}`
+)
 
 // BulkUpdateMode is the mode used when applying security attributes in bulk.
 type BulkUpdateMode string
@@ -115,46 +182,70 @@ type BulkUpdateOutput struct {
 	AttributeIDs []int64        `json:"attribute_ids"`
 }
 
-func toOutput(attribute *gl.SecurityAttribute) Output {
+type attributeNode struct {
+	ID               string        `json:"id"`
+	Name             string        `json:"name"`
+	Color            string        `json:"color"`
+	Description      string        `json:"description"`
+	EditableState    string        `json:"editableState"`
+	SecurityCategory *categoryNode `json:"securityCategory"`
+}
+
+type categoryNode struct {
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	Description       *string `json:"description"`
+	MultipleSelection bool    `json:"multipleSelection"`
+	EditableState     string  `json:"editableState"`
+	TemplateType      *string `json:"templateType"`
+}
+
+type attributeMutationEnvelope struct {
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+func attributeNodeOutput(attribute *attributeNode) Output {
 	if attribute == nil {
 		return Output{}
 	}
+	_, id, _ := toolutil.ParseGID(attribute.ID)
 	out := Output{
-		ID:            attribute.ID,
+		ID:            id,
 		Name:          attribute.Name,
 		Color:         attribute.Color,
 		Description:   attribute.Description,
-		EditableState: string(attribute.EditableState),
+		EditableState: attribute.EditableState,
 	}
 	if attribute.SecurityCategory != nil {
-		out.SecurityCategory = categorySummary(attribute.SecurityCategory)
+		out.SecurityCategory = categoryNodeSummary(attribute.SecurityCategory)
 	}
 	return out
 }
 
-func categorySummary(category *gl.SecurityCategory) *CategorySummary {
+func categoryNodeSummary(category *categoryNode) *CategorySummary {
 	if category == nil {
 		return nil
 	}
+	_, id, _ := toolutil.ParseGID(category.ID)
 	summary := &CategorySummary{
-		ID:                category.ID,
+		ID:                id,
 		Name:              category.Name,
 		MultipleSelection: category.MultipleSelection,
-		EditableState:     string(category.EditableState),
+		EditableState:     category.EditableState,
 	}
 	if category.Description != nil {
 		summary.Description = *category.Description
 	}
 	if category.TemplateType != nil {
-		summary.TemplateType = string(*category.TemplateType)
+		summary.TemplateType = *category.TemplateType
 	}
 	return summary
 }
 
-func toCreateOutput(attributes []*gl.SecurityAttribute) CreateOutput {
+func attributeNodesOutput(attributes []*attributeNode) CreateOutput {
 	out := CreateOutput{Attributes: make([]Output, 0, len(attributes))}
 	for _, attribute := range attributes {
-		out.Attributes = append(out.Attributes, toOutput(attribute))
+		out.Attributes = append(out.Attributes, attributeNodeOutput(attribute))
 	}
 	return out
 }
@@ -253,11 +344,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return CreateOutput{}, err
 	}
 
-	attributes, _, err := client.GL().SecurityAttributes.CreateSecurityAttributes(input.NamespaceID, input.CategoryID, createAttributeOptions(input.Attributes), gl.WithContext(ctx))
+	attributes, err := createSecurityAttributes(ctx, client, input.NamespaceID, input.CategoryID, createAttributeOptions(input.Attributes))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithHint("create security attributes", err, "verify namespace_id and category_id; requires permission on a Premium or Ultimate namespace")
 	}
-	return toCreateOutput(attributes), nil
+	return attributeNodesOutput(attributes), nil
 }
 
 // Update updates a GitLab security attribute.
@@ -288,11 +379,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		}
 		opts.Name = &name
 	}
-	attribute, _, err := client.GL().SecurityAttributes.UpdateSecurityAttribute(input.AttributeID, opts, gl.WithContext(ctx))
+	attribute, err := updateSecurityAttribute(ctx, client, input.AttributeID, opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("update security attribute", err, "verify attribute_id; only editable custom attributes can be updated")
 	}
-	return toOutput(attribute), nil
+	return attributeNodeOutput(attribute), nil
 }
 
 // Delete deletes a GitLab security attribute.
@@ -303,7 +394,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err := validatePositiveID(input.AttributeID, "attribute_id"); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	if _, err := client.GL().SecurityAttributes.DestroySecurityAttribute(input.AttributeID, gl.WithContext(ctx)); err != nil {
+	if err := destroySecurityAttribute(ctx, client, input.AttributeID); err != nil {
 		return toolutil.DeleteOutput{}, toolutil.WrapErrWithHint("delete security attribute", err, "verify attribute_id; only editable custom attributes can be deleted")
 	}
 	return toolutil.DeleteOutput{
@@ -341,11 +432,11 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 	if len(input.RemoveAttributeIDs) > 0 {
 		opts.RemoveAttributeIDs = &input.RemoveAttributeIDs
 	}
-	result, _, err := client.GL().SecurityAttributes.ProjectUpdateSecurityAttribute(input.ProjectID, opts, gl.WithContext(ctx))
+	result, err := projectUpdateSecurityAttribute(ctx, client, input.ProjectID, opts)
 	if err != nil {
 		return ProjectUpdateOutput{}, toolutil.WrapErrWithHint("update project security attributes", err, "verify project_id and attribute IDs; requires permission on the project and Premium or Ultimate")
 	}
-	return ProjectUpdateOutput{AddedCount: result.AddedCount, RemovedCount: result.RemovedCount}, nil
+	return result, nil
 }
 
 // BulkUpdate adds, removes, or replaces security attributes on groups and projects.
@@ -384,7 +475,7 @@ func BulkUpdate(ctx context.Context, client *gitlabclient.Client, input BulkUpda
 	if len(input.ProjectIDs) > 0 {
 		opts.ProjectIDs = &input.ProjectIDs
 	}
-	if _, err := client.GL().SecurityAttributes.BulkUpdateSecurityAttributes(opts, gl.WithContext(ctx)); err != nil {
+	if err := bulkUpdateSecurityAttributes(ctx, client, opts); err != nil {
 		return BulkUpdateOutput{}, toolutil.WrapErrWithHint("bulk update security attributes", err, "verify group_ids, project_ids, attribute_ids, and mode; requires Premium or Ultimate")
 	}
 	return BulkUpdateOutput{
@@ -395,4 +486,189 @@ func BulkUpdate(ctx context.Context, client *gitlabclient.Client, input BulkUpda
 		ProjectIDs:   input.ProjectIDs,
 		AttributeIDs: input.AttributeIDs,
 	}, nil
+}
+
+func createSecurityAttributes(ctx context.Context, client *gitlabclient.Client, namespaceID, categoryID int64, opts *gl.CreateSecurityAttributesOptions) ([]*attributeNode, error) {
+	attributes := make([]map[string]any, 0, len(*opts.Attributes))
+	for _, attribute := range *opts.Attributes {
+		attributes = append(attributes, map[string]any{
+			"name":        attribute.Name,
+			"description": attribute.Description,
+			"color":       attribute.Color,
+		})
+	}
+	query := gl.GraphQLQuery{
+		Query: securityAttributeCreateMutation,
+		Variables: map[string]any{"input": map[string]any{
+			"namespaceId": toolutil.FormatGID("Namespace", namespaceID),
+			"categoryId":  toolutil.FormatGID("Security::Category", categoryID),
+			"attributes":  attributes,
+		}},
+	}
+	var result struct {
+		Data struct {
+			SecurityAttributeCreate struct {
+				SecurityAttributes []*attributeNode `json:"securityAttributes"`
+				Errors             []string         `json:"errors"`
+			} `json:"securityAttributeCreate"`
+		} `json:"data"`
+		attributeMutationEnvelope
+	}
+	_, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeCreate", result.Errors); topLevelErr != nil {
+		return nil, topLevelErr
+	}
+	if len(result.Data.SecurityAttributeCreate.Errors) > 0 {
+		return nil, fmt.Errorf("securityAttributeCreate mutation errors: %v", result.Data.SecurityAttributeCreate.Errors)
+	}
+	if len(result.Data.SecurityAttributeCreate.SecurityAttributes) == 0 {
+		return nil, gl.ErrNotFound
+	}
+	return result.Data.SecurityAttributeCreate.SecurityAttributes, nil
+}
+
+func updateSecurityAttribute(ctx context.Context, client *gitlabclient.Client, attributeID int64, opts *gl.UpdateSecurityAttributeOptions) (*attributeNode, error) {
+	input := map[string]any{"id": toolutil.FormatGID("Security::Attribute", attributeID)}
+	if opts.Name != nil {
+		input["name"] = opts.Name
+	}
+	if opts.Description != nil {
+		input["description"] = opts.Description
+	}
+	if opts.Color != nil {
+		input["color"] = opts.Color
+	}
+	var result struct {
+		Data struct {
+			SecurityAttributeUpdate struct {
+				SecurityAttribute *attributeNode `json:"securityAttribute"`
+				Errors            []string       `json:"errors"`
+			} `json:"securityAttributeUpdate"`
+		} `json:"data"`
+		attributeMutationEnvelope
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityAttributeUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeUpdate", result.Errors); topLevelErr != nil {
+		return nil, topLevelErr
+	}
+	if len(result.Data.SecurityAttributeUpdate.Errors) > 0 {
+		return nil, fmt.Errorf("securityAttributeUpdate mutation errors: %v", result.Data.SecurityAttributeUpdate.Errors)
+	}
+	if result.Data.SecurityAttributeUpdate.SecurityAttribute == nil {
+		return nil, gl.ErrNotFound
+	}
+	return result.Data.SecurityAttributeUpdate.SecurityAttribute, nil
+}
+
+func destroySecurityAttribute(ctx context.Context, client *gitlabclient.Client, attributeID int64) error {
+	var result struct {
+		Data struct {
+			SecurityAttributeDestroy struct {
+				Errors []string `json:"errors"`
+			} `json:"securityAttributeDestroy"`
+		} `json:"data"`
+		attributeMutationEnvelope
+	}
+	query := gl.GraphQLQuery{
+		Query:     securityAttributeDestroyMutation,
+		Variables: map[string]any{"input": map[string]any{"id": toolutil.FormatGID("Security::Attribute", attributeID)}},
+	}
+	_, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeDestroy", result.Errors); topLevelErr != nil {
+		return topLevelErr
+	}
+	if len(result.Data.SecurityAttributeDestroy.Errors) > 0 {
+		return fmt.Errorf("securityAttributeDestroy mutation errors: %v", result.Data.SecurityAttributeDestroy.Errors)
+	}
+	return nil
+}
+
+func projectUpdateSecurityAttribute(ctx context.Context, client *gitlabclient.Client, projectID int64, opts *gl.ProjectUpdateSecurityAttributeOptions) (ProjectUpdateOutput, error) {
+	input := map[string]any{"projectId": toolutil.FormatGID("Project", projectID)}
+	if opts.AddAttributeIDs != nil {
+		input["addAttributeIds"] = formatGIDs("Security::Attribute", *opts.AddAttributeIDs)
+	}
+	if opts.RemoveAttributeIDs != nil {
+		input["removeAttributeIds"] = formatGIDs("Security::Attribute", *opts.RemoveAttributeIDs)
+	}
+	var result struct {
+		Data struct {
+			SecurityAttributeProjectUpdate struct {
+				AddedCount   int64    `json:"addedCount"`
+				RemovedCount int64    `json:"removedCount"`
+				Errors       []string `json:"errors"`
+			} `json:"securityAttributeProjectUpdate"`
+		} `json:"data"`
+		attributeMutationEnvelope
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityAttributeProjectUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	if err != nil {
+		return ProjectUpdateOutput{}, err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeProjectUpdate", result.Errors); topLevelErr != nil {
+		return ProjectUpdateOutput{}, topLevelErr
+	}
+	projectResult := result.Data.SecurityAttributeProjectUpdate
+	if len(projectResult.Errors) > 0 {
+		return ProjectUpdateOutput{}, fmt.Errorf("securityAttributeProjectUpdate mutation errors: %v", projectResult.Errors)
+	}
+	return ProjectUpdateOutput{AddedCount: projectResult.AddedCount, RemovedCount: projectResult.RemovedCount}, nil
+}
+
+func bulkUpdateSecurityAttributes(ctx context.Context, client *gitlabclient.Client, opts *gl.BulkUpdateSecurityAttributesOptions) error {
+	itemsLen := 0
+	if opts.GroupIDs != nil {
+		itemsLen += len(*opts.GroupIDs)
+	}
+	if opts.ProjectIDs != nil {
+		itemsLen += len(*opts.ProjectIDs)
+	}
+	items := make([]string, 0, itemsLen)
+	if opts.GroupIDs != nil {
+		items = append(items, formatGIDs("Group", *opts.GroupIDs)...)
+	}
+	if opts.ProjectIDs != nil {
+		items = append(items, formatGIDs("Project", *opts.ProjectIDs)...)
+	}
+	input := map[string]any{
+		"items":      items,
+		"attributes": formatGIDs("Security::Attribute", *opts.AttributeIDs),
+		"mode":       *opts.Mode,
+	}
+	var result struct {
+		Data struct {
+			BulkUpdateSecurityAttributes struct {
+				Errors []string `json:"errors"`
+			} `json:"bulkUpdateSecurityAttributes"`
+		} `json:"data"`
+		attributeMutationEnvelope
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityAttributeBulkUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	if topLevelErr := toolutil.GraphQLTopLevelError("bulkUpdateSecurityAttributes", result.Errors); topLevelErr != nil {
+		return topLevelErr
+	}
+	if len(result.Data.BulkUpdateSecurityAttributes.Errors) > 0 {
+		return fmt.Errorf("bulkUpdateSecurityAttributes mutation errors: %v", result.Data.BulkUpdateSecurityAttributes.Errors)
+	}
+	return nil
+}
+
+func formatGIDs(typeName string, values []int64) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, toolutil.FormatGID(typeName, value))
+	}
+	return out
 }

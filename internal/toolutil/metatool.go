@@ -2063,10 +2063,10 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 
 // MetaToolDescriptionPrefix builds a fixed-format header that should be
 // prepended to a meta-tool's user-supplied description. The header gives
-// LLMs a literal JSON usage example based on the alphabetically first action
-// and points at the gitlab://schema/meta resource for per-action params
-// schemas. Returns an empty string when routes is empty so callers degrade
-// gracefully rather than emit a malformed header.
+// LLMs a literal JSON usage example based on a representative action and
+// points at the gitlab://schema/meta resource for per-action params schemas.
+// Returns an empty string when routes is empty so callers degrade gracefully
+// rather than emit a malformed header.
 func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	if len(routes) == 0 {
 		return ""
@@ -2076,13 +2076,22 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 		actions = append(actions, name)
 	}
 	sort.Strings(actions)
-	first := actions[0]
+	exampleAction := metaToolExampleAction(actions)
 	guidance := metaToolParameterGuidanceSummary(routes, actions)
 	return fmt.Sprintf(
 		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.%s\n\n",
-		first, toolName,
+		exampleAction, toolName,
 		guidance,
 	)
+}
+
+func metaToolExampleAction(sortedActions []string) string {
+	for _, candidate := range []string{"create", "list", "get", "search", "update"} {
+		if slices.Contains(sortedActions, candidate) {
+			return candidate
+		}
+	}
+	return sortedActions[0]
 }
 
 func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) string {
