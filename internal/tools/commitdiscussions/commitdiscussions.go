@@ -76,23 +76,10 @@ type DeleteNoteInput struct {
 // Output types.
 
 // NoteOutput represents a single note within a discussion.
-type NoteOutput struct {
-	toolutil.HintableOutput
-	ID        int64  `json:"id"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	System    bool   `json:"system"`
-}
+type NoteOutput = toolutil.DiscussionNoteOutput
 
 // Output represents a discussion thread.
-type Output struct {
-	toolutil.HintableOutput
-	ID             string       `json:"id"`
-	IndividualNote bool         `json:"individual_note"`
-	Notes          []NoteOutput `json:"notes"`
-}
+type Output = toolutil.DiscussionOutput
 
 // ListOutput holds a list of commit discussions.
 type ListOutput struct {

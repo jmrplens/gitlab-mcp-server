@@ -317,6 +317,43 @@ type DiscussionNoteMarkdown struct {
 	CreatedAt string
 }
 
+// DiscussionNoteOutput carries the common JSON fields returned by REST
+// discussion note tools.
+type DiscussionNoteOutput struct {
+	HintableOutput
+	ID        int64  `json:"id"`
+	Body      string `json:"body"`
+	Author    string `json:"author"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	System    bool   `json:"system"`
+}
+
+// MarkdownNote returns the shared Markdown view model for a discussion note.
+func (note DiscussionNoteOutput) MarkdownNote() DiscussionNoteMarkdown {
+	return NewDiscussionNoteMarkdown(note.ID, note.Body, note.Author, note.CreatedAt)
+}
+
+// DiscussionOutput carries the common JSON fields returned by REST discussion
+// tools.
+type DiscussionOutput struct {
+	HintableOutput
+	ID             string                 `json:"id"`
+	IndividualNote bool                   `json:"individual_note"`
+	Notes          []DiscussionNoteOutput `json:"notes"`
+}
+
+// MarkdownDiscussion returns the shared Markdown view model for a discussion.
+func (discussion DiscussionOutput) MarkdownDiscussion() DiscussionMarkdown {
+	return NewDiscussionMarkdown(discussion.ID, DiscussionNoteMarkdowns(discussion.Notes, DiscussionNoteOutput.MarkdownNote))
+}
+
+// DiscussionOutputMarkdowns maps shared REST discussion outputs to Markdown
+// view models.
+func DiscussionOutputMarkdowns(discussions []DiscussionOutput) []DiscussionMarkdown {
+	return DiscussionMarkdowns(discussions, DiscussionOutput.MarkdownDiscussion)
+}
+
 // NewDiscussionNoteMarkdown builds a shared Markdown view model for discussion
 // notes.
 func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) DiscussionNoteMarkdown {
@@ -337,6 +374,46 @@ func DiscussionNoteMarkdowns[T any](notes []T, convert func(T) DiscussionNoteMar
 type DiscussionMarkdown struct {
 	ID    string
 	Notes []DiscussionNoteMarkdown
+}
+
+// DiscussionRenderer stores stable labels and hints for a discussion family so
+// package formatters can avoid repeating identical rendering glue.
+type DiscussionRenderer struct {
+	ListTitle       string
+	EmptyMessage    string
+	ListHints       []string
+	DiscussionHints []string
+	NoteHints       []string
+}
+
+// FormatRESTList renders REST discussion threads with offset pagination.
+func (r DiscussionRenderer) FormatRESTList(discussions []DiscussionMarkdown, pagination PaginationOutput) string {
+	return FormatDiscussionListMarkdown(discussions, DiscussionListMarkdownOptions{
+		Title:        r.ListTitle,
+		EmptyMessage: r.EmptyMessage,
+		Pagination:   pagination,
+		Hints:        r.ListHints,
+	})
+}
+
+// FormatGraphQLList renders GraphQL discussion threads with cursor pagination.
+func (r DiscussionRenderer) FormatGraphQLList(discussions []DiscussionMarkdown, pagination GraphQLPaginationOutput) string {
+	return FormatDiscussionListMarkdown(discussions, DiscussionListMarkdownOptions{
+		Title:             r.ListTitle,
+		EmptyMessage:      r.EmptyMessage,
+		GraphQLPagination: &pagination,
+		Hints:             r.ListHints,
+	})
+}
+
+// FormatDiscussion renders a single discussion using the renderer hints.
+func (r DiscussionRenderer) FormatDiscussion(discussion DiscussionMarkdown) string {
+	return FormatDiscussionMarkdown(discussion, r.DiscussionHints...)
+}
+
+// FormatNote renders a single discussion note using the renderer hints.
+func (r DiscussionRenderer) FormatNote(note DiscussionNoteMarkdown) string {
+	return FormatDiscussionNoteMarkdown(note, r.NoteHints...)
 }
 
 // NewDiscussionMarkdown builds a shared Markdown view model for discussion

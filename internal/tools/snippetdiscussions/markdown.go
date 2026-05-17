@@ -2,27 +2,27 @@ package snippetdiscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
+var markdownRenderer = toolutil.DiscussionRenderer{
+	ListTitle:       "Snippet Discussions",
+	EmptyMessage:    "No snippet discussions found.\n",
+	ListHints:       []string{"Use `gitlab_get_snippet_discussion` to view full discussion details"},
+	DiscussionHints: []string{"Use `gitlab_add_snippet_discussion_note` to reply to this discussion"},
+	NoteHints:       []string{"Use `gitlab_update_snippet_discussion_note` to edit this note"},
+}
+
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatRESTDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details")
+	return markdownRenderer.FormatRESTList(toolutil.DiscussionOutputMarkdowns(out.Discussions), out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.
 func FormatMarkdownString(out Output) string {
-	return toolutil.FormatDiscussionMarkdown(toMarkdownDiscussion(out), "Use `gitlab_add_snippet_discussion_note` to reply to this discussion")
+	return markdownRenderer.FormatDiscussion(out.MarkdownDiscussion())
 }
 
 // FormatNoteMarkdownString renders a note as Markdown.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	return toolutil.FormatDiscussionNoteMarkdown(toMarkdownNote(out), "Use `gitlab_update_snippet_discussion_note` to edit this note")
-}
-
-func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
-	return toolutil.NewDiscussionMarkdown(out.ID, toolutil.DiscussionNoteMarkdowns(out.Notes, toMarkdownNote))
-}
-
-func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
-	return toolutil.NewDiscussionNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt)
+	return markdownRenderer.FormatNote(out.MarkdownNote())
 }
 
 func init() {
