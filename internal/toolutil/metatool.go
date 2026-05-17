@@ -2086,7 +2086,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 }
 
 func metaToolExampleAction(sortedActions []string) string {
-	for _, candidate := range []string{"create", "list", "get", "search", "update"} {
+	for _, candidate := range []string{"list", "get", "search", "create", "update"} {
 		if slices.Contains(sortedActions, candidate) {
 			return candidate
 		}

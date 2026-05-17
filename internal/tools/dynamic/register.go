@@ -45,9 +45,11 @@ const (
 	actionIssueNoteUpdate           = "issue.note_update"
 	actionJobDownloadSingleArtifact = "job.download_single_artifact"
 	actionReleaseGet                = "release.get"
+	actionReleaseDelete             = "release.delete"
 	actionReleaseLinkDelete         = "release.link_delete"
 	actionReleaseLinkGet            = "release.link_get"
 	actionReleaseLinkList           = "release.link_list"
+	actionReleaseLinkUpdate         = "release.link_update"
 	tagIssueComment                 = "issue comment"
 	tagIssueNote                    = "issue note"
 	tagIssueTimeTracking            = "issue time tracking"
@@ -1635,11 +1637,11 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"tag.get": {
 		Usage:          "Use to verify that a tag exists before release cleanup or tag deletion workflows.",
-		RelatedActions: []string{actionReleaseGet, actionReleaseLinkList, "release.delete", "tag.delete"},
+		RelatedActions: []string{actionReleaseGet, actionReleaseLinkList, actionReleaseDelete, "tag.delete"},
 	},
 	actionReleaseGet: {
 		Usage:          "Use to verify a release for a tag after tag.get when the workflow asks to verify both.",
-		RelatedActions: []string{"tag.get", actionReleaseLinkList, "release.delete"},
+		RelatedActions: []string{"tag.get", actionReleaseLinkList, actionReleaseDelete},
 	},
 	actionReleaseLinkList: {
 		Usage:          "Lists asset links for an existing release tag; it is not a release existence check.",
@@ -1647,9 +1649,9 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	actionReleaseLinkGet: {
 		Usage:          "Gets one release asset link by link_id; use release.link_list to discover link IDs for a tag.",
-		RelatedActions: []string{actionReleaseLinkList, "release.link_update", actionReleaseLinkDelete},
+		RelatedActions: []string{actionReleaseLinkList, actionReleaseLinkUpdate, actionReleaseLinkDelete},
 	},
-	"release.link_update": {
+	actionReleaseLinkUpdate: {
 		Usage:          "Updates one release asset link by link_id; use release.link_list or release.link_get before editing when the ID is unknown.",
 		RelatedActions: []string{actionReleaseLinkGet, actionReleaseLinkList, actionReleaseLinkDelete},
 	},

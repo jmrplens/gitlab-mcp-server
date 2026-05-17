@@ -251,7 +251,8 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 			name:     "update",
 			queryKey: "securityCategoryUpdate",
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+				name := "Business impact"
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
 				return err
 			},
 		},
@@ -321,7 +322,8 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			queryKey: "securityCategoryUpdate",
 			payload:  `{"securityCategoryUpdate":null}`,
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+				name := "Business impact"
+				_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
 				return err
 			},
 		},
@@ -378,7 +380,8 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 				},
 			})
 			client := testutil.NewTestClient(t, handler)
-			_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: new("Business impact")})
+			name := "Business impact"
+			_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Update() error = %v, want %q", err, tt.want)
 			}

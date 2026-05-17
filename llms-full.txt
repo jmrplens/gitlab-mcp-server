@@ -1451,7 +1451,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Branch**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_branch/<action>.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
@@ -1619,7 +1619,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **CI Variable**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_ci_variable/<action>.
 
 Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
@@ -1782,7 +1782,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Custom Emoji**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_custom_emoji/<action>.
 
 Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
@@ -1855,7 +1855,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Environment**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_environment/<action>.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
@@ -2213,7 +2213,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_group/<action>.
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
@@ -3554,7 +3554,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Issue**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
 Parameter guidance:
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
@@ -4411,7 +4411,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Request**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
@@ -5487,7 +5487,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Pipeline**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
@@ -5813,7 +5813,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Project**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_project/<action>.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
@@ -6948,7 +6948,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Release**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_release/<action>.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
@@ -7961,7 +7961,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Snippet**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_snippet/<action>.
 
 Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
@@ -8483,7 +8483,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Tag**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_tag/<action>.
 
 Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
@@ -8724,7 +8724,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **User**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_user/<action>.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
@@ -9414,7 +9414,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Wiki**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_wiki/<action>.
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
@@ -9878,7 +9878,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Geo**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_geo/<action>.
 
 Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
@@ -10201,7 +10201,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Project Alias**
 
-Use {"action":"create","params":{...}}; only top-level keys are action and params.
+Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_project_alias/<action>.
 
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).

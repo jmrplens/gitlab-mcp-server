@@ -1522,7 +1522,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
 
-	wantExample := `Use {"action":"create","params":{...}}`
+	wantExample := `Use {"action":"list","params":{...}}`
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
 	}
@@ -1544,10 +1544,10 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 }
 
 // TestMetaToolDescriptionPrefix_PrefersReadableExampleAction verifies the
-// usage example does not default to destructive actions when a common read
-// action is available.
+// usage example prefers a read action over a mutating action when both are
+// available.
 func TestMetaToolDescriptionPrefix_PrefersReadableExampleAction(t *testing.T) {
-	routes := ActionMap{"archive": Route(nil), "delete": Route(nil), "get": Route(nil), "update": Route(nil)}
+	routes := ActionMap{"archive": Route(nil), "create": Route(nil), "delete": Route(nil), "get": Route(nil), "update": Route(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
 
 	if !strings.Contains(got, `Use {"action":"get","params":{...}}`) {

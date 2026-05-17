@@ -361,7 +361,8 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 			name:     "update",
 			queryKey: "securityAttributeUpdate",
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				name := "High"
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
 		},
@@ -447,7 +448,8 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			queryKey: "securityAttributeUpdate",
 			payload:  `{"securityAttributeUpdate":null}`,
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				name := "High"
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
 		},
@@ -507,7 +509,8 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 			name:    "attribute id",
 			payload: strings.Replace(sampleAttribute, "gid://gitlab/Security::Attribute/9", "bad-attribute-id", 1),
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				name := "High"
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
 			want: "parse security attribute id",
@@ -516,7 +519,8 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 			name:    "category id",
 			payload: strings.Replace(sampleAttribute, "gid://gitlab/Security::Category/7", "bad-category-id", 1),
 			call: func(client *gitlabclient.Client) error {
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: new("High")})
+				name := "High"
+				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
 			want: "parse security category id",

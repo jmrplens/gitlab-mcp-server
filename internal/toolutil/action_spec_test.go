@@ -251,8 +251,9 @@ func TestNewActionSpec_AppliesInputSchemaOverrides(t *testing.T) {
 		t.Fatalf("anyOf = %#v, want two branches", got)
 	}
 	mode := spec.Route.InputSchema["properties"].(map[string]any)["mode"].(map[string]any)
-	if got := mode["enum"].([]string)[0]; got != "ADD" {
-		t.Fatalf("mode enum = %#v, want cloned ADD/REMOVE", mode["enum"])
+	modeEnum := mode["enum"].([]string)
+	if modeEnum[0] != "ADD" {
+		t.Fatalf("mode enum = %#v, want cloned ADD/REMOVE", modeEnum)
 	}
 	items := spec.Route.InputSchema["properties"].(map[string]any)["items"].(map[string]any)
 	if got := items["minItems"]; got != 1 {
