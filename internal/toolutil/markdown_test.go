@@ -209,15 +209,15 @@ func TestFormatDiscussionListMarkdown(t *testing.T) {
 	}, DiscussionListMarkdownOptions{
 		Title:        "Commit Discussions",
 		EmptyMessage: "No discussions found.\n",
-		Pagination:   PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination:   PaginationOutput{TotalItems: 42, Page: 1, PerPage: 20, TotalPages: 3},
 		Hints:        []string{"Use `gitlab_get_commit_discussion` to view full discussion details"},
 	})
 
 	for _, want := range []string{
-		"## Commit Discussions (1)",
+		"## Commit Discussions (42)",
 		"### Discussion abc123",
 		"- **@alice** (17 May 2026 12:00 UTC): " + body,
-		"Page 1 of 1 | 1 items total | 20 per page",
+		"Page 1 of 3 | 42 items total | 20 per page",
 		"Use `gitlab_get_commit_discussion` to view full discussion details",
 	} {
 		if !strings.Contains(md, want) {
@@ -336,6 +336,22 @@ func TestFormatTemplateContentMarkdown(t *testing.T) {
 	} {
 		if !strings.Contains(withFence, want) {
 			t.Errorf("markdown with embedded fence missing %q:\n%s", want, withFence)
+		}
+	}
+
+	withLongFence := FormatTemplateContentMarkdown(
+		"CI YAML Template",
+		"Custom",
+		"yaml",
+		"script:\n  - echo start\n````\nembedded\n````",
+	)
+	for _, want := range []string{
+		"`````yaml\nscript:",
+		"````\nembedded\n````",
+		"\n`````\n",
+	} {
+		if !strings.Contains(withLongFence, want) {
+			t.Errorf("markdown with four-backtick fence missing %q:\n%s", want, withLongFence)
 		}
 	}
 }

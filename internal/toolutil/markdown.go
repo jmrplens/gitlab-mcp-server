@@ -459,7 +459,11 @@ func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts Discuss
 		return opts.EmptyMessage
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, len(discussions))
+	headingCount := int64(len(discussions))
+	if opts.GraphQLPagination == nil && opts.Pagination.TotalItems > 0 {
+		headingCount = opts.Pagination.TotalItems
+	}
+	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, headingCount)
 	if opts.GraphQLPagination == nil {
 		WriteListSummary(&b, len(discussions), opts.Pagination)
 	}
@@ -631,16 +635,28 @@ func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination Paginat
 func FormatTemplateContentMarkdown(title, name, language, content string, hints ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s: %s\n\n", title, name)
-	fence := "```"
-	if strings.Contains(content, "```") {
-		fence = "````"
-	}
+	fence := markdownCodeFence(content)
 	safeLanguage := strings.NewReplacer("`", "", "\r", "", "\n", "").Replace(language)
 	fmt.Fprintf(&b, "%s%s\n", fence, safeLanguage)
 	b.WriteString(content)
 	fmt.Fprintf(&b, "\n%s\n", fence)
 	WriteHints(&b, hints...)
 	return b.String()
+}
+
+func markdownCodeFence(content string) string {
+	longestRun := 0
+	currentRun := 0
+	for _, char := range content {
+		if char == '`' {
+			currentRun++
+			longestRun = max(longestRun, currentRun)
+			continue
+		}
+		currentRun = 0
+	}
+	fenceLength := max(3, longestRun+1)
+	return strings.Repeat("`", fenceLength)
 }
 
 // NoteMarkdown carries common fields rendered by issue, merge request, and
