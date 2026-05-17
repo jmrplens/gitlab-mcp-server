@@ -277,25 +277,36 @@ func fileMockHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("raw content"))
 	case r.Method == http.MethodHead && strings.Contains(path, "/repository/files/") && !strings.HasSuffix(path, "/raw"):
-		writeFileMetadataHeaders(w, "main.go", "main.go", "13", "b1", "c1", "sha", "base64", "false")
+		writeFileMetadataHeaders(w, fileMetadataHeaders{name: "main.go", path: "main.go", size: "13", blobID: "b1", commitID: "c1", sha: "sha", encoding: "base64", executable: "false"})
 	case r.Method == http.MethodHead && strings.HasSuffix(path, "/raw"):
-		writeFileMetadataHeaders(w, "raw.go", "raw.go", "42", "b2", "c2", "sha-raw", "text", "true")
+		writeFileMetadataHeaders(w, fileMetadataHeaders{name: "raw.go", path: "raw.go", size: "42", blobID: "b2", commitID: "c2", sha: "sha-raw", encoding: "text", executable: "true"})
 	default:
 		http.NotFound(w, r)
 	}
 }
 
-func writeFileMetadataHeaders(w http.ResponseWriter, name, path, size, blobID, commitID, sha, encoding, executable string) {
-	w.Header().Set("X-Gitlab-File-Name", name)
-	w.Header().Set("X-Gitlab-File-Path", path)
-	w.Header().Set("X-Gitlab-Size", size)
-	w.Header().Set("X-Gitlab-Blob-Id", blobID)
-	w.Header().Set("X-Gitlab-Commit-Id", commitID)
-	w.Header().Set("X-Gitlab-Last-Commit-Id", commitID)
-	w.Header().Set("X-Gitlab-Content-Sha256", sha)
-	w.Header().Set("X-Gitlab-Encoding", encoding)
+type fileMetadataHeaders struct {
+	name       string
+	path       string
+	size       string
+	blobID     string
+	commitID   string
+	sha        string
+	encoding   string
+	executable string
+}
+
+func writeFileMetadataHeaders(w http.ResponseWriter, headers fileMetadataHeaders) {
+	w.Header().Set("X-Gitlab-File-Name", headers.name)
+	w.Header().Set("X-Gitlab-File-Path", headers.path)
+	w.Header().Set("X-Gitlab-Size", headers.size)
+	w.Header().Set("X-Gitlab-Blob-Id", headers.blobID)
+	w.Header().Set("X-Gitlab-Commit-Id", headers.commitID)
+	w.Header().Set("X-Gitlab-Last-Commit-Id", headers.commitID)
+	w.Header().Set("X-Gitlab-Content-Sha256", headers.sha)
+	w.Header().Set("X-Gitlab-Encoding", headers.encoding)
 	w.Header().Set("X-Gitlab-Ref", "main")
-	w.Header().Set("X-Gitlab-Execute-Filemode", executable)
+	w.Header().Set("X-Gitlab-Execute-Filemode", headers.executable)
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -247,6 +247,19 @@ func TestParameterNormalizationHelpers_ParseValues(t *testing.T) {
 	}
 }
 
+// TestParameterAliases_SnippetFileNameTargetsFilePath verifies alias metadata matches snippet file normalization output.
+func TestParameterAliases_SnippetFileNameTargetsFilePath(t *testing.T) {
+	for _, alias := range ParameterAliases() {
+		if alias.ActionID == actionSnippetProjectCreate && alias.Alias == "files.file_name" {
+			if alias.Target != "files.file_path" {
+				t.Fatalf("files.file_name target = %q, want files.file_path", alias.Target)
+			}
+			return
+		}
+	}
+	t.Fatal("files.file_name snippet alias not found")
+}
+
 // TestActionAliasHelpers_NormalizationAndCompaction verifies alias normalization trims, sorts, and deduplicates values.
 func TestActionAliasHelpers_NormalizationAndCompaction(t *testing.T) {
 	aliases := cloneActionAliases([]ActionAlias{

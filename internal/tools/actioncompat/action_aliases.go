@@ -13,6 +13,34 @@ const (
 
 const defaultActionAliasReason = "Historical Dynamic compatibility alias for canonical action selection."
 
+const (
+	actionFeatureFlagCreate              = "feature_flags.feature_flag_create"
+	actionBranchProtect                  = "branch.protect"
+	actionExternalStatusCheckListProject = "external_status_check.list_project"
+	actionFeatureFlagUserListList        = "feature_flags.ff_user_list_list"
+	actionGroupLabelUpdate               = "group.group_label_update"
+	actionInteractiveIssueCreate         = "interactive.issue_create"
+	actionIssueLinkCreate                = "issue.link_create"
+	actionIssueNoteList                  = "issue.note_list"
+	actionIssueUpdate                    = "issue.update"
+	actionJobList                        = "job.list"
+	actionMRReviewDraftNotePublishAll    = "mr_review.draft_note_publish_all"
+	actionPackageList                    = "package.list"
+	actionPipelineScheduleCreate         = "pipeline.schedule_create"
+	actionPipelineScheduleUpdate         = "pipeline.schedule_update"
+	actionProjectMemberAdd               = "project.member_add"
+	actionProjectMemberDelete            = "project.member_delete"
+	actionProjectMemberEdit              = "project.member_edit"
+	actionReleaseLinkCreate              = "release.link_create"
+	actionReleaseLinkDelete              = "release.link_delete"
+	actionReleaseLinkGet                 = "release.link_get"
+	actionReleaseLinkList                = "release.link_list"
+	actionReleaseLinkUpdate              = "release.link_update"
+	actionRepositoryFileGet              = "repository.file_get"
+	actionRunnerUpdate                   = "runner.update"
+	actionSnippetProjectCreate           = "snippet.project_create"
+)
+
 // ActionAlias describes one historical action ID alias and its canonical action.
 type ActionAlias struct {
 	Alias          string
@@ -50,18 +78,18 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("branch.protected_list", "branch.get_protected"),
 		compatActionAlias("branch.update_protection", "branch.update_protected"),
 		compatActionAlias("enterprise_user.group_list", "enterprise_user.list"),
-		compatActionAlias("external_status_check.list_project_checks", "external_status_check.list_project"),
+		compatActionAlias("external_status_check.list_project_checks", actionExternalStatusCheckListProject),
 		compatActionAlias("feature_flag.list", "feature_flags.feature_flag_list"),
 		compatActionAlias("geo.node_list", "geo.list"),
 		compatActionAlias("gitlab_server.health_check", "server.health_check"),
 		compatActionAlias("feature_flag_user_list.create", "feature_flags.ff_user_list_create"),
 		compatActionAlias("feature_flag_user_list.delete", "feature_flags.ff_user_list_delete"),
 		compatActionAlias("feature_flag_user_list.get", "feature_flags.ff_user_list_get"),
-		compatActionAlias("feature_flag_user_list.list", "feature_flags.ff_user_list_list"),
+		compatActionAlias("feature_flag_user_list.list", actionFeatureFlagUserListList),
 		compatActionAlias("feature_flag_user_list.update", "feature_flags.ff_user_list_update"),
-		compatActionAlias("feature_flags.feature_flag_user_list", "feature_flags.ff_user_list_list"),
-		compatActionAlias("feature_flags.feature_flag_user_list_list", "feature_flags.ff_user_list_list"),
-		compatActionAlias("feature_flags.feature_flag_user_lists_list", "feature_flags.ff_user_list_list"),
+		compatActionAlias("feature_flags.feature_flag_user_list", actionFeatureFlagUserListList),
+		compatActionAlias("feature_flags.feature_flag_user_list_list", actionFeatureFlagUserListList),
+		compatActionAlias("feature_flags.feature_flag_user_lists_list", actionFeatureFlagUserListList),
 		compatActionAlias("gitlab_issue.create", "issue.create"),
 		compatActionAlias("gitlab_issue.delete", "issue.delete"),
 		compatActionAlias("group.custom_member_roles_list", "member_role.list_group"),
@@ -69,16 +97,16 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("issue.note.create", "issue.note_create"),
 		compatActionAlias("issue.note.delete", "issue.note_delete"),
 		compatActionAlias("issue.note.get", "issue.note_get"),
-		compatActionAlias("issue.note.list", "issue.note_list"),
+		compatActionAlias("issue.note.list", actionIssueNoteList),
 		compatActionAlias("issue.note.update", "issue.note_update"),
-		compatActionAlias("issue.close", "issue.update"),
+		compatActionAlias("issue.close", actionIssueUpdate),
 		compatActionAlias("issue_note.get", "issue.note_get"),
-		compatActionAlias("issue_note.list", "issue.note_list"),
+		compatActionAlias("issue_note.list", actionIssueNoteList),
 		compatActionAlias("issue_note.delete", "issue.note_delete"),
 		compatActionAlias("issue_note.update", "issue.note_update"),
-		compatActionAlias("issue.notes", "issue.note_list"),
-		compatActionAlias("issue.notes.list", "issue.note_list"),
-		compatActionAlias("issue.reopen", "issue.update"),
+		compatActionAlias("issue.notes", actionIssueNoteList),
+		compatActionAlias("issue.notes.list", actionIssueNoteList),
+		compatActionAlias("issue.reopen", actionIssueUpdate),
 		compatActionAlias("job.artifact_download", "job.download_single_artifact"),
 		compatActionAlias("pipeline.jobs", "job.list"),
 		compatActionAlias("merge_train.list", "merge_train.list_project"),
@@ -96,64 +124,64 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("merge_request.set_time_estimate", "merge_request.time_estimate_set"),
 		compatActionAlias("merge_request.time_estimate", "merge_request.time_estimate_set"),
 		compatActionAlias("merge_request.time_spent_add", "merge_request.spent_time_add"),
-		compatActionAlias("mr_review.draft_notes_publish", "mr_review.draft_note_publish_all"),
-		compatActionAlias("mr_review.publish", "mr_review.draft_note_publish_all"),
+		compatActionAlias("mr_review.draft_notes_publish", actionMRReviewDraftNotePublishAll),
+		compatActionAlias("mr_review.publish", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("package.files", "package.file_list"),
-		compatActionAlias("package.list_generic", "package.list"),
+		compatActionAlias("package.list_generic", actionPackageList),
 		compatActionAlias("personal_snippet.raw", "snippet.content"),
 		compatActionAlias("project.releases.list", "release.list"),
 		compatActionAlias("project.hooks.list", "project.hook_list"),
-		compatActionAlias("project.member_remove", "project.member_delete"),
-		compatActionAlias("project.member_update", "project.member_edit"),
+		compatActionAlias("project.member_remove", actionProjectMemberDelete),
+		compatActionAlias("project.member_update", actionProjectMemberEdit),
 		compatActionAlias("project.schedule_storage_move", "storage_move.schedule_project"),
-		compatActionAlias("project.status_check_list", "external_status_check.list_project"),
-		compatActionAlias("project.status_checks.list", "external_status_check.list_project"),
-		compatActionAlias("project_member.add", "project.member_add"),
-		compatActionAlias("project_member.delete", "project.member_delete"),
-		compatActionAlias("project_member.edit", "project.member_edit"),
+		compatActionAlias("project.status_check_list", actionExternalStatusCheckListProject),
+		compatActionAlias("project.status_checks.list", actionExternalStatusCheckListProject),
+		compatActionAlias("project_member.add", actionProjectMemberAdd),
+		compatActionAlias("project_member.delete", actionProjectMemberDelete),
+		compatActionAlias("project_member.edit", actionProjectMemberEdit),
 		compatActionAlias("project_member.get", "project.member_get"),
-		compatActionAlias("project_member.remove", "project.member_delete"),
-		compatActionAlias("project_member.update", "project.member_edit"),
+		compatActionAlias("project_member.remove", actionProjectMemberDelete),
+		compatActionAlias("project_member.update", actionProjectMemberEdit),
 		compatActionAlias("project_access_token.create", "access.token_project_create"),
 		compatActionAlias("project_access_token.revoke", "access.token_project_revoke"),
 		unsearchableActionAlias("repository_tree", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		unsearchableActionAlias("repository_tree.list", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		compatActionAlias("repository_file.create", "repository.file_create"),
 		compatActionAlias("repository_file.delete", "repository.file_delete"),
-		compatActionAlias("repository_file.get", "repository.file_get"),
-		compatActionAlias("repository_file.read", "repository.file_get"),
+		compatActionAlias("repository_file.get", actionRepositoryFileGet),
+		compatActionAlias("repository_file.read", actionRepositoryFileGet),
 		compatActionAlias("repository_files.get_raw_file", "repository.file_raw"),
-		compatActionAlias("issue.link", "issue.link_create"),
+		compatActionAlias("issue.link", actionIssueLinkCreate),
 		compatActionAlias("pipeline.schedule_variable_create", "pipeline.schedule_create_variable"),
 		compatActionAlias("pipeline.schedule_variable_delete", "pipeline.schedule_delete_variable"),
 		compatActionAlias("pipeline.schedule_variable_update", "pipeline.schedule_edit_variable"),
 		compatActionAlias("project.badge_update", "project.badge_edit"),
 		compatActionAlias("merge_request.time_spent_reset", "merge_request.spent_time_reset"),
-		compatActionAlias("generic_package.list", "package.list"),
+		compatActionAlias("generic_package.list", actionPackageList),
 		compatActionAlias("issue_note.create", "issue.note_create"),
-		compatActionAlias("release.create_link", "release.link_create"),
-		compatActionAlias("release.asset_link.create", "release.link_create"),
+		compatActionAlias("release.create_link", actionReleaseLinkCreate),
+		compatActionAlias("release.asset_link.create", actionReleaseLinkCreate),
 		compatActionAlias("release.asset_link.delete", "release.link_delete"),
 		compatActionAlias("release.asset_link.get", "release.link_get"),
-		compatActionAlias("release.asset_link.list", "release.link_list"),
+		compatActionAlias("release.asset_link.list", actionReleaseLinkList),
 		compatActionAlias("release.asset_link.update", "release.link_update"),
-		compatActionAlias("release_link.link_list", "release.link_list"),
+		compatActionAlias("release_link.link_list", actionReleaseLinkList),
 		compatActionAlias("release.generate_notes", "analyze.release_notes"),
-		compatActionAlias("package.list_project", "package.list"),
-		compatActionAlias("package.list_project_packages", "package.list"),
+		compatActionAlias("package.list_project", actionPackageList),
+		compatActionAlias("package.list_project_packages", actionPackageList),
 		compatActionAlias("variable.create", "ci_variable.create"),
 		compatActionAlias("group.variable.create", "ci_variable.group_create"),
 		compatActionAlias("group.audit_events", "audit_event.list_group"),
 		standaloneActionAlias("gitlab_discover_project", "discover_project.resolve"),
-		standaloneActionAlias("interactive_issue.create", "interactive.issue_create"),
-		standaloneActionAlias("interactive_issue_create", "interactive.issue_create"),
-		standaloneActionAlias("gitlab_interactive_issue.create", "interactive.issue_create"),
-		standaloneActionAlias("gitlab_interactive_issue_create", "interactive.issue_create"),
+		standaloneActionAlias("interactive_issue.create", actionInteractiveIssueCreate),
+		standaloneActionAlias("interactive_issue_create", actionInteractiveIssueCreate),
+		standaloneActionAlias("gitlab_interactive_issue.create", actionInteractiveIssueCreate),
+		standaloneActionAlias("gitlab_interactive_issue_create", actionInteractiveIssueCreate),
 		standaloneActionAlias("gitlab_interactive_mr_create", "interactive.mr_create"),
 		standaloneActionAlias("gitlab_interactive_project_create", "interactive.project_create"),
 		standaloneActionAlias("gitlab_interactive_release_create", "interactive.release_create"),
 		compatActionAlias("job.token_scope_remove_inbound", "job.token_scope_remove_project"),
-		compatActionAlias("mr_review.draft_notes_publish_all", "mr_review.draft_note_publish_all"),
+		compatActionAlias("mr_review.draft_notes_publish_all", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("repository.tag.delete", "tag.delete"),
 		compatActionAlias("runner.delete", "runner.remove"),
 		compatActionAlias("wiki.show", "wiki.get"),

@@ -10,6 +10,17 @@ import (
 
 const parameterAliasExplanationSource = "dynamic_action_scoped"
 
+const (
+	reasonNormalizeAccessLevel           = "normalized GitLab access level name to numeric level"
+	reasonPipelineScheduleDescription    = "pipeline schedules use description as the display name"
+	reasonReleaseLinkParentTagName       = "release link actions use tag_name for the parent release"
+	reasonIssueLinkTargetIssueIID        = "issue.link_create uses target_issue_iid for the linked issue"
+	reasonSnippetProjectCreateFiles      = "project snippet creation uses files entries in dynamic mode"
+	reasonSnippetProjectCreateFilePath   = "snippet file entries use file_path"
+	reasonSnippetProjectCreateNoAction   = "project snippet creation file entries do not include an action field"
+	reasonFeatureFlagUserListNameRemoved = "feature flag user-list listing is project-scoped and does not accept a feature flag name"
+)
+
 // ParameterAlias describes one historical action-scoped parameter alias or
 // coercion policy.
 type ParameterAlias struct {
@@ -32,29 +43,29 @@ func ParameterAliases() []ParameterAlias {
 
 func defaultParameterAliases() []ParameterAlias {
 	return []ParameterAlias{
-		parameterAlias("job.list", "status", "scope", "job.list uses scope for job status filtering"),
-		parameterAlias("repository.file_get", "branch", "ref", "repository.file_get reads file content at a ref"),
-		parameterAlias("issue.link_create", "linked_issue_iid", "target_issue_iid", "issue.link_create uses target_issue_iid for the linked issue"),
-		parameterAlias("issue.link_create", "project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id"),
-		parameterAlias("issue.update", "state_event", "state_event", "normalized issue state event value"),
-		parameterAlias("pipeline.schedule_create", "name", "description", "pipeline schedules use description as the display name"),
-		parameterAlias("pipeline.schedule_update", "name", "description", "pipeline schedules use description as the display name"),
-		parameterAlias("branch.protect", "push_access_level", "push_access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("branch.protect", "merge_access_level", "merge_access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("feature_flags.feature_flag_create", "new_version_flag", "version", "feature flag creation uses version for the flag API version"),
-		normalizerOnlyParameterAlias("feature_flags.ff_user_list_list", "name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name"),
-		parameterAlias("group.group_label_update", "name", "new_name", "group label update renames labels with new_name"),
-		parameterAlias("project.member_add", "access_level", "access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("project.member_edit", "access_level", "access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("release.link_create", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_delete", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_get", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_list", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_update", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("runner.update", "paused", "paused", "normalized string boolean to bool"),
-		parameterAlias("snippet.project_create", "file_name/content", "files", "project snippet creation uses files entries in dynamic mode"),
-		parameterAlias("snippet.project_create", "files.file_name", "files", "snippet file entries use file_path"),
-		parameterAlias("snippet.project_create", "files.action", "files", "project snippet creation file entries do not include an action field"),
+		parameterAlias(actionJobList, "status", "scope", "job.list uses scope for job status filtering"),
+		parameterAlias(actionRepositoryFileGet, "branch", "ref", "repository.file_get reads file content at a ref"),
+		parameterAlias(actionIssueLinkCreate, "linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID),
+		parameterAlias(actionIssueLinkCreate, "project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id"),
+		parameterAlias(actionIssueUpdate, "state_event", "state_event", "normalized issue state event value"),
+		parameterAlias(actionPipelineScheduleCreate, "name", "description", reasonPipelineScheduleDescription),
+		parameterAlias(actionPipelineScheduleUpdate, "name", "description", reasonPipelineScheduleDescription),
+		parameterAlias(actionBranchProtect, "push_access_level", "push_access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionBranchProtect, "merge_access_level", "merge_access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionFeatureFlagCreate, "new_version_flag", "version", "feature flag creation uses version for the flag API version"),
+		normalizerOnlyParameterAlias(actionFeatureFlagUserListList, "name", "removed", reasonFeatureFlagUserListNameRemoved),
+		parameterAlias(actionGroupLabelUpdate, "name", "new_name", "group label update renames labels with new_name"),
+		parameterAlias(actionProjectMemberAdd, "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionProjectMemberEdit, "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionReleaseLinkCreate, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionReleaseLinkDelete, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionReleaseLinkGet, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionReleaseLinkList, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionReleaseLinkUpdate, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionRunnerUpdate, "paused", "paused", "normalized string boolean to bool"),
+		parameterAlias(actionSnippetProjectCreate, "file_name/content", "files", reasonSnippetProjectCreateFiles),
+		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath),
+		parameterAlias(actionSnippetProjectCreate, "files.action", "files", reasonSnippetProjectCreateNoAction),
 	}
 }
 
@@ -103,7 +114,7 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 		return ok
 	}
 	switch actionID {
-	case "job.list":
+	case actionJobList:
 		if value, ok := out["status"]; ok && accepts("scope") && !accepts("status") {
 			if _, hasScope := out["scope"]; !hasScope {
 				updated := clone()
@@ -112,7 +123,7 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("status", "scope", "job.list uses scope for job status filtering")
 			}
 		}
-	case "repository.file_get":
+	case actionRepositoryFileGet:
 		if value, ok := out["branch"]; ok && accepts("ref") && !accepts("branch") {
 			if _, hasRef := out["ref"]; !hasRef {
 				updated := clone()
@@ -121,13 +132,13 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("branch", "ref", "repository.file_get reads file content at a ref")
 			}
 		}
-	case "issue.link_create":
+	case actionIssueLinkCreate:
 		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
 			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
 				updated := clone()
 				updated["target_issue_iid"] = value
 				delete(updated, "linked_issue_iid")
-				record("linked_issue_iid", "target_issue_iid", "issue.link_create uses target_issue_iid for the linked issue")
+				record("linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID)
 			}
 		}
 		if value, ok := out["project_id"]; ok && accepts("target_project_id") {
@@ -136,32 +147,32 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id")
 			}
 		}
-	case "issue.update":
+	case actionIssueUpdate:
 		if value, ok := out["state_event"]; ok && accepts("state_event") {
 			if stateEvent, converted := issueStateEventValue(value); converted {
 				clone()["state_event"] = stateEvent
 				record("state_event", "state_event", "normalized issue state event value")
 			}
 		}
-	case "pipeline.schedule_create", "pipeline.schedule_update":
+	case actionPipelineScheduleCreate, actionPipelineScheduleUpdate:
 		if value, ok := out["name"]; ok && accepts("description") && !accepts("name") {
 			updated := clone()
 			if _, hasDescription := out["description"]; !hasDescription {
 				updated["description"] = value
 			}
 			delete(updated, "name")
-			record("name", "description", "pipeline schedules use description as the display name")
+			record("name", "description", reasonPipelineScheduleDescription)
 		}
-	case "branch.protect":
+	case actionBranchProtect:
 		for _, name := range []string{"push_access_level", "merge_access_level"} {
 			if value, ok := out[name]; ok && accepts(name) {
 				if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 					clone()[name] = accessLevel
-					record(name, name, "normalized GitLab access level name to numeric level")
+					record(name, name, reasonNormalizeAccessLevel)
 				}
 			}
 		}
-	case "feature_flags.feature_flag_create":
+	case actionFeatureFlagCreate:
 		if value, ok := out["new_version_flag"]; ok && accepts("version") && !accepts("new_version_flag") {
 			if _, hasVersion := out["version"]; !hasVersion {
 				updated := clone()
@@ -170,12 +181,12 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("new_version_flag", "version", "feature flag creation uses version for the flag API version")
 			}
 		}
-	case "feature_flags.ff_user_list_list":
+	case actionFeatureFlagUserListList:
 		if _, ok := out["name"]; ok && !accepts("name") {
 			delete(clone(), "name")
-			record("name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name")
+			record("name", "removed", reasonFeatureFlagUserListNameRemoved)
 		}
-	case "group.group_label_update":
+	case actionGroupLabelUpdate:
 		if value, ok := out["name"]; ok {
 			if _, hasNewName := out["new_name"]; !hasNewName {
 				updated := clone()
@@ -184,38 +195,38 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("name", "new_name", "group label update renames labels with new_name")
 			}
 		}
-	case "project.member_add", "project.member_edit":
+	case actionProjectMemberAdd, actionProjectMemberEdit:
 		if value, ok := out["access_level"]; ok && accepts("access_level") {
 			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 				clone()["access_level"] = accessLevel
-				record("access_level", "access_level", "normalized GitLab access level name to numeric level")
+				record("access_level", "access_level", reasonNormalizeAccessLevel)
 			}
 		}
-	case "release.link_create", "release.link_delete", "release.link_get", "release.link_list", "release.link_update":
+	case actionReleaseLinkCreate, actionReleaseLinkDelete, actionReleaseLinkGet, actionReleaseLinkList, actionReleaseLinkUpdate:
 		if value, ok := out["release_tag_name"]; ok && accepts("tag_name") && !accepts("release_tag_name") {
 			if _, hasTagName := out["tag_name"]; !hasTagName {
 				updated := clone()
 				updated["tag_name"] = value
 				delete(updated, "release_tag_name")
-				record("release_tag_name", "tag_name", "release link actions use tag_name for the parent release")
+				record("release_tag_name", "tag_name", reasonReleaseLinkParentTagName)
 			}
 		}
-	case "runner.update":
+	case actionRunnerUpdate:
 		if value, ok := out["paused"]; ok && accepts("paused") {
 			if paused, converted := boolStringValue(value); converted {
 				clone()["paused"] = paused
 				record("paused", "paused", "normalized string boolean to bool")
 			}
 		}
-	case "snippet.project_create":
+	case actionSnippetProjectCreate:
 		if accepts("files") && (!accepts("file_name") || !accepts("content")) && buildSnippetCreateFilesFromSingleFileParams(clone, out) {
-			record("file_name/content", "files", "project snippet creation uses files entries in dynamic mode")
+			record("file_name/content", "files", reasonSnippetProjectCreateFiles)
 		}
 		if accepts("files") && normalizeSnippetFileNameFields(clone, out) {
-			record("files.file_name", "files.file_path", "snippet file entries use file_path")
+			record("files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath)
 		}
 		if accepts("files") && stripSnippetCreateFileActions(clone, out) {
-			record("files.action", "files", "project snippet creation file entries do not include an action field")
+			record("files.action", "files", reasonSnippetProjectCreateNoAction)
 		}
 	}
 	return out, explanations

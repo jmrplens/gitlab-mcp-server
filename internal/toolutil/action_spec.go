@@ -582,7 +582,6 @@ func validateActionAliasSpecs(actionName string, aliases []ActionAliasSpec) erro
 }
 
 func validateParameterAliasSpecs(actionName string, inputSchema map[string]any, aliases []ParameterAliasSpec) error {
-	fields := schemaPropertyNames(inputSchema)
 	seen := make(map[string]string, len(aliases))
 	for _, alias := range aliases {
 		aliasName := strings.TrimSpace(strings.ToLower(alias.Alias))
@@ -593,7 +592,7 @@ func validateParameterAliasSpecs(actionName string, inputSchema map[string]any, 
 		if target == "" {
 			return fmt.Errorf("action spec %q compatibility parameter alias %q has no target", actionName, aliasName)
 		}
-		if _, ok := fields[target]; !ok {
+		if !schemaHasPropertyPath(inputSchema, target) {
 			return fmt.Errorf("action spec %q compatibility parameter alias %q targets unknown parameter %q", actionName, aliasName, target)
 		}
 		if strings.TrimSpace(alias.Source) == "" {
@@ -611,4 +610,48 @@ func validateParameterAliasSpecs(actionName string, inputSchema map[string]any, 
 		seen[aliasName] = target
 	}
 	return nil
+}
+
+func schemaHasPropertyPath(schema map[string]any, target string) bool {
+	parts := strings.Split(strings.TrimSpace(target), ".")
+	if len(parts) == 0 || parts[0] == "" {
+		return false
+	}
+	return schemaHasPropertyPathFrom(schema, schema, parts)
+}
+
+func schemaHasPropertyPathFrom(root, schema map[string]any, parts []string) bool {
+	schema = resolveSchemaRef(root, schema)
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	child, ok := properties[parts[0]].(map[string]any)
+	if !ok {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	child = resolveSchemaRef(root, child)
+	if items, hasItems := child["items"].(map[string]any); hasItems {
+		child = resolveSchemaRef(root, items)
+	}
+	return schemaHasPropertyPathFrom(root, child, parts[1:])
+}
+
+func resolveSchemaRef(root, schema map[string]any) map[string]any {
+	ref, ok := schema["$ref"].(string)
+	if !ok || !strings.HasPrefix(ref, "#/$defs/") {
+		return schema
+	}
+	defs, ok := root["$defs"].(map[string]any)
+	if !ok {
+		return schema
+	}
+	definition, ok := defs[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any)
+	if !ok {
+		return schema
+	}
+	return definition
 }

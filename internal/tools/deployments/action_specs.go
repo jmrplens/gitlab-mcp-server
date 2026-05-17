@@ -17,7 +17,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		deploymentCreateSpec("deployment_create", toolutil.RouteAction(client, Create), "gitlab_deployment_create"),
 		deploymentUpdateSpec("deployment_update", toolutil.RouteAction(client, Update), "gitlab_deployment_update"),
 		deploymentDeleteSpec("deployment_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_deployment_delete"),
-		deploymentGateSpec("deployment_approve_or_reject", toolutil.RouteAction(client, ApproveOrReject), "gitlab_deployment_approve_or_reject"),
+		deploymentUpdateSpec("deployment_approve_or_reject", toolutil.RouteAction(client, ApproveOrReject), "gitlab_deployment_approve_or_reject"),
 	}
 }
 
@@ -54,12 +54,6 @@ func deploymentUpdateSpec(name string, route toolutil.ActionRoute, individualToo
 func deploymentDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := deploymentOptions(individualTool)
 	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
-}
-
-func deploymentGateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deploymentOptions(individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }

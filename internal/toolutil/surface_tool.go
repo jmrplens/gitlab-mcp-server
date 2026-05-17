@@ -16,9 +16,7 @@ type SurfaceToolRegisterOptions struct {
 	FormatResult FormatResultFunc
 }
 
-// TextOnlySurfaceResult marks a successful control-flow result that should not
-// be mirrored into StructuredContent.
-type TextOnlySurfaceResult interface {
+type surfaceToolTextOnlyMarker interface {
 	// SurfaceToolTextOnly marks this result as text-only for standalone surface tools.
 	SurfaceToolTextOnly()
 }
@@ -62,7 +60,7 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 		if callResult != nil && callResult.IsError {
 			return callResult, nil, nil
 		}
-		if _, ok := result.(TextOnlySurfaceResult); ok {
+		if _, ok := result.(surfaceToolTextOnlyMarker); ok {
 			return callResult, nil, nil
 		}
 		return WithHints(callResult, result, nil)

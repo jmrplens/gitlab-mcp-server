@@ -535,6 +535,7 @@ func TestFailureDiagnosticCategory_SeparatesPhase4Buckets(t *testing.T) {
 		{[]string{"fixture state is missing project identity"}, "fixture_setup_failure"},
 		{[]string{"expected action issue.create, got project.create"}, "model_route_selection_miss"},
 		{[]string{"unknown params for gitlab/issue.create: iid"}, "model_parameter_shape_miss"},
+		{[]string{"missing required project_id"}, "model_parameter_shape_miss"},
 		{[]string{"destructive task requires params.confirm=true"}, "destructive_safety"},
 		{[]string{"context deadline exceeded"}, "timeout_resource_exhaustion"},
 	}
@@ -557,7 +558,8 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 		{name: "ranker miss", notes: []string{"dynamic ranker miss: expected top action repository.compare, got pipeline.list"}, want: "ranker_miss"},
 		{name: "alias miss", notes: []string{"step 1: expected action repository.file_get, got repository_file.get"}, want: "alias_miss"},
 		{name: "standalone unavailable", notes: []string{"step 1: expected tool gitlab_discover_project, got gitlab_execute_tool; standalone tool uses top-level input fields, not params"}, want: "standalone_unavailable"},
-		{name: "params shape", notes: []string{"step 1: missing required params.project_id"}, want: "params_shape_miss"},
+		{name: "params shape", notes: []string{"step 1: missing required params: project_id"}, want: "params_shape_miss"},
+		{name: "standalone params shape", notes: []string{"step 1: missing required project_id"}, want: "params_shape_miss"},
 		{name: "multi step order", notes: []string{"tool-call step limit reached after 2/3 scenario steps"}, want: "multi_step_order_miss"},
 		{name: "ce or sampling", notes: []string{"step 1 simulation sampling_unsupported_continue: simulated sampling capability unsupported"}, want: "ce_or_sampling_limitation"},
 		{name: "true discovery", notes: []string{"model returned no tool_use block"}, want: "true_discovery_miss"},
@@ -1355,7 +1357,7 @@ func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T)
 func TestCanExecuteInvalidToolCallSkipsWrongDynamicReadOnlyAction(t *testing.T) {
 	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}
-	validation := validationResult{ToolMatches: true, ActionMatches: false, Action: "pipeline.list", RequiredPresent: false, DestructiveSafe: true, Message: "expected action pipeline.get, got pipeline.list; missing required params.pipeline_id"}
+	validation := validationResult{ToolMatches: true, ActionMatches: false, Action: "pipeline.list", RequiredPresent: false, DestructiveSafe: true, Message: "expected action pipeline.get, got pipeline.list; missing required params: pipeline_id"}
 	toolUse := modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "pipeline.list", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}}
 	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {"pipeline.list": toolutil.ActionRoute{}}}
 
@@ -1932,7 +1934,7 @@ func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *test
 func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}
 	task := evalTask{Prompt: "Fetch project `my-org/tools/gitlab-mcp-server`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.project_id"}, nil)
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, nil)
 	if !strings.Contains(message, `"action":"project.get"`) || !strings.Contains(message, "project_id") {
 		t.Fatalf("message = %q, want action envelope example", message)
 	}
@@ -1994,7 +1996,7 @@ func TestValidationRepairMessage_UnknownParamsDropsCarriedFields(t *testing.T) {
 func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.trigger_get", RequiredParams: []string{"project_id", "trigger_id"}}
 	task := evalTask{Prompt: "Fetch pipeline trigger using the returned trigger ID in project `my-org/tools/gitlab-mcp-server`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.project_id"}, map[string]any{
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, map[string]any{
 		"action": "pipeline.trigger_get",
 		"params": map[string]any{"trigger_id": 67},
 	})
@@ -2010,7 +2012,7 @@ func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) 
 func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true}
 	task := evalTask{Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params.target_project_id", Action: "job.token_scope_remove_project"}, map[string]any{
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: target_project_id", Action: "job.token_scope_remove_project"}, map[string]any{
 		"action": "job.token_scope_remove_project",
 		"params": map[string]any{"project_id": 51},
 	})
@@ -4739,7 +4741,7 @@ func TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls(t *testing.T) {
 		},
 		{
 			name:       "missing nested required param",
-			validation: validationResult{ToolMatches: true, ActionMatches: true, Action: "issue.create", RequiredPresent: false, DestructiveSafe: true, Message: "missing required params.title"},
+			validation: validationResult{ToolMatches: true, ActionMatches: true, Action: "issue.create", RequiredPresent: false, DestructiveSafe: true, Message: "missing required params: title"},
 			toolUse:    modelContentBlock{Name: dynamicExecuteTool, Input: map[string]any{"action": "issue.create", "params": map[string]any{"project_id": 1}}},
 		},
 	}
@@ -4750,6 +4752,22 @@ func TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls(t *testing.T) {
 				t.Fatal("canExecuteInvalidToolCall() = true, want incomplete dynamic call to receive exact repair guidance")
 			}
 		})
+	}
+}
+
+// TestValidationErrorKind_ClassifiesStandaloneMissingRequired verifies standalone tool diagnostics keep missing-required classification.
+func TestValidationErrorKind_ClassifiesStandaloneMissingRequired(t *testing.T) {
+	got := validationErrorKind("missing required project_id", validationResult{ToolMatches: true, ActionMatches: true})
+	if got != "missing_required_param" {
+		t.Fatalf("validationErrorKind() = %q, want missing_required_param", got)
+	}
+}
+
+// TestValidationBadParam_ExtractsSchemaFormattedMissingRequired verifies repair payloads name the missing field, not the diagnostic prefix.
+func TestValidationBadParam_ExtractsSchemaFormattedMissingRequired(t *testing.T) {
+	got := validationBadParam("missing required params for gitlab_issue/create: title, description")
+	if got != "title" {
+		t.Fatalf("validationBadParam() = %q, want title", got)
 	}
 }
 
