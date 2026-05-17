@@ -22,6 +22,7 @@ const (
 	actionIssueNoteList                  = "issue.note_list"
 	actionMRReviewDraftNotePublishAll    = "mr_review.draft_note_publish_all"
 	actionPackageList                    = "package.list"
+	actionProjectMemberAdd               = "project.member_add"
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
 	actionSnippetProjectCreate           = "snippet.project_create"
@@ -122,7 +123,7 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("project.schedule_storage_move", "storage_move.schedule_project"),
 		compatActionAlias("project.status_check_list", actionExternalStatusCheckListProject),
 		compatActionAlias("project.status_checks.list", actionExternalStatusCheckListProject),
-		compatActionAlias("project_member.add", "project.member_add"),
+		compatActionAlias("project_member.add", actionProjectMemberAdd),
 		compatActionAlias("project_member.delete", actionProjectMemberDelete),
 		compatActionAlias("project_member.edit", actionProjectMemberEdit),
 		compatActionAlias("project_member.get", "project.member_get"),

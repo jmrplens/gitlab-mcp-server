@@ -172,7 +172,7 @@ const (
 	// diagnosticUnknownParams identifies the diagnostic unknown params constant used by this package.
 	diagnosticUnknownParams = "unknown params"
 	// diagnosticMissingRequiredParams identifies missing required params diagnostics.
-	diagnosticMissingRequiredParams = "missing required params."
+	diagnosticMissingRequiredParams = "missing required params"
 	// diagnosticNotFound identifies the diagnostic not found constant used by this package.
 	diagnosticNotFound = "not found"
 	// diagnosticExpectedAction identifies the diagnostic expected action constant used by this package.
@@ -6765,7 +6765,7 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 		messages = append(messages, fmt.Sprintf("unknown params for %s/%s: %s", step.ExpectedTool, step.ExpectedAction, strings.Join(unknown, ", ")))
 	}
 	if len(missing) > 0 {
-		messages = append(messages, fmt.Sprintf("missing required params for %s/%s: %s", step.ExpectedTool, step.ExpectedAction, strings.Join(missing, ", ")))
+		messages = append(messages, fmt.Sprintf("%s for %s/%s: %s", diagnosticMissingRequiredParams, step.ExpectedTool, step.ExpectedAction, strings.Join(missing, ", ")))
 	}
 	message := strings.Join(messages, "; ")
 	result.Valid = false
@@ -6955,7 +6955,7 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	for _, required := range step.RequiredParams {
 		if !requiredParamPresent(params, required) {
 			result.RequiredPresent = false
-			problems = append(problems, fmt.Sprintf("%s%s", diagnosticMissingRequiredParams, required))
+			problems = append(problems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
 		}
 	}
 	result.DestructiveSafe = true
@@ -7085,7 +7085,7 @@ func validationRepairText(task evalTask, step evalStep, validation validationRes
 // validationErrorKind reports whether validation error kind.
 func validationErrorKind(message string, validation validationResult) string {
 	switch {
-	case strings.Contains(message, "missing required"):
+	case strings.Contains(message, diagnosticMissingRequiredParams):
 		return "missing_required_param"
 	case strings.Contains(message, diagnosticUnknownParams):
 		return "unknown_param"
@@ -7106,7 +7106,7 @@ func validationErrorKind(message string, validation validationResult) string {
 
 // validationBadParam reports whether validation bad param.
 func validationBadParam(message string) string {
-	for _, marker := range []string{diagnosticMissingRequiredParams, "missing required "} {
+	for _, marker := range []string{diagnosticMissingRequiredParams + ":", "missing required "} {
 		if after, ok := strings.CutPrefix(message, marker); ok {
 			return firstRepairParam(after)
 		}
@@ -7979,7 +7979,7 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "ranker_miss"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
+	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
 		return "params_shape_miss"
 	case dynamicMultiStepOrderMiss(text):
 		return "multi_step_order_miss"
@@ -8057,7 +8057,7 @@ func failureDiagnosticCategory(notes []string) string {
 		return "fixture_setup_failure"
 	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool"):
 		return "model_route_selection_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
+	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
 		return "model_parameter_shape_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"

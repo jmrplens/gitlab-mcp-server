@@ -55,7 +55,7 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias("feature_flags.feature_flag_create", "new_version_flag", "version", "feature flag creation uses version for the flag API version"),
 		normalizerOnlyParameterAlias(actionFeatureFlagUserListList, "name", "removed", reasonFeatureFlagUserListNameRemoved),
 		parameterAlias("group.group_label_update", "name", "new_name", "group label update renames labels with new_name"),
-		parameterAlias("project.member_add", "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionProjectMemberAdd, "access_level", "access_level", reasonNormalizeAccessLevel),
 		parameterAlias(actionProjectMemberEdit, "access_level", "access_level", reasonNormalizeAccessLevel),
 		parameterAlias("release.link_create", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias("release.link_delete", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
@@ -195,7 +195,7 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("name", "new_name", "group label update renames labels with new_name")
 			}
 		}
-	case "project.member_add", actionProjectMemberEdit:
+	case actionProjectMemberAdd, actionProjectMemberEdit:
 		if value, ok := out["access_level"]; ok && accepts("access_level") {
 			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 				clone()["access_level"] = accessLevel
