@@ -247,14 +247,11 @@ func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 }
 
 func nodeToDiscussionOutput(disc gqlDiscussionNode) Output {
-	out := Output{
-		ID:    extractDiscussionHex(disc.ID),
-		Notes: make([]NoteOutput, 0, len(disc.Notes.Nodes)),
+	notes := make([]NoteOutput, len(disc.Notes.Nodes))
+	for idx := range disc.Notes.Nodes {
+		notes[idx] = nodeToNoteOutput(disc.Notes.Nodes[idx])
 	}
-	for _, note := range disc.Notes.Nodes {
-		out.Notes = append(out.Notes, nodeToNoteOutput(note))
-	}
-	return out
+	return Output{ID: extractDiscussionHex(disc.ID), Notes: notes}
 }
 
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
