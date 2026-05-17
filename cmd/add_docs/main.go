@@ -17,6 +17,8 @@ import (
 	"strings"
 )
 
+const helperReportsWhetherTemplate = "%s reports whether %s."
+
 // main walks the specified paths and adds godoc comments to undocumented symbols.
 func main() {
 	if len(os.Args) < 2 {
@@ -393,7 +395,7 @@ func generateTestHelperDoc(d *ast.FuncDecl, pkgName string) string {
 	case strings.HasPrefix(name, "find"):
 		return fmt.Sprintf("%s locates %s fixture data for assertions.", name, camelToWords(strings.TrimPrefix(name, "find")))
 	case strings.HasPrefix(name, "has") || strings.HasPrefix(name, "contains") || strings.HasPrefix(name, "is"):
-		return fmt.Sprintf("%s reports whether %s.", name, phrase)
+		return fmt.Sprintf(helperReportsWhetherTemplate, name, phrase)
 	case strings.HasPrefix(name, "load"):
 		return fmt.Sprintf("%s loads %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, "load")))
 	case strings.HasPrefix(name, "new"):
@@ -525,8 +527,8 @@ var helperExactDocs = map[string]string{
 }
 
 var helperPrefixDocRules = []helperDocRule{
-	{prefixes: []string{"is", "has", "should", "valid", "routeLooks", "routeUnavailable", "taskHas", "taskUses", "taskMatches", "taskNeeds", "taskArchives", "taskUnavailable", "catalogHas", "reportMentions"}, template: "%s reports whether %s.", useWords: true},
-	{contains: []string{"Available", "Unavailable"}, template: "%s reports whether %s.", useWords: true},
+	{prefixes: []string{"is", "has", "should", "valid", "routeLooks", "routeUnavailable", "taskHas", "taskUses", "taskMatches", "taskNeeds", "taskArchives", "taskUnavailable", "catalogHas", "reportMentions"}, template: helperReportsWhetherTemplate, useWords: true},
+	{contains: []string{"Available", "Unavailable"}, template: helperReportsWhetherTemplate, useWords: true},
 	{prefixes: []string{"normalize", "normalized"}, trimPrefixes: []string{"normalized", "normalize"}, template: "%s normalizes %s for stable comparisons."},
 	{prefixes: []string{"filter"}, trimPrefixes: []string{"filter"}, template: "%s filters %s using evaluator options."},
 	{prefixes: []string{"order"}, trimPrefixes: []string{"order"}, template: "%s orders %s deterministically."},
