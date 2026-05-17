@@ -7113,6 +7113,11 @@ func isMissingRequiredDiagnostic(message string) bool {
 
 // validationBadParam reports whether validation bad param.
 func validationBadParam(message string) string {
+	if _, after, ok := strings.Cut(message, diagnosticMissingRequiredParams+" for "); ok {
+		if _, params, hasColon := strings.Cut(after, ":"); hasColon {
+			return firstRepairParam(params)
+		}
+	}
 	for _, marker := range []string{diagnosticMissingRequiredParams + ":", diagnosticMissingRequiredStandalone} {
 		if after, ok := strings.CutPrefix(message, marker); ok {
 			return firstRepairParam(after)

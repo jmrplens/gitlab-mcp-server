@@ -4761,6 +4761,14 @@ func TestValidationErrorKind_ClassifiesStandaloneMissingRequired(t *testing.T) {
 	}
 }
 
+// TestValidationBadParam_ExtractsSchemaFormattedMissingRequired verifies repair payloads name the missing field, not the diagnostic prefix.
+func TestValidationBadParam_ExtractsSchemaFormattedMissingRequired(t *testing.T) {
+	got := validationBadParam("missing required params for gitlab_issue/create: title, description")
+	if got != "title" {
+		t.Fatalf("validationBadParam() = %q, want title", got)
+	}
+}
+
 // TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn verifies EvaluateTask when repairs multiple invalid tool calls from same turn.
 func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) {
 	runner := newScriptedRunner(t,
