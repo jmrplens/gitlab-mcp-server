@@ -2,19 +2,23 @@ package epicdiscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
+var markdownRenderer = toolutil.NewDiscussionRenderer("Epic Discussions", "No epic discussions found.\n", "Use `gitlab_get_epic_discussion` to view full discussion details", "Use `gitlab_add_epic_discussion_note` to reply to this discussion", "Use `gitlab_update_epic_discussion_note` to edit this note")
+
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatGraphQLDiscussionListMarkdown(out.Discussions, out.Pagination, toMarkdownDiscussion, "Epic Discussions", "No epic discussions found.\n", "Use `gitlab_get_epic_discussion` to view full discussion details")
+	return markdownRenderer.FormatGraphQLList(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.
 func FormatMarkdownString(out Output) string {
-	return toolutil.FormatDiscussionMarkdown(toMarkdownDiscussion(out), "Use `gitlab_add_epic_discussion_note` to reply to this discussion")
+	discussion := toMarkdownDiscussion(out)
+	return markdownRenderer.FormatDiscussion(discussion)
 }
 
 // FormatNoteMarkdownString renders a note as Markdown.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	return toolutil.FormatDiscussionNoteMarkdown(toMarkdownNote(out), "Use `gitlab_update_epic_discussion_note` to edit this note")
+	note := toMarkdownNote(out)
+	return markdownRenderer.FormatNote(note)
 }
 
 func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
@@ -26,7 +30,5 @@ func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatListMarkdownString)
-	toolutil.RegisterMarkdown(FormatMarkdownString)
-	toolutil.RegisterMarkdown(FormatNoteMarkdownString)
+	toolutil.RegisterMarkdownTriple(FormatListMarkdownString, FormatMarkdownString, FormatNoteMarkdownString)
 }

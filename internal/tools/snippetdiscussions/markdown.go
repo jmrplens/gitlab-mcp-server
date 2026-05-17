@@ -2,31 +2,26 @@ package snippetdiscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
-var markdownRenderer = toolutil.DiscussionRenderer{
-	ListTitle:       "Snippet Discussions",
-	EmptyMessage:    "No snippet discussions found.\n",
-	ListHints:       []string{"Use `gitlab_get_snippet_discussion` to view full discussion details"},
-	DiscussionHints: []string{"Use `gitlab_add_snippet_discussion_note` to reply to this discussion"},
-	NoteHints:       []string{"Use `gitlab_update_snippet_discussion_note` to edit this note"},
-}
+var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details", "Use `gitlab_add_snippet_discussion_note` to reply to this discussion", "Use `gitlab_update_snippet_discussion_note` to edit this note")
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return markdownRenderer.FormatRESTList(toolutil.DiscussionOutputMarkdowns(out.Discussions), out.Pagination)
+	discussions := toolutil.DiscussionOutputMarkdowns(out.Discussions)
+	return markdownRenderer.FormatRESTList(discussions, out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.
 func FormatMarkdownString(out Output) string {
-	return markdownRenderer.FormatDiscussion(out.MarkdownDiscussion())
+	discussion := out.MarkdownDiscussion()
+	return markdownRenderer.FormatDiscussion(discussion)
 }
 
 // FormatNoteMarkdownString renders a note as Markdown.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	return markdownRenderer.FormatNote(out.MarkdownNote())
+	note := out.MarkdownNote()
+	return markdownRenderer.FormatNote(note)
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatListMarkdownString)
-	toolutil.RegisterMarkdown(FormatMarkdownString)
-	toolutil.RegisterMarkdown(FormatNoteMarkdownString)
+	toolutil.RegisterMarkdownTriple(FormatListMarkdownString, FormatMarkdownString, FormatNoteMarkdownString)
 }

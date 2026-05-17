@@ -43,6 +43,19 @@ func RegisterMarkdown[T any](fn func(T) string) {
 	})
 }
 
+// RegisterMarkdownPair registers two Markdown string formatters.
+func RegisterMarkdownPair[A, B any](first func(A) string, second func(B) string) {
+	RegisterMarkdown(first)
+	RegisterMarkdown(second)
+}
+
+// RegisterMarkdownTriple registers three Markdown string formatters.
+func RegisterMarkdownTriple[A, B, C any](first func(A) string, second func(B) string, third func(C) string) {
+	RegisterMarkdown(first)
+	RegisterMarkdown(second)
+	RegisterMarkdown(third)
+}
+
 // RegisterMarkdownResult registers a result formatter for type T.
 // Use this for types that need custom [mcp.CallToolResult] construction
 // (e.g. uploads with image content).

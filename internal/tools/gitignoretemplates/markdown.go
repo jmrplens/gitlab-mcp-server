@@ -4,26 +4,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-var markdownRenderer = toolutil.TemplateRenderer{
-	ListTitle:    "Gitignore Templates",
-	EmptyMessage: "No templates found.\n",
-	ListHint:     "Use `gitlab_get_gitignore_template` to view a specific template",
-	DetailTitle:  "Gitignore Template",
-	Language:     "gitignore",
-	DetailHint:   "Copy this template to your `.gitignore` file and customize it",
-}
+var markdownRenderer = toolutil.NewTemplateRenderer("Gitignore Templates", "No templates found.\n", "Use `gitlab_get_gitignore_template` to view a specific template", "Gitignore Template", "gitignore", "Copy this template to your `.gitignore` file and customize it")
 
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	return markdownRenderer.FormatList(out.Templates, out.Pagination)
+	pagination := out.Pagination
+	return markdownRenderer.FormatList(out.Templates, pagination)
 }
 
 // FormatGetMarkdown formats the get output as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	return markdownRenderer.FormatContent(out.Name, out.Content)
+	content := out.Content
+	return markdownRenderer.FormatContent(out.Name, content)
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatListMarkdown)
-	toolutil.RegisterMarkdown(FormatGetMarkdown)
+	toolutil.RegisterMarkdownPair(FormatListMarkdown, FormatGetMarkdown)
 }

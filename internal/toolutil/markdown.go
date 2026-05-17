@@ -386,6 +386,18 @@ type DiscussionRenderer struct {
 	NoteHints       []string
 }
 
+// NewDiscussionRenderer builds a renderer for discussion tool families that use
+// one hint for each list, discussion, and note view.
+func NewDiscussionRenderer(listTitle, emptyMessage, listHint, discussionHint, noteHint string) DiscussionRenderer {
+	return DiscussionRenderer{
+		ListTitle:       listTitle,
+		EmptyMessage:    emptyMessage,
+		ListHints:       []string{listHint},
+		DiscussionHints: []string{discussionHint},
+		NoteHints:       []string{noteHint},
+	}
+}
+
 // FormatRESTList renders REST discussion threads with offset pagination.
 func (r DiscussionRenderer) FormatRESTList(discussions []DiscussionMarkdown, pagination PaginationOutput) string {
 	return FormatDiscussionListMarkdown(discussions, DiscussionListMarkdownOptions{
@@ -534,6 +546,18 @@ type TemplateRenderer struct {
 	DetailTitle  string
 	Language     string
 	DetailHint   string
+}
+
+// NewTemplateRenderer builds a renderer for a GitLab template family.
+func NewTemplateRenderer(listTitle, emptyMessage, listHint, detailTitle, language, detailHint string) TemplateRenderer {
+	return TemplateRenderer{
+		ListTitle:    listTitle,
+		EmptyMessage: emptyMessage,
+		ListHint:     listHint,
+		DetailTitle:  detailTitle,
+		Language:     language,
+		DetailHint:   detailHint,
+	}
 }
 
 // FormatList renders a GitLab template list with the renderer configuration.
