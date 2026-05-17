@@ -36,6 +36,14 @@ import (
 const (
 	defaultOutputPath = "dist/action-spec-coverage.json"
 	schemaVersion     = 1
+	githubDir         = ".github"
+	noGitLabSurface   = "no-gitlab-action-surface"
+	parsePathError    = "parse %s: %w"
+	readPathError     = "read %s: %w"
+	registerGoFile    = "register.go"
+	registerMetaCall  = ".RegisterMeta("
+	registerAllCall   = "registerAllMetaGroups("
+	testGoSuffix      = "_test.go"
 )
 
 var metaOnlyProjectionActions = map[string]string{
@@ -354,15 +362,15 @@ func legacyRuntimeBridgeFindings(root string) ([]string, error) {
 	checks := map[string][]string{
 		filepath.Join(root, "internal", "tools", "action_catalog.go"): {
 			"CaptureMetaToolDefinitions",
-			"registerAllMetaGroups(",
+			registerAllCall,
 			"groupFromMetaToolDefinition",
-			".RegisterMeta(",
+			registerMetaCall,
 		},
 		filepath.Join(root, "internal", "tools", "register_meta.go"): {
-			"registerAllMetaGroups(",
-			".RegisterMeta(",
+			registerAllCall,
+			registerMetaCall,
 		},
-		filepath.Join(root, "internal", "tools", "register.go"): {
+		filepath.Join(root, "internal", "tools", registerGoFile): {
 			".RegisterTools(",
 			"registerAllLegacy",
 			"legacyIndividualToolDescriptions",
@@ -377,7 +385,7 @@ func legacyRuntimeBridgeFindings(root string) ([]string, error) {
 	for path, forbidden := range checks {
 		content, err := os.ReadFile(path) // #nosec G304 -- paths are fixed repository files assembled from the discovered repository root.
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+			return nil, fmt.Errorf(readPathError, path, err)
 		}
 		findings = append(findings, legacyBridgeFindingsInContent(path, string(content), forbidden)...)
 	}
@@ -394,7 +402,7 @@ func assertNoStaleAIContextGuidance(root string) error {
 	for _, path := range files {
 		content, readErr := os.ReadFile(path) // #nosec G304 -- AI context paths are fixed repository files discovered under known project directories.
 		if readErr != nil {
-			return fmt.Errorf("read %s: %w", path, readErr)
+			return fmt.Errorf(readPathError, path, readErr)
 		}
 		for lineNumber, line := range strings.Split(string(content), "\n") {
 			if staleAIContextLine(line) {
@@ -411,14 +419,14 @@ func assertNoStaleAIContextGuidance(root string) error {
 
 func aiContextFiles(root string) ([]string, error) {
 	paths := []string{
-		filepath.Join(root, ".github", "copilot-instructions.md"),
+		filepath.Join(root, githubDir, "copilot-instructions.md"),
 		filepath.Join(root, "AGENTS.md"),
 		filepath.Join(root, "CLAUDE.md"),
 	}
 	for _, dir := range []string{
-		filepath.Join(root, ".github", "agents"),
-		filepath.Join(root, ".github", "skills"),
-		filepath.Join(root, ".github", "instructions"),
+		filepath.Join(root, githubDir, "agents"),
+		filepath.Join(root, githubDir, "skills"),
+		filepath.Join(root, githubDir, "instructions"),
 	} {
 		if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
@@ -477,10 +485,10 @@ func legacyBridgeFindingsInContent(path, content string, forbidden []string) []s
 }
 
 func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
-	path := filepath.Join(root, "internal", "tools", "dynamic", "register.go")
+	path := filepath.Join(root, "internal", "tools", "dynamic", registerGoFile)
 	content, err := os.ReadFile(path) // #nosec G304 -- path is a fixed repository file assembled from the discovered repository root.
 	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
+		return fmt.Errorf(readPathError, path, err)
 	}
 	for _, forbidden := range []string{
 		"return annotateCompatibilityAliases([]actionAlias{",
@@ -508,12 +516,12 @@ func assertNoProductionSelectorCall(root, qualifier, selectorName string) error 
 			}
 			return nil
 		}
-		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix) {
 			return nil
 		}
 		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
-			return fmt.Errorf("parse %s: %w", path, parseErr)
+			return fmt.Errorf(parsePathError, path, parseErr)
 		}
 		var found bool
 		ast.Inspect(file, func(node ast.Node) bool {
@@ -542,10 +550,10 @@ func assertNoProductionSelectorCall(root, qualifier, selectorName string) error 
 func assertActionCatalogHasNoLegacyReferences(path string) error {
 	content, err := os.ReadFile(path) // #nosec G304 -- caller passes the fixed action_catalog.go path under the discovered repository root.
 	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
+		return fmt.Errorf(readPathError, path, err)
 	}
 	source := string(content)
-	for _, forbidden := range []string{"registerAllMetaGroups(", ".RegisterMeta("} {
+	for _, forbidden := range []string{registerAllCall, registerMetaCall} {
 		if strings.Contains(source, forbidden) {
 			return fmt.Errorf("%s contains %q; BuildActionCatalog must not depend on legacy meta registration", path, forbidden)
 		}
@@ -582,12 +590,12 @@ func discoverActionSpecGroupBuilderNames(toolsDir string) ([]string, error) {
 			return nil
 		}
 		name := entry.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, "_gen.go") {
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, testGoSuffix) || strings.HasSuffix(name, "_gen.go") {
 			return nil
 		}
 		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
-			return fmt.Errorf("parse %s: %w", path, parseErr)
+			return fmt.Errorf(parsePathError, path, parseErr)
 		}
 		for _, declaration := range file.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
@@ -619,7 +627,7 @@ func readManifestActionSpecGroupBuilders(path string) ([]string, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, path, nil, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf(parsePathError, path, err)
 	}
 	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
@@ -696,7 +704,7 @@ func inspectDomainSource(domainDir, packageName string) (domainSource, error) {
 		if name == "markdown.go" {
 			source.HasMarkdown = true
 		}
-		if strings.HasSuffix(name, "_test.go") {
+		if strings.HasSuffix(name, testGoSuffix) {
 			source.HasTests = true
 			return nil
 		}
@@ -706,7 +714,7 @@ func inspectDomainSource(domainDir, packageName string) (domainSource, error) {
 
 		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
-			return fmt.Errorf("parse %s: %w", path, parseErr)
+			return fmt.Errorf(parsePathError, path, parseErr)
 		}
 		for _, declaration := range file.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
@@ -756,7 +764,7 @@ func exprString(fileSet *token.FileSet, expression ast.Expr) string {
 }
 
 func referencedRegisterAllPackages(root string) (map[string]bool, error) {
-	return referencedPackages(filepath.Join(root, "internal", "tools", "register.go"), "RegisterTools")
+	return referencedPackages(filepath.Join(root, "internal", "tools", registerGoFile), "RegisterTools")
 }
 
 func referencedRegisterMetaPackages(root string) (map[string]bool, error) {
@@ -767,7 +775,7 @@ func referencedPackages(path, selectorName string) (map[string]bool, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, path, nil, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf(parsePathError, path, err)
 	}
 	references := make(map[string]bool)
 	ast.Inspect(file, func(node ast.Node) bool {
@@ -941,7 +949,7 @@ func classifySurface(source domainSource, coverage domainCoverage) string {
 	case coverage.HasStandaloneOnlyTools || source.HasRegisterMeta:
 		return "standalone-only"
 	default:
-		return "no-gitlab-action-surface"
+		return noGitLabSurface
 	}
 }
 
@@ -965,7 +973,7 @@ func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	if source.HasRegisterMeta && coverage.DelegatedMeta {
 		notes = append(notes, "delegated RegisterMeta is referenced from internal/tools/register_meta.go")
 	}
-	if coverage.SurfaceClassification == "no-gitlab-action-surface" {
+	if coverage.SurfaceClassification == noGitLabSurface {
 		notes = append(notes, "no GitLab action surface discovered from source or catalog metadata")
 	}
 	return notes
@@ -996,7 +1004,7 @@ func summarizeCoverage(domains []domainCoverage) coverageSummary {
 		if domain.HasStandaloneOnlyTools {
 			summary.StandaloneOnlyDomainCount++
 		}
-		if domain.SurfaceClassification == "no-gitlab-action-surface" {
+		if domain.SurfaceClassification == noGitLabSurface {
 			summary.NoGitLabActionSurfaceCount++
 		}
 		summary.OrdinaryGitLabActionCount += domain.OrdinaryGitLabActionCount

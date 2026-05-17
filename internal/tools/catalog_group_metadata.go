@@ -1,7 +1,7 @@
 package tools
 
 import (
-	_ "embed"
+	_ "embed" // required by go:embed directives for tool snapshot JSON files
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -95,73 +95,57 @@ func catalogGroupCapabilityRequirements(toolName string) []string {
 	return nil
 }
 
+var catalogGroupIconsByToolName = map[string][]mcp.Icon{
+	"gitlab_access":                toolutil.IconToken,
+	"gitlab_admin":                 toolutil.IconConfig,
+	"gitlab_analyze":               toolutil.IconAnalytics,
+	"gitlab_attestation":           toolutil.IconShield,
+	"gitlab_audit_event":           toolutil.IconAudit,
+	"gitlab_branch":                toolutil.IconBranch,
+	"gitlab_ci_catalog":            toolutil.IconTemplate,
+	"gitlab_ci_variable":           toolutil.IconVariable,
+	"gitlab_compliance_policy":     toolutil.IconCompliance,
+	"gitlab_custom_emoji":          toolutil.IconEvent,
+	"gitlab_dependency":            toolutil.IconPackage,
+	"gitlab_dora_metrics":          toolutil.IconAnalytics,
+	"gitlab_enterprise_user":       toolutil.IconUser,
+	"gitlab_environment":           toolutil.IconEnvironment,
+	"gitlab_external_status_check": toolutil.IconShield,
+	"gitlab_feature_flags":         toolutil.IconConfig,
+	"gitlab_geo":                   toolutil.IconInfra,
+	"gitlab_group":                 toolutil.IconGroup,
+	"gitlab_group_scim":            toolutil.IconGroup,
+	"gitlab_issue":                 toolutil.IconIssue,
+	"gitlab_job":                   toolutil.IconJob,
+	"gitlab_member_role":           toolutil.IconConfig,
+	"gitlab_merge_request":         toolutil.IconMR,
+	"gitlab_merge_train":           toolutil.IconQueue,
+	"gitlab_model_registry":        toolutil.IconPackage,
+	"gitlab_mr_review":             toolutil.IconMR,
+	"gitlab_orbit":                 toolutil.IconAnalytics,
+	"gitlab_package":               toolutil.IconPackage,
+	"gitlab_pipeline":              toolutil.IconPipeline,
+	"gitlab_project":               toolutil.IconProject,
+	"gitlab_project_alias":         toolutil.IconProject,
+	"gitlab_release":               toolutil.IconRelease,
+	"gitlab_repository":            toolutil.IconFile,
+	"gitlab_runner":                toolutil.IconRunner,
+	"gitlab_search":                toolutil.IconSearch,
+	"gitlab_security_finding":      toolutil.IconSecurity,
+	"gitlab_snippet":               toolutil.IconSnippet,
+	"gitlab_storage_move":          toolutil.IconInfra,
+	"gitlab_tag":                   toolutil.IconTag,
+	"gitlab_template":              toolutil.IconTemplate,
+	"gitlab_user":                  toolutil.IconUser,
+	"gitlab_vulnerability":         toolutil.IconVulnerability,
+	"gitlab_wiki":                  toolutil.IconWiki,
+}
+
 func catalogGroupIcons(toolName string) []mcp.Icon {
-	switch toolName {
-	case "gitlab_access":
-		return toolutil.IconToken
-	case "gitlab_admin":
-		return toolutil.IconConfig
-	case "gitlab_analyze", "gitlab_dora_metrics", "gitlab_orbit":
-		return toolutil.IconAnalytics
-	case "gitlab_attestation", "gitlab_external_status_check":
-		return toolutil.IconShield
-	case "gitlab_audit_event":
-		return toolutil.IconAudit
-	case "gitlab_branch":
-		return toolutil.IconBranch
-	case "gitlab_ci_catalog", "gitlab_template":
-		return toolutil.IconTemplate
-	case "gitlab_ci_variable":
-		return toolutil.IconVariable
-	case "gitlab_compliance_policy":
-		return toolutil.IconCompliance
-	case "gitlab_custom_emoji":
-		return toolutil.IconEvent
-	case "gitlab_dependency", "gitlab_model_registry", "gitlab_package":
-		return toolutil.IconPackage
-	case "gitlab_enterprise_user", "gitlab_user":
-		return toolutil.IconUser
-	case "gitlab_environment":
-		return toolutil.IconEnvironment
-	case "gitlab_feature_flags", "gitlab_member_role":
-		return toolutil.IconConfig
-	case "gitlab_geo", "gitlab_storage_move":
-		return toolutil.IconInfra
-	case "gitlab_group", "gitlab_group_scim":
-		return toolutil.IconGroup
-	case "gitlab_issue":
-		return toolutil.IconIssue
-	case "gitlab_job":
-		return toolutil.IconJob
-	case "gitlab_merge_request", "gitlab_mr_review":
-		return toolutil.IconMR
-	case "gitlab_merge_train":
-		return toolutil.IconQueue
-	case "gitlab_pipeline":
-		return toolutil.IconPipeline
-	case "gitlab_project", "gitlab_project_alias":
-		return toolutil.IconProject
-	case "gitlab_release":
-		return toolutil.IconRelease
-	case "gitlab_repository":
-		return toolutil.IconFile
-	case "gitlab_runner":
-		return toolutil.IconRunner
-	case "gitlab_search":
-		return toolutil.IconSearch
-	case "gitlab_security_finding":
-		return toolutil.IconSecurity
-	case "gitlab_snippet":
-		return toolutil.IconSnippet
-	case "gitlab_tag":
-		return toolutil.IconTag
-	case "gitlab_vulnerability":
-		return toolutil.IconVulnerability
-	case "gitlab_wiki":
-		return toolutil.IconWiki
-	default:
-		return toolutil.IconServer
+	if icons, ok := catalogGroupIconsByToolName[toolName]; ok {
+		return icons
 	}
+	return toolutil.IconServer
 }
 
 func catalogGroupFormatResult(toolName string) toolutil.FormatResultFunc {

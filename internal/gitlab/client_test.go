@@ -240,7 +240,7 @@ func TestNewClientWithToken_SkipTLS(t *testing.T) {
 func TestHTTPTransport_ReturnsRoundTripper(t *testing.T) {
 	for _, skipTLSVerify := range []bool{false, true} {
 		t.Run(fmt.Sprintf("skipTLSVerify_%v", skipTLSVerify), func(t *testing.T) {
-			if transport := HTTPTransport(skipTLSVerify); transport == nil {
+			if HTTPTransport(skipTLSVerify) == nil {
 				t.Fatal("HTTPTransport() returned nil")
 			}
 		})

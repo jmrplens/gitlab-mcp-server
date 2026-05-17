@@ -498,113 +498,140 @@ func generateHandlerDoc(d *ast.FuncDecl, pkgName string) string {
 // that are more useful than generic "internal helper" comments.
 func helperIntentDoc(name, pkgName string) string {
 	words := camelToWords(name)
+	if doc, ok := helperIntentDocByPrefix(name, words); ok {
+		return doc
+	}
+	if doc, ok := helperIntentDocByContent(name, words); ok {
+		return doc
+	}
+	if doc, ok := helperIntentDocByEvaluatorPrefix(name, words); ok {
+		return doc
+	}
+	return fmt.Sprintf("%s implements the %s helper used by %s.", name, words, pkgName)
+}
+
+func helperIntentDocByPrefix(name, words string) (string, bool) {
 	switch {
 	case name == "main":
-		return "main starts the command-line workflow."
+		return "main starts the command-line workflow.", true
 	case name == "run":
-		return "run executes the command workflow after arguments are parsed."
+		return "run executes the command workflow after arguments are parsed.", true
 	case strings.HasPrefix(name, "is") || strings.HasPrefix(name, "has") || strings.HasPrefix(name, "should") || strings.HasPrefix(name, "valid") || strings.HasPrefix(name, "routeLooks") || strings.HasPrefix(name, "routeUnavailable") || strings.HasPrefix(name, "taskHas") || strings.HasPrefix(name, "taskUses") || strings.HasPrefix(name, "taskMatches") || strings.HasPrefix(name, "taskNeeds") || strings.HasPrefix(name, "taskArchives") || strings.HasPrefix(name, "taskUnavailable") || strings.HasPrefix(name, "catalogHas") || strings.HasPrefix(name, "reportMentions") || strings.Contains(name, "Available") || strings.Contains(name, "Unavailable"):
-		return fmt.Sprintf("%s reports whether %s.", name, words)
+		return fmt.Sprintf("%s reports whether %s.", name, words), true
 	case strings.HasPrefix(name, "normalize") || strings.HasPrefix(name, "normalized"):
-		return fmt.Sprintf("%s normalizes %s for stable comparisons.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize")))
+		return fmt.Sprintf("%s normalizes %s for stable comparisons.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize"))), true
 	case strings.HasPrefix(name, "filter"):
-		return fmt.Sprintf("%s filters %s using evaluator options.", name, camelToWords(strings.TrimPrefix(name, "filter")))
+		return fmt.Sprintf("%s filters %s using evaluator options.", name, camelToWords(strings.TrimPrefix(name, "filter"))), true
 	case strings.HasPrefix(name, "order"):
-		return fmt.Sprintf("%s orders %s deterministically.", name, camelToWords(strings.TrimPrefix(name, "order")))
+		return fmt.Sprintf("%s orders %s deterministically.", name, camelToWords(strings.TrimPrefix(name, "order"))), true
 	case strings.HasPrefix(name, "split"):
-		return fmt.Sprintf("%s splits %s into parsed fields.", name, camelToWords(strings.TrimPrefix(name, "split")))
+		return fmt.Sprintf("%s splits %s into parsed fields.", name, camelToWords(strings.TrimPrefix(name, "split"))), true
 	case strings.HasPrefix(name, "sort") || strings.HasPrefix(name, "sorted"):
-		return fmt.Sprintf("%s sorts %s deterministically.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "sorted"), "sort")))
+		return fmt.Sprintf("%s sorts %s deterministically.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "sorted"), "sort"))), true
 	case strings.HasPrefix(name, "default"):
-		return fmt.Sprintf("%s returns the default %s.", name, camelToWords(strings.TrimPrefix(name, "default")))
+		return fmt.Sprintf("%s returns the default %s.", name, camelToWords(strings.TrimPrefix(name, "default"))), true
 	case strings.HasPrefix(name, "parse"):
-		return fmt.Sprintf("%s parses %s from evaluator input.", name, camelToWords(strings.TrimPrefix(name, "parse")))
+		return fmt.Sprintf("%s parses %s from evaluator input.", name, camelToWords(strings.TrimPrefix(name, "parse"))), true
 	case strings.HasPrefix(name, "load"):
-		return fmt.Sprintf("%s loads %s from evaluator inputs.", name, camelToWords(strings.TrimPrefix(name, "load")))
+		return fmt.Sprintf("%s loads %s from evaluator inputs.", name, camelToWords(strings.TrimPrefix(name, "load"))), true
 	case strings.HasPrefix(name, "publish"):
-		return fmt.Sprintf("%s publishes %s into managed documentation.", name, camelToWords(strings.TrimPrefix(name, "publish")))
+		return fmt.Sprintf("%s publishes %s into managed documentation.", name, camelToWords(strings.TrimPrefix(name, "publish"))), true
 	case strings.HasPrefix(name, "report"):
-		return fmt.Sprintf("%s extracts %s from generated reports.", name, camelToWords(strings.TrimPrefix(name, "report")))
+		return fmt.Sprintf("%s extracts %s from generated reports.", name, camelToWords(strings.TrimPrefix(name, "report"))), true
 	case strings.HasPrefix(name, "section"):
-		return fmt.Sprintf("%s extracts %s from a managed Markdown section.", name, camelToWords(strings.TrimPrefix(name, "section")))
+		return fmt.Sprintf("%s extracts %s from a managed Markdown section.", name, camelToWords(strings.TrimPrefix(name, "section"))), true
 	case strings.HasPrefix(name, "replace"):
-		return fmt.Sprintf("%s replaces %s placeholders in evaluation prompts.", name, camelToWords(strings.TrimPrefix(name, "replace")))
+		return fmt.Sprintf("%s replaces %s placeholders in evaluation prompts.", name, camelToWords(strings.TrimPrefix(name, "replace"))), true
 	case strings.HasPrefix(name, "fixture"):
-		return fmt.Sprintf("%s returns %s fixture content.", name, camelToWords(strings.TrimPrefix(name, "fixture")))
+		return fmt.Sprintf("%s returns %s fixture content.", name, camelToWords(strings.TrimPrefix(name, "fixture"))), true
 	case strings.HasPrefix(name, "live"):
-		return fmt.Sprintf("%s returns %s for live evaluation runs.", name, camelToWords(strings.TrimPrefix(name, "live")))
+		return fmt.Sprintf("%s returns %s for live evaluation runs.", name, camelToWords(strings.TrimPrefix(name, "live"))), true
 	case strings.HasPrefix(name, "suffix"):
-		return fmt.Sprintf("%s appends %s to isolate live evaluation resources.", name, camelToWords(strings.TrimPrefix(name, "suffix")))
-	case strings.Contains(name, "Path") || strings.Contains(name, "URL") || strings.Contains(name, "Endpoint"):
-		return fmt.Sprintf("%s returns the %s used by evaluator requests.", name, words)
-	case strings.Contains(name, "Schema") || strings.Contains(name, "Enum"):
-		return fmt.Sprintf("%s derives %s from tool schema metadata.", name, words)
-	case strings.Contains(name, "Prompt") || strings.Contains(name, "Preamble") || strings.Contains(name, "Guidance"):
-		return fmt.Sprintf("%s builds %s for evaluator prompts.", name, words)
-	case strings.Contains(name, "Message") || strings.Contains(name, "Payload") || strings.Contains(name, "Envelope") || strings.Contains(name, "Hint"):
-		return fmt.Sprintf("%s builds %s for retry and repair feedback.", name, words)
-	case strings.Contains(name, "Param") || strings.Contains(name, "Params") || strings.Contains(name, "Role") || strings.Contains(name, "Provenance"):
-		return fmt.Sprintf("%s derives %s from task and schema inputs.", name, words)
-	case strings.Contains(name, "Route") || strings.Contains(name, "Routes") || strings.Contains(name, "Catalog"):
-		return fmt.Sprintf("%s derives %s from catalog metadata.", name, words)
-	case strings.Contains(name, "Tool") || strings.Contains(name, "Tools") || strings.Contains(name, "Action"):
-		return fmt.Sprintf("%s resolves %s for evaluator execution.", name, words)
-	case strings.Contains(name, "Result") || strings.Contains(name, "Results") || strings.Contains(name, "Content") || strings.Contains(name, "Response"):
-		return fmt.Sprintf("%s formats %s for evaluator output.", name, words)
-	case strings.Contains(name, "Metric") || strings.Contains(name, "Metrics") || strings.Contains(name, "Cost") || strings.Contains(name, "Percent"):
-		return fmt.Sprintf("%s calculates %s for evaluation summaries.", name, words)
-	case strings.Contains(name, "Failure") || strings.Contains(name, "Diagnostic") || strings.Contains(name, "Miss"):
-		return fmt.Sprintf("%s classifies %s for evaluation diagnostics.", name, words)
-	case strings.Contains(name, "Pricing"):
-		return fmt.Sprintf("%s reports whether model pricing data is configured.", name)
-	case strings.Contains(name, "Set") || strings.HasPrefix(name, "unique") || strings.HasPrefix(name, "missing") || strings.HasPrefix(name, "covered") || strings.HasPrefix(name, "uncovered") || strings.HasPrefix(name, "count"):
-		return fmt.Sprintf("%s derives %s from evaluator collections.", name, words)
-	case strings.Contains(name, "From") || strings.Contains(name, "To"):
-		return fmt.Sprintf("%s maps %s between API and evaluator models.", name, words)
-	case strings.HasPrefix(name, "sanitize"):
-		return fmt.Sprintf("%s sanitizes %s for provider compatibility.", name, camelToWords(strings.TrimPrefix(name, "sanitize")))
-	case strings.Contains(name, "Column") || strings.Contains(name, "Label") || strings.Contains(name, "Status") || strings.Contains(name, "Date") || strings.Contains(name, "Rank"):
-		return fmt.Sprintf("%s formats %s for report output.", name, words)
-	case strings.HasPrefix(name, "clone") || strings.HasPrefix(name, "deepClone"):
-		return fmt.Sprintf("%s clones %s without sharing mutable maps.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "deepClone"), "clone")))
-	case strings.HasPrefix(name, "required"):
-		return fmt.Sprintf("%s returns required %s names for provider schemas.", name, camelToWords(strings.TrimPrefix(name, "required")))
-	case strings.HasPrefix(name, "new"):
-		return fmt.Sprintf("%s constructs %s.", name, camelToWords(strings.TrimPrefix(name, "new")))
-	case strings.HasPrefix(name, "current"):
-		return fmt.Sprintf("%s collects current %s metadata.", name, camelToWords(strings.TrimPrefix(name, "current")))
-	case strings.HasPrefix(name, "first"):
-		return fmt.Sprintf("%s returns the first %s value that is set.", name, camelToWords(strings.TrimPrefix(name, "first")))
-	case strings.HasPrefix(name, "metrics"):
-		return fmt.Sprintf("%s computes %s from comparison data.", name, camelToWords(strings.TrimPrefix(name, "metrics")))
-	case strings.HasPrefix(name, "aggregate"):
-		return fmt.Sprintf("%s aggregates %s across reports.", name, camelToWords(strings.TrimPrefix(name, "aggregate")))
-	case strings.HasPrefix(name, "append"):
-		return fmt.Sprintf("%s appends %s to the output builder.", name, camelToWords(strings.TrimPrefix(name, "append")))
-	case strings.HasPrefix(name, "apply"):
-		return fmt.Sprintf("%s applies %s transformations.", name, camelToWords(strings.TrimPrefix(name, "apply")))
-	case strings.HasPrefix(name, "read"):
-		return fmt.Sprintf("%s reads %s from disk.", name, camelToWords(strings.TrimPrefix(name, "read")))
-	case strings.HasPrefix(name, "write"):
-		return fmt.Sprintf("%s writes %s to disk.", name, camelToWords(strings.TrimPrefix(name, "write")))
-	case strings.HasPrefix(name, "wait"):
-		return fmt.Sprintf("%s waits for %s to become available.", name, camelToWords(strings.TrimPrefix(name, "wait")))
-	case strings.HasPrefix(name, "ensure"):
-		return fmt.Sprintf("%s ensures %s exists for live evaluation.", name, camelToWords(strings.TrimPrefix(name, "ensure")))
-	case strings.HasPrefix(name, "taskSteps"):
-		return fmt.Sprintf("%s returns expected tool steps for an evaluation task.", name)
-	case strings.HasPrefix(name, "promptNames"):
-		return fmt.Sprintf("%s reports whether a prompt names the target entity.", name)
-	case strings.HasPrefix(name, "standaloneDynamicActionCandidates"):
-		return fmt.Sprintf("%s returns dynamic fallback action candidates for standalone tools.", name)
-	case strings.HasPrefix(name, "superDispatcherAction"):
-		return fmt.Sprintf("%s returns the meta-tool dispatcher action for a task step.", name)
-	case strings.HasPrefix(name, "close") || strings.HasPrefix(name, "cleanup") || strings.HasPrefix(name, "delete"):
-		return fmt.Sprintf("%s removes %s resources when present.", name, camelToWords(name))
-	case strings.HasPrefix(name, "openAI") || strings.HasPrefix(name, "google") || strings.HasPrefix(name, "qwen") || strings.HasPrefix(name, "model") || strings.HasPrefix(name, "provider") || strings.HasPrefix(name, "doModel"):
-		return fmt.Sprintf("%s prepares %s for model-provider evaluation.", name, words)
+		return fmt.Sprintf("%s appends %s to isolate live evaluation resources.", name, camelToWords(strings.TrimPrefix(name, "suffix"))), true
 	default:
-		return fmt.Sprintf("%s implements the %s helper used by %s.", name, words, pkgName)
+		return "", false
+	}
+}
+
+func helperIntentDocByContent(name, words string) (string, bool) {
+	switch {
+	case strings.Contains(name, "Path") || strings.Contains(name, "URL") || strings.Contains(name, "Endpoint"):
+		return fmt.Sprintf("%s returns the %s used by evaluator requests.", name, words), true
+	case strings.Contains(name, "Schema") || strings.Contains(name, "Enum"):
+		return fmt.Sprintf("%s derives %s from tool schema metadata.", name, words), true
+	case strings.Contains(name, "Prompt") || strings.Contains(name, "Preamble") || strings.Contains(name, "Guidance"):
+		return fmt.Sprintf("%s builds %s for evaluator prompts.", name, words), true
+	case strings.Contains(name, "Message") || strings.Contains(name, "Payload") || strings.Contains(name, "Envelope") || strings.Contains(name, "Hint"):
+		return fmt.Sprintf("%s builds %s for retry and repair feedback.", name, words), true
+	case strings.Contains(name, "Param") || strings.Contains(name, "Params") || strings.Contains(name, "Role") || strings.Contains(name, "Provenance"):
+		return fmt.Sprintf("%s derives %s from task and schema inputs.", name, words), true
+	case strings.Contains(name, "Route") || strings.Contains(name, "Routes") || strings.Contains(name, "Catalog"):
+		return fmt.Sprintf("%s derives %s from catalog metadata.", name, words), true
+	case strings.Contains(name, "Tool") || strings.Contains(name, "Tools") || strings.Contains(name, "Action"):
+		return fmt.Sprintf("%s resolves %s for evaluator execution.", name, words), true
+	case strings.Contains(name, "Result") || strings.Contains(name, "Results") || strings.Contains(name, "Content") || strings.Contains(name, "Response"):
+		return fmt.Sprintf("%s formats %s for evaluator output.", name, words), true
+	case strings.Contains(name, "Metric") || strings.Contains(name, "Metrics") || strings.Contains(name, "Cost") || strings.Contains(name, "Percent"):
+		return fmt.Sprintf("%s calculates %s for evaluation summaries.", name, words), true
+	case strings.Contains(name, "Failure") || strings.Contains(name, "Diagnostic") || strings.Contains(name, "Miss"):
+		return fmt.Sprintf("%s classifies %s for evaluation diagnostics.", name, words), true
+	case strings.Contains(name, "Pricing"):
+		return fmt.Sprintf("%s reports whether model pricing data is configured.", name), true
+	case strings.Contains(name, "Set") || strings.HasPrefix(name, "unique") || strings.HasPrefix(name, "missing") || strings.HasPrefix(name, "covered") || strings.HasPrefix(name, "uncovered") || strings.HasPrefix(name, "count"):
+		return fmt.Sprintf("%s derives %s from evaluator collections.", name, words), true
+	case strings.Contains(name, "From") || strings.Contains(name, "To"):
+		return fmt.Sprintf("%s maps %s between API and evaluator models.", name, words), true
+	case strings.Contains(name, "Column") || strings.Contains(name, "Label") || strings.Contains(name, "Status") || strings.Contains(name, "Date") || strings.Contains(name, "Rank"):
+		return fmt.Sprintf("%s formats %s for report output.", name, words), true
+	default:
+		return "", false
+	}
+}
+
+func helperIntentDocByEvaluatorPrefix(name, words string) (string, bool) {
+	switch {
+	case strings.HasPrefix(name, "sanitize"):
+		return fmt.Sprintf("%s sanitizes %s for provider compatibility.", name, camelToWords(strings.TrimPrefix(name, "sanitize"))), true
+	case strings.HasPrefix(name, "clone") || strings.HasPrefix(name, "deepClone"):
+		return fmt.Sprintf("%s clones %s without sharing mutable maps.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "deepClone"), "clone"))), true
+	case strings.HasPrefix(name, "required"):
+		return fmt.Sprintf("%s returns required %s names for provider schemas.", name, camelToWords(strings.TrimPrefix(name, "required"))), true
+	case strings.HasPrefix(name, "new"):
+		return fmt.Sprintf("%s constructs %s.", name, camelToWords(strings.TrimPrefix(name, "new"))), true
+	case strings.HasPrefix(name, "current"):
+		return fmt.Sprintf("%s collects current %s metadata.", name, camelToWords(strings.TrimPrefix(name, "current"))), true
+	case strings.HasPrefix(name, "first"):
+		return fmt.Sprintf("%s returns the first %s value that is set.", name, camelToWords(strings.TrimPrefix(name, "first"))), true
+	case strings.HasPrefix(name, "metrics"):
+		return fmt.Sprintf("%s computes %s from comparison data.", name, camelToWords(strings.TrimPrefix(name, "metrics"))), true
+	case strings.HasPrefix(name, "aggregate"):
+		return fmt.Sprintf("%s aggregates %s across reports.", name, camelToWords(strings.TrimPrefix(name, "aggregate"))), true
+	case strings.HasPrefix(name, "append"):
+		return fmt.Sprintf("%s appends %s to the output builder.", name, camelToWords(strings.TrimPrefix(name, "append"))), true
+	case strings.HasPrefix(name, "apply"):
+		return fmt.Sprintf("%s applies %s transformations.", name, camelToWords(strings.TrimPrefix(name, "apply"))), true
+	case strings.HasPrefix(name, "read"):
+		return fmt.Sprintf("%s reads %s from disk.", name, camelToWords(strings.TrimPrefix(name, "read"))), true
+	case strings.HasPrefix(name, "write"):
+		return fmt.Sprintf("%s writes %s to disk.", name, camelToWords(strings.TrimPrefix(name, "write"))), true
+	case strings.HasPrefix(name, "wait"):
+		return fmt.Sprintf("%s waits for %s to become available.", name, camelToWords(strings.TrimPrefix(name, "wait"))), true
+	case strings.HasPrefix(name, "ensure"):
+		return fmt.Sprintf("%s ensures %s exists for live evaluation.", name, camelToWords(strings.TrimPrefix(name, "ensure"))), true
+	case strings.HasPrefix(name, "taskSteps"):
+		return fmt.Sprintf("%s returns expected tool steps for an evaluation task.", name), true
+	case strings.HasPrefix(name, "promptNames"):
+		return fmt.Sprintf("%s reports whether a prompt names the target entity.", name), true
+	case strings.HasPrefix(name, "standaloneDynamicActionCandidates"):
+		return fmt.Sprintf("%s returns dynamic fallback action candidates for standalone tools.", name), true
+	case strings.HasPrefix(name, "superDispatcherAction"):
+		return fmt.Sprintf("%s returns the meta-tool dispatcher action for a task step.", name), true
+	case strings.HasPrefix(name, "close") || strings.HasPrefix(name, "cleanup") || strings.HasPrefix(name, "delete"):
+		return fmt.Sprintf("%s removes %s resources when present.", name, camelToWords(name)), true
+	case strings.HasPrefix(name, "openAI") || strings.HasPrefix(name, "google") || strings.HasPrefix(name, "qwen") || strings.HasPrefix(name, "model") || strings.HasPrefix(name, "provider") || strings.HasPrefix(name, "doModel"):
+		return fmt.Sprintf("%s prepares %s for model-provider evaluation.", name, words), true
+	default:
+		return "", false
 	}
 }
 

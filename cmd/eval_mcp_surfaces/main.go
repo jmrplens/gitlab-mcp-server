@@ -120,6 +120,12 @@ const (
 	promptMarkerBranch = "branch "
 	// promptMarkerProject identifies the prompt marker project constant used by this package.
 	promptMarkerProject = "project "
+	// promptMarkerAllowlistProject identifies allowlist project prompt markers.
+	promptMarkerAllowlistProject = "allowlist of project "
+	// promptMarkerIssueIID identifies issue IID prompt markers.
+	promptMarkerIssueIID = "issue IID "
+	// promptMarkerGroupPath identifies group path prompt markers.
+	promptMarkerGroupPath = "group path "
 	// promptMarkerAwardEmojiID identifies the prompt marker award emoji ID constant used by this package.
 	promptMarkerAwardEmojiID = "award emoji ID "
 	// promptMarkerFrom identifies the prompt marker from constant used by this package.
@@ -159,14 +165,22 @@ const (
 	actionPipelineGet = "pipeline.get"
 	// actionIssueCreate identifies the action issue create constant used by this package.
 	actionIssueCreate = "issue.create"
+	// actionIssueLinkCreate identifies the action issue link create constant used by this package.
+	actionIssueLinkCreate = "issue.link_create"
 	// errBuildActionCatalog identifies the err build action catalog constant used by this package.
 	errBuildActionCatalog = "build action catalog: %w"
 	// diagnosticUnknownParams identifies the diagnostic unknown params constant used by this package.
 	diagnosticUnknownParams = "unknown params"
+	// diagnosticMissingRequiredParams identifies missing required params diagnostics.
+	diagnosticMissingRequiredParams = "missing required params."
 	// diagnosticNotFound identifies the diagnostic not found constant used by this package.
 	diagnosticNotFound = "not found"
 	// diagnosticExpectedAction identifies the diagnostic expected action constant used by this package.
 	diagnosticExpectedAction = "expected action"
+	// diagnosticUnexpectedTopLevelParameter identifies invalid dynamic envelopes.
+	diagnosticUnexpectedTopLevelParameter = "unexpected top-level parameter"
+	// liveDeleteFixtureNameFormat identifies temporary fixture names for destructive live tests.
+	liveDeleteFixtureNameFormat = "delete-fixture-%s"
 )
 
 // evalElicitationReleaseTag stores the package-level eval elicitation release tag state.
@@ -2861,7 +2875,7 @@ func ensureLiveJobTokenScopeRemoveProjectTarget(ctx context.Context, client *git
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "allowlist of project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerAllowlistProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-066 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2891,7 +2905,7 @@ func ensureLiveJobTokenScopeRemoveProjectTarget(ctx context.Context, client *git
 	if err != nil {
 		return task, err
 	}
-	prompt, err = replacePromptBacktickValueAfter(prompt, "allowlist of project ", source.ID)
+	prompt, err = replacePromptBacktickValueAfter(prompt, promptMarkerAllowlistProject, source.ID)
 	if err != nil {
 		return task, err
 	}
@@ -3207,7 +3221,7 @@ func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	hook, _, err := client.GL().Projects.AddProjectHook(projectID, &gl.AddProjectHookOptions{
-		Name:                  new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
+		Name:                  new(fmt.Sprintf(liveDeleteFixtureNameFormat, liveUniqueSuffix())),
 		URL:                   new("https://example.com/gitlab-hook-delete"),
 		PushEvents:            new(true),
 		EnableSSLVerification: new(false),
@@ -3237,7 +3251,7 @@ func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	badge, _, err := client.GL().ProjectBadges.AddProjectBadge(projectID, &gl.AddProjectBadgeOptions{
 		LinkURL:  new("https://example.com/coverage"),
 		ImageURL: new("https://example.com/badge.svg"),
-		Name:     new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
+		Name:     new(fmt.Sprintf(liveDeleteFixtureNameFormat, liveUniqueSuffix())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-059 fixture badge: %w", err)
@@ -3418,7 +3432,7 @@ func ensureLivePipelineTriggerDeleteTarget(ctx context.Context, client *gitlabcl
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	trigger, _, err := client.GL().PipelineTriggers.AddPipelineTrigger(projectID, &gl.AddPipelineTriggerOptions{
-		Description: new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
+		Description: new(fmt.Sprintf(liveDeleteFixtureNameFormat, liveUniqueSuffix())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-102 fixture trigger: %w", err)
@@ -3444,7 +3458,7 @@ func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabc
 	defer cancel()
 	ref := liveFixtureDefaultRef
 	schedule, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(projectID, &gl.CreatePipelineScheduleOptions{
-		Description:  new(fmt.Sprintf("delete-fixture-%s", liveUniqueSuffix())),
+		Description:  new(fmt.Sprintf(liveDeleteFixtureNameFormat, liveUniqueSuffix())),
 		Ref:          &ref,
 		Cron:         new("0 3 * * *"),
 		CronTimezone: new("UTC"),
@@ -4677,7 +4691,7 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 		if !validation.ActionMatches {
 			return false
 		}
-		if strings.Contains(validation.Message, "missing required params.") {
+		if strings.Contains(validation.Message, diagnosticMissingRequiredParams) {
 			return false
 		}
 	}
@@ -5024,7 +5038,7 @@ func addSimulatedResourceIDs(result map[string]any, action string, params map[st
 	case actionIssueCreate:
 		addTopLevelID(result, "issue_iid", 123)
 		result["issue"] = map[string]any{"id": 123, "iid": 123, "issue_iid": 123, "project_id": params["project_id"]}
-	case "issue.link_create":
+	case actionIssueLinkCreate:
 		addTopLevelID(result, "issue_link_id", 124)
 		result["issue_link"] = map[string]any{"id": 124, "issue_link_id": 124, "project_id": params["project_id"], "issue_iid": params["issue_iid"]}
 	case "pipeline.trigger_create":
@@ -5201,7 +5215,7 @@ func executionErrorBadParam(step evalStep, err error) string {
 	switch step.ExpectedAction {
 	case "job.token_scope_remove_project":
 		return "project_id,target_project_id"
-	case "issue.link_create":
+	case actionIssueLinkCreate:
 		return "project_id,issue_iid,target_project_id,target_issue_iid"
 	case "merge_request.create":
 		return "source_branch,target_branch"
@@ -6246,7 +6260,7 @@ func roleParamProvenance(param, prompt string, allParams map[string]bool) (param
 	switch param {
 	case "project_id":
 		if allParams["target_project_id"] {
-			return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"allowlist of project ", "of project ", "source project ", "owning project ", "in project ", "from project ", "on project "})
+			return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{promptMarkerAllowlistProject, "of project ", "source project ", "owning project ", "in project ", "from project ", "on project "})
 		}
 		return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"in project ", "from project ", "on project "})
 	case "target_project_id":
@@ -6255,18 +6269,18 @@ func roleParamProvenance(param, prompt string, allParams map[string]bool) (param
 		return firstBacktickProvenance(param, prompt, "target_group", []string{"target group ID ", "target group "}, true)
 	case "issue_iid":
 		if allParams["target_issue_iid"] {
-			return firstBacktickProvenance(param, prompt, "source_issue", []string{"source issue IID ", "source issue ", "issue IID ", promptMarkerIssue}, true)
+			return firstBacktickProvenance(param, prompt, "source_issue", []string{"source issue IID ", "source issue ", promptMarkerIssueIID, promptMarkerIssue}, true)
 		}
 	case "target_issue_iid":
 		return firstBacktickProvenance(param, prompt, "target_issue", []string{"target issue IID ", "target issue "}, true)
 	case "child_iid":
-		return firstBacktickProvenance(param, prompt, "child_issue", []string{"child issue IID ", "issue IID "}, true)
+		return firstBacktickProvenance(param, prompt, "child_issue", []string{"child issue IID ", promptMarkerIssueIID}, true)
 	case "source_branch":
 		return firstBacktickProvenance(param, prompt, "source_branch", []string{promptMarkerFrom, "source branch "}, false)
 	case "target_branch":
 		return firstBacktickProvenance(param, prompt, "target_branch", []string{" into ", "target branch ", "against "}, false)
 	case "full_path":
-		return firstBacktickProvenance(param, prompt, "parent_group_path", []string{"group full path ", "parent group full path ", "group path "}, false)
+		return firstBacktickProvenance(param, prompt, "parent_group_path", []string{"group full path ", "parent group full path ", promptMarkerGroupPath}, false)
 	case "child_project_path":
 		return firstBacktickProvenance(param, prompt, "child_project_path", []string{"child project path "}, false)
 	case "parent_id":
@@ -6428,7 +6442,7 @@ var numericExampleParamMarkers = map[string][]string{
 	"csp_namespace_id":         {"namespace ID "},
 	"export_id":                {"export ID "},
 	"epic_iid":                 {"epic IID "},
-	"child_iid":                {"issue IID "},
+	"child_iid":                {promptMarkerIssueIID},
 	"token_id":                 {"personal access token ID ", "token ID "},
 	"issue_iid":                {promptMarkerIssue},
 	"merge_request_iid":        {"merge_request_iid ", promptMarkerMergeRequest, "MR "},
@@ -6448,8 +6462,8 @@ var numericExampleParamMarkers = map[string][]string{
 var stringExampleParamMarkers = map[string][]string{
 	"external_url":       {"pointing at "},
 	"artifact_path":      {"artifact "},
-	"group_id":           {" in group ", "group path ", "group "},
-	"full_path":          {"group full path ", "group path "},
+	"group_id":           {" in group ", promptMarkerGroupPath, "group "},
+	"full_path":          {"group full path ", promptMarkerGroupPath},
 	"child_project_path": {"child project path "},
 	"start_date":         {promptMarkerFrom},
 	"end_date":           {" to "},
@@ -6935,13 +6949,13 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	}
 	for key := range input {
 		if key != "action" && key != "params" && (step.ExpectedTool != dynamicExecuteTool || key != "confirm") {
-			problems = append(problems, fmt.Sprintf("unexpected top-level parameter %s; put action-specific fields under params", key))
+			problems = append(problems, fmt.Sprintf("%s %s; put action-specific fields under params", diagnosticUnexpectedTopLevelParameter, key))
 		}
 	}
 	for _, required := range step.RequiredParams {
 		if !requiredParamPresent(params, required) {
 			result.RequiredPresent = false
-			problems = append(problems, fmt.Sprintf("missing required params.%s", required))
+			problems = append(problems, fmt.Sprintf("%s%s", diagnosticMissingRequiredParams, required))
 		}
 	}
 	result.DestructiveSafe = true
@@ -7051,7 +7065,7 @@ func validationRepairText(task evalTask, step evalStep, validation validationRes
 	fmt.Fprintf(&b, ". Retry with tool %s and action %s using the envelope %s", step.ExpectedTool, step.ExpectedAction, expectedActionCallExample(task, step, attemptedInput))
 	if step.ExpectedTool == dynamicExecuteTool {
 		b.WriteString(". In dynamic mode, action IDs are canonical domain.action values without gitlab_ prefixes, and top-level params is required even when empty. Never send confirm:false; omit confirm unless the envelope above shows confirm:true")
-		if strings.Contains(validation.Message, "missing required params.") {
+		if strings.Contains(validation.Message, diagnosticMissingRequiredParams) {
 			b.WriteString(". Your retry must include action and params together in the same tool input; do not send only action and confirm")
 		}
 	}
@@ -7083,7 +7097,7 @@ func validationErrorKind(message string, validation validationResult) string {
 		return "wrong_action"
 	case !validation.ToolMatches:
 		return "wrong_tool"
-	case strings.Contains(message, "unexpected top-level parameter") || strings.Contains(message, "top-level input fields"):
+	case strings.Contains(message, diagnosticUnexpectedTopLevelParameter) || strings.Contains(message, "top-level input fields"):
 		return "invalid_envelope"
 	default:
 		return "validation_error"
@@ -7092,7 +7106,7 @@ func validationErrorKind(message string, validation validationResult) string {
 
 // validationBadParam reports whether validation bad param.
 func validationBadParam(message string) string {
-	for _, marker := range []string{"missing required params.", "missing required "} {
+	for _, marker := range []string{diagnosticMissingRequiredParams, "missing required "} {
 		if after, ok := strings.CutPrefix(message, marker); ok {
 			return firstRepairParam(after)
 		}
@@ -7160,7 +7174,7 @@ func roleSensitiveRepairHint(step evalStep) string {
 	switch step.ExpectedAction {
 	case "job.token_scope_remove_project":
 		return ". Parameter role hint: project_id is the owning project whose allowlist changes; target_project_id is the project being added or removed"
-	case "issue.link_create":
+	case actionIssueLinkCreate:
 		return ". Parameter role hint: project_id and issue_iid identify the source issue; target_project_id and target_issue_iid identify the linked target issue"
 	case "merge_request.create":
 		return ". Parameter role hint: source_branch is the branch merged from; target_branch is the branch merged into"
@@ -7965,7 +7979,7 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "ranker_miss"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, "unexpected top-level parameter"):
+	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
 		return "params_shape_miss"
 	case dynamicMultiStepOrderMiss(text):
 		return "multi_step_order_miss"
@@ -8043,7 +8057,7 @@ func failureDiagnosticCategory(notes []string) string {
 		return "fixture_setup_failure"
 	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool"):
 		return "model_route_selection_miss"
-	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, "unexpected top-level parameter") || strings.Contains(text, "standalone tool uses top-level"):
+	case strings.Contains(text, "missing required params") || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
 		return "model_parameter_shape_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"

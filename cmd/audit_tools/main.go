@@ -38,6 +38,8 @@ var (
 // minDescLen is the minimum acceptable description length for an MCP tool.
 const minDescLen = 20
 
+const markdownFourColumnSeparator = "| --- | --- | --- | --- |\n"
+
 // readSuffixes indicate read-only operations based on tool name endings.
 var readSuffixes = []string{
 	"_list", "_lists", "_get", "_search",
@@ -337,7 +339,7 @@ func printReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefin
 	fmt.Printf("## All Tools\n\n")
 	fmt.Printf("### Individual Tools (%d)\n\n", len(individual))
 	fmt.Printf("| # | Name | Description (first 60 chars) | Annotations |\n")
-	fmt.Printf("| --- | --- | --- | --- |\n")
+	fmt.Print(markdownFourColumnSeparator)
 	for i, t := range individual {
 		desc := t.Description
 		if len(desc) > 60 {
@@ -356,7 +358,7 @@ func printReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefin
 
 	fmt.Printf("\n### Meta-Tools (%d)\n\n", len(meta))
 	fmt.Printf("| # | Name | Description (first 60 chars) | Annotations |\n")
-	fmt.Printf("| --- | --- | --- | --- |\n")
+	fmt.Print(markdownFourColumnSeparator)
 	for i, t := range meta {
 		desc := t.Description
 		if len(desc) > 60 {
@@ -398,7 +400,7 @@ func printRegisterMetaDefinitions(definitions []registerMetaDefinition) {
 	fmt.Printf("| Approved delegated definitions | %d |\n", delegated)
 	fmt.Printf("| Unexpected definitions | %d |\n\n", len(unexpected))
 	fmt.Printf("| Status | Package | File | Meta tool names |\n")
-	fmt.Printf("| --- | --- | --- | --- |\n")
+	fmt.Print(markdownFourColumnSeparator)
 	for _, definition := range definitions {
 		status := "unexpected"
 		if isDelegatedRegisterMetaDefinition(definition) {

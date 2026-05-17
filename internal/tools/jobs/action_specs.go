@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		jobReadSpec("list_project", toolutil.RouteAction(client, ListProject), "gitlab_job_list_project"),
 		jobGetSpec(toolutil.RouteAction(client, Get)),
 		jobReadSpec("trace", toolutil.RouteAction(client, Trace), "gitlab_job_trace"),
-		jobUpdateSpec("cancel", toolutil.RouteAction(client, Cancel), "gitlab_job_cancel"),
+		jobMutationSpec("cancel", toolutil.RouteAction(client, Cancel), "gitlab_job_cancel"),
 		jobMutationSpec("retry", toolutil.RouteAction(client, Retry), "gitlab_job_retry"),
 		jobReadSpec("list_bridges", toolutil.RouteAction(client, ListBridges), "gitlab_job_list_bridges"),
 		jobReadSpec("artifacts", toolutil.RouteAction(client, GetArtifacts), "gitlab_job_artifacts", "artifact"),
@@ -20,7 +20,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		jobReadSpec("download_single_artifact", toolutil.RouteAction(client, DownloadSingleArtifact), "gitlab_job_download_single_artifact", "artifact"),
 		jobReadSpec("download_single_artifact_by_ref", toolutil.RouteAction(client, DownloadSingleArtifactByRef), "gitlab_job_download_single_artifact_by_ref", "artifact"),
 		jobDeleteSpec("erase", toolutil.DestructiveAction(client, Erase), "gitlab_job_erase"),
-		jobUpdateSpec("keep_artifacts", toolutil.RouteAction(client, KeepArtifacts), "gitlab_job_keep_artifacts", "artifact"),
+		jobMutationSpec("keep_artifacts", toolutil.RouteAction(client, KeepArtifacts), "gitlab_job_keep_artifacts", "artifact"),
 		jobMutationSpec("play", toolutil.RouteAction(client, Play), "gitlab_job_play"),
 		jobDeleteSpec("delete_artifacts", toolutil.DestructiveVoidAction(client, DeleteArtifacts), "gitlab_job_delete_artifacts", "artifact"),
 		jobDeleteSpec("delete_project_artifacts", toolutil.DestructiveVoidAction(client, DeleteProjectArtifacts), "gitlab_job_delete_project_artifacts", "artifact"),
@@ -44,12 +44,6 @@ func jobReadSpec(name string, route toolutil.ActionRoute, individualTool string,
 }
 
 func jobMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := jobOptions(individualTool, extraTags...)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
-}
-
-func jobUpdateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
 	options := jobOptions(individualTool, extraTags...)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)

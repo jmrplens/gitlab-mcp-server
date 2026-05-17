@@ -10,6 +10,17 @@ import (
 
 const parameterAliasExplanationSource = "dynamic_action_scoped"
 
+const (
+	reasonNormalizeAccessLevel           = "normalized GitLab access level name to numeric level"
+	reasonPipelineScheduleDescription    = "pipeline schedules use description as the display name"
+	reasonReleaseLinkParentTagName       = "release link actions use tag_name for the parent release"
+	reasonIssueLinkTargetIssueIID        = "issue.link_create uses target_issue_iid for the linked issue"
+	reasonSnippetProjectCreateFiles      = "project snippet creation uses files entries in dynamic mode"
+	reasonSnippetProjectCreateFilePath   = "snippet file entries use file_path"
+	reasonSnippetProjectCreateNoAction   = "project snippet creation file entries do not include an action field"
+	reasonFeatureFlagUserListNameRemoved = "feature flag user-list listing is project-scoped and does not accept a feature flag name"
+)
+
 // ParameterAlias describes one historical action-scoped parameter alias or
 // coercion policy.
 type ParameterAlias struct {
@@ -34,27 +45,27 @@ func defaultParameterAliases() []ParameterAlias {
 	return []ParameterAlias{
 		parameterAlias("job.list", "status", "scope", "job.list uses scope for job status filtering"),
 		parameterAlias("repository.file_get", "branch", "ref", "repository.file_get reads file content at a ref"),
-		parameterAlias("issue.link_create", "linked_issue_iid", "target_issue_iid", "issue.link_create uses target_issue_iid for the linked issue"),
-		parameterAlias("issue.link_create", "project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id"),
+		parameterAlias(actionIssueLinkCreate, "linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID),
+		parameterAlias(actionIssueLinkCreate, "project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id"),
 		parameterAlias("issue.update", "state_event", "state_event", "normalized issue state event value"),
-		parameterAlias("pipeline.schedule_create", "name", "description", "pipeline schedules use description as the display name"),
-		parameterAlias("pipeline.schedule_update", "name", "description", "pipeline schedules use description as the display name"),
-		parameterAlias("branch.protect", "push_access_level", "push_access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("branch.protect", "merge_access_level", "merge_access_level", "normalized GitLab access level name to numeric level"),
+		parameterAlias("pipeline.schedule_create", "name", "description", reasonPipelineScheduleDescription),
+		parameterAlias("pipeline.schedule_update", "name", "description", reasonPipelineScheduleDescription),
+		parameterAlias(actionBranchProtect, "push_access_level", "push_access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionBranchProtect, "merge_access_level", "merge_access_level", reasonNormalizeAccessLevel),
 		parameterAlias("feature_flags.feature_flag_create", "new_version_flag", "version", "feature flag creation uses version for the flag API version"),
-		normalizerOnlyParameterAlias("feature_flags.ff_user_list_list", "name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name"),
+		normalizerOnlyParameterAlias(actionFeatureFlagUserListList, "name", "removed", reasonFeatureFlagUserListNameRemoved),
 		parameterAlias("group.group_label_update", "name", "new_name", "group label update renames labels with new_name"),
-		parameterAlias("project.member_add", "access_level", "access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("project.member_edit", "access_level", "access_level", "normalized GitLab access level name to numeric level"),
-		parameterAlias("release.link_create", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_delete", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_get", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_list", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
-		parameterAlias("release.link_update", "release_tag_name", "tag_name", "release link actions use tag_name for the parent release"),
+		parameterAlias("project.member_add", "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionProjectMemberEdit, "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias("release.link_create", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias("release.link_delete", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias("release.link_get", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias("release.link_list", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias("release.link_update", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias("runner.update", "paused", "paused", "normalized string boolean to bool"),
-		parameterAlias("snippet.project_create", "file_name/content", "files", "project snippet creation uses files entries in dynamic mode"),
-		parameterAlias("snippet.project_create", "files.file_name", "files", "snippet file entries use file_path"),
-		parameterAlias("snippet.project_create", "files.action", "files", "project snippet creation file entries do not include an action field"),
+		parameterAlias(actionSnippetProjectCreate, "file_name/content", "files", reasonSnippetProjectCreateFiles),
+		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files", reasonSnippetProjectCreateFilePath),
+		parameterAlias(actionSnippetProjectCreate, "files.action", "files", reasonSnippetProjectCreateNoAction),
 	}
 }
 
@@ -121,13 +132,13 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("branch", "ref", "repository.file_get reads file content at a ref")
 			}
 		}
-	case "issue.link_create":
+	case actionIssueLinkCreate:
 		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
 			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
 				updated := clone()
 				updated["target_issue_iid"] = value
 				delete(updated, "linked_issue_iid")
-				record("linked_issue_iid", "target_issue_iid", "issue.link_create uses target_issue_iid for the linked issue")
+				record("linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID)
 			}
 		}
 		if value, ok := out["project_id"]; ok && accepts("target_project_id") {
@@ -150,14 +161,14 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				updated["description"] = value
 			}
 			delete(updated, "name")
-			record("name", "description", "pipeline schedules use description as the display name")
+			record("name", "description", reasonPipelineScheduleDescription)
 		}
-	case "branch.protect":
+	case actionBranchProtect:
 		for _, name := range []string{"push_access_level", "merge_access_level"} {
 			if value, ok := out[name]; ok && accepts(name) {
 				if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 					clone()[name] = accessLevel
-					record(name, name, "normalized GitLab access level name to numeric level")
+					record(name, name, reasonNormalizeAccessLevel)
 				}
 			}
 		}
@@ -170,10 +181,10 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("new_version_flag", "version", "feature flag creation uses version for the flag API version")
 			}
 		}
-	case "feature_flags.ff_user_list_list":
+	case actionFeatureFlagUserListList:
 		if _, ok := out["name"]; ok && !accepts("name") {
 			delete(clone(), "name")
-			record("name", "removed", "feature flag user-list listing is project-scoped and does not accept a feature flag name")
+			record("name", "removed", reasonFeatureFlagUserListNameRemoved)
 		}
 	case "group.group_label_update":
 		if value, ok := out["name"]; ok {
@@ -184,11 +195,11 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("name", "new_name", "group label update renames labels with new_name")
 			}
 		}
-	case "project.member_add", "project.member_edit":
+	case "project.member_add", actionProjectMemberEdit:
 		if value, ok := out["access_level"]; ok && accepts("access_level") {
 			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
 				clone()["access_level"] = accessLevel
-				record("access_level", "access_level", "normalized GitLab access level name to numeric level")
+				record("access_level", "access_level", reasonNormalizeAccessLevel)
 			}
 		}
 	case "release.link_create", "release.link_delete", "release.link_get", "release.link_list", "release.link_update":
@@ -197,7 +208,7 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				updated := clone()
 				updated["tag_name"] = value
 				delete(updated, "release_tag_name")
-				record("release_tag_name", "tag_name", "release link actions use tag_name for the parent release")
+				record("release_tag_name", "tag_name", reasonReleaseLinkParentTagName)
 			}
 		}
 	case "runner.update":
@@ -207,15 +218,15 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("paused", "paused", "normalized string boolean to bool")
 			}
 		}
-	case "snippet.project_create":
+	case actionSnippetProjectCreate:
 		if accepts("files") && (!accepts("file_name") || !accepts("content")) && buildSnippetCreateFilesFromSingleFileParams(clone, out) {
-			record("file_name/content", "files", "project snippet creation uses files entries in dynamic mode")
+			record("file_name/content", "files", reasonSnippetProjectCreateFiles)
 		}
 		if accepts("files") && normalizeSnippetFileNameFields(clone, out) {
-			record("files.file_name", "files.file_path", "snippet file entries use file_path")
+			record("files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath)
 		}
 		if accepts("files") && stripSnippetCreateFileActions(clone, out) {
-			record("files.action", "files", "project snippet creation file entries do not include an action field")
+			record("files.action", "files", reasonSnippetProjectCreateNoAction)
 		}
 	}
 	return out, explanations
