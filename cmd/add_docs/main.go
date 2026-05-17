@@ -525,7 +525,8 @@ var helperExactDocs = map[string]string{
 }
 
 var helperPrefixDocRules = []helperDocRule{
-	{prefixes: []string{"is", "has", "should", "valid", "routeLooks", "routeUnavailable", "taskHas", "taskUses", "taskMatches", "taskNeeds", "taskArchives", "taskUnavailable", "catalogHas", "reportMentions"}, contains: []string{"Available", "Unavailable"}, template: "%s reports whether %s.", useWords: true},
+	{prefixes: []string{"is", "has", "should", "valid", "routeLooks", "routeUnavailable", "taskHas", "taskUses", "taskMatches", "taskNeeds", "taskArchives", "taskUnavailable", "catalogHas", "reportMentions"}, template: "%s reports whether %s.", useWords: true},
+	{contains: []string{"Available", "Unavailable"}, template: "%s reports whether %s.", useWords: true},
 	{prefixes: []string{"normalize", "normalized"}, trimPrefixes: []string{"normalized", "normalize"}, template: "%s normalizes %s for stable comparisons."},
 	{prefixes: []string{"filter"}, trimPrefixes: []string{"filter"}, template: "%s filters %s using evaluator options."},
 	{prefixes: []string{"order"}, trimPrefixes: []string{"order"}, template: "%s orders %s deterministically."},
@@ -555,7 +556,8 @@ var helperContentDocRules = []helperDocRule{
 	{contains: []string{"Metric", "Metrics", "Cost", "Percent"}, template: "%s calculates %s for evaluation summaries.", useWords: true},
 	{contains: []string{"Failure", "Diagnostic", "Miss"}, template: "%s classifies %s for evaluation diagnostics.", useWords: true},
 	{contains: []string{"Pricing"}, template: "%s reports whether model pricing data is configured.", nameOnly: true},
-	{prefixes: []string{"unique", "missing", "covered", "uncovered", "count"}, contains: []string{"Set"}, template: "%s derives %s from evaluator collections.", useWords: true},
+	{prefixes: []string{"unique", "missing", "covered", "uncovered", "count"}, template: "%s derives %s from evaluator collections.", useWords: true},
+	{contains: []string{"Set"}, template: "%s derives %s from evaluator collections.", useWords: true},
 	{contains: []string{"From", "To"}, template: "%s maps %s between API and evaluator models.", useWords: true},
 	{contains: []string{"Column", "Label", "Status", "Date", "Rank"}, template: "%s formats %s for report output.", useWords: true},
 }
@@ -608,17 +610,21 @@ func helperIntentDocFromRules(name, words string, rules []helperDocRule) (string
 }
 
 func (rule helperDocRule) matches(name string) bool {
+	prefixMatch := len(rule.prefixes) == 0
 	for _, prefix := range rule.prefixes {
 		if strings.HasPrefix(name, prefix) {
-			return true
+			prefixMatch = true
+			break
 		}
 	}
+	containsMatch := len(rule.contains) == 0
 	for _, marker := range rule.contains {
 		if strings.Contains(name, marker) {
-			return true
+			containsMatch = true
+			break
 		}
 	}
-	return false
+	return prefixMatch && containsMatch
 }
 
 func (rule helperDocRule) format(name, words string) string {

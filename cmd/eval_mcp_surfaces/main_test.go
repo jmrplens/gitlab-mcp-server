@@ -4753,6 +4753,14 @@ func TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls(t *testing.T) {
 	}
 }
 
+// TestValidationErrorKind_ClassifiesStandaloneMissingRequired verifies standalone tool diagnostics keep missing-required classification.
+func TestValidationErrorKind_ClassifiesStandaloneMissingRequired(t *testing.T) {
+	got := validationErrorKind("missing required project_id", validationResult{ToolMatches: true, ActionMatches: true})
+	if got != "missing_required_param" {
+		t.Fatalf("validationErrorKind() = %q, want missing_required_param", got)
+	}
+}
+
 // TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn verifies EvaluateTask when repairs multiple invalid tool calls from same turn.
 func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) {
 	runner := newScriptedRunner(t,

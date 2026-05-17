@@ -189,6 +189,33 @@ func TestActionSpecValidate_CompatibilityPolicy(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_CompatibilityPolicyAcceptsNestedParameterAlias verifies nested schema paths can be used in parameter alias metadata.
+func TestActionSpecValidate_CompatibilityPolicyAcceptsNestedParameterAlias(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"files": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"file_path": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+	spec := NewActionSpec("project_create", ActionRoute{InputSchema: schema}, ActionSpecOptions{
+		Compatibility: CompatibilityPolicy{
+			ParameterAliases: []ParameterAliasSpec{{Alias: "files.file_name", Target: "files.file_path", Source: "dynamic", Reason: "Map legacy file names to file paths."}},
+		},
+	})
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+}
+
 // TestActionSpecValidate_RejectsInvalidCompatibilityPolicy covers ActionSpecValidate with table-driven subtests for rejects invalid compatibility policy.
 func TestActionSpecValidate_RejectsInvalidCompatibilityPolicy(t *testing.T) {
 	testCases := []struct {

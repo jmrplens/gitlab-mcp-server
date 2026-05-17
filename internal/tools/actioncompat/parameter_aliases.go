@@ -64,7 +64,7 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias("release.link_update", "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias("runner.update", "paused", "paused", "normalized string boolean to bool"),
 		parameterAlias(actionSnippetProjectCreate, "file_name/content", "files", reasonSnippetProjectCreateFiles),
-		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files", reasonSnippetProjectCreateFilePath),
+		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath),
 		parameterAlias(actionSnippetProjectCreate, "files.action", "files", reasonSnippetProjectCreateNoAction),
 	}
 }

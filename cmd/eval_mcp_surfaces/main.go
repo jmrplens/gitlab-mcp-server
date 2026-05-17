@@ -173,6 +173,8 @@ const (
 	diagnosticUnknownParams = "unknown params"
 	// diagnosticMissingRequiredParams identifies missing required params diagnostics.
 	diagnosticMissingRequiredParams = "missing required params"
+	// diagnosticMissingRequiredStandalone identifies standalone missing required field diagnostics.
+	diagnosticMissingRequiredStandalone = "missing required "
 	// diagnosticNotFound identifies the diagnostic not found constant used by this package.
 	diagnosticNotFound = "not found"
 	// diagnosticExpectedAction identifies the diagnostic expected action constant used by this package.
@@ -7085,7 +7087,7 @@ func validationRepairText(task evalTask, step evalStep, validation validationRes
 // validationErrorKind reports whether validation error kind.
 func validationErrorKind(message string, validation validationResult) string {
 	switch {
-	case strings.Contains(message, diagnosticMissingRequiredParams):
+	case isMissingRequiredDiagnostic(message):
 		return "missing_required_param"
 	case strings.Contains(message, diagnosticUnknownParams):
 		return "unknown_param"
@@ -7104,9 +7106,14 @@ func validationErrorKind(message string, validation validationResult) string {
 	}
 }
 
+// isMissingRequiredDiagnostic reports whether message describes a missing required parameter.
+func isMissingRequiredDiagnostic(message string) bool {
+	return strings.Contains(message, diagnosticMissingRequiredParams) || strings.Contains(message, diagnosticMissingRequiredStandalone)
+}
+
 // validationBadParam reports whether validation bad param.
 func validationBadParam(message string) string {
-	for _, marker := range []string{diagnosticMissingRequiredParams + ":", "missing required "} {
+	for _, marker := range []string{diagnosticMissingRequiredParams + ":", diagnosticMissingRequiredStandalone} {
 		if after, ok := strings.CutPrefix(message, marker); ok {
 			return firstRepairParam(after)
 		}
@@ -7145,7 +7152,7 @@ func validationExpectedType(message, badParam string) string {
 	if strings.Contains(message, "integer") {
 		return "integer"
 	}
-	if strings.Contains(message, "missing required") {
+	if isMissingRequiredDiagnostic(message) {
 		return "present concrete value"
 	}
 	if strings.Contains(message, diagnosticUnknownParams) {
@@ -7227,7 +7234,7 @@ func validateStandaloneToolCall(step evalStep, toolName string, input map[string
 	for _, required := range step.RequiredParams {
 		if _, ok := input[required]; !ok {
 			result.RequiredPresent = false
-			problems = append(problems, fmt.Sprintf("missing required %s", required))
+			problems = append(problems, fmt.Sprintf("%s%s", diagnosticMissingRequiredStandalone, required))
 		}
 	}
 	result.DestructiveSafe = true

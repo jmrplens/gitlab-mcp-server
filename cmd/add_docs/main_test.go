@@ -171,6 +171,24 @@ func TestHelperTextGeneration_CoversIdentifiersAndInitialisms(t *testing.T) {
 	}
 }
 
+// TestHelperDocRuleMatches_CombinesMixedConstraints verifies mixed helper doc rules require every configured constraint.
+func TestHelperDocRuleMatches_CombinesMixedConstraints(t *testing.T) {
+	mixedRule := helperDocRule{prefixes: []string{"is"}, contains: []string{"Available"}}
+	if !mixedRule.matches("isProjectAvailable") {
+		t.Fatal("mixed rule did not match name with required prefix and marker")
+	}
+	if mixedRule.matches("isProject") {
+		t.Fatal("mixed rule matched name missing required marker")
+	}
+
+	if !((helperDocRule{prefixes: []string{"is"}}).matches("isProject")) {
+		t.Fatal("prefix-only rule did not match by prefix")
+	}
+	if !((helperDocRule{contains: []string{"Available"}}).matches("projectAvailable")) {
+		t.Fatal("contains-only rule did not match by marker")
+	}
+}
+
 // TestExprToString_FormatsCommonExpressionShapes verifies exprToString renders common AST type forms.
 func TestExprToString_FormatsCommonExpressionShapes(t *testing.T) {
 	expressions := []struct {
