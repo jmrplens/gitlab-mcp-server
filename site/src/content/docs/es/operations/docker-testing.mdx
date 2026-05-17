@@ -11,12 +11,12 @@ El modo E2E con Docker arranca un entorno desechable de GitLab CE, provisiona fi
 
 ## Qué incluye
 
-| Componente | Propósito |
-| ---------- | --------- |
-| GitLab CE | Instancia efímera de GitLab para llamadas reales a REST y GraphQL |
-| GitLab Runner | Habilita flujos de pipelines y jobs que los tests unitarios no pueden ejercitar |
-| Servicio de fixtures | Proporciona endpoints deterministas para webhooks, emoji personalizados y mirrors |
-| Suite E2E | Ejecuta flujos de herramientas individuales, meta-herramientas y herramientas dinámicas mediante transporte MCP en memoria |
+| Componente           | Propósito                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| GitLab CE            | Instancia efímera de GitLab para llamadas reales a REST y GraphQL                                                          |
+| GitLab Runner        | Habilita flujos de pipelines y jobs que los tests unitarios no pueden ejercitar                                            |
+| Servicio de fixtures | Proporciona endpoints deterministas para webhooks, emoji personalizados y mirrors                                          |
+| Suite E2E            | Ejecuta flujos de herramientas individuales, meta-herramientas y herramientas dinámicas mediante transporte MCP en memoria |
 
 El modo Docker cubre los mismos flujos de ciclo de vida que los E2E autoalojados, además de escenarios de pipelines y jobs que solo están disponibles en Docker. Crea datos temporales en GitLab y los elimina al desmontar el stack.
 
@@ -55,13 +55,13 @@ E2E_MODE=docker \
 
 ## Cuándo usarlo
 
-| Situación | ¿Usar E2E Docker? |
-| --------- | ----------------- |
-| Cambios en registro de herramientas, proyección del catálogo o schemas | Sí |
-| Cambios en pipelines, jobs, webhooks, emoji personalizados o mirrors | Sí |
-| Verificar release candidates antes de publicar binarios | Sí |
-| Editar una página Markdown estrecha | Normalmente no |
-| Depurar un unit test fallando con respuestas mock de GitLab | Normalmente no |
+| Situación                                                              | ¿Usar E2E Docker? |
+| ---------------------------------------------------------------------- | ----------------- |
+| Cambios en registro de herramientas, proyección del catálogo o schemas | Sí                |
+| Cambios en pipelines, jobs, webhooks, emoji personalizados o mirrors   | Sí                |
+| Verificar release candidates antes de publicar binarios                | Sí                |
+| Editar una página Markdown estrecha                                    | Normalmente no    |
+| Depurar un unit test fallando con respuestas mock de GitLab            | Normalmente no    |
 
 ## Reportes y limpieza
 
@@ -73,11 +73,11 @@ docker compose -f test/e2e/docker-compose.yml down -v
 
 ## Solución de problemas
 
-| Síntoma | Qué comprobar |
-| ------- | ------------- |
-| GitLab nunca queda listo | Límites de memoria y CPU de Docker; GitLab CE necesita varios GB de RAM |
-| Tests de pipelines o jobs saltados/fallando | Salida de registro del runner y valores de `test/e2e/.env.docker` |
-| Fallos en webhooks o mirrors | Salud del contenedor de fixtures y URLs internas de la red Docker |
-| Una repetición ve datos antiguos | Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` y empieza de nuevo |
+| Síntoma                                     | Qué comprobar                                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| GitLab nunca queda listo                    | Límites de memoria y CPU de Docker; GitLab CE necesita varios GB de RAM            |
+| Tests de pipelines o jobs saltados/fallando | Salida de registro del runner y valores de `test/e2e/.env.docker`                  |
+| Fallos en webhooks o mirrors                | Salud del contenedor de fixtures y URLs internas de la red Docker                  |
+| Una repetición ve datos antiguos            | Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` y empieza de nuevo |
 
 Docker E2E es más lento que los tests unitarios, pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab, el transporte MCP y todas las superficies públicas de herramientas a la vez.

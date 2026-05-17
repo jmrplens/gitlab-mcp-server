@@ -59,6 +59,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: coverage
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: site
       - name: SonarCloud Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@v8
