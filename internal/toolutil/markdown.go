@@ -444,8 +444,34 @@ func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown) {
 
 // TemplateMarkdown carries common fields rendered by template list tools.
 type TemplateMarkdown struct {
-	Key  string
-	Name string
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// TemplateRenderer stores the stable labels and hints for a GitLab template
+// family so package formatters can avoid repeating identical rendering glue.
+type TemplateRenderer struct {
+	ListTitle    string
+	EmptyMessage string
+	ListHint     string
+	DetailTitle  string
+	Language     string
+	DetailHint   string
+}
+
+// FormatList renders a GitLab template list with the renderer configuration.
+func (r TemplateRenderer) FormatList(templates []TemplateMarkdown, pagination PaginationOutput) string {
+	return FormatTemplateListMarkdown(templates, pagination, TemplateListMarkdownOptions{
+		Title:        r.ListTitle,
+		EmptyMessage: r.EmptyMessage,
+		Hints:        []string{r.ListHint},
+	})
+}
+
+// FormatContent renders a single GitLab template body with the renderer
+// configuration.
+func (r TemplateRenderer) FormatContent(name, content string) string {
+	return FormatTemplateContentMarkdown(r.DetailTitle, name, r.Language, content, r.DetailHint)
 }
 
 // NewTemplateMarkdown builds a shared Markdown view model for GitLab template

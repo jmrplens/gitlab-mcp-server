@@ -18,10 +18,7 @@ type ListInput struct {
 }
 
 // TemplateListItem represents a gitignore template in a list.
-type TemplateListItem struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-}
+type TemplateListItem = toolutil.TemplateMarkdown
 
 // ListOutput is the output for listing gitignore templates.
 type ListOutput struct {

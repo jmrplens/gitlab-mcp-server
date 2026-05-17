@@ -4,18 +4,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+var markdownRenderer = toolutil.TemplateRenderer{
+	ListTitle:    "Dockerfile Templates",
+	EmptyMessage: "No templates found.\n",
+	ListHint:     "Use `gitlab_get_dockerfile_template` to view a specific template",
+	DetailTitle:  "Dockerfile Template",
+	Language:     "dockerfile",
+	DetailHint:   "Copy this template to your Dockerfile and customize it",
+}
+
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	return toolutil.FormatTemplateCollectionMarkdown(out.Templates, out.Pagination, toTemplateMarkdown, "Dockerfile Templates", "No templates found.\n", "Use `gitlab_get_dockerfile_template` to view a specific template")
+	return markdownRenderer.FormatList(out.Templates, out.Pagination)
 }
 
 // FormatGetMarkdown formats the get output as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	return toolutil.FormatTemplateContentMarkdown("Dockerfile Template", out.Name, "dockerfile", out.Content, "Copy this template to your Dockerfile and customize it")
-}
-
-func toTemplateMarkdown(template TemplateListItem) toolutil.TemplateMarkdown {
-	return toolutil.NewTemplateMarkdown(template.Key, template.Name)
+	return markdownRenderer.FormatContent(out.Name, out.Content)
 }
 
 func init() {

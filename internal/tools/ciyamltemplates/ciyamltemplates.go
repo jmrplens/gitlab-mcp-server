@@ -22,10 +22,7 @@ type ListInput struct {
 }
 
 // TemplateListItem represents a CI YAML template in a list.
-type TemplateListItem struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-}
+type TemplateListItem = toolutil.TemplateMarkdown
 
 // ListOutput is the output for listing CI YAML templates.
 type ListOutput struct {

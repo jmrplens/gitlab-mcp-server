@@ -4,18 +4,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+var markdownRenderer = toolutil.TemplateRenderer{
+	ListTitle:    "CI YAML Templates",
+	EmptyMessage: "No templates found.\n",
+	ListHint:     "Use `gitlab_get_ci_yaml_template` to view a specific template",
+	DetailTitle:  "CI YAML Template",
+	Language:     "yaml",
+	DetailHint:   "Copy this template to your `.gitlab-ci.yml` file and customize it",
+}
+
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	return toolutil.FormatTemplateCollectionMarkdown(out.Templates, out.Pagination, toTemplateMarkdown, "CI YAML Templates", "No templates found.\n", "Use `gitlab_get_ci_yaml_template` to view a specific template")
+	return markdownRenderer.FormatList(out.Templates, out.Pagination)
 }
 
 // FormatGetMarkdown formats the get output as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	return toolutil.FormatTemplateContentMarkdown("CI YAML Template", out.Name, "yaml", out.Content, "Copy this template to your `.gitlab-ci.yml` file and customize it")
-}
-
-func toTemplateMarkdown(template TemplateListItem) toolutil.TemplateMarkdown {
-	return toolutil.NewTemplateMarkdown(template.Key, template.Name)
+	return markdownRenderer.FormatContent(out.Name, out.Content)
 }
 
 func init() {
