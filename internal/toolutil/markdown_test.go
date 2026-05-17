@@ -170,6 +170,30 @@ func TestFormatCICDVariableMarkdown(t *testing.T) {
 	}
 }
 
+// TestCICDVariableMarkdownHelpers verifies shared CI/CD variable constructors
+// and collection wrappers used by project, group, and instance variable tools.
+func TestCICDVariableMarkdownHelpers(t *testing.T) {
+	variable := NewCICDVariableMarkdown("TOKEN", "secret", "file", CICDVariableFlags{Protected: true, Raw: true}, "*", "deploy token")
+	variables := CICDVariableMarkdowns([]CICDVariableMarkdown{variable}, func(v CICDVariableMarkdown) CICDVariableMarkdown { return v })
+	if len(variables) != 1 || variables[0].Key != "TOKEN" || !variables[0].Protected || !variables[0].Raw {
+		t.Fatalf("unexpected mapped variable: %+v", variables)
+	}
+
+	detail := FormatCICDVariableDetailMarkdown(variable, "Variable", true)
+	for _, want := range []string{"## Variable: TOKEN", "| Value | secret |", "Use action 'delete' to remove this variable"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail markdown missing %q:\n%s", want, detail)
+		}
+	}
+
+	list := FormatCICDVariableCollectionMarkdown(variables, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, func(v CICDVariableMarkdown) CICDVariableMarkdown { return v }, "Variables", "No variables found.\n", false, "Read a variable")
+	for _, want := range []string{"## Variables (1)", "| Key | Type | Protected | Masked |", "| TOKEN | file | " + BoolEmoji(true), "Read a variable"} {
+		if !strings.Contains(list, want) {
+			t.Errorf("list markdown missing %q:\n%s", want, list)
+		}
+	}
+}
+
 // TestFormatCICDVariableListMarkdown verifies the shared CI/CD variable list renderer.
 func TestFormatCICDVariableListMarkdown(t *testing.T) {
 	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
@@ -228,6 +252,52 @@ func TestFormatDiscussionListMarkdown(t *testing.T) {
 	empty := FormatDiscussionListMarkdown(nil, DiscussionListMarkdownOptions{EmptyMessage: "No discussions found.\n"})
 	if empty != "No discussions found.\n" {
 		t.Errorf("empty markdown = %q, want no-results message", empty)
+	}
+}
+
+// TestDiscussionMarkdownHelpers verifies shared discussion renderers and mapper
+// wrappers used by REST and GraphQL discussion tool packages.
+func TestDiscussionMarkdownHelpers(t *testing.T) {
+	restDiscussion := DiscussionOutput{
+		ID: "rest-1",
+		Notes: []DiscussionNoteOutput{
+			{ID: 11, Body: "hello", Author: "alice", CreatedAt: "2026-05-17T12:00:00Z"},
+		},
+	}
+	renderer := NewDiscussionRenderer("REST Discussions", "No discussions found.\n", "Open a discussion", "Reply to discussion", "Edit note")
+
+	restList := renderer.FormatRESTList(DiscussionOutputMarkdowns([]DiscussionOutput{restDiscussion}), PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
+	for _, want := range []string{"## REST Discussions (1)", "### Discussion rest-1", "Open a discussion"} {
+		if !strings.Contains(restList, want) {
+			t.Errorf("REST list markdown missing %q:\n%s", want, restList)
+		}
+	}
+
+	rendererGraphQLList := renderer.FormatGraphQLList([]DiscussionMarkdown{restDiscussion.MarkdownDiscussion()}, GraphQLPaginationOutput{HasPreviousPage: true, StartCursor: "before"})
+	for _, want := range []string{"## REST Discussions (1)", "prev page cursor: `before`", "Open a discussion"} {
+		if !strings.Contains(rendererGraphQLList, want) {
+			t.Errorf("renderer GraphQL list markdown missing %q:\n%s", want, rendererGraphQLList)
+		}
+	}
+
+	discussion := restDiscussion.MarkdownDiscussion()
+	if got := renderer.FormatDiscussion(discussion); !strings.Contains(got, "Reply to discussion") {
+		t.Errorf("discussion markdown missing renderer hint:\n%s", got)
+	}
+	if got := renderer.FormatNote(restDiscussion.Notes[0].MarkdownNote()); !strings.Contains(got, "Edit note") {
+		t.Errorf("note markdown missing renderer hint:\n%s", got)
+	}
+
+	graphqlList := FormatGraphQLDiscussionListMarkdown([]DiscussionMarkdown{discussion}, GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor"}, func(v DiscussionMarkdown) DiscussionMarkdown { return v }, "GraphQL Discussions", "No discussions found.\n", "Fetch next page")
+	for _, want := range []string{"## GraphQL Discussions (1)", "next page cursor: `cursor`", "Fetch next page"} {
+		if !strings.Contains(graphqlList, want) {
+			t.Errorf("GraphQL list markdown missing %q:\n%s", want, graphqlList)
+		}
+	}
+
+	restWrapper := FormatRESTDiscussionListMarkdown([]DiscussionOutput{restDiscussion}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, DiscussionOutput.MarkdownDiscussion, "Wrapped Discussions", "No discussions found.\n", "Wrapped hint")
+	if !strings.Contains(restWrapper, "Wrapped hint") {
+		t.Errorf("REST wrapper markdown missing hint:\n%s", restWrapper)
 	}
 }
 
@@ -305,6 +375,33 @@ func TestFormatTemplateListMarkdown(t *testing.T) {
 	}
 }
 
+// TestTemplateMarkdownHelpers verifies shared template renderers and collection
+// wrappers used by CI YAML, Dockerfile, and Gitignore template tools.
+func TestTemplateMarkdownHelpers(t *testing.T) {
+	renderer := NewTemplateRenderer("Templates", "No templates found.\n", "Open a template", "Template", "yaml", "Copy it")
+	template := NewTemplateMarkdown("Go", "Go template")
+	templates := TemplateMarkdowns([]TemplateMarkdown{template}, func(v TemplateMarkdown) TemplateMarkdown { return v })
+
+	list := renderer.FormatList(templates, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
+	for _, want := range []string{"## Templates", "| Go | Go template |", "Open a template"} {
+		if !strings.Contains(list, want) {
+			t.Errorf("template list markdown missing %q:\n%s", want, list)
+		}
+	}
+
+	content := renderer.FormatContent("Go", "stages:\n  - test")
+	for _, want := range []string{"## Template: Go", "```yaml", "Copy it"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("template content markdown missing %q:\n%s", want, content)
+		}
+	}
+
+	collection := FormatTemplateCollectionMarkdown(templates, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, func(v TemplateMarkdown) TemplateMarkdown { return v }, "Collection", "No templates found.\n", "Collection hint")
+	if !strings.Contains(collection, "Collection hint") {
+		t.Errorf("template collection markdown missing hint:\n%s", collection)
+	}
+}
+
 // TestFormatTemplateContentMarkdown verifies shared template body rendering.
 func TestFormatTemplateContentMarkdown(t *testing.T) {
 	md := FormatTemplateContentMarkdown("Dockerfile Template", "Go", "dockerfile", "FROM golang:latest", "Copy this template to your Dockerfile and customize it")
@@ -359,7 +456,7 @@ func TestFormatTemplateContentMarkdown(t *testing.T) {
 // TestFormatNoteMarkdown verifies shared GitLab note detail rendering.
 func TestFormatNoteMarkdown(t *testing.T) {
 	md := FormatNoteMarkdown(
-		NewNoteMarkdown(7, "note body", "alice", "2026-05-17T12:00:00Z", true, true, true, true, "bob"),
+		NewNoteMarkdown(7, "note body", "alice", "2026-05-17T12:00:00Z", NoteMarkdownFlags{System: true, Internal: true, Resolvable: true, Resolved: true}, "bob"),
 		NoteMarkdownOptions{
 			Title:             "MR Note",
 			IncludeInternal:   true,
@@ -385,11 +482,33 @@ func TestFormatNoteMarkdown(t *testing.T) {
 	}
 }
 
+// TestNoteMarkdownHelpers verifies shared note mappers and the unresolved note
+// branch used by issue and merge request notes.
+func TestNoteMarkdownHelpers(t *testing.T) {
+	note := NewNoteMarkdown(8, "plain body", "bob", "2026-05-17T12:00:00Z", NoteMarkdownFlags{Resolvable: true}, "")
+	notes := NoteMarkdowns([]NoteMarkdown{note}, func(v NoteMarkdown) NoteMarkdown { return v })
+	if len(notes) != 1 || notes[0].ID != 8 {
+		t.Fatalf("unexpected mapped notes: %+v", notes)
+	}
+
+	detail := FormatNoteMarkdown(note, NoteMarkdownOptions{Title: "Issue Note", IncludeResolvable: true})
+	for _, want := range []string{"## Issue Note #8", "- **Resolvable**: unresolved", "plain body"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("note detail markdown missing %q:\n%s", want, detail)
+		}
+	}
+
+	list := FormatNoteListMarkdown(notes, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, NoteListMarkdownOptions{Title: "Notes", EmptyMessage: "No notes found.\n"})
+	if !strings.Contains(list, "| ID | Author | Created | System |") || strings.Contains(list, "Internal") {
+		t.Errorf("note list markdown should omit internal column:\n%s", list)
+	}
+}
+
 // TestFormatNoteListMarkdown verifies shared GitLab note list rendering.
 func TestFormatNoteListMarkdown(t *testing.T) {
 	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
 	md := FormatNoteListMarkdown([]NoteMarkdown{
-		NewNoteMarkdown(7, "", "alice|dev", "2026-05-17T12:00:00Z", true, true, false, false, ""),
+		NewNoteMarkdown(7, "", "alice|dev", "2026-05-17T12:00:00Z", NoteMarkdownFlags{System: true, Internal: true}, ""),
 	}, pagination, NoteListMarkdownOptions{
 		Title:           "Issue Notes",
 		EmptyMessage:    "No issue notes found.\n",

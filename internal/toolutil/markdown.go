@@ -57,6 +57,7 @@ const (
 	FmtMdAuthorAt    = "- **Author**: @%s\n"
 	FmtMdAuthor      = "- **Author**: %s\n"
 	FmtMdSectionText = "\n%s\n"
+	FmtMdH2Count     = "## %s (%d)\n\n"
 	TblSep1Col       = "| --- |\n"
 	TblSep2Col       = "| --- | --- |\n"
 	TblSep3Col       = "| --- | --- | --- |\n"
@@ -180,17 +181,26 @@ type CICDVariableMarkdown struct {
 	Description      string
 }
 
+// CICDVariableFlags groups boolean CI/CD variable attributes for Markdown
+// view-model construction.
+type CICDVariableFlags struct {
+	Protected bool
+	Masked    bool
+	Hidden    bool
+	Raw       bool
+}
+
 // NewCICDVariableMarkdown builds a shared Markdown view model for CI/CD
 // variables without forcing tool packages to duplicate composite literals.
-func NewCICDVariableMarkdown(key, value, variableType string, protected, masked, hidden, raw bool, environmentScope, description string) CICDVariableMarkdown {
+func NewCICDVariableMarkdown(key, value, variableType string, flags CICDVariableFlags, environmentScope, description string) CICDVariableMarkdown {
 	return CICDVariableMarkdown{
 		Key:              key,
 		Value:            value,
 		VariableType:     variableType,
-		Protected:        protected,
-		Masked:           masked,
-		Hidden:           hidden,
-		Raw:              raw,
+		Protected:        flags.Protected,
+		Masked:           flags.Masked,
+		Hidden:           flags.Hidden,
+		Raw:              flags.Raw,
 		EnvironmentScope: environmentScope,
 		Description:      description,
 	}
@@ -273,7 +283,7 @@ func FormatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination
 		return opts.EmptyMessage
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, pagination.TotalItems)
+	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, pagination.TotalItems)
 	WriteListSummary(&b, len(variables), pagination)
 	if opts.IncludeEnvironmentScope {
 		b.WriteString(MarkdownTableHeader("Key", "Type", "Protected", "Masked", "Scope"))
@@ -463,7 +473,7 @@ func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts Discuss
 	if opts.GraphQLPagination == nil && opts.Pagination.TotalItems > 0 {
 		headingCount = opts.Pagination.TotalItems
 	}
-	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, headingCount)
+	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, headingCount)
 	if opts.GraphQLPagination == nil {
 		WriteListSummary(&b, len(discussions), opts.Pagination)
 	}
@@ -639,7 +649,7 @@ func FormatTemplateContentMarkdown(title, name, language, content string, hints 
 	safeLanguage := strings.NewReplacer("`", "", "\r", "", "\n", "").Replace(language)
 	fmt.Fprintf(&b, "%s%s\n", fence, safeLanguage)
 	b.WriteString(content)
-	fmt.Fprintf(&b, "\n%s\n", fence)
+	fmt.Fprintf(&b, FmtMdSectionText, fence)
 	WriteHints(&b, hints...)
 	return b.String()
 }
@@ -673,17 +683,26 @@ type NoteMarkdown struct {
 	ResolvedBy string
 }
 
+// NoteMarkdownFlags groups boolean note attributes for Markdown view-model
+// construction.
+type NoteMarkdownFlags struct {
+	System     bool
+	Internal   bool
+	Resolvable bool
+	Resolved   bool
+}
+
 // NewNoteMarkdown builds a shared Markdown view model for GitLab notes.
-func NewNoteMarkdown(id int64, body, author, createdAt string, system, internal, resolvable, resolved bool, resolvedBy string) NoteMarkdown {
+func NewNoteMarkdown(id int64, body, author, createdAt string, flags NoteMarkdownFlags, resolvedBy string) NoteMarkdown {
 	return NoteMarkdown{
 		ID:         id,
 		Body:       body,
 		Author:     author,
 		CreatedAt:  createdAt,
-		System:     system,
-		Internal:   internal,
-		Resolvable: resolvable,
-		Resolved:   resolved,
+		System:     flags.System,
+		Internal:   flags.Internal,
+		Resolvable: flags.Resolvable,
+		Resolved:   flags.Resolved,
 		ResolvedBy: resolvedBy,
 	}
 }
@@ -728,7 +747,7 @@ func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 			fmt.Fprintf(&b, "- **Resolved By**: @%s\n", note.ResolvedBy)
 		}
 	}
-	fmt.Fprintf(&b, "\n%s\n", WrapGFMBody(note.Body))
+	fmt.Fprintf(&b, FmtMdSectionText, WrapGFMBody(note.Body))
 	WriteHints(&b, opts.Hints...)
 	return b.String()
 }
@@ -744,7 +763,7 @@ type NoteListMarkdownOptions struct {
 // FormatNoteListMarkdown renders a list of GitLab notes as Markdown.
 func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, opts NoteListMarkdownOptions) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.Title, pagination.TotalItems)
+	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, pagination.TotalItems)
 	WriteListSummary(&b, len(notes), pagination)
 	if len(notes) == 0 {
 		b.WriteString(opts.EmptyMessage)

@@ -26,7 +26,8 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
-	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.Author, n.CreatedAt, n.System, false, false, false, "")
+	flags := toolutil.NoteMarkdownFlags{System: n.System}
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.Author, n.CreatedAt, flags, "")
 }
 
 func init() {
